@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# XLA compilation cache (binary, machine-specific)
+examples/.jax_cache/
+
+# stray figures written outside examples/figures/
+/*.png
+
+# Raw run data from scratch probes: regenerable, and hundreds of MB.  The probe
+# SCRIPTS are tracked (they are the record of how each decision was settled);
+# their outputs are not.
+scratch/**/*.npz
+scratch/**/*.pkl
+scratch/**/*.done

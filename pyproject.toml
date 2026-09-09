@@ -1,0 +1,77 @@
+[project]
+name = "jax-dsmc"
+version = "0.0.0"
+description = "Differentiable DSMC in JAX with a DTO adjoint"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# scratch/ holds throwaway probes: linted loosely, never auto-formatted.
+# *.md is excluded because docstring-code-format would otherwise rewrite the
+# illustrative code blocks in the spec, which are prose and not compiled.
+extend-exclude = ["papers_reference", "scratch", "*.md"]
+
+[tool.ruff.lint]
+select = [
+    "F",      # pyflakes: undefined names, unused imports/variables
+    "E", "W", # pycodestyle
+    "I",      # isort: import ordering
+    "UP",     # pyupgrade
+    "B",      # bugbear: real bug patterns
+    "SIM",    # flake8-simplify
+    "C4",     # comprehensions
+    "RET",    # return-statement hygiene
+    "ARG",    # unused arguments
+    "PIE",    # misc lints
+    "PL",     # pylint subset (incl. PLR0915 too-many-statements)
+    "NPY",    # numpy-specific
+    "RUF",    # ruff-specific
+]
+
+ignore = [
+    # --- scientific/JAX naming. Physics code uses the symbols from the papers. ---
+    "E741",    # ambiguous name `l`, `I`, `O` -- `I` is the identity matrix
+    "N802", "N803", "N806",  # non-lowercase func/arg/variable: N, D, C, A_max, T, P, B
+
+    # --- JAX idioms that are not bugs ---
+    "B023",    # function-uses-loop-variable: scan/vmap bodies close over loop carries
+    "PLR0913", # too many arguments: pure fns take (state, params, cfg, key, ...) explicitly
+    "PLR0917", # too many POSITIONAL arguments: same reason; partial-bound scan bodies hit this
+    "PLR2004", # magic value comparison: physical constants and exponents are literal
+    "ARG001", "ARG002",  # unused args: signature compatibility across strategy impls
+
+    # --- style choices ---
+    "E501",    # line length: handled by the formatter, not worth failing on
+    "SIM108",  # ternary instead of if-else: often less readable for physics branches
+    "RET504",  # unnecessary assignment before return: named intermediates aid readability
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scratch/*"  = ["ALL"]        # throwaway probes are exempt
+# SIM300 fires on `assert value == pytest.approx(expected)`, which is the
+# documented pytest idiom -- ruff's "fix" inverts it into the less readable form.
+# RUF059: the test helpers return a full case tuple (state, cstate, grid, species,
+# params, static, temp, key) and each test unpacks the whole thing but uses only
+# the part it needs.  Renaming the unused half to `_`-prefixed names every time
+# would be noisier than the warning.
+"tests/*"    = ["PLR2004", "ARG", "SIM300", "RUF059"]
+"__init__.py" = ["F401"]      # re-exports
+# `output.py` is deliberately host-side and JAX-free at import time (section 10.2:
+# "all output is host-side, called outside the jitted step"), and `h5py` is an
+# optional dependency.  Both make PLC0415 a false positive here: the deferred
+# imports ARE the design, not an oversight.
+"jax_dsmc/output.py" = ["PLC0415"]
+
+[tool.ruff.lint.pylint]
+max-statements = 40           # a physics kernel is legitimately longer than the default 50->40 guard
+max-branches = 12
+max-locals = 25               # collision kernels genuinely carry many named quantities
+
+[tool.ruff.lint.isort]
+known-first-party = ["jax_dsmc"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
