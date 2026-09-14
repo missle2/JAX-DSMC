@@ -35,3 +35,21 @@ def test_two_faces_allocate_actual_births_with_capacity_larger_than_storage():
     assert int(inserted) == 20
     assert int(out.alive.sum()) == 20
     assert float(shortfall) == 0
+
+
+@pytest.mark.parametrize('s', [-10., -3., 0., 3., 10.])
+def test_flux_quantile_and_implicit_derivative_against_quadrature(s):
+    from scipy.integrate import quad
+    from scipy.optimize import brentq
+    u = 0.37
+    def cdf(y, drift):
+        shift = min(drift, 0.) ** 2
+        f = lambda z: z * np.exp(-(z-drift)**2 + shift)
+        return quad(f, 0, y, epsabs=1e-13)[0] / quad(f, 0, max(drift, 0)+12, epsabs=1e-13)[0]
+    def root(drift):
+        return brentq(lambda y: cdf(y, drift)-u, 0, max(drift, 0)+12, xtol=1e-13)
+    got = inflow.flux_quantile(jnp.float64(u), jnp.float64(s))
+    derivative = jax.grad(lambda drift: inflow.flux_quantile(jnp.float64(u), drift))(jnp.float64(s))
+    expected = (root(s+1e-4)-root(s-1e-4))/2e-4
+    np.testing.assert_allclose(got, root(s), rtol=2e-10, atol=1e-11)
+    np.testing.assert_allclose(derivative, expected, rtol=2e-6, atol=1e-9)
