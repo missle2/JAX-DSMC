@@ -349,7 +349,13 @@ def collide(
 
     # v and logh carry an extra SCRATCH ROW at index N (8.4.1).
     v0 = jnp.concatenate([state.v, jnp.zeros((1, 3), dtype=state.v.dtype)])
-    logh0 = jnp.concatenate([state.logh_acc, jnp.zeros((1,), dtype=state.logh_acc.dtype)])
+    # The trajectory prefix is scalar inside the attempt scan. Broadcasting it
+    # only at the state boundary avoids an N-vector addition for every attempt.
+    logh0 = (
+        state.logh_acc[:1]
+        if score_mode == "trajectory"
+        else jnp.concatenate([state.logh_acc, jnp.zeros((1,), dtype=state.logh_acc.dtype)])
+    )
 
     body = functools.partial(
         _slot,
@@ -392,7 +398,11 @@ def collide(
         inflow_shortfall=jnp.array(0.0, jnp.float64),
     )
     new_state = ParticleState(
-        x=state.x, v=v[:n_part], species=state.species, alive=state.alive, logh_acc=logh[:n_part]
+        x=state.x,
+        v=v[:n_part],
+        species=state.species,
+        alive=state.alive,
+        logh_acc=jnp.broadcast_to(logh, (n_part,)) if score_mode == "trajectory" else logh[:n_part],
     )
     vremax_next = jnp.maximum(cstate.vremax, qmax[:, None, None])
     del n_cells, C

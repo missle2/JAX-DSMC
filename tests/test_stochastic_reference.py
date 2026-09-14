@@ -164,16 +164,17 @@ def test_p3_anisotropic_wall_temperature_components():
 
 
 def test_eager_wall_steps_reuse_one_compilation_for_changing_particle_values():
-    from jax_dsmc.wall_adjoint import advance  # noqa: PLC0415
-    grid = GridSpec(lo=jnp.array([0.]), hi=jnp.array([1.]), n=(1,))
+    from jax_dsmc.wall_adjoint import _advance_jitted, advance  # noqa: PLC0415
+
+    grid = GridSpec(lo=jnp.array([0.0]), hi=jnp.array([1.0]), n=(1,))
     faces = boundary.Faces.uniform(boundary.BC.DIFFUSE, 1)
-    wall = boundary.WallParams.uniform(1, 1.)
-    x, v = jnp.full((32, 1), .5), jnp.ones((32, 3))
+    wall = boundary.WallParams.uniform(1, 1.0)
+    x, v = jnp.full((32, 1), 0.5, dtype=jnp.float64), jnp.ones((32, 3), dtype=jnp.float64)
     alive = jnp.ones(32, bool)
-    args = (alive, grid, faces, wall, K_BOLTZ, .1)
-    x, v, _, _, _ = advance(x, v, *args, jax.random.PRNGKey(0), epsilon=.01)
-    count = advance._cache_size()
+    args = (alive, grid, faces, wall, K_BOLTZ, 0.1)
+    x, v, _, _, _ = advance(x, v, *args, jax.random.PRNGKey(0), epsilon=0.01)
+    count = _advance_jitted._cache_size()
     for k in range(1, 5):
-        x, v, _, _, _ = advance(x, v, *args, jax.random.PRNGKey(k), epsilon=.01)
+        x, v, _, _, _ = advance(x, v, *args, jax.random.PRNGKey(k), epsilon=0.01)
     jax.block_until_ready(v)
-    assert advance._cache_size() == count
+    assert _advance_jitted._cache_size() == count

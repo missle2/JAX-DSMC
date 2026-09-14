@@ -3,6 +3,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from jax_dsmc import paper_walls as pw
 
@@ -21,12 +22,21 @@ def test_disjoint_maxwell_driver_conserves_momentum_and_energy():
     np.testing.assert_allclose(derivative, 2 * jnp.sum(v * v), rtol=1e-13)
 
 
-def test_paper_driver_anisotropic_wall_gradients_are_finite_and_value_neutral():
-    cfg = pw.Config(particles=64, cells=2, steps=2, observable="heat")
+@pytest.mark.parametrize("particles,cells", [(64, 2), (256, 4)])
+def test_paper_driver_anisotropic_wall_gradients_are_finite_and_value_neutral(particles, cells):
+    if (
+        particles == 64
+        and jax.default_backend() == "gpu"
+        and jax.__version__ == "0.6.2"
+        and "RTX 3050" in jax.devices()[0].device_kind
+    ):
+        pytest.skip(
+            "JAX 0.6.2 / RTX 3050 tiny-grid GPU compilation exceeds 120s; same six-component gradient covered at N=256"
+        )
+    cfg = pw.Config(particles=particles, cells=cells, steps=2, observable="heat")
     temp = jnp.array([[0.6, 0.7, 0.8], [0.9, 1.0, 1.1]])
-    (value, (plain, invalid)), gradient = jax.value_and_grad(pw.solve, has_aux=True)(
-        temp, 0.0, jax.random.PRNGKey(7), cfg
-    )
+    evaluate = jax.jit(jax.value_and_grad(pw.solve, has_aux=True), static_argnums=3)
+    (value, (plain, invalid)), gradient = evaluate(temp, 0.0, jax.random.PRNGKey(7), cfg)
     assert int(invalid) == 0
     assert float(value) == float(plain)
     assert gradient.shape == (2, 3)

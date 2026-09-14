@@ -7,6 +7,8 @@ transition, including position observables. Merely scoring the hit probability
 while freezing an unconditional travel time omits this conditional derivative.
 """
 
+import functools
+
 import jax
 import jax.numpy as jnp
 
@@ -43,7 +45,7 @@ def next_hit(x, v, lo, hi):
     return jnp.where(moving, jnp.maximum(distance, 0.0), jnp.inf), side
 
 
-def advance(
+def _advance_impl(
     x, v, alive, grid, faces, wall, mass, dt, key, epsilon=0.0, acc_delta=0.0, max_bounces=4
 ):
     """1-D first-event tracking and P3 wall gradient; returns the apply_faces tuple.
@@ -109,4 +111,32 @@ def advance(
         alive,
         jnp.sum(exhausted),
         jnp.where(originally_alive, logp, 0.0),
+    )
+
+
+_advance_jitted = jax.jit(_advance_impl, static_argnames=("faces", "max_bounces"))
+
+
+@functools.wraps(_advance_impl)
+def advance(
+    x, v, alive, grid, faces, wall, mass, dt, key, epsilon=0.0, acc_delta=0.0, max_bounces=4
+):
+    # Eager calls need a stable compilation boundary; an enclosing jit/grad already
+    # supplies tracing. Bypass the extra boundary there to keep its AD graph small.
+    leaves = jax.tree.leaves((x, v, alive, grid, wall, mass, dt, key, epsilon, acc_delta))
+    traced = any(isinstance(leaf, jax.core.Tracer) for leaf in leaves)
+    kernel = _advance_impl if traced else _advance_jitted
+    return kernel(
+        x,
+        v,
+        alive,
+        grid,
+        faces,
+        wall,
+        mass,
+        dt,
+        key,
+        epsilon=epsilon,
+        acc_delta=acc_delta,
+        max_bounces=max_bounces,
     )

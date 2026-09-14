@@ -196,6 +196,12 @@ def run(
 ):
     """Run ``static.n_steps`` timesteps.
 
+    ``score_mode="paper"`` keeps terminal-label accumulators. ``"trajectory"``
+    stores the same complete likelihood prefix in every slot, counting each event
+    once. Initialize the accumulator to zero or continue with the same mode.
+    Consume the latter with ``adjoint.trajectory_surrogate``. This likelihood
+    does not differentiate hard cell memberships or changing rounding support.
+
     Returns:
         ``((state, cstate), (out, diagnostics))`` where the second element is
         stacked over time.  ``out`` is the full :class:`CellMoments` per step when

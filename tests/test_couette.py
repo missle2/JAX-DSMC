@@ -106,3 +106,8 @@ def test_wall_temperature_sets_the_bulk_temperature_scale(diffuse):
     temp = diffuse["temp"]
     assert float(np.min(temp)) > 0.5 * cu.TEMP
     assert float(np.mean(temp)) > cu.TEMP, "shear work must heat the gas"
+
+
+def test_profile_refuses_to_report_truncated_transport():
+    with pytest.raises(RuntimeError, match="increase a_max"):
+        cu.profile(cu.Case(n_cells=4, npc=120, a_max=1), n_warm=0, n_sample=2, sample_stride=2)
