@@ -175,7 +175,7 @@ class WallParams:
     sensitivities -- whereas the rule itself selects a code path and must stay static.
 
     Fields:
-        temp:  ``f64[2D]`` wall temperature.
+        temp:  ``f64[2D]`` isotropic or ``f64[2D,3]`` component wall temperatures.
         vwall: ``f64[2D, 3]`` wall velocity; must be tangential to its own face.
         acc:   ``f64[2D]`` accommodation coefficient.  ``1`` is fully diffuse,
                ``0`` is specular (``surf_collide_diffuse.cpp:211``).
@@ -304,7 +304,7 @@ def _diffuse_velocity(v, wall, mass, axis, side, key, delta=0.0):
     v_out = w[:, None] * fresh + (1.0 - w)[:, None] * v_spec
     # the realised branch is data, not a function of `acc`: only the probability of it is
     log_p = jnp.where(took_diffuse, safe_log(wall.acc[f]), safe_log(1.0 - wall.acc[f]))
-    return v_out, log_p
+    return v_out, jnp.where(delta > 0.0, 0.0, log_p)
 
 
 def _apply_face_rule(x, v, alive, hit, axis, side, bc, grid, wall, mass, key):
@@ -523,7 +523,12 @@ def apply_faces(
     draw and, when ``epsilon > 0``, the crossing branch.  It is added to
     ``ParticleState.logh_acc`` by the caller and consumed by :func:`adjoint.surrogate`.
 
-    Two stages, in this order:
+    In 1D, dispatches to chronological P3 random-time tracking with a conditional
+    Gaussian derivative (``wall_adjoint.advance``). In higher dimensions, the
+    legacy two-stage treatment below remains; it has not been given the same
+    expected-gradient guarantee.
+
+    Legacy stages, in this order:
 
     1. **The wall bounce**, for the first diffuse face reached (if any).  The particle
        is advanced to the wall, re-emitted, and the *remaining* time is advected with
@@ -540,6 +545,18 @@ def apply_faces(
     production timestep.
     """
     D = x_old.shape[-1]
+    if D == 1 and BC.DIFFUSE in faces.bcs:
+        # Lazy import breaks the boundary dispatch import cycle.
+        from jax_dsmc.wall_adjoint import advance  # noqa: PLC0415
+
+        result = advance(
+            x_old, v, alive, grid, faces, wall, mass, dt, key, epsilon=epsilon, acc_delta=acc_delta
+        )
+        if score_spread == "cell":
+            return (*result[:4], spread_score_over_cell(result[4], x_old, alive, grid))
+        if score_spread != "particle":
+            raise ValueError("score_spread must be particle or cell")
+        return result
     keys = jax.random.split(key, 2 * D + 3)
     # [P3] section 4: the regularised step.  `epsilon == 0` gives `tau == dt` exactly.
     tau = sampling.sample_tau(keys[2 * D + 2], x_old.shape[0], dt, epsilon)

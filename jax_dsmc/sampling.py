@@ -167,7 +167,8 @@ def sample_diffuse_velocity(key, n, temp_wall, mass, axis, inward, vwall):
     """
     k_perp, k_tan = jax.random.split(key)
     v = thermal_speed(temp_wall, mass) * jax.random.normal(k_tan, (n, 3), dtype=jnp.float64)
-    v_perp = inward * sample_flux_normal(k_perp, n, temp_wall, mass)
+    normal_temp = temp_wall if jnp.ndim(temp_wall) == 0 else temp_wall[axis]
+    v_perp = inward * sample_flux_normal(k_perp, n, normal_temp, mass)
     return v.at[:, axis].set(v_perp) + vwall
 
 
