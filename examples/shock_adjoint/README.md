@@ -182,8 +182,8 @@ Two things fall out that matter more than the headline:
 - **FD cannot do this at all.** Helium's finite difference sits at 0.57σ — the signal is
   below its own noise — so the `|z| = 0.24` AD-vs-FD agreement is a *low-power* check, not
   a verification. Reaching 3σ on FD alone would need ~28× the ensemble.
-- **The adjoint is 8.4× less noisy than FD** for helium in the shock, against the 2.0–2.3×
-  measured in the 0-D `p2_replication`. That is the first configuration here where [P2]'s
+- **The adjoint is 8.4× less noisy than FD** for helium in the shock, against the 1.7–2.0×
+  measured in the 0-D `p2_replication` (mean over β = 1, 2; individual points 1.3–2.3). That is the first configuration here where [P2]'s
   claimed ~10× advantage actually shows up, and it appears precisely where the pathwise
   term is doing the work.
 

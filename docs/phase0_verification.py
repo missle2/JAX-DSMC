@@ -446,6 +446,14 @@ MILESTONES = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"]
 #         misses [P3]'s INSIDE form by 9.8e-2; reordering the loop swaps both.  A
 #         companion test pins the PRODUCTION step's ordering behaviourally.
 #         tests/test_adjoint_oracle.py::test_oracle3_*.
+#   U6 -- spec 9.3 / 19.  CLOSED.  `inflow.revive_slots` is the only sanctioned way to
+#         set alive False->True and zeroes every ACCUMULATOR_FIELDS entry in the same
+#         update; the field list is checked by reflection over ParticleState.  The gate
+#         is met quantitatively: a revived slot's gradient equals a fresh particle's
+#         exactly, and skipping the reset shifts it by exactly sum(inherited*phi)/N
+#         (matched to 1e-10).  NOTE the obvious version of this test proves nothing --
+#         magic(L)=exp(L-sg(L)) has gradient dL/dtheta, so a stale CONSTANT differentiates
+#         to zero; the accumulator must be made theta-dependent.  tests/test_inflow.py.
 UNVERIFIED = [
     (
         "U4",
@@ -469,16 +477,28 @@ UNVERIFIED = [
         "U2",
         "M6",
         "the score estimator is unbiased at a NON-ZERO gradient",
-        # Half-closed.  At a KNOWN ZERO it now passes: the collision-invariant check
-        # (section 23.3.7) gives |z| <= 1.53 for alpha/diam/omega against an exact 0.
-        # And the SE target is met: diam reaches 1.2% SE at N=2.56e5, M_s=100.  What is
-        # NOT closed is unbiasedness at a non-zero value, and the reason is that the
-        # obvious reference is not a reference: mode-B FD at [P2]'s Delta m = 0.1 is
-        # O(h^2) TRUNCATION-biased, measured at |z| = 6.4 for diam (section 23.3).
-        # Comparing an estimator against a biased yardstick cannot demonstrate either.
-        "sweep Delta m at fixed large M_s and Richardson-extrapolate the FD to h -> 0 "
-        "to remove the O(h^2) bias, THEN require |z| < 2 against the scored AD at an SE "
-        "below 10% of the mean; report the sample count needed",
+        # SETTLED 2026-09-11, and the answer is NO.  See `docs/ATTRIBUTION.md`.
+        #
+        # The obstacle recorded here -- that mode-B FD is itself O(h^2) biased, so it
+        # cannot serve as a yardstick -- was real but avoidable.  An ENSEMBLE FD over
+        # independent keys differences two ensemble means and is unbiased whatever the
+        # coupling, so it IS a reference; `acc` (a pure Bernoulli threshold, zero
+        # pathwise derivative) then isolates the score with nothing else in the way.
+        #
+        # Measured: the per-particle DiCE attribution is biased LOW, and the bias grows
+        # with trajectory length -- FD/AD = 1.13, 1.32, 1.57, 1.95, 2.82 at M = 2, 5, 10,
+        # 20, 40.  With collisions switched off the same estimator is EXACT (|z| = 0.18),
+        # which identifies reward attribution rather than the log-probability as the
+        # cause: `sum_i phi_i grad L_i` drops every Cov(phi_j, grad l_k) for particles j
+        # that the decision reached through a collision.
+        #
+        # Consequences already recorded: the shipped collision score is ~6% low at
+        # M = 16 (a competing explanation for half of VARIANCE.md section B's |z| = 6.4),
+        # and the shock density-ratio gradient comes out with the WRONG SIGN.
+        "SETTLED: not unbiased.  The exact form is the global-reward estimator (20x worse "
+        "SE); the cheaper fix is to relax the decision onto the pathwise route, as "
+        "`acc_delta` does for accommodation.  Re-opening would mean building the "
+        "single-count accumulator described in docs/ATTRIBUTION.md",
     ),
     (
         "U10",
@@ -486,12 +506,6 @@ UNVERIFIED = [
         "the v_r-frame and lab-frame collision reparameterisations are equally good "
         "pathwise estimators",
         "measure Var(dJ/dtheta) over seeds under both samplers at matched cost, 0-D and 1-D",
-    ),
-    (
-        "U6",
-        "M5",
-        "logh_acc is zeroed when inflow refills a dead slot",
-        "inject into a dead slot; assert accumulator 0 and gradient equals a fresh particle's",
     ),
     (
         "U7",

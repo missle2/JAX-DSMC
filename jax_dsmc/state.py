@@ -210,6 +210,27 @@ class Diagnostics:
     majorant_violations: jax.Array
     min_majorant_margin: jax.Array
     decision_checksum: jax.Array
+    wall_recrossed: jax.Array
+    """``i32`` particles that crossed more than one boundary face in a step.
+
+    The wall analogue of ``attempts_clipped``: only the resolved crossings are
+    applied and the remainder is clamped, so a nonzero value means the timestep is
+    too large for the geometry (section 9.4).
+    """
+    inflow_injected: jax.Array
+    """``i32`` particles injected through ``INFLOW`` faces this step."""
+    inflow_shortfall: jax.Array
+    """``f64`` emissions the per-face ``capacity`` could not place.
+
+    A silently dropped entrant is a mass sink that looks exactly like correct
+    physics, which is why it is counted rather than clipped away (section 9.3).
+
+    All three are **required, not defaulted**.  A default of ``None`` makes them
+    absent leaves, so a ``Diagnostics`` built without them has a different pytree
+    structure -- which ``lax.scan`` rejects, and which silently changed the leaf
+    count under ``tree_map``.  Requiring them makes an inconsistent instance
+    unconstructible.
+    """
 
 
 # --- parameters -----------------------------------------------------------

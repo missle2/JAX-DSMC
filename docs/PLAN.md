@@ -859,3 +859,98 @@ we no longer run.
 2. The objective must depend on **both** `x_M` and `v_M`. With a velocity-only `phi`,
    `alpha == 0` and the oracle silently degenerates into Oracle 1 while still passing. A
    nonzero-`alpha` guard is now asserted before the comparison.
+
+---
+
+## Status update — M4 forward complete: thermal walls, inflow, outflow (2026-09-09)
+
+All wall and open boundary conditions are built **forward-only**, verified against external
+physics rather than against our own prior output, and gap **U6 is closed**. Adjoints (M7/M8)
+are deliberately not started: the forward physics had to be right first.
+
+### What was built
+
+| piece | where | status |
+|---|---|---|
+| Per-face BCs (`Faces`, `WallParams`) | `boundary.py` | walls, inflow and periodic can now coexist on one domain |
+| Diffuse/thermal wall, SPARTA-style | `boundary.py`, `sampling.py` | flux-weighted half-Maxwellian, accommodation, sliding walls |
+| Regularised thermal wall, [P3] §4 | `boundary.py`, `sampling.py` | `tau ~ N(dt, eps^2)`; `eps = 0` **bitwise** exact |
+| Inflow / outflow | `inflow.py` | Bird's bounded rejection as a static `scan`; U6 guard |
+| Couette gate | `examples/couette/` | Chapman-Enskog recovered as `Kn -> 0`; see below |
+| Two-sided-inflow shock | `examples/shock/inflow_driven.py` | all six moments within **0.7 %** of Rankine-Hugoniot |
+
+### The two headline gates
+
+**Couette shear viscosity vs Chapman-Enskog** (Bird 4.64), argon. The gate is the
+**`Kn -> 0` intercept** of a Knudsen sweep, not any single run, because Chapman-Enskog is a
+continuum limit: at finite Kn the Knudsen layers eat into the sheared bulk and the apparent
+viscosity falls, with a measured slope of about `-0.9` per unit Kn over `Kn = 1/10 ... 1/30`.
+Current numbers are regenerated into `examples/couette/RESULTS.md` from the run logs and are
+deliberately not restated here.
+
+An earlier form of this line read **"0.24 % from Chapman-Enskog"**. That claim is
+**retracted**. It came from a single draw of a quantity that carries several per cent of Monte
+Carlo scatter, and the same mistake was then made three more times -- attributing the offset
+in turn to under-resolution, to cell size, and to under-convergence -- before an ensemble was
+finally run. The one-line check that would have caught it at the outset was to run the same
+configuration twice with different seeds. `examples/couette` now has no single-seed mode:
+`--seeds` has a hard minimum of 2, warm-up is set per case as a multiple of the momentum
+diffusion time `L^2/nu` rather than as a step count, and every ratio is reported as mean +- SE
+with its seed count.
+
+**Two-sided-inflow normal shock at Mach 2**, `L = 60 lambda`: upstream `nrho`/`T`/`ux` within
+0.19/0.68/0.05 %, downstream within 0.66/0.26/0.37 % of Rankine-Hugoniot, mass flux conserved
+end to end to 0.17 %.
+
+### Three things the build got wrong first, all caught by measurement
+
+1. **A sub-move scan that was not needed.** The first thermal wall resolved hit times with a
+   bounded `K_bounce` scan, imported from SPARTA — which needs it only because it has general
+   cut-cell geometry. [P3] eq. `thermal_v_L` is already closed form on a static mesh. Both were
+   implemented and compared: identical results, **1.65 s against >7 min**. §9.4 was rewritten.
+2. **A corner bug that heated the gas.** Applying each face's rule in turn gave a particle
+   leaving through two faces *two* flux-weighted re-emission draws; since each is biased toward
+   fast particles, the second pumps in energy — a cold gas settled at 350 K (`D=2`) and 386 K
+   (`D=3`) against a 300 K wall. Resolving the first face *in time* and running a statically
+   gated second pass took `D=3` to **300.90 K**.
+3. **A shock parked inside its own thickness.** Initialising the box at the upstream state made
+   the shock form at the outlet, leaving 6 mfp of downstream run for a shock ~5-7 mfp thick; the
+   plateau read 9 % off Rankine-Hugoniot. Mass flux was conserved to 0.07 % throughout, which is
+   what showed the layout was at fault and not the solver.
+
+### Known limitation, measured
+
+A corner between **two thermal faces on different axes** resolves two crossings, not three, so
+an all-thermal box carries a residual `3.3e-4` recrossing rate and ~0.3 % warm bias. It is
+**exactly zero** for both target geometries (Couette: periodic/thermal; shock: inflow/specular),
+because periodic, specular and outflow keep exact any-number-of-crossings folds applied *after*
+the wall bounce. The ordering inside `apply_faces` is load-bearing and asserted.
+
+### Next
+
+M7 (thermal-wall adjoint) then M8 (inflow ensemble adjoint). The groundwork is in place:
+`logh_acc` is the accumulator, the branch probabilities `p_l` are implemented and validated
+against empirical crossing frequencies, and [P3] eq. `J_final_t1_x` shows the boundary
+sensitivity is `(d log p_l/dx) r_i` — structurally the same DiCE score the collision `eta` term
+already uses. M7 is wiring, not new theory.
+
+## Status update -- M7/M8 boundary adjoints, partial (2026-09-11)
+
+Boundary gradients are built and the forward solve is provably unchanged (Couette and a
+30 000-step inflow shock both reproduce pre-M7 output exactly). What is **verified against
+external references**, not against our own prior output:
+
+* `dJ/dT_wall`, `dJ/dv_wall` -- pathwise, fixed-key FD to 1e-11, and pointwise against
+  the Couette closed form over the whole profile.
+* `dJ/d(nrho)` for inflow -- score, ensemble FD/AD = 1.04.
+* `d(T_2/T_1)/du_1` for the shock -- against Rankine-Hugoniot over `M = 1.6-4.0`.
+
+What is **not**: `d(rho_2/rho_1)/du_1` has the wrong sign, and `dJ/d(acc)` is biased 2.8x
+at a 40-step horizon. Both are score-carried and both are explained -- with measurements --
+in `docs/ATTRIBUTION.md`. Read that before trusting any score-carried gradient; the headline
+is that its bias **grows with trajectory length**, so a result that is fine at `M = 16` is
+not fine at `M = 400`.
+
+M7/M8 are therefore **partially complete**: the pathwise half is done and validated, the
+score half needs the unbiased estimator, and the chaotic-sensitivity problem needs a method
+this project does not have yet.

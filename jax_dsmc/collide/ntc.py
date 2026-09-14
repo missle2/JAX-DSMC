@@ -377,6 +377,9 @@ def collide(
         majorant_violations=nviol,
         min_majorant_margin=margin,
         decision_checksum=lax.stop_gradient(chk),
+        wall_recrossed=jnp.array(0, jnp.int32),
+        inflow_injected=jnp.array(0, jnp.int32),
+        inflow_shortfall=jnp.array(0.0, jnp.float64),
     )
     new_state = ParticleState(
         x=state.x, v=v[:n_part], species=state.species, alive=state.alive, logh_acc=logh[:n_part]

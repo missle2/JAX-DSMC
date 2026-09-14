@@ -48,11 +48,17 @@ FIGURES = "examples/shock_adjoint/figures"
 NAMES = ("temp", "ux", "alpha", "diam")
 
 LABEL = {
+    # `omega` and `nrho` appear only in the ensemble-size probe, not in the N-ladder
+    "omega": r"$\omega$",
+    "nrho": "$n$",
     "temp": "$T_1$",
     "ux": "$u_\\mathrm{stream}$",
     "alpha": r"$\alpha$",
     "diam": "$d_\\mathrm{ref}$",
 }
+
+#: ASCII names for the text tables -- `LABEL` is LaTeX and renders as raw markup there.
+PLAIN = {"temp": "T_1", "ux": "u_stream", "alpha": "alpha", "diam": "d_ref"}
 
 COLOUR = {
     "temp": SERIES_ANALYTIC,
@@ -200,6 +206,51 @@ def parse_variance_log(path):
         "B": _parse_b(sec["B"]),
         "C": _parse_c(sec["C"]),
         "D": _parse_d(sec["D"]),
+    }
+
+
+def parse_ens_size(path):
+    """``ens_size.log`` -> the forward/gradient noise at one theta and one case.
+
+    This is the probe that set the ensemble size for the whole study.  It is a *single*
+    configuration (``sa.case(1)``, 512 keys) rather than a ladder, which is the point:
+    the question it answers is "how many independent runs does one gradient need", and
+    that needs one theta measured well, not many measured badly.
+    """
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    keys = re.search(r"grads over (\d+) keys", text)
+    jm = re.search(r"J: mean (\S+)\s+sd (\S+)\s+\(([\d.]+) % per seed\)", text)
+    if not keys or not jm:
+        raise ValueError(f"{path}: missing the key count or the `J:` line")
+    grads = {
+        m.group(1): {
+            "mean": float(m.group(2)),
+            "sem": float(m.group(3)),
+            "se_pct": float(m.group(4)),
+        }
+        for m in re.finditer(r"AD\s+(\w+):\s+(\S+)\s+\+-\s+(\S+)\s+\(([\d.]+) % SE\)", text)
+    }
+    scaling = [
+        {
+            "n": int(m.group(1)),
+            "mean": float(m.group(2)),
+            "sem": float(m.group(3)),
+            "se_pct": float(m.group(4)),
+        }
+        for m in re.finditer(r"n=\s*(\d+)\s+mean\s+(\S+)\s+SE\s+(\S+)\s+\(\s*([\d.]+) %\)", text)
+    ]
+    if not grads or not scaling:
+        raise ValueError(f"{path}: no AD rows or no SE-scaling rows parsed")
+    scale_param = re.search(r"SE scaling for (\w+)", text)
+    return {
+        "n_keys": int(keys.group(1)),
+        "j_mean": float(jm.group(1)),
+        "j_sd": float(jm.group(2)),
+        "j_rel_sd_pct": float(jm.group(3)),
+        "grads": grads,
+        "scaling": sorted(scaling, key=lambda r: r["n"]),
+        "scale_param": scale_param.group(1) if scale_param else "diam",
     }
 
 
@@ -449,7 +500,132 @@ def table_split(sp):
     print("  PARTICLES is the only lever; no estimator change touches pathwise noise.")
 
 
-# --- figures ------------------------------------------------------------------
+def _classify(z, cv, target):
+    """``(bottleneck, runs-needed)`` for one parameter.
+
+    ``z < 2`` means there is no signal to measure and no ensemble size helps, so the run
+    count is left blank rather than quoted as a huge number -- it is unbounded, not large.
+    """
+    if z < 2.0:
+        return "SIGNAL (mean ~ 0)", "--"
+    need = (cv / target) ** 2
+    label = "VARIANCE" if cv > 5.0 * target else "neither"
+    if need < 1.0:
+        return label, "1 (already)"  # a single run is already inside the target
+    return label, f"{need:,.0f}"
+
+
+def table_bottleneck(sp, target=0.01):
+    """Separate a *signal* problem from a *variance* problem.
+
+    These are constantly conflated and they have opposite remedies.  A relative standard
+    error blows up either because the gradient's mean is near zero (nothing is wrong with
+    the estimator -- there is simply little to measure) or because the per-run spread is
+    genuinely large (the estimator is noisy, and more runs is the only fix).  Reporting
+    only ``SE/|mean|`` cannot tell them apart, and reading a signal problem as a variance
+    problem sends you looking for an estimator bug that is not there.
+
+    Two independent numbers separate them at fixed ``N`` and ``M``:
+
+    * ``|z|`` -- is the mean distinguishable from zero at all?  Below ~2, it is a signal
+      problem and no ensemble size fixes it.
+    * ``CV`` -- the per-**run** relative spread, which is a property of the estimator and
+      does not improve with more runs; only the *mean's* error does.
+    """
+    print("\n=== Signal problem or variance problem? ====================================")
+    print("  A large relative error has two completely different causes with opposite")
+    print("  remedies.  `|z|` says whether there is a signal; `CV` says whether the")
+    print("  estimator is noisy about it.  Only the second is an estimator concern.\n")
+    n_part = max(sp)
+    keys = sp[n_part]["n_keys"]
+    print(f"  N = {n_part}, {keys} keys.")
+    print(
+        f"  {'param':>7} {'CV per run':>11} {'|z| of mean':>12} {'score % var':>12} "
+        f"{'runs for ' + f'{target:.0%}':>13} {'bottleneck':>17}"
+    )
+    _rule(84)
+    for n in NAMES:
+        r = sp[n_part]["rows"][n]
+        mean, sd = abs(r["mean"]), r["sd_full"]
+        cv = sd / mean if mean else math.inf
+        z = mean / (sd / math.sqrt(keys)) if sd else math.inf
+        tot = r["sd_pathwise"] ** 2 + r["sd_score"] ** 2
+        share = r["sd_score"] ** 2 / tot if tot else math.nan
+        tag, need_s = _classify(z, cv, target)
+        print(f"  {n:>7} {100 * cv:>10.2f}% {z:>12.1f} {share:>11.0%} {need_s:>13} {tag:>17}")
+    print("\n  `diam` is the one real estimator concern here, and it is NOT about a")
+    print("  vanishing mean: its mean is resolved at high |z| and it still carries a")
+    print("  large per-run spread, because 100 % of its gradient variance is the score")
+    print("  term -- it has no pathwise route at all (sd(pathwise) is exactly 0 above).")
+    print("  A score term multiplies the reward by grad-log-p, and that does not shrink")
+    print("  as the reward concentrates, so its variance stays high by construction.")
+    print("\n  `alpha`'s huge relative error is the opposite case and must not be read as")
+    print("  an estimator defect: its true gradient really is ~0 near argon's stationary")
+    print("  point.  Move off that point -- helium at alpha = 1.26 -- and it resolves at")
+    print("  |AD|/SE = 4.7 with no change to the estimator (see examples/p2_replication).")
+    print("\n  The remedies differ and they do not overlap: a baseline attacks exactly the")
+    print("  score variance, so it is worth up to 84x for `diam` and 1.02-1.07x for the")
+    print("  pathwise parameters.  Nothing but more particles touches pathwise noise.")
+
+
+def _resolved(row, k=2.0):
+    """Is this gradient mean distinguishable from zero?  Below this a *relative* error
+    divides by noise, and any "seeds needed" figure derived from it is meaningless."""
+    return abs(row["mean"]) > k * row["sem"]
+
+
+def table_ensemble_size(e):
+    """Why the study averages over many seeds, at one theta."""
+    n = e["n_keys"]
+    j_at_n = e["j_rel_sd_pct"] / math.sqrt(n)
+    print("\n=== E. why the gradient needs an ensemble and the forward solve does not ====")
+    print("  One theta, one case, 512 independent keys.  The forward solve and the")
+    print("  gradient are measured on the SAME runs, so this is a like-for-like")
+    print("  comparison of how noisy each one is per unit of work.\n")
+    print(f"  Forward J: {e['j_rel_sd_pct']:.2f} % per seed  ->  {j_at_n:.3f} % over {n} seeds.")
+    print("  A single forward run already resolves J to a few per cent.  That is the")
+    print("  baseline every gradient below is measured against.\n")
+    print(
+        f"  {'parameter':>10} {'AD mean':>15} {'rel SE %':>10} {'vs forward':>11} "
+        f"{'seeds for 10 %':>15}"
+    )
+    for name, r in sorted(e["grads"].items(), key=lambda kv: kv[1]["se_pct"]):
+        need = n * (r["se_pct"] / 10.0) ** 2
+        need_s = "already" if r["se_pct"] <= 10.0 else f"{need:,.0f}"
+        # a mean consistent with zero makes `relative` error a division by noise; the
+        # count it implies is unbounded, not merely large, so quoting one is a fiction
+        if not _resolved(r):
+            need_s = "(mean ~ 0)"
+        print(
+            f"  {name:>10} {r['mean']:>15.5e} {r['se_pct']:>10.1f} "
+            f"{r['se_pct'] / j_at_n:>10.0f}x {need_s:>15}"
+        )
+    unres = [k for k, r in e["grads"].items() if not _resolved(r)]
+    if unres:
+        print(
+            f"\n  {', '.join(unres)}: mean within 2 SE of zero, so the relative error "
+            "divides by\n  noise.  Those rows read `unresolved`, not `expensive` -- no "
+            "ensemble size fixes a\n  gradient that may genuinely be zero."
+        )
+    print("\n  The last column is the estimator's whole problem: `temp` is as well resolved")
+    print("  as the objective itself, while a score-carried parameter needs thousands of")
+    print("  independent runs for the same relative precision.  It is not a bug in the")
+    print("  estimator -- section A shows all four obey the same N^-1/2 law -- it is that")
+    print("  they start orders of magnitude apart.\n")
+    print(f"  SE scaling for `{e['scale_param']}` (the sampling law, measured):")
+    print(f"    {'seeds':>7} {'SE':>12} {'rel SE %':>10}")
+    for r in e["scaling"]:
+        print(f"    {r['n']:>7d} {r['sem']:>12.3e} {r['se_pct']:>10.1f}")
+    first, last = e["scaling"][0], e["scaling"][-1]
+    ratio = first["sem"] / last["sem"]
+    span = math.sqrt(last["n"] / first["n"])
+    print(
+        f"\n  SE falls {ratio:.2f}x over a {last['n'] // first['n']}x range of seeds; "
+        f"1/sqrt(n) predicts {span:.2f}x."
+    )
+
+
+# --- figures -------------------------------------------------------------------
 
 
 def _loglog_guide(ax, x, y0, slope, label):
@@ -611,6 +787,119 @@ def figure_d(m, path):
     return savefig(fig, path)
 
 
+def figure_ensemble_size(e, path):
+    """The variance argument for ensemble averaging, at one theta.
+
+    Two panels, both answering "how many independent runs does this need":
+
+    * left -- relative standard error against ensemble size, for the objective and for
+      the gradient, measured on the *same* runs.  They start two to three orders of
+      magnitude apart and fall at the same `1/sqrt(n)` rate, so the gap never closes:
+      it can only be paid for.
+    * right -- where each parameter sits at the full 512 seeds.  This is why the study
+      quotes ensemble means rather than single draws, and why some parameters are
+      reported as unresolved rather than tuned.
+    """
+    n_keys = e["n_keys"]
+    ns = np.array([r["n"] for r in e["scaling"]], dtype=float)
+    rel = np.array([r["se_pct"] for r in e["scaling"]])
+    grid = np.logspace(math.log10(ns.min()), math.log10(max(ns.max(), 1e4)), 64)
+
+    fig, ax = make_figure(1, 2, figsize=(12.8, 4.8))
+
+    # the forward solve: sd is per-seed, so its SE over n seeds is sd/sqrt(n)
+    ax[0].plot(
+        grid,
+        e["j_rel_sd_pct"] / np.sqrt(grid),
+        "-",
+        color=INK_SECONDARY,
+        linewidth=3.0,
+        label=rf"forward $J$  ({e['j_rel_sd_pct']:.2f}% per seed)",
+        zorder=4,
+    )
+    label = LABEL.get(e["scale_param"], e["scale_param"])
+    ax[0].plot(
+        ns,
+        rel,
+        "o-",
+        color=SERIES_ERROR,
+        linewidth=2.2,
+        markersize=8,
+        label=rf"AD $\partial J/\partial${label}",
+        zorder=5,
+    )
+    ax[0].plot(
+        grid,
+        rel[-1] * np.sqrt(ns[-1] / grid),
+        "--",
+        color=REFERENCE,
+        linewidth=1.4,
+        label=r"$1/\sqrt{n}$",
+        zorder=1,
+    )
+    ax[0].axhline(10.0, color=SERIES_ANALYTIC, linewidth=1.2, alpha=0.7)
+    ax[0].text(grid[0], 11.0, "10 % relative error", fontsize=8, color=SERIES_ANALYTIC)
+    ax[0].axvline(100, color=INK_SECONDARY, linestyle=":", linewidth=1.4)
+    ax[0].annotate(
+        "[P2]'s $M_s = 100$",
+        xy=(100, rel[-1] * math.sqrt(ns[-1] / 100)),
+        xytext=(8, 14),
+        textcoords="offset points",
+        fontsize=8.5,
+        color=INK_SECONDARY,
+    )
+    ax[0].set(
+        xscale="log",
+        yscale="log",
+        xlabel="ensemble size $n$ (independent keys)",
+        ylabel=r"relative standard error  [%]",
+    )
+    ax[0].set_title("the gradient starts where the objective ends", fontsize=11)
+    ax[0].legend(frameon=False, fontsize=8.5, loc="lower left")
+
+    # --- right: every parameter at the full ensemble --------------------------------
+    j_at_n = e["j_rel_sd_pct"] / math.sqrt(n_keys)
+    items = sorted(e["grads"].items(), key=lambda kv: kv[1]["se_pct"])
+    names = [rf"$\partial J/\partial${LABEL.get(k, k)}" for k, _ in items]
+    vals = [v["se_pct"] for _, v in items]
+    y = np.arange(len(items))
+    # Hollow == the gradient mean is within 2 SE of zero, so its *relative* error is a
+    # division by noise and the bar length is not a precision statement.  A hatch was
+    # tried first and is invisible against a saturated fill at this figure size.
+    for yi, (_, row) in zip(y, items, strict=True):
+        solid = _resolved(row)
+        ax[1].barh(
+            yi,
+            vals[yi],
+            height=0.62,
+            color=SERIES_MEASURED if solid else "none",
+            edgecolor=SERIES_MEASURED if solid else SERIES_ERROR,
+            linewidth=0.0 if solid else 1.6,
+            linestyle="solid" if solid else "dashed",
+        )
+    for yi, (v, (_, row)) in enumerate(zip(vals, items, strict=True)):
+        tag = f"{v:.1f}%  ({v / j_at_n:.0f}x)"
+        if not _resolved(row):
+            tag += r"   mean $\approx 0$"
+        ax[1].text(v * 1.15, yi, tag, va="center", fontsize=8, color=INK_SECONDARY)
+    ax[1].axvline(
+        j_at_n,
+        color=INK_SECONDARY,
+        linewidth=2.5,
+        label=rf"forward $J$ at $n={n_keys}$  ({j_at_n:.2f}%)",
+    )
+    ax[1].axvline(10.0, color=SERIES_ANALYTIC, linestyle="--", linewidth=1.4, label="10 %")
+    ax[1].set_yticks(y)
+    ax[1].set_yticklabels(names, fontsize=9)
+    ax[1].set_xscale("log")
+    ax[1].set_xlim(right=max(vals) * 6)
+    ax[1].set(xlabel=rf"relative standard error at $n = {n_keys}$  [%]")
+    ax[1].set_title("same runs, same cost, wildly different precision", fontsize=11)
+    ax[1].legend(frameon=False, fontsize=8, loc="lower right")
+    fig.tight_layout()
+    return savefig(fig, path)
+
+
 def figure_split(sp, path):
     """Pathwise vs score noise, measured separately rather than inferred.
 
@@ -662,6 +951,7 @@ def main(argv=None):
     v = parse_variance_log(os.path.join(args.scratch, "variance.log"))
     m = parse_m_scaling(os.path.join(args.scratch, "m_scaling.log"))
     sp = parse_split(os.path.join(args.scratch, "split_var.log"))
+    ens = parse_ens_size(os.path.join(args.scratch, "ens_size.log"))
 
     print("=" * 92)
     print("  SCORE-ESTIMATOR VARIANCE STUDY -- consolidated report")
@@ -673,6 +963,8 @@ def main(argv=None):
     table_c(v["C"])
     table_d(v["D"], m)
     table_split(sp)
+    table_bottleneck(sp)
+    table_ensemble_size(ens)
 
     if not args.no_plot:
         print("\n=== figures ================================================================")
@@ -682,6 +974,7 @@ def main(argv=None):
             figure_c(v["C"], os.path.join(args.figures, "variance_c_window.png")),
             figure_d(m, os.path.join(args.figures, "variance_d_steps.png")),
             figure_split(sp, os.path.join(args.figures, "variance_decomposition.png")),
+            figure_ensemble_size(ens, os.path.join(args.figures, "variance_ensemble_size.png")),
         ):
             print(f"  {p}")
 

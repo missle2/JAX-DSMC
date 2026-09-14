@@ -584,7 +584,7 @@ Two consequences that matter more than the headline:
   `|z| = 0.24` AD-vs-FD agreement is a **low-power** check, not a verification. Never quote it
   as one. FD needs ~28x the ensemble to reach 3 sigma.
 - **`SE_FD/SE_AD = 8.4x` for helium** — the first configuration here where [P2]'s claimed ~10x
-  AD noise advantage actually shows up (the 0-D replication measured 2.0-2.3x). It appears where
+  AD noise advantage actually shows up (the 0-D replication measured 1.7-2.0x on average). It appears where
   the pathwise term dominates, consistent with the split-variance finding above.
 
 Argon's `|FD|/SE = 1.45` beating its `|AD|/SE = 0.8` is not evidence against AD — argon's true
@@ -718,3 +718,150 @@ Two traps worth remembering, both found by building it:
 
 It also corrected §13.3: two steps is **not** the minimum that discriminates (one step gives
 2.66e-2), though two remains the right choice for margin and for testing `B_k` composition.
+
+### The Couette viscosity gate, and how it was got wrong four times (2026-09-09)
+
+**Read this before quoting any ratio from `examples/couette`.**
+
+The M4 gate compares the measured shear viscosity against Chapman-Enskog (Bird 4.64). The
+final form of that gate is the **`Kn -> 0` intercept of a Knudsen sweep**, with every point
+an ensemble over independent seeds. It reached that form only after four successive
+explanations of an apparent viscosity deficit turned out to be wrong:
+
+| # | explanation offered | what actually killed it |
+|---|---|---|
+| 1 | "DSMC under-resolution at coarse cells" | the coarse point was `A_max` clipping (gap U4), not resolution |
+| 2 | "cell size" | **partly right, and initially dismissed wrongly** -- see below |
+| 3 | "finite-Kn physics" (first attempt) | the sweep's widest case had run 1.7 % of a diffusion time |
+| 4 | "under-convergence" | ruled out properly: warm-up 1.0 -> 3.0 diffusion times moves the gate `+0.0041 +- 0.0065`, `\|z\| = 0.63` |
+
+**The single root cause: a quantity with no error bar was treated as a measurement, four
+times over.** `mu_meas/mu_CE` carries several per cent of Monte Carlo scatter at any
+affordable particle count. The one-line check that would have caught this at the very
+outset -- before any of the four explanations were constructed -- is *run the same
+configuration twice with different seeds*.
+
+**The resolution is explanation 3, done properly.** The whole offset is finite-Knudsen
+physics. A converged sweep (4 seeds per point, warm-up scaled per case) gives
+
+| Kn | ratio |
+|---|---|
+| 1/10 | 0.9225 +- 0.0028 |
+| 1/15 | 0.9411 +- 0.0069 |
+| 1/22 | 0.9561 +- 0.0048 |
+| 1/30 | 0.9779 +- 0.0032 |
+
+fitting to `ratio = 0.9971 +- 0.0095 - (0.777 +- 0.143) Kn`, i.e. **-0.29 % from
+Chapman-Enskog at Kn -> 0, |t| = 0.31 on 2 dof: the gate passes.** The slope's sign is
+what first-order slip theory predicts.
+
+**Explanation 2 was dismissed on a study that could not see the effect.** The cell-size
+sweep was read as flat and used to rule resolution out. Re-run with per-case warm-up and
+ensembles it is *not* flat: `0.9352 +- 0.0266` / `0.9728 +- 0.0024` / `0.9829 +- 0.0031` at
+`dx/lambda = 0.60 / 0.30 / 0.15`, with the two finest points separated by `|z| = 2.58`.
+`O(dx^2)` fits and extrapolates to `0.9863` at `dx -> 0`, i.e. **the gate configuration
+carries a 1.35 % resolution bias.** "Flat" is exactly what an under-powered study of a
+noisy quantity looks like, which is why this one survived the longest.
+
+The two corrections compose because the Knudsen sweep holds `dx/lambda` fixed at 0.30 at
+every point, making cell-size error a constant offset that moves that sweep's intercept and
+not its slope. **The gate is therefore the double extrapolation:**
+`Kn -> 0` gives `0.9971 +- 0.0095`, `dx -> 0` adds `+0.0135 +- 0.0039`, total
+**`1.0105 +- 0.0103`, i.e. +1.05 % from Chapman-Enskog, |t| = 1.03: consistent.**
+
+**And explanation 4 was doubly wrong -- including in its retraction.** Warm-up was first
+dismissed on a single-draw study, then briefly *re*-blamed on the strength of a 2-seed
+point reading `0.9872 +- 0.0004` where 4 seeds at the same configuration give
+`0.9779 +- 0.0032`. The 2-seed SE was a fluke of two draws landing close together. Measured
+against the ensembles, moving warm-up from 1.0 to 3.0 diffusion times shifts the gate by
+`+0.0041 +- 0.0065`, `|z| = 0.63` -- **not significant**, which means the original
+measurement that the shear rate settles by ~0.3 of a diffusion time was right all along.
+Reading a 2-seed error bar as precision is the same error one level up, committed while
+documenting the error.
+
+Three structural fixes now make each failure unrepeatable, and all three live in the code
+rather than in this document:
+
+1. **No single-seed mode.** `examples/couette.__main__.run_case` raises on `seeds < 2`.
+   Every ratio in every log and table carries a standard error and a seed count.
+2. **Warm-up in diffusion times, never steps.** `diffusion_steps(case)` returns `L^2/nu` in
+   units of `dt`; `--warm-diff` defaults to 3 of them, per case. This matters specifically
+   because a Knudsen sweep *must* change `L`, so a constant step budget under-converges
+   the wide end as `L^2` and manufactures a smooth trend. The justification is the *first*
+   sweep, not a measured shift at the gate: it ran gaps of 15-120 lambda at a flat 4 000
+   steps, where the widest case needs 232 105 -- short by a factor of 58. At the gate
+   configuration itself the ratio is already converged at 1.0 diffusion times (see above),
+   so 3.0 is margin, not necessity.
+3. **The gate is the intercept.** Chapman-Enskog is a continuum limit, so comparing any
+   single finite-Kn run to it and calling the difference an error is a category mistake.
+   The measured slope is about `-0.9` per unit Kn -- the apparent viscosity falls as
+   Knudsen layers eat into the sheared bulk, which is the sign first-order slip theory
+   predicts.
+
+A fourth point worth carrying forward: **an SE from 2 seeds is not a usable error bar.**
+The 2-seed version of the sweep put points 5.6 and 9.2 "sigma" off a visually excellent
+line; the 4-seed version puts the same points within 0.6-2.1 sigma of it, with a smaller
+rms residual (0.0051 against 0.0082). Nothing about the physics changed -- only whether the
+error bars meant anything. `kn_extrapolation` therefore takes its uncertainty from the
+fit's residual scatter rather than from the per-point SEs, and `figure_knudsen`'s second
+panel plots those pulls so the reliability of the quoted SEs is visible rather than
+assumed. **Use 4 seeds minimum for anything quoted; 2 only to establish that a quantity
+scatters at all.**
+
+Numbers are not restated here or in the README on purpose. They live in
+`examples/couette/RESULTS.md`, regenerated by `python3 -m examples.couette.report` parsing
+`results/*.log` -- the stale-hardcoded-number failure is exactly how the retracted
+"0.24 % from Chapman-Enskog" claim outlived the run that produced it.
+
+### Reward attribution in the DiCE surrogate -- measured bias (2026-09-10)
+
+See **`docs/ATTRIBUTION.md`**. Short version, because it changes how a score-carried
+gradient should be read:
+
+* `adjoint.surrogate` pairs each score with its own particle's reward. Every dropped term is
+  a covariance, so the estimator is unbiased **iff decisions do not propagate between
+  particles**. Measured: collisions off -> exact (`|z| = 0.18`); collisions on -> low by
+  **2.8x** (`|z| = 22`).
+* **The bias grows with trajectory length**, not with attribution radius: `FD/AD` = 1.13,
+  1.32, 1.57, 1.95, 2.82 at `M` = 2, 5, 10, 20, 40. Widening attribution to the whole cell
+  closed only ~10 % of the gap for 7x the variance, so that hypothesis is rejected.
+* **The shipped collision score is ~6 % low at `M = 16`** -- a competing explanation for
+  about half of the `FD/AD = 1.137` that `VARIANCE.md` section B attributes to `O(dm^2)`
+  truncation. `alpha`'s results are unaffected: its gradient is consistent with zero.
+* **Pathwise gradients are untouched** by all of this, exactly: `dJ/dT_wall` and
+  `dJ/dv_wall` verify to 3.3e-12 and 2.5e-11 against a fixed-key FD.
+* The exact fix is the global-reward form (20x worse SE). The better fix for `acc` is to
+  **relax the Bernoulli** (`acc_delta`) so it becomes pathwise -- [P3]'s `eps` trick applied
+  to the accommodation draw. `acc_delta = 0` and `score_spread="particle"` reproduce today's
+  behaviour bitwise.
+* Trap: `sum_i logh_acc_i` is **not** `sum_k l_k`. Multiplicities are 1 (wall), 2 (pair) and
+  ~`npc` (NTC count), so a global estimator built on it is valid only for `acc`.
+
+### M7/M8 boundary adjoints -- what is verified and what is not (2026-09-11)
+
+**Forward solves are untouched.** The accommodation relaxation (`acc_delta`) and the new
+boundary scores change no forward result: the Couette gate reproduces pre-M7 output to every
+digit, and the 30 000-step inflow shock reproduces all six moments, the shock position, the
+flux ratio and every diagnostic with **0 mismatches**. Pinned by `tests/test_walls.py`.
+One caveat is pinned there too: the velocity blend equals the old `where`-select in *value*
+everywhere but differs in *bits* at signed zeros (`-0.0 + 0.0` is `+0.0`), so "bitwise
+identical" was claimed and is not literally true.
+
+| parameter | route | status |
+|---|---|---|
+| wall temperature, wall velocity | pathwise | **verified** -- fixed-key FD to 3.3e-12 / 2.5e-11, and pointwise against the Couette closed form (worst 0.068 / 0.066) |
+| inflow rate `nrho` | score | **verified** -- ensemble FD/AD = 1.04, `\|z\| = 0.81` |
+| shock `d(T_2/T_1)/du_1` | pathwise | **verified** against Rankine-Hugoniot, `M = 1.6-4.0` |
+| accommodation `acc` | score | biased 2.8x at `M = 40`; use `acc_delta > 0` to make it pathwise |
+| shock `d(rho_2/rho_1)/du_1` | score | **WRONG SIGN** -- see `docs/ATTRIBUTION.md` |
+
+**Two limits bound every gradient here, and they are different.** Attribution bias (score
+route only, grows with trajectory length) and chaotic amplification (all pathwise gradients,
+grows exponentially). The shock density ratio fails both: at 300 steps it is precise and
+sign-wrong; at 1000 steps, where the forward finally reaches Rankine-Hugoniot, the spread is
+9 orders of magnitude above the signal.
+
+**A forward bug found on the way.** `inflow.inject` silently dropped entrants when dead
+slots ran out -- `shortfall` counted only `target > capacity` despite its contract naming
+both. A saturated array read as correct physics (-46 % density ratio at Mach 4, all
+diagnostics zero). Fixed.

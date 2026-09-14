@@ -89,6 +89,9 @@ def _diagnostics():
         majorant_violations=jnp.asarray(0, dtype=jnp.int32),
         min_majorant_margin=jnp.asarray(np.inf, dtype=jnp.float64),
         decision_checksum=jnp.asarray(0.0, dtype=jnp.float64),
+        wall_recrossed=jnp.asarray(0, dtype=jnp.int32),
+        inflow_injected=jnp.asarray(0, dtype=jnp.int32),
+        inflow_shortfall=jnp.asarray(0.0, dtype=jnp.float64),
     )
 
 

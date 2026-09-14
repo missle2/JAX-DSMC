@@ -1,0 +1,5 @@
+# case dim n_cells npc acc eps_rel specular dx_over_mfp knudsen du_dy tau_bulk mu_meas mu_ce ratio slip slip_theory temp_bulk n_part recrossed clipped
+# warm=4000 sample=6000 generated=2026-09-09
+50 cells                 1      50   400  1.00    0.00        0      0.6000  0.03333  9.21136e+03 -2.06181e-01  2.23834e-05  2.29684e-05   0.9745    23.43       13.67    296.785    20000          0        0
+100 cells                1     100   400  1.00    0.00        0      0.3000  0.03333  9.22768e+03 -2.06102e-01  2.23352e-05  2.28795e-05   0.9762    14.46       13.70    295.174    40000          0        0
+200 cells                1     200   400  1.00    0.00        0      0.1500  0.03333  9.17800e+03 -2.03260e-01  2.21464e-05  2.28541e-05   0.9690    14.27       13.62    295.132    80000          0        0

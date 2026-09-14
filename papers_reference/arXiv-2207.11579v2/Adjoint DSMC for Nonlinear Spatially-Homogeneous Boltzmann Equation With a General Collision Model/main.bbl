@@ -1,0 +1,213 @@
+\begin{thebibliography}{23}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\href}[2]{#2}
+\providecommand{\path}[1]{#1}
+\providecommand{\DOIprefix}{doi:}
+\providecommand{\ArXivprefix}{arXiv:}
+\providecommand{\URLprefix}{URL: }
+\providecommand{\Pubmedprefix}{pmid:}
+\providecommand{\doi}[1]{\href{http://dx.doi.org/#1}{\path{#1}}}
+\providecommand{\Pubmed}[1]{\href{pmid:#1}{\path{#1}}}
+\providecommand{\bibinfo}[2]{#2}
+\ifx\xfnm\relax \def\xfnm[#1]{\unskip,\space#1}\fi
+%Type = Article
+\bibitem[{Albi et~al.(2019)Albi, Bellomo, Fermo, Ha, Kim, Pareschi, Poyato and
+  Soler}]{albi2019vehicular}
+\bibinfo{author}{Albi, G.}, \bibinfo{author}{Bellomo, N.},
+  \bibinfo{author}{Fermo, L.}, \bibinfo{author}{Ha, S.Y.},
+  \bibinfo{author}{Kim, J.}, \bibinfo{author}{Pareschi, L.},
+  \bibinfo{author}{Poyato, D.}, \bibinfo{author}{Soler, J.},
+  \bibinfo{year}{2019}.
+\newblock \bibinfo{title}{Vehicular traffic, crowds, and swarms: From kinetic
+  theory and multiscale methods to applications and research perspectives}.
+\newblock \bibinfo{journal}{Mathematical Models and Methods in Applied
+  Sciences} \bibinfo{volume}{29}, \bibinfo{pages}{1901--2005}.
+%Type = Article
+\bibitem[{Albi et~al.(2015)Albi, Herty and Pareschi}]{albi2015kinetic}
+\bibinfo{author}{Albi, G.}, \bibinfo{author}{Herty, M.},
+  \bibinfo{author}{Pareschi, L.}, \bibinfo{year}{2015}.
+\newblock \bibinfo{title}{Kinetic description of optimal control problems and
+  applications to opinion consensus}.
+\newblock \bibinfo{journal}{Communications in Mathematical Sciences}
+  \bibinfo{volume}{13}, \bibinfo{pages}{1407--1429}.
+%Type = Article
+\bibitem[{Albi et~al.(2014)Albi, Pareschi and Zanella}]{albi2014boltzmann}
+\bibinfo{author}{Albi, G.}, \bibinfo{author}{Pareschi, L.},
+  \bibinfo{author}{Zanella, M.}, \bibinfo{year}{2014}.
+\newblock \bibinfo{title}{Boltzmann-type control of opinion consensus through
+  leaders}.
+\newblock \bibinfo{journal}{Philosophical Transactions of the Royal Society A:
+  Mathematical, Physical and Engineering Sciences} \bibinfo{volume}{372},
+  \bibinfo{pages}{20140138}.
+%Type = Article
+\bibitem[{Babovsky and Illner(1989)}]{babovsky1989convergence}
+\bibinfo{author}{Babovsky, H.}, \bibinfo{author}{Illner, R.},
+  \bibinfo{year}{1989}.
+\newblock \bibinfo{title}{A convergence proof for {N}anbu’s simulation method
+  for the full {Boltzmann} equation}.
+\newblock \bibinfo{journal}{{SIAM Journal on Numerical Analysis}}
+  \bibinfo{volume}{26}, \bibinfo{pages}{45--65}.
+%Type = Article
+\bibitem[{Babovsky and Neunzert(1986)}]{babovsky1986simulation}
+\bibinfo{author}{Babovsky, H.}, \bibinfo{author}{Neunzert, H.},
+  \bibinfo{year}{1986}.
+\newblock \bibinfo{title}{On a simulation scheme for the {Boltzmann} equation}.
+\newblock \bibinfo{journal}{{Mathematical Methods in the Applied Sciences}}
+  \bibinfo{volume}{8}, \bibinfo{pages}{223--233}.
+%Type = Article
+\bibitem[{Ben~Abdallah et~al.(1996)Ben~Abdallah, Degond and
+  G{\'e}nieys}]{ben1996energy}
+\bibinfo{author}{Ben~Abdallah, N.}, \bibinfo{author}{Degond, P.},
+  \bibinfo{author}{G{\'e}nieys, S.}, \bibinfo{year}{1996}.
+\newblock \bibinfo{title}{{An energy-transport model for semiconductors derived
+  from the Boltzmann equation}}.
+\newblock \bibinfo{journal}{{Journal of Statistical Physics}}
+  \bibinfo{volume}{84}, \bibinfo{pages}{205--231}.
+%Type = Article
+\bibitem[{Bird(1970)}]{bird1970direct}
+\bibinfo{author}{Bird, G.}, \bibinfo{year}{1970}.
+\newblock \bibinfo{title}{Direct simulation and the {B}oltzmann equation}.
+\newblock \bibinfo{journal}{The Physics of Fluids} \bibinfo{volume}{13},
+  \bibinfo{pages}{2676--2681}.
+%Type = Article
+\bibitem[{Burini et~al.(2016)Burini, De~Lillo and
+  Gibelli}]{burini2016collective}
+\bibinfo{author}{Burini, D.}, \bibinfo{author}{De~Lillo, S.},
+  \bibinfo{author}{Gibelli, L.}, \bibinfo{year}{2016}.
+\newblock \bibinfo{title}{Collective learning modeling based on the kinetic
+  theory of active particles}.
+\newblock \bibinfo{journal}{{Physics of Life Reviews}} \bibinfo{volume}{16},
+  \bibinfo{pages}{123--139}.
+%Type = Article
+\bibitem[{Caflisch et~al.(2021)Caflisch, Silantyev and
+  Yang}]{caflisch2021adjoint}
+\bibinfo{author}{Caflisch, R.}, \bibinfo{author}{Silantyev, D.},
+  \bibinfo{author}{Yang, Y.}, \bibinfo{year}{2021}.
+\newblock \bibinfo{title}{Adjoint {DSMC} for nonlinear {B}oltzmann equation
+  constrained optimization}.
+\newblock \bibinfo{journal}{Journal of Computational Physics}
+  \bibinfo{volume}{439}, \bibinfo{pages}{110404}.
+%Type = Article
+\bibitem[{Cordier et~al.(2005)Cordier, Pareschi and
+  Toscani}]{cordier2005kinetic}
+\bibinfo{author}{Cordier, S.}, \bibinfo{author}{Pareschi, L.},
+  \bibinfo{author}{Toscani, G.}, \bibinfo{year}{2005}.
+\newblock \bibinfo{title}{On a kinetic model for a simple market economy}.
+\newblock \bibinfo{journal}{Journal of Statistical Physics}
+  \bibinfo{volume}{120}, \bibinfo{pages}{253--277}.
+%Type = Inproceedings
+\bibitem[{Davis et~al.(2020)Davis, Giannakis, Stadler, Stechmann and
+  Manucharyan}]{davis2020super}
+\bibinfo{author}{Davis, A.D.}, \bibinfo{author}{Giannakis, D.},
+  \bibinfo{author}{Stadler, G.}, \bibinfo{author}{Stechmann, S.N.},
+  \bibinfo{author}{Manucharyan, G.}, \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{Super-parameterization of {L}agrangian sea ice
+  dynamics using the {B}oltzmann equation}, in: \bibinfo{booktitle}{AGU Fall
+  Meeting Abstracts}, pp. \bibinfo{pages}{C048--03}.
+%Type = Article
+\bibitem[{Gamba et~al.(2017)Gamba, Haack, Hauck and Hu}]{gamba2017fast}
+\bibinfo{author}{Gamba, I.M.}, \bibinfo{author}{Haack, J.R.},
+  \bibinfo{author}{Hauck, C.D.}, \bibinfo{author}{Hu, J.},
+  \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{A fast spectral method for the {B}oltzmann collision
+  operator with general collision kernels}.
+\newblock \bibinfo{journal}{{SIAM Journal on Scientific Computing}}
+  \bibinfo{volume}{39}, \bibinfo{pages}{B658--B674}.
+%Type = Article
+\bibitem[{Guana et~al.(2022)Guana, Noguchia, Matsushimaa and
+  Yamadaa}]{guanatopology}
+\bibinfo{author}{Guana, K.}, \bibinfo{author}{Noguchia, Y.},
+  \bibinfo{author}{Matsushimaa, K.}, \bibinfo{author}{Yamadaa, T.},
+  \bibinfo{year}{2022}.
+\newblock \bibinfo{title}{Topology optimization for rarefied gas flow problems
+  using density method and adjoint {DSMC}}.
+\newblock \bibinfo{journal}{Preprint.} \URLprefix
+  \url{https://doi.org/10.51094/jxiv.98}.
+%Type = Article
+\bibitem[{Kanazawa et~al.(2018)Kanazawa, Sueshige, Takayasu and
+  Takayasu}]{kanazawa2018derivation}
+\bibinfo{author}{Kanazawa, K.}, \bibinfo{author}{Sueshige, T.},
+  \bibinfo{author}{Takayasu, H.}, \bibinfo{author}{Takayasu, M.},
+  \bibinfo{year}{2018}.
+\newblock \bibinfo{title}{{Derivation of the Boltzmann equation for financial
+  Brownian motion: Direct observation of the collective motion of
+  high-frequency traders}}.
+\newblock \bibinfo{journal}{Physical Review Letters} \bibinfo{volume}{120},
+  \bibinfo{pages}{138301}.
+%Type = Article
+\bibitem[{Mohamed et~al.(2020)Mohamed, Rosca, Figurnov and
+  Mnih}]{mohamed2019monte}
+\bibinfo{author}{Mohamed, S.}, \bibinfo{author}{Rosca, M.},
+  \bibinfo{author}{Figurnov, M.}, \bibinfo{author}{Mnih, A.},
+  \bibinfo{year}{2020}.
+\newblock \bibinfo{title}{Monte {C}arlo gradient estimation in machine
+  learning}.
+\newblock \bibinfo{journal}{Journal of Machine Learning Research}
+  \bibinfo{volume}{21}, \bibinfo{pages}{1--62}.
+%Type = Article
+\bibitem[{Naesseth et~al.(2017)Naesseth, Ruiz, Linderman and Blei}]{Blei2017}
+\bibinfo{author}{Naesseth, C.}, \bibinfo{author}{Ruiz, F.},
+  \bibinfo{author}{Linderman, S.}, \bibinfo{author}{Blei, D.},
+  \bibinfo{year}{2017}.
+\newblock \bibinfo{title}{Reparameterization gradients through
+  acceptance-rejection sampling algorithms}.
+\newblock \bibinfo{journal}{Proceedings of the 20th International Conference on
+  Artificial Intelligence and Statistics (AISTATS)} .
+%Type = Article
+\bibitem[{Nanbu(1980)}]{nanbu1980direct}
+\bibinfo{author}{Nanbu, K.}, \bibinfo{year}{1980}.
+\newblock \bibinfo{title}{Direct simulation scheme derived from the {Boltzmann}
+  equation. {I.} monocomponent gases}.
+\newblock \bibinfo{journal}{Journal of the Physical Society of Japan}
+  \bibinfo{volume}{49}, \bibinfo{pages}{2042--2049}.
+%Type = Inproceedings
+\bibitem[{Pareschi and Russo(2001)}]{pareschi2001introduction}
+\bibinfo{author}{Pareschi, L.}, \bibinfo{author}{Russo, G.},
+  \bibinfo{year}{2001}.
+\newblock \bibinfo{title}{{An introduction to Monte Carlo method for the
+  Boltzmann equation}}, in: \bibinfo{booktitle}{ESAIM: Proceedings},
+  \bibinfo{organization}{EDP Sciences}. pp. \bibinfo{pages}{35--75}.
+%Type = Book
+\bibitem[{Pareschi and Toscani(2013)}]{pareschi2013interacting}
+\bibinfo{author}{Pareschi, L.}, \bibinfo{author}{Toscani, G.},
+  \bibinfo{year}{2013}.
+\newblock \bibinfo{title}{Interacting multiagent systems: kinetic equations and
+  Monte Carlo methods}.
+\newblock \bibinfo{publisher}{OUP Oxford}.
+%Type = Article
+\bibitem[{Pareschi and Toscani(2014)}]{pareschi2014wealth}
+\bibinfo{author}{Pareschi, L.}, \bibinfo{author}{Toscani, G.},
+  \bibinfo{year}{2014}.
+\newblock \bibinfo{title}{{Wealth distribution and collective knowledge: a
+  Boltzmann approach}}.
+\newblock \bibinfo{journal}{Philosophical Transactions of the Royal Society A:
+  Mathematical, Physical and Engineering Sciences} \bibinfo{volume}{372},
+  \bibinfo{pages}{20130396}.
+%Type = Article
+\bibitem[{Poupaud(1991)}]{poupaud1991diffusion}
+\bibinfo{author}{Poupaud, F.}, \bibinfo{year}{1991}.
+\newblock \bibinfo{title}{{Diffusion approximation of the linear semiconductor
+  Boltzmann equation: analysis of boundary layers}}.
+\newblock \bibinfo{journal}{Asymptotic Analysis} \bibinfo{volume}{4},
+  \bibinfo{pages}{293--317}.
+%Type = Incollection
+\bibitem[{Villani(2002)}]{villani2002review}
+\bibinfo{author}{Villani, C.}, \bibinfo{year}{2002}.
+\newblock \bibinfo{title}{A review of mathematical topics in collisional
+  kinetic theory}, in: \bibinfo{editor}{Friedlander, S.},
+  \bibinfo{editor}{Serre, D.} (Eds.), \bibinfo{booktitle}{Handbook of
+  Mathematical Fluid Dynamics}. volume~\bibinfo{volume}{1}, pp.
+  \bibinfo{pages}{71--305}.
+%Type = Article
+\bibitem[{Wang et~al.(2008)Wang, Lin, Caflisch, Cohen and
+  Dimits}]{wang2008particle}
+\bibinfo{author}{Wang, C.}, \bibinfo{author}{Lin, T.},
+  \bibinfo{author}{Caflisch, R.}, \bibinfo{author}{Cohen, B.I.},
+  \bibinfo{author}{Dimits, A.M.}, \bibinfo{year}{2008}.
+\newblock \bibinfo{title}{Particle simulation of {C}oulomb collisions:
+  Comparing the methods of {T}akizuka \& {A}be and {N}anbu}.
+\newblock \bibinfo{journal}{Journal of Computational Physics}
+  \bibinfo{volume}{227}, \bibinfo{pages}{4308--4329}.
+
+\end{thebibliography}

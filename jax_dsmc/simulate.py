@@ -35,16 +35,35 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 
-from jax_dsmc import sample, sort
+from jax_dsmc import boundary, inflow, sample, sort
 from jax_dsmc.boundary import BC
 from jax_dsmc.collide.ntc import collide, decision_weights
 from jax_dsmc.move import move_with_decisions
+from jax_dsmc.rng import STAGE_INFLOW, STAGE_MOVE, key_for
 from jax_dsmc.state import CollideState, ParticleState
 
 jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
 
 
-def _step(carry, k, grid, sp, params, static, base_key, bc, collide_only, emit_moments, reward):
+def _step(
+    carry,
+    k,
+    grid,
+    sp,
+    params,
+    static,
+    base_key,
+    bc,
+    collide_only,
+    emit_moments,
+    reward,
+    faces=None,
+    wall=None,
+    res=None,
+    capacity=0,
+    score_spread="particle",
+    acc_delta=0.0,
+):
     """One timestep.  Module-level and bound with ``partial`` (decision 14).
 
     ``collide_only`` short-circuits advection for the 0D milestone-1 case, where
@@ -67,18 +86,70 @@ def _step(carry, k, grid, sp, params, static, base_key, bc, collide_only, emit_m
     else:
         state, cstate, j_acc = carry
     bc_chk = jnp.float64(0.0)
+    recrossed = jnp.array(0, jnp.int32)
+    injected = jnp.array(0, jnp.int32)
+    shortfall = jnp.float64(0.0)
     if not collide_only:
-        state, fold = move_with_decisions(state, grid, params.dt, bc)
-        # the boundary fold index is a frozen decision too -- see boundary.fold_index
-        w = decision_weights(fold.size).reshape(fold.shape)
-        bc_chk = lax.stop_gradient(jnp.sum(w * fold))
+        if faces is None:
+            state, fold = move_with_decisions(state, grid, params.dt, bc)
+            # the boundary fold index is a frozen decision too -- see boundary.fold_index
+            w = decision_weights(fold.size).reshape(fold.shape)
+            bc_chk = lax.stop_gradient(jnp.sum(w * fold))
+        else:
+            # per-face path (section 9.4): thermal walls, inflow, mixed geometries
+            k_move = key_for(base_key, k, STAGE_MOVE)
+            x, v, alive, recrossed, logh_bc = boundary.apply_faces(
+                state.x,
+                state.v,
+                state.alive,
+                grid,
+                faces,
+                wall,
+                sp.mass[0],
+                params.dt,
+                k_move,
+                epsilon=params.epsilon,
+                score_spread=score_spread,
+                acc_delta=acc_delta,
+            )
+            fold = boundary.fold_index(x, grid, BC.PERIODIC)
+            w = decision_weights(fold.size).reshape(fold.shape)
+            bc_chk = lax.stop_gradient(jnp.sum(w * fold))
+            # M7: the boundary decisions' score joins the collision score in the same
+            # accumulator, because `surrogate` weights the reward by `grad` of the WHOLE
+            # prefix `L_{<=k}` -- a separate accumulator would drop the cross terms.
+            state = ParticleState(
+                x=x,
+                v=v,
+                species=state.species,
+                alive=alive,
+                logh_acc=state.logh_acc + logh_bc,
+            )
+            if res is not None:
+                state, injected, shortfall = inflow.inject(
+                    state,
+                    grid,
+                    faces,
+                    res,
+                    sp.mass[0],
+                    params.fnum[0],
+                    params.dt,
+                    key_for(base_key, k, STAGE_INFLOW),
+                    capacity,
+                )
     table = sort.build_table(state, grid)
     # the cell temperature feeds the a-priori majorant floor (section 7.2.3)
     m = sample.moments(state, table, grid, params, sp)
     state, cstate, diag = collide(
         state, table, cstate, grid, sp, params, static, m.temp, k, base_key
     )
-    diag = dataclasses.replace(diag, decision_checksum=diag.decision_checksum + bc_chk)
+    diag = dataclasses.replace(
+        diag,
+        decision_checksum=diag.decision_checksum + bc_chk,
+        wall_recrossed=recrossed,
+        inflow_injected=injected,
+        inflow_shortfall=shortfall,
+    )
     new_carry = (state, cstate) if reward is None else (state, cstate, j_acc + reward(state, table))
     if emit_moments == "none":
         # Emit nothing per step.  `scan` stacks its ys over time, so a full
@@ -103,6 +174,12 @@ def run(
     emit_moments: bool = True,
     step0: int = 0,
     reward=None,
+    faces=None,
+    wall=None,
+    res=None,
+    capacity: int = 0,
+    score_spread: str = "particle",
+    acc_delta: float = 0.0,
 ):
     """Run ``static.n_steps`` timesteps.
 
@@ -139,6 +216,12 @@ def run(
         collide_only=collide_only,
         emit_moments=emit_moments,
         reward=reward,
+        score_spread=score_spread,
+        acc_delta=acc_delta,
+        faces=faces,
+        wall=wall,
+        res=res,
+        capacity=capacity,
     )
     policy = getattr(jax.checkpoint_policies, static.remat_policy, None)
     body = jax.checkpoint(body, policy=policy, static_argnums=())

@@ -125,9 +125,55 @@ and the central difference has no truncation error at all. AD and FD then agree 
 decimals — 50–250× finer than either side's own random error. That is a sharper test than
 [P2]'s own figure and it is the same fact the Euler identity exploits.
 
-**[P2]'s "AD ~10× less noisy than FD"** (`:1502`) reproduces only partially: measured
-`SE_FD/SE_AD` is **~2.0–2.3×** here, same direction, smaller factor. This matches the
-shock study's 2.9–5.4×.
+### AD vs FD noise — [P2]'s "10×" is 1.7–2.0× here
+
+`figure_error_vs_n` plots how much the two estimators *disagree*. The other question is
+which one is **noisier at the same budget**, since that is what decides whether AD is worth
+having, and it is [P2]'s claim at `:1502` that AD is ~10× less noisy than FD.
+
+Measured on the same runs (`M_s = 100`, `Δm = 0.1`, `M = 20`):
+
+| β | usable points | mean `SE_FD/SE_AD` | range |
+|---|---|---|---|
+| 0 | 11 | **1.00×** | 1.00–1.00 |
+| 1 | 15 | **1.70×** | 1.28–2.28 |
+| 2 | 15 | **1.95×** | 1.70–2.29 |
+
+![estimator noise](figures/estimator_noise.png)
+
+The grey halo is the **objective's own standard error**, measured on the same runs
+(`scratch/adjoint/p2_forward.log`, produced by `probe_p2_forward.py` — a forward-only pass,
+about two minutes). It is drawn as a band rather than a line because a line is invisible
+here: `SE(∂T_y/∂T_y⁰)` equals `SE(J = T_y)` to within ±20 % at every point, **mean ratio
+0.98 over all 15**. The AD curves ride inside it.
+
+That is worth stating plainly: **for the diagonal sensitivity, differentiating costs
+nothing in precision.** The gradient is as well resolved as the quantity it is taken of.
+The interesting case is the off-diagonal components, which in *relative* terms are 4–9×
+noisier — not because the reverse pass is worse there, but because `∂T_y/∂T_x⁰ ≈ 0.03` is
+a small number carrying the same absolute noise as an `O(1)` one:
+
+| β | `∂T_y/∂T_x⁰` | `∂T_y/∂T_y⁰` | `∂T_y/∂T_z⁰` |
+|---|---|---|---|
+| 0 | 4.1× | **1.0×** | 4.1× |
+| 1 | 5.9× | **1.0×** | 8.6× |
+| 2 | 4.1× | **1.6×** | 6.9× |
+
+(relative SE against the objective's, at `N = 32 000`)
+
+**The direction reproduces; the factor is ~5× smaller than [P2] reports.** The shock study
+finds the same thing at 2.9–5.4× for its pathwise parameters.
+
+β = 0's `1.00×` is real but carries no information: for Maxwell molecules the central
+difference has *no* truncation error, so AD and FD compute the same number from the same
+runs and their sample SEs coincide by construction. It is the β = 1 and 2 rows that measure
+anything.
+
+**The quoted ratios drop points whose rounding uncertainty exceeds 10 %.** The log prints
+every SE to four decimals, so an SE of `0.0001` is a single significant figure and a ratio
+built from it would be reporting the log's format rather than the estimator. An earlier
+version of this section read "~2.0–2.3×", which was the top of the range quoted as though
+it were the value.
 
 ## 4. Why `dJ/dα` reads zero on the argon shock — and it is physics
 

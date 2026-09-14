@@ -9,6 +9,13 @@ recompilation counts, which are platform-independent -- so the CPU loses no cove
 Run `pytest --gpu` to check that the same tests compile and pass on the accelerator; that
 is the only thing the GPU run adds, and it belongs before a milestone, not in the loop.
 
+**This applies to the test suite only -- production runs belong on the GPU.**  The finding
+above is about tiny cases where XLA compilation dominates; once a run is long enough to
+amortise the compile, the ordering reverses hard.  Measured on the Couette gate
+configuration (80 000 particles, 200 cells): **1.0 M particle-steps/s on the CPU against
+5.5 M on the GPU**, a 5.3x gap, with the GPU compiling faster too (13.7 s vs 23.3 s).
+`examples/couette` and `examples/shock` runners therefore set `JAX_PLATFORMS=cuda`.
+
 **2. Four forced host devices.**  `test_decomp.py` needs `>= 2` devices and skips
 otherwise.  On this box the GPU is a single device, so the GPU run *skips* the six
 sharding tests; the CPU run with `--xla_force_host_platform_device_count=4` runs them.

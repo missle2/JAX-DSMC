@@ -75,3 +75,14 @@ known-first-party = ["jax_dsmc"]
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+# `scratch/` holds throwaway probes, some of which are named `test_*.py` and read
+# `sys.argv` at import.  Without this, a bare `pytest` tries to collect them and dies
+# during collection -- taking the whole suite with it, not just the probe.  ruff already
+# excludes the same directory; this is the pytest half of that same rule.
+testpaths = ["tests"]
+norecursedirs = ["scratch", "papers_reference", "examples", ".git", ".ruff_cache", "*.egg"]
+markers = [
+    "perf: cost-budget and compile-time checks (see tests/test_perf_budget.py)",
+]

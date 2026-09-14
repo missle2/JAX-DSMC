@@ -19,6 +19,7 @@ import jax.numpy as jnp
 from jax import lax, random
 
 from jax_dsmc.constants import K_BOLTZ
+from jax_dsmc.safe import safe_sqrt
 from jax_dsmc.state import GridSpec
 
 jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
@@ -127,18 +128,95 @@ def stochastic_round(x: jnp.ndarray, u: jnp.ndarray) -> jnp.ndarray:
 
 
 def sample_flux_normal(key: jax.Array, n: int, temp_wall, mass) -> jnp.ndarray:
-    """Wall-normal speed of a diffusely re-emitted particle.  **M4 stub.**
+    """Wall-normal speed of a diffusely re-emitted particle, ``f64[n] >= 0``.
 
-    The implementation is [DF] ``dsmcDiffuseWallPatch.C:106-111``::
+    [DF] ``dsmcDiffuseWallPatch.C:106-111``::
 
-        u = random.uniform(key, (n,))
-        v_perp = thermal_speed(temp_wall, mass) * safe_sqrt(-2.0 * log(1.0 - u))
+        v_perp = sqrt(k T / m) * sqrt(-2 log(1 - u))
 
-    with the tangential components staying Gaussian.  [DF] writes ``log(1 - R)``
-    rather than ``log(R)``; both are correct and the choice only moves which end
-    of the unit interval is singular.  ``safe_sqrt`` covers it either way.
+    which is SPARTA's ``vrm * sqrt(-log u)`` (``collide`` uses the most-probable
+    speed ``vrm = sqrt(2kT/m)``) written in the per-component sigma this codebase
+    uses everywhere else -- the two differ only by which end of the unit interval
+    is singular.  ``log1p(-u)`` keeps the ``u -> 0`` end accurate, and
+    :func:`safe_sqrt` keeps the gradient finite there, which is the end that
+    matters: the flux weighting makes ``v_perp = 0`` the *likely* value.
+
+    Reparameterised in ``temp_wall``, so ``dJ/dT_wall`` is pathwise -- the reason
+    a thermal wall's *parameter* gradient is easy even though the *event* of
+    hitting it is not (section 9.4).
     """
-    raise NotImplementedError("flux-weighted wall re-emission is milestone 4")
+    u = jax.random.uniform(key, (n,), dtype=jnp.float64)
+    return thermal_speed(temp_wall, mass) * safe_sqrt(-2.0 * jnp.log1p(-u))
+
+
+def sample_diffuse_velocity(key, n, temp_wall, mass, axis, inward, vwall):
+    """Full post-wall velocity for an **axis-aligned** diffuse wall, ``f64[n, 3]``.
+
+    ``inward`` is ``+1.0`` on a low face and ``-1.0`` on a high face: the normal
+    component must point back into the domain.  ``vwall`` is added afterwards and
+    is required to be **tangential** -- see :func:`assert_tangential_wall`.
+
+    SPARTA draws the two tangential components in polar form
+    (``vtangent * sin/cos(2 pi u)``, ``surf_collide_diffuse.cpp:233-236``), which is
+    Box-Muller for a pair of ``N(0, kT/m)`` variates.  We draw them directly as
+    Gaussians (decision 11): statistically identical, trig-free, and one fewer
+    singular expression.  On an axis-aligned face the tangent directions are just
+    the other two velocity axes, so SPARTA's ``tangent1``/``tangent2``
+    cross-product construction -- and its ``lensq3(tangent1) == 0`` degeneracy --
+    does not arise at all.
+    """
+    k_perp, k_tan = jax.random.split(key)
+    v = thermal_speed(temp_wall, mass) * jax.random.normal(k_tan, (n, 3), dtype=jnp.float64)
+    v_perp = inward * sample_flux_normal(k_perp, n, temp_wall, mass)
+    return v.at[:, axis].set(v_perp) + vwall
+
+
+def sample_tau(key, n: int, dt, epsilon):
+    """The regularised timestep ``tau ~ N(dt, epsilon^2)``, ``f64[n]``.  [P3] section 4.
+
+    ``epsilon == 0`` returns ``dt`` **exactly** (``dt + 0.0 * z == dt`` in IEEE), so the
+    whole M1-M5 validation suite is unaffected by the existence of this knob -- that
+    exactness is the reason the regularisation can be shipped switched off rather than
+    kept on a branch.
+
+    [P3] requires ``epsilon << dt/3`` so that ``P(tau < 0)`` is negligible; a negative
+    ``tau`` would advect backwards.  Rather than trust the caller, values are clamped at
+    zero and :func:`negative_tau_fraction` reports how often that bit.
+
+    The point of the randomisation is not physical.  It makes the *event* of hitting a
+    wall probabilistic, so the discontinuous boundary map is replaced by a smooth
+    dependence on ``log p_l`` -- an ill-defined pathwise derivative becomes a
+    well-defined weak derivative in expectation.
+    """
+    z = jax.random.normal(key, (n,), dtype=jnp.float64)
+    return jnp.maximum(dt + epsilon * z, 0.0)
+
+
+def negative_tau_fraction(dt, epsilon):
+    """``P(tau < 0)`` for the current settings -- the quantity [P3] asks to keep negligible."""
+    dt = jnp.asarray(dt, dtype=jnp.float64)
+    epsilon = jnp.asarray(epsilon, dtype=jnp.float64)
+    safe = jnp.where(epsilon > 0.0, epsilon, 1.0)
+    return jnp.where(epsilon > 0.0, 0.5 * jax.scipy.special.erfc(dt / (safe * jnp.sqrt(2.0))), 0.0)
+
+
+def assert_tangential_wall(vwall, axis, tol=1e-12):
+    """A wall may slide, not breathe.  Raises if ``vwall`` has a normal component.
+
+    SPARTA supports a wall whose velocity has a component along its own normal, but
+    only via a rejection loop (``surf_collide_diffuse.cpp:265-276``) whose trip count
+    is data-dependent -- inadmissible here (section 12, no ``while_loop``).  For
+    planar Couette the wall slides *in its own plane*, so the normal component is
+    exactly zero and the loop would never execute anyway.  This asserts the
+    restriction rather than silently producing the wrong flux.
+    """
+    vn = float(jnp.abs(jnp.asarray(vwall)[..., axis]).max())
+    if vn > tol:
+        raise ValueError(
+            f"wall velocity has a normal component {vn:.3e} on axis {axis}; only "
+            "tangential wall motion is supported (SPARTA's normal-motion sampler is "
+            "a data-dependent rejection loop)"
+        )
 
 
 def mol_inflow(s):

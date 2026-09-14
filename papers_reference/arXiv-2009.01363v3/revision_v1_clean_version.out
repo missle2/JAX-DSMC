@@ -1,0 +1,33 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Boltzmann equation and the direct simulation Monte Carlo \(DSMC\) method}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Boltzmann equation}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Operator formulation for collisions}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{The linearized collision operator}{section.2}% 5
+\BOOKMARK [2][-]{subsection.2.4}{The direct simulation Monte Carlo \(DSMC\) method}{section.2}% 6
+\BOOKMARK [1][-]{section.3}{Continuous adjoint Boltzmann equations}{}% 7
+\BOOKMARK [2][-]{subsection.3.1}{Derivation of the continuous adjoint equation}{section.3}% 8
+\BOOKMARK [2][-]{subsection.3.2}{A particle method for the continuous adjoint Boltzmann equation}{section.3}% 9
+\BOOKMARK [1][-]{section.4}{Adjoint DSMC for Boltzmann equation}{}% 10
+\BOOKMARK [2][-]{subsection.4.1}{Velocities at the final time for DSMC}{section.4}% 11
+\BOOKMARK [2][-]{subsection.4.2}{Collisions away from the final time for DSMC}{section.4}% 12
+\BOOKMARK [2][-]{subsection.4.3}{Summary for discrete adjoint system}{section.4}% 13
+\BOOKMARK [1][-]{section.5}{Relationship between the continuous adjoint and the adjoint DSMC formulation}{}% 14
+\BOOKMARK [2][-]{subsection.5.1}{Continuous adjoint variable as a Fr\351chet derivative}{section.5}% 15
+\BOOKMARK [2][-]{subsection.5.2}{DSMC adjoint variable as a derivative}{section.5}% 16
+\BOOKMARK [2][-]{subsection.5.3}{Connections between the continuous and DSMC adjoint variables}{section.5}% 17
+\BOOKMARK [2][-]{subsection.5.4}{The unbiasedness of the adjoint DSMC gradient estimator}{section.5}% 18
+\BOOKMARK [1][-]{section.6}{Numerical results}{}% 19
+\BOOKMARK [2][-]{subsection.6.1}{Forward DSMC simulation}{section.6}% 20
+\BOOKMARK [2][-]{subsection.6.2}{Adjoint DSMC}{section.6}% 21
+\BOOKMARK [2][-]{subsection.6.3}{DSMC-type scheme for the adjoint equation}{section.6}% 22
+\BOOKMARK [2][-]{subsection.6.4}{Direct discretization of the adjoint equation integrals}{section.6}% 23
+\BOOKMARK [2][-]{subsection.6.5}{Method comparison}{section.6}% 24
+\BOOKMARK [2][-]{subsection.6.6}{Optimization examples}{section.6}% 25
+\BOOKMARK [3][-]{subsubsection.6.6.1}{Matching the velocity moments}{subsection.6.6}% 26
+\BOOKMARK [3][-]{subsubsection.6.6.2}{Inverse Problem}{subsection.6.6}% 27
+\BOOKMARK [1][-]{section.7}{Conclusion}{}% 28
+\BOOKMARK [1][-]{appendix.A}{Direct numerical integration scheme of the continuous adjoint equation \(19b\)}{}% 29
+\BOOKMARK [1][-]{appendix.B}{Numerical methods comparison. Memory requirements, error scaling and operation count.}{}% 30
+\BOOKMARK [2][-]{subsection.B.1}{Memory requirements}{appendix.B}% 31
+\BOOKMARK [2][-]{subsection.B.2}{Error scaling}{appendix.B}% 32
+\BOOKMARK [2][-]{subsection.B.3}{Operation count}{appendix.B}% 33

@@ -19,6 +19,7 @@ the single source of truth and a half-finished run raises instead of plotting bl
 | C | what does the spatial window cost? | `probe_variance.py` | `scratch/adjoint/variance.log` |
 | D | does `sd ~ √M` hold? | `probe_variance.py`, `probe_M_scaling.py` | `variance.log`, `m_scaling.log` |
 | — | is the noise pathwise or score? | `probe_split_variance.py` | `scratch/adjoint/split_var.log` |
+| E | how many independent runs does one gradient need? | `probe_ensemble_size.py` | `scratch/adjoint/ens_size.log` |
 
 Prose discussion lives in `docs/PSEUDOCODE.md` §23.3.1–23.3.7.
 
@@ -187,3 +188,98 @@ dominant noise term is more particles**, exactly as the `N^-1/2` law says. No es
 baseline, or ensemble size touches pathwise Monte Carlo error.
 
 ![decomposition](figures/variance_decomposition.png)
+
+---
+
+## E. Why the gradient is ensemble-averaged and the objective is not
+
+The sections above measure how gradient noise *scales*. This one measures the thing that
+actually set the study's budget: **how noisy a gradient is compared with the objective it
+differentiates, on the same runs.**
+
+One `θ`, one case (`sa.case(1)`, `D = 1`), 512 independent keys. The forward value and the
+reverse gradient come from the *same* 512 runs, so this is like-for-like — no ladder, no
+sweep, and nothing to re-measure.
+
+**The forward solve resolves `J` to 3.85 % on a single seed** — 0.17 % once averaged over
+all 512. That is the baseline. Against it:
+
+| parameter | AD mean | rel SE at `n = 512` | vs forward | seeds for 10 % |
+|---|---|---|---|---|
+| `temp` | 1.78843e+02 | **0.2 %** | 1× | already there |
+| `omega` | 1.17882e+03 | 22.1 % | 130× | 2 501 |
+| `diam` | −4.20861e+12 | 31.9 % | 187× | 5 210 |
+| `nrho` | −1.10030e-16 | 135.9 % | 799× | *(mean ≈ 0)* |
+| `alpha` | 8.37982e+00 | 390.2 % | 2 293× | *(mean ≈ 0)* |
+
+![ensemble size](figures/variance_ensemble_size.png)
+
+Three things this settles:
+
+- **The spread is not an estimator defect.** `temp` is resolved *as well as the objective
+  itself* — differentiating it is free. Every parameter obeys the same `N^-1/2` law
+  (section A); they simply start orders of magnitude apart, so a single budget cannot
+  serve all of them.
+- **`nrho` and `alpha` are `unresolved`, not `expensive`.** Their means sit within 2 SE of
+  zero, so a *relative* error divides by noise and the implied seed count is unbounded
+  rather than merely large. No ensemble size fixes a gradient that may genuinely be zero;
+  the table and the figure mark these rather than quoting a number. (`nrho`'s mean is
+  `−1.1e-16`, i.e. a machine zero.)
+- **`M_s = 100` is a compromise, not a sufficiency proof.** The measured scaling says
+  `diam` still carries ~72 % relative error at 100 seeds and needs ~5 200 for 10 %. [P2]'s
+  budget buys a usable gradient for the pathwise parameters and an order-of-magnitude one
+  for the score-carried parameters. That is the honest reading, and it is why score-carried
+  parameters are reported with error bars everywhere in this study rather than as point
+  values.
+
+The sampling law itself checks out on the same data: **SE falls 4.26× over a 16× range of
+seeds, against the 4.00× that `1/√n` predicts.** The deviation at the smallest ensembles is
+the mean still wandering, not the law breaking.
+
+---
+
+## Signal problem or variance problem? — they are constantly conflated
+
+A large *relative* error has two completely different causes with **opposite remedies**,
+and `SE/|mean|` alone cannot tell them apart. Two numbers separate them, at fixed `N` and
+`M` (`N = 64 000`, 256 keys):
+
+| parameter | CV per run | `|z|` of mean | score % of variance | runs for 1 % | bottleneck |
+|---|---|---|---|---|---|
+| `temp` | 0.64 % | 2513 | 12 % | 1 (already) | neither |
+| `ux` | 3.18 % | 503 | 5 % | 10 | neither |
+| `alpha` | 3612 % | **0.4** | 3 % | — | **signal** (mean ≈ 0) |
+| `diam` | **26.2 %** | **61.0** | **100 %** | **687** | **variance** |
+
+`|z|` asks whether there is a signal at all. `CV` is the per-**run** spread — a property of
+the estimator, which does *not* improve with more runs; only the error on the mean does.
+
+**`diam` is the one genuine estimator concern, and it has nothing to do with a vanishing
+mean.** Its mean is resolved at `|z| = 61` and it still carries a 26 % per-run spread —
+41× `temp`'s, at the same `N`, the same `M` and on the same runs. The cause is structural:
+**100 % of its gradient variance is the score term**, because it has no pathwise route at
+all (`sd(pathwise)` is *exactly* 0 in the decomposition above). A score term multiplies the
+reward by `∇log p`, and that factor does not shrink as the reward concentrates, so its
+variance stays high by construction. The practical cost is ~**687 runs for 1 %** where
+`temp` needs one.
+
+**`alpha` is the opposite case and must not be read as an estimator defect.** Its true
+gradient really is ≈ 0 near argon's `α = 1.40`, 1 % from the stationary point `√2`. Move
+off that point — helium at `α = 1.26` — and it resolves at `|AD|/SE = 4.7` with no change
+whatever to the estimator. No ensemble size fixes a gradient that is genuinely zero, so its
+"runs needed" is unbounded rather than merely large, and the table leaves it blank.
+
+The remedies do not overlap, which is a useful accident: **a baseline attacks exactly the
+score variance**, so it is worth up to 84× for `diam` and only 1.02–1.07× for the pathwise
+parameters. Nothing but more particles touches pathwise noise.
+
+### What is *not* a concern here
+
+`sd ~ M^q` fits give `q` from 0.29 to 1.29 against [P2]'s predicted 0.5, which looks
+alarming until the mean is fitted too: `q(|mean|)` runs 0.02–1.63 alongside it, and the
+**relative** noise `sd/|mean|` is flat or falling for `ux`, `alpha` and `diam`
+(`q = −0.28, −0.34, −0.002`). Only `temp` degrades, at `q = +0.27`. **No exponent here
+should be extrapolated to long trajectories**: the study spans `M = 4 … 32` while the gas
+is still relaxing — `ux`'s mean moves 19× across that range — so these fits mix "the
+gradient genuinely grows as the trajectory lengthens" with "noise accumulates", and cannot
+separate them. It is a flag for a longer-`M` study, not a measurement of one.

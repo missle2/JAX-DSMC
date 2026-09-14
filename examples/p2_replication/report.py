@@ -30,6 +30,7 @@ from jax_dsmc.viz import (
     SERIES_MEASURED,
     make_figure,
     savefig,
+    time_color,
 )
 
 SCRATCH = "scratch/adjoint"
@@ -41,6 +42,9 @@ COMPONENTS = (
     r"$\partial T_y/\partial T_z^0$",
 )
 COMP_COLOUR = (SERIES_ANALYTIC, SERIES_MEASURED, SERIES_ERROR)
+
+#: ASCII forms for the text tables -- `COMPONENTS` is LaTeX and renders as raw markup there.
+COMPONENTS_PLAIN = ("dTy/dTx0", "dTy/dTy0", "dTy/dTz0")
 
 _F = r"[-+]?\d+\.?\d*(?:[eE][-+]?\d+)?"
 
@@ -149,6 +153,109 @@ def print_replicate(data):
     print("  close linearly, so the central difference has no truncation error at all.")
 
 
+def parse_p2_forward(path):
+    """``p2_forward.log`` -> ``{beta: {N: {mean, sd, se, rel_se_pct}}}``.
+
+    The forward objective's own noise, measured on the same ladder and the same ``M_s``
+    keys as the replication.  Without it the estimator comparison can only say which of AD
+    and FD is noisier, not whether either is noisy *relative to the quantity being
+    differentiated* -- which is the question that decides if a gradient is usable.
+    """
+    out = {}
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.split()
+            if len(parts) < 6:
+                continue
+            try:
+                beta, n = int(parts[0]), int(parts[1])
+                mean, sd, se, rel = (float(x) for x in parts[2:6])
+            except ValueError:
+                continue
+            out.setdefault(beta, {})[n] = {
+                "mean": mean,
+                "sd": sd,
+                "se": se,
+                "rel_se_pct": rel,
+            }
+    if not out:
+        raise ValueError(f"{path}: no forward rows parsed -- did the probe finish?")
+    return out
+
+
+def print_estimator_noise(data, fwd=None, rel_tol=0.10):
+    """``SE_FD/SE_AD`` -- is AD actually the less noisy estimator, and by how much?"""
+    print("\n=== AD vs FD noise at [P2]'s protocol (M_s = 100) ==========================")
+    print("  [P2] main.tex:1502 states AD is roughly 10x less noisy than FD.  Measured")
+    print("  here, the DIRECTION reproduces and the FACTOR does not.\n")
+    print(f"  {'beta':>5} {'usable pts':>11} {'mean ratio':>11} {'range':>14}")
+    for beta in sorted(data):
+        good = []
+        for r in data[beta]:
+            for p in range(3):
+                ratio, err = _ratio_with_quantisation(r["ad_se"][p], r["fd_se"][p])
+                if err / ratio <= rel_tol:
+                    good.append(ratio)
+        if not good:
+            print(f"  {beta:>5} {'--':>11} {'(all quantised)':>26}")
+            continue
+        print(
+            f"  {beta:>5} {len(good):>11d} {np.mean(good):>10.2f}x "
+            f"{min(good):>6.2f}-{max(good):.2f}"
+        )
+    print("\n  beta = 0's 1.00x is real but uninformative: for Maxwell molecules the")
+    print("  central difference has NO truncation error, so AD and FD are computing the")
+    print("  same number off the same runs and their sample SEs coincide by construction.")
+    print("  The informative rows are beta = 1 and 2, where FD is 1.7-2.0x noisier on")
+    print("  average -- the same direction [P2] reports, about 5x smaller in magnitude.")
+    print(f"\n  Points whose rounding uncertainty exceeds {100 * rel_tol:.0f} % are dropped:")
+    print("  the log prints each SE to 4 decimals, so an SE of 0.0001 is one significant")
+    print("  figure and a ratio built from it would be reporting the log's format.")
+
+
+def print_forward_vs_gradient(data, fwd, diag=1):
+    """Is the gradient noisier than the objective it is taken of?"""
+    print("\n=== forward noise vs gradient noise ========================================")
+    print("  Measured on the same runs, so this is like-for-like.  It asks what")
+    print("  differentiating actually costs in precision -- the question the AD-vs-FD")
+    print("  ratio above cannot answer, since it compares two gradients to each other.\n")
+    ratios = []
+    print(f"  {'beta':>5} {'N':>8} {'SE(dTy/dTy0)':>14} {'SE(J=Ty)':>12} {'ratio':>8}")
+    for beta in sorted(data):
+        for r in sorted(data[beta], key=lambda r: r["N"]):
+            f = fwd.get(beta, {}).get(r["N"])
+            if not f:
+                continue
+            ratio = r["ad_se"][diag] / f["se"]
+            ratios.append(ratio)
+            print(
+                f"  {beta:>5d} {r['N']:>8d} {r['ad_se'][diag]:>14.4e} "
+                f"{f['se']:>12.4e} {ratio:>8.2f}"
+            )
+    if ratios:
+        print(
+            f"\n  Mean {np.mean(ratios):.2f}x over {len(ratios)} points "
+            f"(range {min(ratios):.2f}-{max(ratios):.2f}): the DIAGONAL gradient is as"
+        )
+        print("  well resolved as the objective itself.  Differentiating costs nothing")
+        print("  here -- which is what makes the off-diagonal components the interesting")
+        print("  case.  In RELATIVE terms, at the largest N:")
+    for beta in sorted(data):
+        rows = sorted(data[beta], key=lambda r: r["N"])
+        f = fwd.get(beta, {}).get(rows[-1]["N"])
+        if not f:
+            continue
+        frel = f["se"] / abs(f["mean"])
+        cells = " ".join(
+            f"{COMPONENTS_PLAIN[c]} {(rows[-1]['ad_se'][c] / abs(rows[-1]['ad'][c])) / frel:>5.1f}x"
+            for c in range(3)
+        )
+        print(f"    beta={beta}: {cells}")
+    print("\n  The off-diagonal sensitivities are 4-9x noisier than the objective in")
+    print("  relative terms, purely because they are small numbers (~0.03) rather than")
+    print("  O(1) ones.  Same runs, same absolute noise, very different usability.")
+
+
 def figure_error_vs_n(data, path):
     """[P2]'s ``Error-N`` figure, plus the normalised version that is actually readable.
 
@@ -247,6 +354,182 @@ def figure_gradient_convergence(data, path):
         if k == 0:
             ax[k].legend(frameon=False, fontsize=8.5)
     return savefig(fig, path)
+
+
+#: The replication log prints every standard error as ``%.4f``.  An SE of 0.0001 therefore
+#: carries a ~29 % rounding uncertainty and 0.0010 carries ~3 %, which is enough to make a
+#: ratio of two of them meaningless at the small-SE end.  Everything below propagates this
+#: explicitly rather than plotting quantised values as if they were exact.
+SE_ULP = 1e-4
+SE_QUANT = SE_ULP / math.sqrt(12.0)
+
+
+def _ratio_with_quantisation(ad_se, fd_se):
+    """``SE_FD/SE_AD`` and its uncertainty from the log's 4-decimal rounding alone."""
+    ratio = fd_se / ad_se
+    rel = math.hypot(SE_QUANT / ad_se, SE_QUANT / fd_se)
+    return ratio, ratio * rel
+
+
+def figure_estimator_noise(data, path, fwd=None, rel_tol=0.10):
+    """AD against FD **noise** -- the comparison the error plot cannot make.
+
+    ``figure_error_vs_n`` plots the *disagreement* between the two estimators and uses
+    their standard errors only as a yardstick for it.  This asks the other question:
+    given the same budget, which estimator is noisier?  That is what decides whether AD is
+    worth having, and it is the measurement behind [P2]'s claim at ``main.tex:1502`` that
+    AD is roughly ten times less noisy than FD.
+
+    Both panels are at [P2]'s protocol verbatim -- ``M_s = 100`` runs, ``Delta m = 0.1``,
+    ``M = 20`` -- so ``N`` is the only thing varying.
+    """
+    betas = sorted(data)
+    fig, ax = make_figure(1, 2, figsize=(12.6, 4.8))
+    _panel_se_vs_n(ax[0], data, fwd, betas)
+    _panel_noise_ratio(ax[1], data, betas, rel_tol)
+    fig.tight_layout()
+    return savefig(fig, path)
+
+
+def _panel_se_vs_n(ax0, data, fwd, betas, diag=1):
+    """Left panel: forward, AD and FD standard errors against ``N``.
+
+    ``diag`` is ``dT_y/dT_y^0`` -- the largest signal and the component the README tables.
+    """
+    ax = [ax0]
+    for beta in betas:
+        rows = sorted(data[beta], key=lambda r: r["N"])
+        ns = np.array([r["N"] for r in rows], dtype=float)
+        colour = time_color(betas.index(beta), max(len(betas), 2))
+        ax[0].plot(
+            ns,
+            [r["ad_se"][diag] for r in rows],
+            "o-",
+            color=colour,
+            linewidth=2.0,
+            markersize=7,
+            label=rf"$\beta={beta}$  AD",
+        )
+        ax[0].plot(
+            ns,
+            [r["fd_se"][diag] for r in rows],
+            "s--",
+            color=colour,
+            linewidth=1.5,
+            markersize=7,
+            markerfacecolor="none",
+            label=rf"$\beta={beta}$  FD",
+        )
+    # The objective's own noise, on the same runs.  Drawn as a wide translucent halo
+    # BEHIND the AD curves rather than as a line, because a line is invisible here: the
+    # AD standard error of dT_y/dT_y^0 equals the forward standard error of T_y to within
+    # +-20 % at every point (mean ratio 0.98 over all 15).  The AD curves therefore ride
+    # inside the halo, which is the finding -- a line would just look like it had been
+    # forgotten.  All three beta agree within ~7 %, so they are drawn individually rather
+    # than averaged.
+    if fwd:
+        for i, beta in enumerate(sorted(fwd)):
+            pts = sorted(fwd[beta].items())
+            ax[0].plot(
+                [n for n, _ in pts],
+                [v["se"] for _, v in pts],
+                "-",
+                color=INK_SECONDARY,
+                linewidth=9.0,
+                alpha=0.22,
+                solid_capstyle="round",
+                zorder=0,
+                label=r"forward $J = T_y$ (all $\beta$)" if i == 0 else None,
+            )
+    ns0 = np.array([r["N"] for r in sorted(data[betas[0]], key=lambda r: r["N"])], dtype=float)
+    y0 = sorted(data[betas[-1]], key=lambda r: r["N"])[0]["fd_se"][diag]
+    ax[0].plot(
+        ns0,
+        y0 * (ns0 / ns0[0]) ** -0.5,
+        ":",
+        color=REFERENCE,
+        linewidth=1.6,
+        label=r"$N^{-1/2}$",
+    )
+    ax[0].axhspan(0, SE_ULP, color=SERIES_ERROR, alpha=0.13)
+    ax[0].text(
+        ns0[0],
+        SE_ULP * 1.15,
+        "one printed digit -- ratios here are rounding",
+        fontsize=7.5,
+        color=INK_SECONDARY,
+    )
+    ax[0].set(
+        xscale="log",
+        yscale="log",
+        xlabel="particles $N$",
+        ylabel=rf"SE of {COMPONENTS[diag]}",
+    )
+    # beta = 0's two curves lie on top of each other and that is the point, not an omission
+    ax[0].annotate(
+        r"$\beta=0$: AD and FD coincide"
+        "\n"
+        r"(Maxwell molecules close linearly,"
+        "\n"
+        r"so FD has no truncation error)",
+        xy=(ns0[1], sorted(data[0], key=lambda r: r["N"])[1]["ad_se"][diag]),
+        xytext=(0.05, 0.20),
+        textcoords="axes fraction",
+        fontsize=7.5,
+        color=INK_SECONDARY,
+        arrowprops={"arrowstyle": "->", "color": INK_SECONDARY, "linewidth": 0.9},
+    )
+    ax[0].set_title("AD rides inside the objective's own noise; FD sits above it", fontsize=11)
+    ax[0].legend(frameon=False, fontsize=7.5, ncol=2)
+
+
+def _panel_noise_ratio(ax1, data, betas, rel_tol):
+    """Right panel: ``SE_FD/SE_AD``, which is [P2]'s actual claim."""
+    ax = {1: ax1}
+    ns0 = np.array([r["N"] for r in sorted(data[betas[0]], key=lambda r: r["N"])], dtype=float)
+    for beta in betas:
+        rows = sorted(data[beta], key=lambda r: r["N"])
+        colour = time_color(betas.index(beta), max(len(betas), 2))
+        xs, ys, es = [], [], []
+        for r in rows:
+            for p in range(3):
+                ratio, err = _ratio_with_quantisation(r["ad_se"][p], r["fd_se"][p])
+                if err / ratio > rel_tol:
+                    continue  # the log has too few digits here to say anything
+                xs.append(r["N"] * (1.0 + 0.05 * (p - 1)))
+                ys.append(ratio)
+                es.append(err)
+        if not xs:
+            continue
+        ax[1].errorbar(
+            xs,
+            ys,
+            yerr=es,
+            fmt="o",
+            color=colour,
+            markersize=6,
+            capsize=2.5,
+            linewidth=1.2,
+            label=rf"$\beta={beta}$  (mean {np.mean(ys):.2f}$\times$)",
+        )
+    ax[1].axhline(1.0, color=INK_SECONDARY, linewidth=1.4)
+    ax[1].axhline(10.0, color=REFERENCE, linestyle="--", linewidth=1.6)
+    ax[1].text(
+        ns0[0],
+        10.6,
+        "[P2]: AD $\\sim 10\\times$ less noisy (main.tex:1502)",
+        fontsize=8.5,
+        color=INK_SECONDARY,
+    )
+    ax[1].set(
+        xscale="log",
+        yscale="log",
+        xlabel="particles $N$",
+        ylabel=r"$\mathrm{SE}_{\rm FD} \, / \, \mathrm{SE}_{\rm AD}$",
+    )
+    ax[1].set_ylim(0.7, 16)
+    ax[1].set_title("the direction reproduces, the factor does not", fontsize=11)
+    ax[1].legend(frameon=False, fontsize=8.5, loc="center right")
 
 
 def figure_noble_gases(rows, path):
@@ -367,13 +650,19 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     rep = parse_replicate(os.path.join(args.scratch, "p2_repl.log"))
+    fpath = os.path.join(args.scratch, "p2_forward.log")
+    fwd = parse_p2_forward(fpath) if os.path.exists(fpath) else None
     print_replicate(rep)
+    print_estimator_noise(rep, fwd=fwd)
+    if fwd:
+        print_forward_vs_gradient(rep, fwd)
     made = []
     if not args.no_plot:
         made.append(figure_error_vs_n(rep, os.path.join(args.figures, "error_vs_n.png")))
         made.append(
             figure_gradient_convergence(rep, os.path.join(args.figures, "gradient_convergence.png"))
         )
+        made.append(figure_estimator_noise(rep, os.path.join(args.figures, "estimator_noise.png")))
 
     gpath = os.path.join(args.scratch, args.gases_log)
     if os.path.exists(gpath):

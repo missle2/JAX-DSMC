@@ -695,6 +695,14 @@ def stochastic_round(x, u):
 
 `fix_emit.cpp:166-174`, Bird eq. 4.22. Recorded here so the interface is stable:
 
+**Built** — `jax_dsmc/inflow.py`. Bird's bounded rejection scheme as a `lax.scan` of a static
+`N_TRIALS = 16` with an acceptance mask, never a `while_loop`. One improvement over SPARTA:
+its inner `do beta_un = 6U-3 while (beta_un + scosine < 0)` (`fix_emit_face.cpp:576-577`) is
+itself a rejection loop; sampling the truncated range `[max(-3,-s), 3]` directly is the
+identical distribution with the nested loop removed. Validated against numerical quadrature of
+`(beta + s) exp(-beta^2)` rather than a stored baseline — mean and sd to 1-2 % across
+`s in [-1, 5]`, acceptance `>= 99.6 %` within the 16 trials.
+
 ```
 def mol_inflow(s):                 # s = vstream_normal / vscale
     return (exp(-s*s) + sqrt(pi)*s*(1 + erf(s))) / (2*sqrt(pi))
@@ -1765,11 +1773,81 @@ Dead particles keep their array slots (static shapes) and are sorted to the sent
 > This also retires the M1-M4 test assertion in 9.5 that the alive count is monotone
 > non-increasing; from M5 it is not, and the replacement invariant is a mass balance
 > (`injected - deleted == change in alive count`).
+>
+> **Built** — `jax_dsmc/inflow.py`. `revive_slots` is the *only* sanctioned way to set
+> `alive` from `False` to `True` and zeroes every field in `ACCUMULATOR_FIELDS` in the same
+> update; `ACCUMULATOR_FIELDS` is checked by reflection over `ParticleState`, so a future
+> accumulator cannot be silently missed. The mass balance is asserted at **every** step of a
+> 400-step inflow run and holds exactly.
+>
+> **The obvious U6 test proves nothing, and this was found the hard way.** Asserting "a stale
+> `logh_acc` changes the gradient" *fails*: `magic(L) = exp(L - stop_gradient(L))` has gradient
+> `dL/dtheta`, so a stale **constant** differentiates to zero. The real hazard is that the
+> previous occupant's score was itself built from `theta`-dependent collisions, so the inherited
+> term carries a nonzero `dL/dtheta` into the new particle's reward. The gate now makes
+> `logh_acc` a genuine function of `theta` and predicts the contamination quantitatively —
+> exactly `sum(inherited * phi[dead]) / N`, matched to `1e-10`.
 
-### 9.4 Diffuse / thermal — M4 forward only, **not differentiated until M7**
+### 9.4 Diffuse / thermal — M4 forward, M7 adjoint (see 9.4.1)
 
-Needs the true hit time in order to re-emit at the wall and re-advect the remainder, so it is a
-bounded `scan` of `K_bounce` masked sub-moves carrying `dtremain`, with `K_bounce` static.
+**Closed form, no sub-move scan.** [P3] eq. `thermal_v_L`/`thermal_v_R` gives the entire bounce
+as one expression:
+
+```
+v_{k+1} = g,        x_{k+1} = L + (x' - L)/(P v') * (P g)
+```
+
+`(x' - L)/(P v')` is the *overshoot time* — how long the particle spent past the wall — and it is
+re-advected with the **new** normal velocity. So the mesh stays static, every face rule stays a
+closed-form function of the end-of-step position, and the fast path is preserved. The flux bias
+lives in the half-Maxwellian draw (`sample_flux_normal`), not in geometric tracking.
+
+> **Revision.** This section previously specified "a bounded `scan` of `K_bounce` masked
+> sub-moves carrying `dtremain`". That was SPARTA's approach imported wholesale, and SPARTA needs
+> hit times only because it has general cut-cell geometry — on a static axis-aligned mesh it buys
+> nothing. Both were implemented and measured: they agree with the closed forms for
+> `PERIODIC`/`SPECULAR` to `2e-19`, reach the same wall equilibrium, and the closed form runs the
+> same 60-step, 1e5-particle case in **1.65 s against >7 min**.
+>
+> [P3] notes the closed form "does not include the possibility of multiple boundary crossings";
+> neither does SPARTA's specular (`domain.cpp:337-357`). **Measured**, at `L = 1e-3`, 8 cells,
+> argon at 300 K, the fraction of particles crossing two faces in a step is:
+>
+> | `dt / (dx/v_th)` | 0.15 (production) | 1.0 | 2.0 | 4.0 | 8.0 |
+> |---|---|---|---|---|---|
+> | recrossed fraction | **0** | **0** | 1e-6 | 4.2e-3 | 8.5e-2 |
+>
+> Zero up to ~7x the production CFL step. So a single pass is right, and the multi-crossing case
+> is **detected and reported** (`recrossed`, the wall analogue of `attempts_clipped`) rather than
+> iterated over — a silent one would be a momentum sink. Anything still outside is clamped, which
+> is a safety net rather than physics: without it `cell_of` would clip it into an edge cell
+> silently.
+>
+> **Corners are a separate effect, and they do not vanish with `dt`.** In `D >= 2` a particle can
+> leave through two *different* faces in one step; that fraction scales as `(v dt / L)^(D-1) N`,
+> not as the same-face rate above.
+>
+> **Both wall interactions are resolved.** `n_bounce_passes` is a *static* function of the face
+> layout: a particle can only reach two thermal faces in a step if they lie on different **axes**,
+> since after bouncing off one face of an axis it travels away from the opposite face. So thermal
+> on one axis (Couette) runs one pass and pays nothing; thermal on two or more runs two. Each pass
+> leaves the particle *at* its wall with `t_used` advanced, and a single final advance by
+> `dt - t_used` completes the step — which is what makes the passes composable. Measured on a box
+> thermal on every face: `D = 3` equilibrium went from **309.9 K to 300.90 K** against a 300 K
+> wall, and the residual `recrossed` fell 1.8e-3 -> 3.3e-4 (`D = 2`). What is left is the tail
+> needing a *third* crossing, worth ~0.3%.
+>
+> The target geometries are exact regardless, because periodic, specular and outflow keep their
+> exact any-number-of-crossings folds and are applied *after* the wall bounce:
+>
+> | configuration | recrossed / particle-step |
+> |---|---|
+> | thermal on every face (worst case, 2 passes) | 3.3e-4 |
+> | **Couette** — periodic `x`, thermal `y` | **0** |
+> | **shock** — outflow `x`, specular `y` | **0** |
+>
+> So the ordering inside `apply_faces` is load-bearing: wall bounce first, exact folds second.
+
 `surf_collide_diffuse.cpp:206-320`:
 
 ```
@@ -1777,12 +1855,62 @@ v_perp = v_rm(T_wall) * safe_sqrt(-log(U))            # flux-weighted Rayleigh
 v_tan  = maxwellian tangential components
 ```
 
-`v_perp` is reparameterised in `T_wall`, so `dJ/dT_wall` would in principle be pathwise. It is
-still deferred, because the *event* of hitting the wall is a discontinuous function of position,
-and [P3] §4 shows this obstructs the adjoint until the timestep is randomised. M7 adds
-`tau ~ N(dt, epsilon^2)` behind the `cfg.epsilon` knob (`epsilon = 0` reproduces the exact
-deterministic scheme, so M1-M5 validation is unaffected) and accumulates `log p_l(x, v)` into the
-same `logh_acc`.
+`v_perp` is reparameterised in `T_wall`, so `dJ/dT_wall` is pathwise. `vwall` is added after the
+draw, so `dJ/dv_wall` is too.
+
+### 9.4.1 M7: what was built, and what each parameter costs
+
+**Built** (all default-off, so every M1-M5 forward result is unchanged -- verified: the Couette
+gate reproduces pre-M7 output to every digit, and a 30 000-step inflow shock reproduces all six
+moments and every diagnostic with zero mismatches):
+
+| piece | where | knob |
+|---|---|---|
+| crossing-event score, [P3] app:`log` | `boundary.crossing_score` | `params.epsilon` (0 → score is exactly 0, since `log 1 = 0`) |
+| accommodation Bernoulli score | `boundary._diffuse_velocity` | always on; zero-mean, so harmless |
+| **relaxed** accommodation | same | `acc_delta` (0 → the hard threshold) |
+| cell-wide score attribution | `boundary.spread_score_over_cell` | `score_spread="cell"` |
+| inflow injection-count score | `inflow.inject` | always on |
+
+The per-step boundary score is returned by `apply_faces` as a fifth value and added to
+`logh_acc` by `simulate._step` -- the *same* accumulator the collision score uses, because
+`surrogate` weights the reward by the gradient of the whole prefix and a separate accumulator
+would drop the cross terms.
+
+**Parameters divide by route, and the route decides everything:**
+
+| parameter | route | status |
+|---|---|---|
+| `T_wall`, `v_wall` | pathwise | **verified** -- fixed-key FD to 3.3e-12 / 2.5e-11, and pointwise against the Couette closed form (§9.4.2) |
+| inflow `nrho` | score | **verified** -- ensemble FD/AD = 1.04 |
+| `acc` | score, or pathwise with `acc_delta > 0` | score form biased 2.8x at `M = 40` |
+| shock `d(rho_2/rho_1)/du_1` | score | **wrong sign** |
+
+A score-carried gradient is **biased low, and the bias grows with trajectory length** -- 1.13x
+at `M = 2` rising to 2.82x at `M = 40`. The cause is reward attribution, not the
+log-probability: with collisions switched off the same estimator is exact (`|z| = 0.18`).
+**`docs/ATTRIBUTION.md` is the reference for this and should be read before quoting any
+score-carried gradient.**
+
+### 9.4.2 Two limits that bound every gradient here
+
+Both were measured, and they are independent:
+
+1. **Attribution bias** (score route only). See above.
+2. **Chaotic amplification** (every pathwise gradient). The derivative of a *single*
+   trajectory grows like `exp(lambda t)` while the quantity it estimates stays `O(1)`: the
+   per-seed spread of `du_s/du_wall` grows **9 254x** between 10 and 800 steps. The estimator
+   never becomes wrong, it becomes uninformative.
+
+A third scaling follows from (2) and is the practical one: **particle count does not fix a
+gradient.** At a 25-step horizon the forward observable and both gradients all scale
+`N^-1/2`; at 200 steps the forward still does and the gradients are **flat** (`N^+0.00`,
+`N^-0.10`). The chaotic part of the variance does not average over particles, so past the
+horizon where it dominates, only ensemble size helps -- at `M^-1/2`.
+
+Validation lives in `examples/couette/gradients.py` (against continuum Couette with Maxwell
+slip, and against `dT/dT_wall = 1` exactly) and `examples/shock/gradients.py` (against
+Rankine-Hugoniot).
 
 ### 9.5 Tests (`tests/test_move.py`), parametrised over `D in {1, 2, 3}`
 
@@ -2931,7 +3059,7 @@ definition of done. A row may only be deleted by moving its evidence into §17.
 | ~~U3~~ **CLOSED 2026-09-04** | A 2-5x safety factor on `Sigma` eliminates majorant violations | **Achievable — but NOT with SPARTA's seed.** SPARTA seed + stale-max ratchet FAILS (violation rate `1.1e-3` equilibrium, `1.0e-2` beams; min margin `0.62`). The a-priori thermal majorant passes: **zero** violations in all 6 IC x transient cases, min margin `2.15`. This is a **design change to `vremax_init`** — see §17.5 | Gate run: `scratch/gate_U3_margin_numpy.py`; regression in `tests/test_gaps.py` | done |
 | U4 | Sizing `A_max` from the inflated `Sigma` prevents silent clipping | The 2.29x inflation is measured; **the mitigation is not.** No test shows a cold-start `A_max` actually clips, nor that the rule prevents it | Drive a `T: 1->4->1` transient; assert `attempts_clipped > 0` with cold-start sizing and `== 0` with the inflated rule | **M3** |
 | U5 | Oracle 3 discriminates the intra-step ordering | **CLOSED.** Built as `tests/test_adjoint_oracle.py::test_oracle3_*` (§13.3). The 2x2 discriminator is exactly diagonal: our `move -> collide` loop matches the OUTSIDE form to **1.33e-16** and misses [P3]'s INSIDE form by **9.85e-02**; reordering the loop swaps both. `B_k` is [P1]'s analytic `A^T`, not `jax.jacobian`. A companion test pins the *production* step's ordering behaviourally, so the oracle cannot end up validating a loop we no longer run | — (closed) | **M2** |
-| U6 | `logh_acc` is zeroed when inflow refills a dead slot | Reasoned invariant only (§9.3). No test | Inject into a dead slot; assert its accumulator is 0 and its gradient contribution equals a freshly allocated particle's | **M5** |
+| U6 | `logh_acc` is zeroed when inflow refills a dead slot | **CLOSED.** `inflow.revive_slots` is the only sanctioned path from `alive=False` to `True` and zeroes every `ACCUMULATOR_FIELDS` entry in the same update; the field list is checked by **reflection** over `ParticleState`, so a later accumulator cannot be silently missed. A revived slot's gradient equals a fresh particle's exactly, and skipping the reset shifts it by exactly `sum(inherited * phi[dead])/N`, matched to `1e-10`. **The obvious test proves nothing**: `magic(L) = exp(L - sg(L))` has gradient `dL/dtheta`, so a stale *constant* differentiates to zero — the accumulator has to be made `theta`-dependent for the check to have any power | — (closed) | **M5** |
 | U7 | Non-uniform `fnum` without reweighting breaks mass conservation | The *hazard* is reasoned (§3.3); neither the failure nor the guard is demonstrated | Run non-uniform `fnum` with particles crossing cells; exhibit the mass drift; assert the setup guard fires | **M5** |
 | U8 | `h_crit ~ 5.8/(N*C*M)` closes the FD window at production scale | Fitted over `N*C*M <= 3e6`; the M3-scale conclusion is a **6-decade extrapolation** | Measure `h_crit` at one intermediate point (`N*C*M ~ 1e8`) and check the fit holds before relying on the extrapolation | **M3** |
 | U10 | The `v_r`-frame and lab-frame collision reparameterisations are equally good pathwise estimators | **Only unbiasedness is argued, never variance.** §17.1.1 measures that they are *different* maps (rank 6 vs 4); nothing measures which produces a noisier gradient, and §23.3 shows variance is the binding constraint | Estimate `Var(dJ/dtheta)` over seeds under both samplers at matched cost, 0-D and 1-D; if the lab-frame form wins materially, it is a cheap forward-solve change | **M6** |
@@ -3723,7 +3851,7 @@ Three readings, in order of how much they change what we do:
    below its own noise. So the `\|z\| = 0.24` AD-vs-FD agreement is a **low-power** check and
    must not be quoted as a verification. FD would need ~28x the ensemble to reach 3 sigma.
 3. **`SE_FD/SE_AD = 8.4x` is the first sighting of [P2]'s claimed ~10x AD advantage.** The 0-D
-   replication measured only 2.0-2.3x (§23.3.4). The advantage appears here, where the pathwise
+   replication measured only 1.7-2.0x on average (§23.3.4). The advantage appears here, where the pathwise
    term dominates — consistent with §23.3.3's finding that pathwise carries 3-5x the score noise
    and is therefore where a method difference can show up at all.
 

@@ -136,3 +136,99 @@ guard in the code:
 - **the collision model** — ruled out independently: the 2-D Taylor–Green case measures the
   viscosity to **+0.38 %** of Chapman–Enskog, and `test_vss.py` now asserts the mean collision
   rate equals the hard-sphere rate at `T_ref` for every ω.
+
+---
+
+## 4. Two-sided-inflow shock — the open-boundary gate
+
+The three cases above drive their shocks with a **piston off a specular wall**: the domain
+is closed, so the boundary conditions under test are reflection and periodicity. This
+fourth case holds the *same* Mach-2 shock stationary with **inflow at both ends** — the
+left face injects the upstream state, the right face the Rankine–Hugoniot post-shock
+state — which is [P3]'s test3 geometry and the verification case for the inflow boundary
+condition.
+
+```bash
+python3 -m examples.shock.inflow_report              # run, log and plot
+python3 -m examples.shock.inflow_report --plot-only  # re-plot from the stored log
+```
+
+It checks two different things at once, and the split matters:
+
+* the **upstream** rows test the *boundary condition* — does inflow deliver the state it
+  was asked for;
+* the **downstream** rows test the *interior physics* — does the solver reproduce
+  Rankine–Hugoniot from that inlet.
+
+`L = 60 λ₁`, 200 cells, 40 000 particles, 20 000 warm-up steps
+(`results/inflow_driven.log`):
+
+| moment | measured | Rankine–Hugoniot | error |
+|---|---|---|---|
+| `nrho` upstream | 9.9793e+20 | 1.0000e+21 | −0.21 % |
+| `T` upstream | 2.7075e+02 | 2.7315e+02 | −0.88 % |
+| `ux` upstream | 6.1602e+02 | 6.1580e+02 | +0.04 % |
+| `nrho` downstream | 2.2738e+21 | 2.2857e+21 | −0.52 % |
+| `T` downstream | 5.6583e+02 | 5.6764e+02 | −0.32 % |
+| `ux` downstream | 2.7015e+02 | 2.6941e+02 | +0.27 % |
+
+**Worst moment 0.88 %**, with the mass flux `n·uₓ` conserved plateau-to-plateau to
+**0.09 %**, `inflow_shortfall = 0` and `attempts_clipped = 0`.
+
+This is a **single run**, not an ensemble, and the per-moment errors carry run-to-run
+scatter of a few tenths of a per cent — an independent repeat of exactly this
+configuration moved the worst moment between 0.68 % and 0.88 % and the flux conservation
+between 0.09 % and 0.17 %. The claim the case supports is therefore "every moment inside
+~1 %", which is robust at that scatter; do not read the individual digits as resolved.
+(`examples/couette` learned this the hard way — see `docs/HANDOFF.md`.)
+
+![two-sided-inflow shock](figures/inflow_driven.png)
+
+### Initialise with the shock already in the middle
+
+Filling the box with the upstream state instead makes the shock form at the outlet and
+never travel back. Measured, it parked at `x/L = 0.900` with only **6.0 mfp** of
+downstream run — less than a Mach-2 shock is thick — so the "downstream plateau" was
+inside the shock structure and read **9 % off** Rankine–Hugoniot.
+
+What identified the fault as the *layout* rather than the solver was that the mass flux
+stayed conserved to **0.07 %** throughout. A solver that had got the physics wrong would
+not conserve `n·uₓ`; one that had simply been asked the wrong question would. Placing the
+shock at mid-domain gives 16.5 mfp of run and the table above.
+
+### `A_max` must be sized for the *downstream* side
+
+The post-shock gas is 2.29× denser and the NTC attempt count goes as `npc²`, so the
+downstream cells need roughly five times the upstream attempt budget. A first attempt at
+the reduced test configuration ran with `a_max = 64` and clipped **5328** attempts — gap
+U4's silent-under-collision failure mode exactly, caught only because
+`Diagnostics.attempts_clipped` is asserted rather than logged. The shipped case uses
+`a_max = 128` at `npc = 200`, where the measured peak is well inside it.
+
+---
+
+## 5. Gradients against Rankine-Hugoniot
+
+```bash
+python3 -m examples.shock.gradients
+```
+
+`d(T_2/T_1)/du_1` **agrees with the closed form across `M = 1.6 ... 4.0`** at a 300-step
+horizon -- the temperature response reaches the inlet velocity *pathwise*, through the
+prescribed inflow temperature and local equilibration.
+
+`d(rho_2/rho_1)/du_1` **does not, and comes out with the wrong sign.** It is not a noise
+problem: at that horizon the per-seed spread is 3x the signal, so the gradient is precise
+and wrong. The density ratio reaches `u_1` only through discrete decisions with opposing
+contributions, and the per-particle attribution under-counts them by different factors.
+A second obstacle sits behind it -- reaching the Rankine-Hugoniot compression takes ~1000
+steps, by which point chaotic amplification puts the derivative nine orders of magnitude
+above its own signal. Full analysis in [`docs/ATTRIBUTION.md`](../../docs/ATTRIBUTION.md).
+
+![shock gradients](figures/gradients.png)
+
+**A forward bug this study found.** `inflow.inject` silently dropped entrants when dead
+slots ran out: `shortfall` counted only `target > capacity`, though its contract says both.
+A saturated particle array then looks exactly like correct physics -- at Mach 4 the density
+ratio flattened at 1.83 against a Rankine-Hugoniot 3.37 (**-46 %**) with every diagnostic
+reading zero. Fixed; the counter now reports it.
