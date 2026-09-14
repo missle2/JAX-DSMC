@@ -161,3 +161,19 @@ def test_p3_anisotropic_wall_temperature_components():
     np.testing.assert_allclose(
         jax.grad(energy)(jnp.array([0.6, 0.7, 0.8])), [2.0, 1.0, 1.0], rtol=0.02
     )
+
+
+def test_eager_wall_steps_reuse_one_compilation_for_changing_particle_values():
+    from jax_dsmc.wall_adjoint import advance  # noqa: PLC0415
+    grid = GridSpec(lo=jnp.array([0.]), hi=jnp.array([1.]), n=(1,))
+    faces = boundary.Faces.uniform(boundary.BC.DIFFUSE, 1)
+    wall = boundary.WallParams.uniform(1, 1.)
+    x, v = jnp.full((32, 1), .5), jnp.ones((32, 3))
+    alive = jnp.ones(32, bool)
+    args = (alive, grid, faces, wall, K_BOLTZ, .1)
+    x, v, _, _, _ = advance(x, v, *args, jax.random.PRNGKey(0), epsilon=.01)
+    count = advance._cache_size()
+    for k in range(1, 5):
+        x, v, _, _, _ = advance(x, v, *args, jax.random.PRNGKey(k), epsilon=.01)
+    jax.block_until_ready(v)
+    assert advance._cache_size() == count
