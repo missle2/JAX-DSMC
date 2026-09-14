@@ -1,0 +1,47 @@
+{
+  "config": {
+    "particles": 2000,
+    "cells": 20,
+    "dt": 0.05,
+    "steps": 10,
+    "epsilon": 0.005,
+    "initial_std": 1.0,
+    "observable": "couette",
+    "score_mode": "paper"
+  },
+  "seeds": 8,
+  "fd_step": 0.05,
+  "adjoint": {
+    "mean": [
+      3.089346414641156
+    ],
+    "se": [
+      0.11082054297565504
+    ]
+  },
+  "deterministic_fd": {
+    "mean": [
+      3.009729307094756
+    ],
+    "se": [
+      0.23738796892394223
+    ]
+  },
+  "regularized_fd": {
+    "mean": [
+      3.2527008653423497
+    ],
+    "se": [
+      0.16395918572888454
+    ]
+  },
+  "objective": {
+    "mean": 6.967680489585099,
+    "se": 0.07473338089452779
+  },
+  "paper_resolution_reproduced": false,
+  "paper_couette_adjoint": 3.0283,
+  "paper_couette_fd": 3.0011,
+  "regularization": "all particles; paper uses a three-sigma proximity cutoff",
+  "backend": "cpu"
+}

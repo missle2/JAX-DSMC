@@ -1,5 +1,7 @@
 # JAX-DSMC — Pseudocode Specification (Phase 0)
 
+> Adjoint implementation update: see [corrections, P3 methods, and validation limits](ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.
+
 Status: **specification only, revision 3 — not yet approved.** No JAX code is written until this
 document is reviewed.
 

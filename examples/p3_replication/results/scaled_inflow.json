@@ -1,0 +1,67 @@
+{
+  "config": {
+    "n_initial": 1000,
+    "cells": 40,
+    "dt": 0.025,
+    "steps": 20,
+    "retained": 64,
+    "source_samples": 499,
+    "partners": 4,
+    "neighbors": 32,
+    "q0": 1.0,
+    "source_density": 1000.0,
+    "initial_std": 1.0
+  },
+  "seeds": 4,
+  "fd_step": 0.1,
+  "injection_counts": [
+    499,
+    499
+  ],
+  "normalization": 20960,
+  "adjoint_normal_temperature": {
+    "mean": [
+      0.15515578038677635,
+      0.1471421855512433
+    ],
+    "se": [
+      0.012503471250593133,
+      0.007063420580492372
+    ]
+  },
+  "finite_difference_normal_temperature": {
+    "mean": [
+      0.12047846542211416,
+      0.42479089795270597
+    ],
+    "se": [
+      0.07315368900623939,
+      0.18337786683280782
+    ]
+  },
+  "paired_difference": {
+    "mean": [
+      0.03467731496466221,
+      -0.2776487124014626
+    ],
+    "se": [
+      0.08419186226386806,
+      0.1894311251059812
+    ]
+  },
+  "objective": {
+    "mean": 3.2095252651821324,
+    "se": 0.02066002131849491
+  },
+  "final_population": {
+    "mean": 16274.75,
+    "se": 34.05234940499701
+  },
+  "paper_adjoint_mean": [
+    0.15171883,
+    0.15157001
+  ],
+  "paper_resolution_reproduced": false,
+  "elapsed_seconds": 31.47030072900816,
+  "backend": "numpy/scipy host"
+}

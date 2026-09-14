@@ -1,5 +1,7 @@
 # JAX-DSMC
 
+> Adjoint implementation update: see [corrections, P3 methods, and validation limits](docs/ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.
+
 Differentiable Direct Simulation Monte Carlo in JAX, built so that a **discrete adjoint** for the
 inhomogeneous Boltzmann equation falls out of the forward solve rather than requiring a second
 implementation.

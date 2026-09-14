@@ -1,5 +1,7 @@
 # Reward attribution in the DiCE surrogate — measured bias, and what it costs
 
+> Adjoint implementation update: see [corrections, P3 methods, and validation limits](ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.
+
 **Read this before trusting any score-carried gradient from a long run.**
 
 Everything here was measured in September 2026 while building the M7 boundary adjoint. The

@@ -1,5 +1,7 @@
 # Handoff — state of play
 
+> Adjoint implementation update: see [corrections, P3 methods, and validation limits](ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.
+
 Written for someone picking this up cold. It covers what exists, what is in flight, and — mostly
 — **the traps**, because this project has already produced two defects that would have shipped
 silently wrong physics and survived a careful reading of the spec.
