@@ -109,7 +109,7 @@ class Case:
     u_wall: float = 200.0
     acc: float = 1.0
     epsilon_rel: float = 0.0
-    a_max: int = 64
+    a_max: int = 256
     specular: bool = False
     """Specular walls transfer no tangential momentum, so they must drive no shear."""
 
@@ -186,11 +186,11 @@ def initial_state(key, grid, sp, n_part):
     )
 
 
-def _accumulate(run, state, cstate, grid, gap, stream, n_slab, dy, n_warm, blocks):
+def _accumulate(run, state, cstate, grid, gap, stream, n_slab, dy, n_warm, blocks, stride=BLOCK):
     """Bin particle moments onto gap-axis slabs.  Split out to keep `profile` readable."""
     acc = {k: np.zeros(n_slab) for k in ("n", "us", "un", "uns", "v2")}
     for blk in range(blocks):
-        (state, cstate), _ = run(state, cstate, n_warm + blk * BLOCK)
+        (state, cstate), _ = run(state, cstate, n_warm + blk * stride)
         j = np.clip(
             ((np.asarray(state.x[:, gap]) - float(grid.lo[gap])) / dy).astype(int),
             0,
@@ -209,8 +209,11 @@ def _accumulate(run, state, cstate, grid, gap, stream, n_slab, dy, n_warm, block
     return acc
 
 
-def profile(case: Case, key=None, n_warm=None, n_sample=6000):
+def profile(case: Case, key=None, n_warm=None, n_sample=6000, sample_stride=BLOCK):
     """Run to steady state and return the gap-resolved profiles and bulk transport.
+
+    ``sample_stride`` sets the number of timesteps between particle snapshots.
+    Diagnostics cover all warm-up and sampling blocks; unresolved events raise.
 
     Binning is on the **gap-axis slab**, not the flat cell index, so the periodic
     directions are averaged over automatically and the same code serves ``D = 1, 2, 3``.
@@ -226,9 +229,12 @@ def profile(case: Case, key=None, n_warm=None, n_sample=6000):
     explicit small ``n_warm`` only for structural tests that do not read the transport
     coefficients.
     """
+    if sample_stride < 1 or n_sample < sample_stride:
+        raise ValueError("Sampling needs a positive stride and at least one snapshot")
     key = jax.random.PRNGKey(0) if key is None else key
     n_warm = 3 * diffusion_steps(case) if n_warm is None else int(n_warm)
     grid, sp, params, static, faces, wall, lam, length, fnum = build(case)
+    static = dataclasses.replace(static, n_steps=sample_stride)
     n_cell = num_cells(grid)
     gap, stream = case.gap, case.stream
     n_slab = case.n_cells
@@ -261,12 +267,27 @@ def profile(case: Case, key=None, n_warm=None, n_sample=6000):
             step0=k0,
         )
     )
-    diag = None
-    for blk in range(n_warm // BLOCK):
-        (state, cstate), (_, diag) = run(state, cstate, blk * BLOCK)
+    totals = {"recrossed": 0, "clipped": 0}
 
-    blocks = n_sample // BLOCK
-    acc = _accumulate(run, state, cstate, grid, gap, stream, n_slab, dy, n_warm, blocks)
+    def checked_run(st, cs, step):
+        result = run(st, cs, step)
+        diagnostics = result[1][1]
+        totals["recrossed"] += int(jnp.sum(diagnostics.wall_recrossed))
+        totals["clipped"] += int(jnp.sum(diagnostics.attempts_clipped))
+        if totals["clipped"] or totals["recrossed"]:
+            raise RuntimeError(
+                "Unresolved Couette events: increase a_max for clipped attempts "
+                "or reduce dt for wall recrossings"
+            )
+        return result
+
+    for blk in range(n_warm // sample_stride):
+        (state, cstate), _ = checked_run(state, cstate, blk * sample_stride)
+
+    blocks = n_sample // sample_stride
+    acc = _accumulate(
+        checked_run, state, cstate, grid, gap, stream, n_slab, dy, n_warm, blocks, sample_stride
+    )
 
     cnt = np.maximum(acc["n"], 1.0)
     u_s = acc["us"] / cnt
@@ -311,8 +332,8 @@ def profile(case: Case, key=None, n_warm=None, n_sample=6000):
         "epsilon_rel": case.epsilon_rel,
         "specular": case.specular,
         "n_part": static.N,
-        "recrossed": int(jnp.sum(diag.wall_recrossed)),
-        "clipped": int(jnp.sum(diag.attempts_clipped)),
+        "recrossed": totals["recrossed"],
+        "clipped": totals["clipped"],
     }
 
 

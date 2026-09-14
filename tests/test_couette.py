@@ -18,19 +18,29 @@ jax.config.update("jax_enable_x64", True)
 
 from examples import couette as cu  # noqa: E402
 
-WARM = 500
+WARM = 600
 SAMPLE = 600
 CELLS = 40
 NPC = 120
 
 
 def _run(**kw):
-    return cu.profile(cu.Case(n_cells=CELLS, npc=NPC, **kw), n_warm=WARM, n_sample=SAMPLE)
+    return cu.profile(
+        cu.Case(n_cells=CELLS, npc=NPC, a_max=256, **kw),
+        n_warm=WARM,
+        n_sample=SAMPLE,
+        sample_stride=20,
+    )
 
 
 @pytest.fixture(scope="module")
 def diffuse():
     return _run()
+
+
+def test_no_silent_attempt_or_wall_truncation(diffuse):
+    assert diffuse["clipped"] == 0
+    assert diffuse["recrossed"] == 0
 
 
 def test_diffuse_walls_drive_a_shear_with_the_right_sign(diffuse):
