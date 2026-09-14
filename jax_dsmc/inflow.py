@@ -24,14 +24,18 @@ import functools
 import jax
 import jax.numpy as jnp
 from jax import lax
+from jax.scipy.special import log_ndtr
 
 jax.config.update("jax_enable_x64", True)
 
 from jax_dsmc import sampling  # noqa: E402
 from jax_dsmc.boundary import BC  # noqa: E402
 from jax_dsmc.constants import K_BOLTZ  # noqa: E402
+from jax_dsmc.geometry import surface_measure  # noqa: E402
+from jax_dsmc.rng import indexed_normal, indexed_uniform  # noqa: E402
 from jax_dsmc.safe import safe_log  # noqa: E402
 from jax_dsmc.state import ParticleState  # noqa: E402
+from jax_dsmc.wall_adjoint import advance  # noqa: E402
 
 ACCUMULATOR_FIELDS = ("logh_acc",)
 """Per-particle state that is a *history* and so must be reset on slot reuse.
@@ -178,13 +182,8 @@ class InflowParams:
 
 
 def face_area(grid, axis: int) -> jnp.ndarray:
-    """Area of a face normal to ``axis``.  In 1-D this is 1 (a point), by convention."""
-    extent = grid.hi - grid.lo
-    area = jnp.array(1.0, dtype=jnp.float64)
-    for other in range(len(grid.n)):
-        if other != axis:
-            area = area * extent[other]
-    return area
+    """Physical face area, including the suppressed transverse measure."""
+    return surface_measure(grid, axis)
 
 
 def target_count(res, grid, axis, side, mass, fnum, dt):
@@ -198,38 +197,107 @@ def target_count(res, grid, axis, side, mass, fnum, dt):
     inward = 1.0 if side == 0 else -1.0
     vscale = jnp.sqrt(2.0 * K_BOLTZ * res.temp[f] / mass)
     s = inward * res.vstream[f, axis] / vscale
-    return res.nrho[f] * vscale * mol_inflow(s) * face_area(grid, axis) * dt / fnum
+    return res.nrho[f] * vscale * flux_integral(s) * face_area(grid, axis) * dt / fnum
+
+
+def flux_integral(s):
+    """Untruncated reservoir flux per most-probable thermal speed.
+
+    Unlike the legacy SPARTA-compatible mol_inflow helper, retains inward tails
+    for outward drift below -3. Gaussian tails use log_ndtr to avoid erf cancellation.
+    """
+    shift = jnp.minimum(s, 0.)**2
+    scaled = (.5*jnp.exp(-s*s+shift)
+              + s*jnp.sqrt(jnp.pi)*jnp.exp(shift+log_ndtr(jnp.sqrt(2.)*s)))
+    return jnp.maximum(scaled, 0.)*jnp.exp(-shift)/jnp.sqrt(jnp.pi)
+
+
+def flux_cdf(y, s):
+    """CDF of inward speed y >= 0 with density proportional to y exp(-(y-s)^2).
+
+    Scaling out exp(-s^2) for outward reservoirs avoids Gaussian underflow.
+    Tested over speed ratios [-10, 10]; residual checks reject failed inversion.
+    """
+    shift = jnp.minimum(s, 0.0) ** 2
+    def tail(z):
+        return (0.5 * jnp.exp(-(z-s)**2 + shift)
+                + s * jnp.sqrt(jnp.pi)
+                * jnp.exp(shift + log_ndtr(jnp.sqrt(2.) * (s-z))))
+    return 1.0 - tail(y) / tail(jnp.zeros_like(y))
+
+
+@jax.custom_jvp
+def flux_quantile(u, s):
+    """Inverse normalized drifting flux CDF, with an implicit pathwise tangent."""
+    u, s = jnp.broadcast_arrays(u, s)
+    lo = jnp.zeros_like(u)
+    hi = jnp.maximum(s, 0.) + 12.0
+    def bisect(_, bounds):
+        a, b = bounds
+        mid = (a+b)/2
+        left = flux_cdf(mid, s) < u
+        return jnp.where(left, mid, a), jnp.where(left, b, mid)
+    lo, hi = jax.lax.fori_loop(0, 64, bisect, (lo, hi))
+    return (lo+hi)/2
+
+
+@flux_quantile.defjvp
+def _flux_quantile_jvp(primals, tangents):
+    u, s = primals
+    du, ds = tangents
+    y = flux_quantile(u, s)
+    _, fy = jax.jvp(lambda z: flux_cdf(z, s), (y,), (jnp.ones_like(y),))
+    _, fs = jax.jvp(lambda drift: flux_cdf(y, drift), (s,), (jnp.ones_like(s),))
+    return y, (du-fs*ds)/jnp.maximum(fy, jnp.finfo(y.dtype).tiny)
+
+
+def sample_surface_velocities(key, n, temperature, stream, normal, mass):
+    """Drifting isotropic reservoir flux through an arbitrary inward unit normal.
+
+    Gaussian tangents are projected directly, avoiding frame branches. The normal
+    flux speed uses the implicit inverse CDF. Shape/support corrections are separate.
+    """
+    vscale = jnp.sqrt(2*K_BOLTZ*temperature/mass)
+    drift = jnp.dot(stream, normal)
+    s = drift/vscale
+    kn, kt = jax.random.split(key)
+    u = jnp.clip(indexed_uniform(kn, n), jnp.finfo(jnp.float64).eps,
+                 1-jnp.finfo(jnp.float64).eps)
+    speed = flux_quantile(u,s)
+    accepted = jnp.isfinite(speed) & (jnp.abs(flux_cdf(speed,s)-u) < 1e-10)
+    gaussian = indexed_normal(kt,n,(3,))*vscale/jnp.sqrt(2.)+stream
+    velocity = gaussian+(speed*vscale-jnp.sum(gaussian*normal,axis=1))[:,None]*normal
+    return velocity,accepted
 
 
 def sample_face_velocities(key, n, res, axis, side, mass):
-    """Velocities of ``n`` candidate entrants at face ``(axis, side)``, ``f64[n, 3]``.
-
-    Normal component from the flux-weighted rejection sampler; tangential components
-    Maxwellian about the reservoir stream, matching ``fix_emit_face.cpp:584-587``
-    (whose polar form is Box-Muller for the same pair of Gaussians).
-    """
-    f = 2 * axis + side
-    inward = 1.0 if side == 0 else -1.0
-    vscale = jnp.sqrt(2.0 * K_BOLTZ * res.temp[f] / mass)
-    k_beta, k_tan = jax.random.split(key)
-    s = inward * res.vstream[f, axis] / vscale
-    beta, accepted = sample_normal_beta(k_beta, n, s)
-    # tangential sigma is sqrt(kT/m) = vscale/sqrt(2)
-    v = (vscale / jnp.sqrt(2.0)) * jax.random.normal(k_tan, (n, 3), dtype=jnp.float64)
-    v = v + res.vstream[f]
-    v = v.at[:, axis].set(inward * beta * vscale + res.vstream[f, axis])
-    return v, accepted
+    """Cartesian adapter to the pathwise arbitrary-normal source sampler."""
+    f = 2*axis+side
+    normal = jnp.zeros(3).at[axis].set(1. if side == 0 else -1.)
+    return sample_surface_velocities(key,n,res.temp[f],res.vstream[f],normal,mass)
 
 
 def sample_face_positions(key, n, grid, axis, side):
     """Uniform positions **on** face ``(axis, side)``, ``f64[n, D]``."""
     D = len(grid.n)
-    u = jax.random.uniform(key, (n, D), dtype=jnp.float64)
+    u = indexed_uniform(key, n, (D,))
     x = grid.lo + u * (grid.hi - grid.lo)
     return x.at[:, axis].set(grid.lo[axis] if side == 0 else grid.hi[axis])
 
 
-def inject(state, grid, faces, res, mass, fnum, dt, key, capacity):
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True)
+class InjectionDiagnostics:
+    requested: jax.Array
+    inserted: jax.Array
+    escaped: jax.Array
+    sampler_failed: jax.Array
+    candidate_overflow: jax.Array
+    storage_overflow: jax.Array
+    tracking_exhausted: jax.Array
+
+
+def inject(state, grid, faces, res, mass, fnum, dt, key, capacity, *, wall=None, max_bounces=4, track=False, score_mode="paper", return_diagnostics=False):  # noqa: PLR0915 -- source accounting remains one replayable event
     """Emit through every ``INFLOW`` face into dead slots.  Static shapes throughout.
 
     Returns ``(state, injected, shortfall)``.
@@ -249,6 +317,10 @@ def inject(state, grid, faces, res, mass, fnum, dt, key, capacity):
     ``x_face + dtremain * v``.  Without it every entrant would sit exactly on the face
     at the start of the step and produce an artificial density spike there.
     """
+    if score_mode not in ("paper", "trajectory"):
+        raise ValueError("score_mode must be paper or trajectory")
+    trajectory = state.logh_acc[0]
+    details = InjectionDiagnostics(*(jnp.int32(0) for _ in range(7)))
     n_part = state.x.shape[0]
     # dead slots first; `argsort` on a bool puts False (dead) ahead of True
     order = jnp.argsort(state.alive.astype(jnp.int32), stable=True)
@@ -279,34 +351,53 @@ def inject(state, grid, faces, res, mass, fnum, dt, key, capacity):
             # of it is what depends on `nrho`
             frac = target - jnp.floor(target)
             log_p_count = jnp.where(u_round < frac, safe_log(frac), safe_log(1.0 - frac))
-            shortfall = shortfall + jnp.maximum(0.0, target - capacity)
+            log_p_count = jnp.where(frac == 0, jax.lax.stop_gradient(log_p_count), log_p_count)
 
             xf = sample_face_positions(k_x, capacity, grid, axis, side)
             vf, accepted = sample_face_velocities(k_v, capacity, res, axis, side, mass)
-            frac = dt * jax.random.uniform(k_t, (capacity,), dtype=jnp.float64)
-            xf = xf + vf[:, : len(grid.n)] * frac[:, None]
+            sampler_failed = jnp.sum((jnp.arange(capacity) < n_emit) & ~accepted, dtype=jnp.int32)
+            exhausted = jnp.int32(0)
+            frac = dt * indexed_uniform(k_t, capacity)
+            if track:
+                wanted_birth = (jnp.arange(capacity) < n_emit) & accepted
+                xf, vf, surviving, exhausted, boundary_score = advance(
+                    xf, vf, wanted_birth, grid, faces, wall, mass, frac,
+                    jax.random.fold_in(k_t, 1), max_bounces=max_bounces)
+                # Absorption is physical; unresolved travel is an invalid source step.
+                shortfall = shortfall + exhausted
+                escaped = jnp.sum(wanted_birth & ~surviving, dtype=jnp.int32)
+                accepted = accepted & surviving
+                trajectory = trajectory+jnp.sum(boundary_score)
+            else:
+                xf = xf + vf[:, : len(grid.n)] * frac[:, None]
+                escaped = jnp.int32(0)
 
             wanted = (jnp.arange(capacity) < n_emit) & accepted
-            slots = jax.lax.dynamic_slice(order, (used,), (capacity,))
-            slot_is_dead = (jnp.arange(capacity) + used) < n_dead
-            take = wanted & slot_is_dead
-            # Slot starvation is the OTHER way an entrant goes missing, and until this
-            # line it was invisible: `shortfall` counted only `target > capacity` even
-            # though its contract says it reports both.  A saturated particle array then
-            # looks exactly like correct physics -- measured on a Mach-4 two-sided shock,
-            # the downstream density ratio flattened at 1.83 against a Rankine-Hugoniot
-            # 3.37 (-46 %) with every diagnostic reading zero.
-            shortfall = shortfall + jnp.sum((wanted & ~slot_is_dead).astype(jnp.float64))
-
-            revive = revive.at[slots].set(jnp.where(take, True, revive[slots]))
-            x_new = x_new.at[slots].set(jnp.where(take[:, None], xf, x_new[slots]))
-            v_new = v_new.at[slots].set(jnp.where(take[:, None], vf, v_new[slots]))
-            logh_new = logh_new.at[slots].set(jnp.where(take, log_p_count, logh_new[slots]))
-            injected = injected + jnp.sum(take)
-            used = used + capacity
+            # Compact actual candidates, not the padded per-face allocation.
+            rank = jnp.cumsum(wanted.astype(jnp.int32)) - 1 + used
+            take = wanted & (rank < n_dead)
+            slots = jnp.where(take, order[jnp.clip(rank, 0, n_part - 1)], n_part)
+            revive = revive.at[slots].set(True, mode="drop")
+            x_new = x_new.at[slots].set(xf, mode="drop")
+            v_new = v_new.at[slots].set(vf, mode="drop")
+            logh_new = logh_new.at[slots].set(log_p_count, mode="drop")
+            inserted = jnp.sum(take, dtype=jnp.int32)
+            injected = injected + inserted
+            used = used + inserted
+            # Include sampler failures and requested integer births beyond capacity.
+            shortfall = shortfall + n_emit - inserted - escaped
+            trajectory = trajectory+log_p_count
+            details = InjectionDiagnostics(
+                details.requested+n_emit, details.inserted+inserted, details.escaped+escaped,
+                details.sampler_failed+sampler_failed,
+                details.candidate_overflow+jnp.maximum(n_emit-capacity, 0),
+                details.storage_overflow+jnp.sum(wanted, dtype=jnp.int32)-inserted,
+                details.tracking_exhausted+jnp.asarray(exhausted,jnp.int32))
 
     # AFTER `revive_slots`, which zeroes the accumulator for revived slots (gap U6): an
     # entrant has no inherited history, but the decision that created it is its own.
     state = revive_slots(state, revive, x_new, v_new)
-    state = dataclasses.replace(state, logh_acc=state.logh_acc + logh_new)
-    return state, injected, shortfall
+    state = dataclasses.replace(state, logh_acc=(jnp.broadcast_to(trajectory, (n_part,))
+                                if score_mode == "trajectory" else state.logh_acc+logh_new))
+    result = (state, injected, shortfall)
+    return (*result, details) if return_diagnostics else result

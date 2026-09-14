@@ -1,3 +1,5 @@
+See [forward/JIT follow-up status](docs/FORWARD_JIT_IMPLEMENTATION.md) for current interfaces, validation, and remaining acceptance work.
+
 # JAX-DSMC
 
 > Adjoint implementation update: see [corrections, P3 methods, and validation limits](docs/ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.

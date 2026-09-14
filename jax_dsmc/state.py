@@ -130,14 +130,19 @@ class CollideState:
     [P2]'s virtual-collision unbiasedness argument assumes and what makes the
     ``log(q/Sigma)`` score term well defined (sections 7.2, 8.4, 18.1).
 
-    There is deliberately **no ``remain`` field**: section 8.1 uses stochastic
-    rounding of the attempt count, which needs no carry and — unlike the
-    deterministic carry — leaves a differentiable ``log P(n | f)`` score behind.
+    ``remainder`` stores the fractional proposal carry in remainder mode. It is
+    initialized to zeros for compatibility with old constructors and persists
+    across chunks. Remainder expectation gradients are not implemented.
 
     Spec: section 3.1.
     """
 
     vremax: jax.Array
+    remainder: jax.Array = None
+
+    def __post_init__(self):
+        if self.remainder is None and hasattr(self.vremax, "shape"):
+            object.__setattr__(self, "remainder", jnp.zeros_like(self.vremax))
 
 
 @register_dataclass
@@ -231,6 +236,17 @@ class Diagnostics:
     count under ``tree_map``.  Requiring them makes an inconsistent instance
     unconstructible.
     """
+
+    inflow_requested: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    inflow_escaped: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    inflow_sampler_failed: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    inflow_candidate_overflow: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    inflow_storage_overflow: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    inflow_tracking_exhausted: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    count_support_boundary: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """Positive integer count means: ordinary two-sided score derivative is unsupported."""
+    configuration_invalid: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """Invalid traced weights or certified-bound inputs; checked before reporting."""
 
 
 # --- parameters -----------------------------------------------------------
@@ -403,9 +419,18 @@ class SimStatic:
     K_bounce: int
     n_steps: int
     remat_policy: str = "nothing_saveable"
+    checkpoint_block_size: int = 0
+    count_scheme: str = "stochastic"
+    majorant_mode: str = "thermal"
 
     def __post_init__(self) -> None:
         """Reject values that would produce a wrong shape rather than an error."""
+        if not isinstance(self.checkpoint_block_size, int) or self.checkpoint_block_size < 0:
+            raise ValueError("checkpoint_block_size must be a nonnegative integer")
+        if self.count_scheme not in ("stochastic", "remainder"):
+            raise ValueError("count_scheme must be stochastic or remainder")
+        if self.majorant_mode not in ("thermal", "certified"):
+            raise ValueError("majorant_mode must be thermal or certified")
         if self.D not in (1, 2, 3):
             raise ValueError(f"D must be 1, 2 or 3 (section 0.2); got {self.D}")
         if self.G > self.S:

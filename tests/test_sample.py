@@ -332,21 +332,25 @@ def test_cell_index_agrees_with_the_table():
 def test_accumulator_averages_sums_once():
     """``finalize(accumulate(...))`` is the arithmetic mean of the samples."""
     grid = _grid((2,))
-    acc = sample.zero_accumulator(grid)
-    temps = []
+    acc = sample.zero_accumulator(grid, _species().mass[0])
+    states = []
     for seed in range(5):
         state = _maxwellian_state(jax.random.key(seed), 4000, grid)
+        states.append(state)
         m = sample.moments(state, build_table(state, grid), grid, _params(grid, 1.0), _species())
-        temps.append(np.asarray(m.temp))
         acc = sample.accumulate(acc, m)
+    pooled = jax.tree.map(lambda *a: jnp.concatenate(a), *states)
+    expected = sample.moments(pooled, build_table(pooled, grid), grid, _params(grid, 1.0), _species())
     avg = sample.finalize(acc)
-    assert float(acc.n_samples) == 5.0
-    assert np.allclose(np.asarray(avg.temp), np.mean(temps, axis=0), rtol=1e-13)
+    np.testing.assert_allclose(avg.temp, expected.temp, rtol=1e-12)
+    np.testing.assert_allclose(avg.u, expected.u, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(avg.P, expected.P/5, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(avg.q, expected.q/5, rtol=1e-11, atol=1e-12)
 
 
 def test_empty_accumulator_finalizes_to_zero():
     grid = _grid((2,))
-    avg = sample.finalize(sample.zero_accumulator(grid))
+    avg = sample.finalize(sample.zero_accumulator(grid, _species().mass[0]))
     assert np.all(np.asarray(avg.temp) == 0.0)
     assert np.all(np.isfinite(np.asarray(avg.P)))
 

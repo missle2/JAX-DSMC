@@ -29,9 +29,10 @@ from jax_dsmc.collide.vss import (
     frame_is_well_defined,
     log_h,
     scatter,
+    vr2_clamp,
 )
 from jax_dsmc.constants import EPS, K_BOLTZ
-from jax_dsmc.grid import cell_volume, num_cells
+from jax_dsmc.grid import cell_volume
 from jax_dsmc.rng import (
     STAGE_ACCEPT,
     STAGE_NTC_ROUND,
@@ -92,6 +93,44 @@ def vremax_init(temp0, omega, tref, mr, prefactor, n_cells, g_groups, k_ev=K_EV,
     return jnp.broadcast_to(jnp.reshape(sigma, (n_cells, 1, 1)), (n_cells, g_groups, g_groups))
 
 
+def remainder_count(mean, remainder):
+    """Forward NTC carry law. Returns (new remainder, integer count)."""
+    total = mean+remainder
+    count = jnp.floor(total)
+    return lax.stop_gradient(total-count), lax.stop_gradient(count).astype(jnp.int32)
+
+
+def rounded_weak_derivative(mean, continuation, side="right"):
+    """Coupled count-law derivative holding the pre-event state fixed.
+
+    continuation(n) must replay the COMPLETE scalar downstream objective using
+    shared randomness. This is only the derivative through the count mean;
+    direct derivatives of the continuation must be added separately.
+    """
+    if side not in ("left", "right"):
+        raise ValueError("side must be left or right")
+    n = jnp.floor(mean).astype(jnp.int32)
+    if side == "left":
+        n = n-jnp.asarray(mean == n, jnp.int32)
+    return continuation(n+1)-continuation(n)
+
+
+def certified_majorant(state, table, sp):
+    """Closed equal-mass cell energy bound, including the VSS speed clamp.
+
+    Requires 0.5 <= omega <= 1 and finite positive physical coefficients.
+    No geometry or random matching assumptions beyond fixed collision cells.
+    """
+    cells = table.counts.shape[0]
+    weight = state.alive.astype(jnp.float64)
+    mean = jax.ops.segment_sum(weight[:, None]*state.v, table.cell, cells)/jnp.maximum(table.counts[:, None], 1)
+    energy = jax.ops.segment_sum(weight*jnp.sum((state.v-mean[table.cell])**2, axis=1), table.cell, cells)
+    upper2 = jnp.maximum(2*energy, vr2_clamp(sp, 0, 0))
+    bound = sp.prefactor[0, 0]*upper2**(1-sp.omega[0, 0])
+    valid = (sp.omega[0, 0] >= .5) & (sp.omega[0, 0] <= 1.)
+    return jnp.where(valid, bound*(1+1e-12), jnp.nan)
+
+
 def attempt_count(counts, vremax, volume, dt, fnum, key):
     """Number of candidate pairs per cell, by **stochastic rounding**.
 
@@ -106,7 +145,7 @@ def attempt_count(counts, vremax, volume, dt, fnum, key):
     Returns:
         ``(n, logP)`` -- ``i32[C]`` frozen counts and the ``f64[C]`` score.
 
-    ``n = floor(f + U)``, SPARTA's *default* path (``collide_vss.cpp:147-149``),
+    ``n = floor(f + U)``, SPARTA's `remain no` path (``collide_vss.cpp:147-149``),
     not the ``remainflag`` carry.  The carry version has no probability to score --
     ``P(n | f, remain)`` is degenerate -- so ``dt``, ``fnum`` and ``cell_volume``
     have **no gradient path at all** under it, measured as exactly ``0.0`` while
@@ -123,6 +162,9 @@ def attempt_count(counts, vremax, volume, dt, fnum, key):
     up = u < frac  # FROZEN (bool)
     n = lax.stop_gradient(lower + up).astype(jnp.int32)  # FROZEN
     logP = jnp.where(up, safe_log(frac), safe_log(1.0 - frac))
+    # At a support boundary there is no ordinary two-sided likelihood derivative.
+    # Freeze this invalid interior formula; diagnostics require a weak/one-sided check.
+    logP = jnp.where(frac == 0, lax.stop_gradient(logP), logP)
     return n, logP
 
 
@@ -285,7 +327,7 @@ def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
     return (v, logh, qmax, nviol, margin, lax.stop_gradient(chk)), None
 
 
-def collide(
+def collide(  # noqa: PLR0915 -- collision stages stay together for deterministic replay
     state: ParticleState,
     table,
     cstate: CollideState,
@@ -310,7 +352,6 @@ def collide(
     if score_mode not in ("paper", "trajectory"):
         raise ValueError("score_mode must be paper or trajectory")
     n_part = static.N
-    n_cells = num_cells(grid)
     volume = cell_volume(grid)
     isp, jsp = 0, 0  # single species (decision 6); shaped for (S, S) throughout
 
@@ -331,8 +372,22 @@ def collide(
         )
     )
 
+    if static.S != 1 or static.G != 1:
+        raise ValueError("Only one monatomic species and collision group are implemented")
+    if static.majorant_mode == "certified":
+        sigma = lax.stop_gradient(certified_majorant(state, table, sp))
+
     k_cnt = key_for(base_key, step, STAGE_NTC_ROUND)
-    n, logP = attempt_count(table.counts, sigma, volume, params.dt, params.fnum, k_cnt)
+    remainder = cstate.remainder
+    if static.count_scheme == "remainder":
+        if score_mode == "trajectory":
+            raise ValueError("Remainder carry has no implemented expectation-gradient correction")
+        mean = .5*table.counts*(table.counts-1)*sigma*params.dt*params.fnum/volume
+        remain, n = remainder_count(mean, remainder[:, 0, 0])
+        remainder = remain[:, None, None]
+        logP = jnp.zeros_like(mean)
+    else:
+        n, logP = attempt_count(table.counts, sigma, volume, params.dt, params.fnum, k_cnt)
 
     # Section 1 rule 3: each stage draws ALL its randomness in ONE batched call,
     # shaped (A_max, C), consumed by the scan as `xs`.  This is a performance
@@ -341,11 +396,15 @@ def collide(
     npc_safe = jnp.maximum(table.counts, 2)
     k_pi, k_pr = random.split(key_for(base_key, step, STAGE_PAIR))
     k_chi, k_eps = random.split(key_for(base_key, step, STAGE_SCATTER))
-    u_i = random.randint(k_pi, (A, C), 0, npc_safe)
-    u_r = random.randint(k_pr, (A, C), 0, npc_safe - 1)
-    u_acc = random.uniform(key_for(base_key, step, STAGE_ACCEPT), (A, C), dtype=jnp.float64)
-    u_chi = random.uniform(k_chi, (A, C), dtype=jnp.float64)
-    u_eps = random.uniform(k_eps, (A, C), dtype=jnp.float64)
+    # Slot-addressed streams preserve all earlier attempts when A_max grows.
+    slots = jnp.arange(A)
+    def draw(key, fn):
+        return jax.vmap(lambda slot: fn(random.fold_in(key, slot)))(slots)
+    u_i = draw(k_pi, lambda key: random.randint(key, (C,), 0, npc_safe))
+    u_r = draw(k_pr, lambda key: random.randint(key, (C,), 0, npc_safe-1))
+    u_acc = draw(key_for(base_key, step, STAGE_ACCEPT), lambda key: random.uniform(key, (C,), dtype=jnp.float64))
+    u_chi = draw(k_chi, lambda key: random.uniform(key, (C,), dtype=jnp.float64))
+    u_eps = draw(k_eps, lambda key: random.uniform(key, (C,), dtype=jnp.float64))
 
     # v and logh carry an extra SCRATCH ROW at index N (8.4.1).
     v0 = jnp.concatenate([state.v, jnp.zeros((1, 3), dtype=state.v.dtype)])
@@ -396,6 +455,14 @@ def collide(
         wall_recrossed=jnp.array(0, jnp.int32),
         inflow_injected=jnp.array(0, jnp.int32),
         inflow_shortfall=jnp.array(0.0, jnp.float64),
+        count_support_boundary=jnp.sum(
+            (table.counts > 1) &
+            ((.5*table.counts*(table.counts-1)*sigma*params.dt*params.fnum/volume) > 0) &
+            (jnp.mod(.5*table.counts*(table.counts-1)*sigma*params.dt*params.fnum/volume, 1.) == 0),
+            dtype=jnp.int32),
+        configuration_invalid=jnp.asarray(
+            jnp.any(~jnp.isfinite(params.fnum) | (params.fnum <= 0) | (params.fnum != params.fnum[0]))
+            | jnp.any(~jnp.isfinite(sigma)), jnp.int32),
     )
     new_state = ParticleState(
         x=state.x,
@@ -405,5 +472,4 @@ def collide(
         logh_acc=jnp.broadcast_to(logh, (n_part,)) if score_mode == "trajectory" else logh[:n_part],
     )
     vremax_next = jnp.maximum(cstate.vremax, qmax[:, None, None])
-    del n_cells, C
-    return new_state, CollideState(vremax=vremax_next), diag
+    return new_state, CollideState(vremax=vremax_next, remainder=remainder), diag

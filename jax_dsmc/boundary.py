@@ -515,6 +515,7 @@ def apply_faces(
     epsilon=0.0,
     score_spread="particle",
     acc_delta=0.0,
+    max_bounces=4,
 ):
     """Advance one step under per-face rules, closed form.
 
@@ -523,10 +524,10 @@ def apply_faces(
     draw and, when ``epsilon > 0``, the crossing branch.  It is added to
     ``ParticleState.logh_acc`` by the caller and consumed by :func:`adjoint.surrogate`.
 
-    In 1D, dispatches to chronological P3 random-time tracking with a conditional
-    Gaussian derivative (``wall_adjoint.advance``). In higher dimensions, the
-    legacy two-stage treatment below remains; it has not been given the same
-    expected-gradient guarantee.
+    Diffuse faces dispatch to chronological Cartesian random-time tracking.
+    The conditional-time estimator is tested most extensively in 1D; general
+    corner/grazing sensitivities remain unvalidated. Without diffuse faces the
+    exact Cartesian fold path below remains available.
 
     Legacy stages, in this order:
 
@@ -545,12 +546,12 @@ def apply_faces(
     production timestep.
     """
     D = x_old.shape[-1]
-    if D == 1 and BC.DIFFUSE in faces.bcs:
+    if BC.DIFFUSE in faces.bcs:
         # Lazy import breaks the boundary dispatch import cycle.
         from jax_dsmc.wall_adjoint import advance  # noqa: PLC0415
 
         result = advance(
-            x_old, v, alive, grid, faces, wall, mass, dt, key, epsilon=epsilon, acc_delta=acc_delta
+            x_old, v, alive, grid, faces, wall, mass, dt, key, epsilon=epsilon, acc_delta=acc_delta, max_bounces=max_bounces
         )
         if score_spread == "cell":
             return (*result[:4], spread_score_over_cell(result[4], x_old, alive, grid))

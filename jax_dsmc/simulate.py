@@ -112,6 +112,7 @@ def _step(
                 epsilon=params.epsilon,
                 score_spread=score_spread,
                 acc_delta=acc_delta,
+                max_bounces=static.K_bounce,
             )
             fold = boundary.fold_index(x, grid, BC.PERIODIC)
             w = decision_weights(fold.size).reshape(fold.shape)
@@ -128,7 +129,7 @@ def _step(
                 + (jnp.sum(logh_bc) if score_mode == "trajectory" else logh_bc),
             )
             if res is not None:
-                state, injected, shortfall = inflow.inject(
+                state, injected, shortfall, source_details = inflow.inject(
                     state,
                     grid,
                     faces,
@@ -138,6 +139,7 @@ def _step(
                     params.dt,
                     key_for(base_key, k, STAGE_INFLOW),
                     capacity,
+                    wall=wall, max_bounces=static.K_bounce, track=True, score_mode=score_mode, return_diagnostics=True,
                 )
     table = sort.build_table(state, grid)
     # the cell temperature feeds the a-priori majorant floor (section 7.2.3)
@@ -155,6 +157,21 @@ def _step(
         base_key,
         score_mode=score_mode,
     )
+    if res is not None:
+        diag = dataclasses.replace(diag,
+            inflow_requested=source_details.requested,
+            inflow_escaped=source_details.escaped,
+            inflow_sampler_failed=source_details.sampler_failed,
+            inflow_candidate_overflow=source_details.candidate_overflow,
+            inflow_storage_overflow=source_details.storage_overflow,
+            inflow_tracking_exhausted=source_details.tracking_exhausted)
+        source_support = jnp.int32(0)
+        for axis in range(len(grid.n)):
+            for side in (0, 1):
+                if faces.of(axis, side) is boundary.BC.INFLOW:
+                    mean = inflow.target_count(res, grid, axis, side, sp.mass[0], params.fnum[0], params.dt)
+                    source_support += jnp.asarray((mean > 0) & (mean == jnp.floor(mean)), jnp.int32)
+        diag = dataclasses.replace(diag, count_support_boundary=diag.count_support_boundary+source_support)
     diag = dataclasses.replace(
         diag,
         decision_checksum=diag.decision_checksum + bc_chk,
@@ -170,6 +187,7 @@ def _step(
         # diagnostics stay: they are per-step SCALARS, and `A_max` resizing needs
         # them.  Snapshots come from `chunk_moments` instead.
         return new_carry, (None, diag)
+    m = sample.moments(state, table, grid, params, sp)
     return new_carry, (m, diag)
 
 
@@ -197,7 +215,7 @@ def run(
     """Run ``static.n_steps`` timesteps.
 
     ``score_mode="paper"`` keeps terminal-label accumulators. ``"trajectory"``
-    stores the same complete likelihood prefix in every slot, counting each event
+    stores the same accumulated stochastic correction in every slot, counting each event
     once. Initialize the accumulator to zero or continue with the same mode.
     Consume the latter with ``adjoint.trajectory_surrogate``. This likelihood
     does not differentiate hard cell memberships or changing rounding support.
@@ -224,12 +242,15 @@ def run(
     single random draw: chunking ``[0, 200)`` into two halves consumes exactly the
     stream that one 200-step call would have.
     """
+    if res is not None and (faces is None or collide_only or capacity < 1):
+        raise ValueError("Sources require faces, transport, and positive candidate capacity")
+    # Concrete public calls reject unsupported physics immediately. Traced calls
+    # must be constructed through a validated setup or checked_run.
+    if not any(isinstance(x, jax.core.Tracer) for x in jax.tree.leaves((sp, params))):
+        from jax_dsmc.validation import validate_inputs
+        validate_inputs(sp, params, static)
     if score_mode not in ("paper", "trajectory"):
         raise ValueError("score_mode must be paper or trajectory")
-    if score_mode == "trajectory" and res is not None:
-        raise ValueError(
-            "Use ensemble_inflow for P3 inlet gradients; recycled slots do not preserve trajectory scores"
-        )
     if score_mode == "trajectory" and score_spread != "particle":
         raise ValueError("Trajectory scoring requires each boundary event exactly once")
     body = functools.partial(
@@ -254,7 +275,22 @@ def run(
     policy = getattr(jax.checkpoint_policies, static.remat_policy, None)
     body = jax.checkpoint(body, policy=policy, static_argnums=())
     init = (state, cstate) if reward is None else (state, cstate, jnp.float64(0.0))
-    return lax.scan(body, init, step0 + jnp.arange(static.n_steps))
+    if static.checkpoint_block_size == 0:
+        return lax.scan(body, init, step0 + jnp.arange(static.n_steps))
+    size = static.checkpoint_block_size
+    blocks = (static.n_steps+size-1)//size
+    output_shape = jax.eval_shape(lambda carry: body(carry, step0), init)[1]
+    padding = jax.tree.map(lambda a: jnp.zeros(a.shape, a.dtype), output_shape)
+    def block(carry, block_index):
+        def step(carry, offset):
+            index = block_index*size+offset
+            return lax.cond(index < static.n_steps,
+                            lambda c: body(c, step0+index),
+                            lambda c: (c, padding), carry)
+        return lax.scan(step, carry, jnp.arange(size))
+    final, outputs = lax.scan(jax.checkpoint(block), init, jnp.arange(blocks))
+    outputs = jax.tree.map(lambda a: a.reshape((-1, *a.shape[2:]))[:static.n_steps], outputs)
+    return final, outputs
 
 
 def run_adaptive(
@@ -364,6 +400,8 @@ def run_adaptive(
             a_max = new_a
             state, cstate = saved  # redo THIS chunk only, from where it began
             continue
+        from jax_dsmc.validation import require_valid
+        require_valid(diag)
         if chunk_moments:
             table = sort.build_table(state, grid)
             out = jax.tree.map(
@@ -388,3 +426,12 @@ def run_adaptive(
         else diags[0]
     )
     return (state, cstate), (cat, dcat), history
+
+
+def checked_run(state, cstate, grid, sp, params, static, base_key, **kwargs):
+    """Host wrapper: validate configuration and all returned trajectory diagnostics."""
+    from jax_dsmc.validation import require_valid, validate_inputs
+    validate_inputs(sp, params, static)
+    result = run(state, cstate, grid, sp, params, static, base_key, **kwargs)
+    require_valid(result[1][1])
+    return result

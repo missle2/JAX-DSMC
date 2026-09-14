@@ -306,6 +306,18 @@ def decomp_step(carry, k, grid, sp, params, static, n_slabs, m_max, base_key, bc
     table = sort.build_table(state, lg)
     m = sample.moments(state, table, lg, params, sp)
     state, cstate, diag = collide(state, table, cstate, lg, sp, params, static, m.temp, k, base_key)
+    # Every returned scalar is globally reduced before declaring it replicated.
+    fields = {}
+    for field in dataclasses.fields(diag):
+        value = getattr(diag, field.name)
+        reduce = (lax.pmin if field.name == "min_majorant_margin" else
+                  lax.pmax if field.name == "max_attempts" else lax.psum)
+        fields[field.name] = reduce(value, AXIS)
+    diag = dataclasses.replace(diag, **fields)
+    owner = slab_of(state.x, grid, n_slabs)
+    mig["wrong_owner"] = jnp.sum(state.alive & (owner != lax.axis_index(AXIS)))
+    mig = jax.tree.map(lambda value: lax.psum(value, AXIS), mig)
+    m = sample.moments(state, table, lg, params, sp)
     return (state, cstate), (m, diag, mig)
 
 
@@ -355,6 +367,8 @@ def run_decomposed(
     from jax.experimental.shard_map import shard_map  # noqa: PLC0415
     from jax.sharding import PartitionSpec as P  # noqa: PLC0415
 
+    from jax_dsmc.validation import validate_inputs
+    validate_inputs(sp, params, static)
     n_slabs = mesh.devices.size
     # `static.N` is a SHAPE, and inside `shard_map` every shape is the per-device
     # one.  Leaving the global N here makes `collide`'s `logh.at[:N]` slice past the

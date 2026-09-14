@@ -123,7 +123,7 @@ def dx_extrapolation(rows):
     out = {}
     for key, x in (("quad", h**2), ("lin", h)):
         design = np.vstack([np.ones_like(x), x]).T
-        w = 1.0 / se**2
+        w = 1.0 / se
         beta = np.linalg.lstsq(design * w[:, None], ratio * w, rcond=None)[0]
         out[key] = (float(beta[0]), ratio - design @ beta)
     intercept, resid = out["quad"]

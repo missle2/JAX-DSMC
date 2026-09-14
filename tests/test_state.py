@@ -235,7 +235,7 @@ def test_collide_state_has_no_remain_field():
     term, and therefore an exactly zero gradient to ``dt``, ``fnum`` and the cell
     volume — the most serious defect in revision 2.
     """
-    assert traced_fields(CollideState) == ("vremax",)
+    assert traced_fields(CollideState) == ("vremax", "remainder")
     assert not hasattr(_collide_state(), "remain")
     assert _collide_state().vremax.shape == (C, G, G)
 
@@ -391,7 +391,7 @@ def test_check_fnum_uniform_rejects_a_non_uniform_multi_cell_field():
 def test_containers_nest_into_a_single_pytree():
     bundle = (_particle_state(), _collide_state(), _cell_table(), _params(), _grid())
     leaves, treedef = jax.tree_util.tree_flatten(bundle)
-    assert len(leaves) == 5 + 1 + 4 + 3 + 3  # GridSpec carries lo, hi AND transverse
+    assert len(leaves) == 5 + 2 + 4 + 3 + 3  # GridSpec carries lo, hi AND transverse
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
     assert rebuilt[4].n == GRID_N
     doubled = jax.jit(_identity)(bundle)

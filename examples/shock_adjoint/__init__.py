@@ -166,6 +166,7 @@ class Case:
     domain_mfp: float
     window_mfp: float
     width_mfp: float
+    dt_scale: float = 1.0
     remat: str = "nothing_saveable"
     """``jax.checkpoint_policies`` attribute used by the time loop.
 
@@ -205,6 +206,7 @@ def case(
     domain_mfp=20.0,
     remat="nothing_saveable",
     gas=None,
+    dt_scale=1.0,
 ):
     """A small reflected-shock case, sized so a finite-difference window still exists.
 
@@ -225,6 +227,7 @@ def case(
         window_mfp=6.0,
         width_mfp=3.0,
         remat=remat,
+        dt_scale=dt_scale,
         gas=DEFAULT_GAS if gas is None else gas,
     )
 
@@ -296,7 +299,7 @@ def build(theta, cs: Case):
     # not be the one being checked (section 22.6: a control must vary one thing).
     # Thermal speed sets the CFL-like step, so it must follow the GAS, not argon:
     # helium is 16x lighter, hence 4x faster, hence needs a 4x smaller dt.
-    dt = 0.15 * dx / math.sqrt(K_BOLTZ * cs.gas.tref / cs.gas.mass)
+    dt = cs.dt_scale * 0.15 * dx / math.sqrt(K_BOLTZ * cs.gas.tref / cs.gas.mass)
     static = SimStatic(
         N=cs.n_part,
         D=cs.dim,
@@ -334,7 +337,7 @@ def _phi(cs: Case, lam):
     )
 
 
-def evaluate(theta, cs: Case, base_key, scored=True):
+def evaluate(theta, cs: Case, base_key, scored=True, baseline=None):
     """``J`` at one parameter point and one base key.  Returns ``(J, diag)``.
 
     ``scored`` picks which gradient this carries -- :func:`jax_dsmc.adjoint.surrogate`
@@ -367,7 +370,7 @@ def evaluate(theta, cs: Case, base_key, scored=True):
         _phi(cs, lam),
         rho=1.0,
         bc=BC.SPECULAR,
-        baseline=None,
+        baseline=baseline,
         scored=scored,
     )
     return j, diag

@@ -32,6 +32,7 @@ random numbers across perturbed runs.
 from __future__ import annotations
 
 import jax
+import jax.numpy as jnp
 from jax import random
 
 # --- stage ids (section 1).  Module-level Python ints, never traced. --------
@@ -86,3 +87,15 @@ def key_for_slot(stage_key: jax.Array, slot) -> jax.Array:
     exactly this path.
     """
     return random.fold_in(stage_key, slot)
+
+
+def indexed_uniform(key, n, trailing_shape=()):
+    """Capacity-independent candidate draws, batched into one compiled operation."""
+    return jax.vmap(lambda i: random.uniform(random.fold_in(key, i), trailing_shape,
+                                            dtype=jnp.float64))(jnp.arange(n))
+
+
+def indexed_normal(key, n, trailing_shape=()):
+    """Normal counterpart of indexed_uniform, stable under capacity growth."""
+    return jax.vmap(lambda i: random.normal(random.fold_in(key, i), trailing_shape,
+                                           dtype=jnp.float64))(jnp.arange(n))
