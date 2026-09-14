@@ -478,7 +478,7 @@ def test_magic_box_is_value_neutral():
     np.testing.assert_allclose(np.asarray(got), [2.0, 3.0, 5.0, 7.0], rtol=1e-14)
 
 
-def test_baseline_is_value_neutral_and_changes_no_gradient_in_expectation():
+def test_independent_constant_baseline_is_value_neutral():
     """A constant baseline shifts neither the value nor the *pathwise* gradient.
 
     ``E[grad L] == 0`` makes the score half unbiased under any constant ``b``, so
@@ -492,13 +492,13 @@ def test_baseline_is_value_neutral_and_changes_no_gradient_in_expectation():
     logh = 0.1 * random.normal(random.fold_in(key, 1), (N_PART,))
     alive = jnp.ones((N_PART,), dtype=bool)
     j0 = adjoint.surrogate(phi_v, logh, alive, RHO, None)
-    jb = adjoint.surrogate(phi_v, logh, alive, RHO, "mean")
+    jb = adjoint.surrogate(phi_v, logh, alive, RHO, 2.0)
     np.testing.assert_allclose(float(jb), float(j0), rtol=1e-14)
     np.testing.assert_allclose(float(j0), float(adjoint.objective(phi_v, alive, RHO)), rtol=1e-14)
 
     g0 = jax.grad(adjoint.surrogate, argnums=1)(phi_v, logh, alive, RHO, None)
-    gb = jax.grad(adjoint.surrogate, argnums=1)(phi_v, logh, alive, RHO, "mean")
-    b = float(jnp.mean(phi_v))
+    gb = jax.grad(adjoint.surrogate, argnums=1)(phi_v, logh, alive, RHO, 2.0)
+    b = 2.0
     expected = -b / N_PART * RHO * np.ones(N_PART)
     np.testing.assert_allclose(np.asarray(gb - g0), expected, rtol=1e-12)
 

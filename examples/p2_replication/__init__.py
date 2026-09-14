@@ -287,6 +287,7 @@ def value(t0, cs: Case, key, component=1, alpha=1.0, scored=True):
         rho=1.0,
         collide_only=True,
         scored=scored,
+        score_mode="paper",  # Retain the estimator compared to P2's recursion.
     )
     return j
 

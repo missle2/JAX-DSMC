@@ -367,7 +367,7 @@ def evaluate(theta, cs: Case, base_key, scored=True):
         _phi(cs, lam),
         rho=1.0,
         bc=BC.SPECULAR,
-        baseline="mean",
+        baseline=None,
         scored=scored,
     )
     return j, diag

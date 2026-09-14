@@ -213,7 +213,7 @@ def decision_weights(k):
     return jnp.mod((jnp.arange(k, dtype=jnp.float64) + 1.0) * PHI_INV, 1.0) + 0.5
 
 
-def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part):
+def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
     """One attempt slot, vectorised across all cells.  Body of the section-8.4 scan.
 
     **Draws nothing.**  Every random number it needs arrives through ``xs``, drawn
@@ -252,7 +252,10 @@ def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part):
 
     # BOTH partners get the SAME log h, and BOTH branches contribute (section 7.3).
     lh = jnp.where(active, log_h(q, sigma, accept), 0.0)
-    logh = logh.at[pi].add(lh).at[pj].add(lh)
+    if score_mode == "trajectory":
+        logh = logh + jnp.sum(lh)
+    else:
+        logh = logh.at[pi].add(lh).at[pj].add(lh)
 
     # masked so an untested slot's meaningless q cannot inflate the next majorant
     qmax = jnp.where(active, jnp.maximum(qmax, q), qmax)
@@ -293,6 +296,7 @@ def collide(
     cell_temp,
     step,
     base_key,
+    score_mode="paper",
 ):
     """One collision step.  Returns ``(state, cstate, diag)``.
 
@@ -303,6 +307,8 @@ def collide(
 
     Spec: section 8.4.
     """
+    if score_mode not in ("paper", "trajectory"):
+        raise ValueError("score_mode must be paper or trajectory")
     n_part = static.N
     n_cells = num_cells(grid)
     volume = cell_volume(grid)
@@ -354,6 +360,7 @@ def collide(
         jsp=jsp,
         sp=sp,
         n_part=n_part,
+        score_mode=score_mode,
     )
     init = (v0, logh0, sigma, jnp.int32(0), jnp.float64(jnp.inf), jnp.float64(0.0))
     xs = (jnp.arange(A), u_i, u_r, u_acc, u_chi, u_eps)
@@ -365,7 +372,10 @@ def collide(
     # branch of 7.3, and it is where the entire dt / fnum / cell_volume
     # sensitivity enters.  Omitting this line reproduces the revision-2 defect
     # exactly -- those three gradients read 0.0.
-    logh = logh.at[:n_part].add(jnp.where(state.alive, logP[table.cell], 0.0))
+    if score_mode == "trajectory":
+        logh = logh + jnp.sum(logP)
+    else:
+        logh = logh.at[:n_part].add(jnp.where(state.alive, logP[table.cell], 0.0))
 
     # Cell membership and the attempt count are decided once per step, outside the
     # slot scan, so they are folded in here rather than per slot.

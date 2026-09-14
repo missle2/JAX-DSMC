@@ -63,6 +63,7 @@ def _step(
     capacity=0,
     score_spread="particle",
     acc_delta=0.0,
+    score_mode="paper",
 ):
     """One timestep.  Module-level and bound with ``partial`` (decision 14).
 
@@ -123,7 +124,8 @@ def _step(
                 v=v,
                 species=state.species,
                 alive=alive,
-                logh_acc=state.logh_acc + logh_bc,
+                logh_acc=state.logh_acc
+                + (jnp.sum(logh_bc) if score_mode == "trajectory" else logh_bc),
             )
             if res is not None:
                 state, injected, shortfall = inflow.inject(
@@ -141,7 +143,17 @@ def _step(
     # the cell temperature feeds the a-priori majorant floor (section 7.2.3)
     m = sample.moments(state, table, grid, params, sp)
     state, cstate, diag = collide(
-        state, table, cstate, grid, sp, params, static, m.temp, k, base_key
+        state,
+        table,
+        cstate,
+        grid,
+        sp,
+        params,
+        static,
+        m.temp,
+        k,
+        base_key,
+        score_mode=score_mode,
     )
     diag = dataclasses.replace(
         diag,
@@ -180,6 +192,7 @@ def run(
     capacity: int = 0,
     score_spread: str = "particle",
     acc_delta: float = 0.0,
+    score_mode: str = "paper",
 ):
     """Run ``static.n_steps`` timesteps.
 
@@ -205,6 +218,14 @@ def run(
     single random draw: chunking ``[0, 200)`` into two halves consumes exactly the
     stream that one 200-step call would have.
     """
+    if score_mode not in ("paper", "trajectory"):
+        raise ValueError("score_mode must be paper or trajectory")
+    if score_mode == "trajectory" and res is not None:
+        raise ValueError(
+            "Use ensemble_inflow for P3 inlet gradients; recycled slots do not preserve trajectory scores"
+        )
+    if score_mode == "trajectory" and score_spread != "particle":
+        raise ValueError("Trajectory scoring requires each boundary event exactly once")
     body = functools.partial(
         _step,
         grid=grid,
@@ -218,6 +239,7 @@ def run(
         reward=reward,
         score_spread=score_spread,
         acc_delta=acc_delta,
+        score_mode=score_mode,
         faces=faces,
         wall=wall,
         res=res,

@@ -1,40 +1,11 @@
-"""The surrogate objective, and the gradient entry points (spec section 11).
+"""Particle-recursion and full-trajectory score objectives.
 
-This module is small on purpose.  **No hand-written backward pass exists in the
-production path**: the adjoint recursions of [P1] Algorithm 2 and [P2] Algorithm 3
-are what reverse-mode AD already computes for the forward solve, provided two
-things are true, and both are properties of code that lives elsewhere:
-
-1. the randomness is *frozen* -- keys come from ``(base_key, step, stage)`` and
-   never from state, so a perturbed run consumes an identical stream (section 1);
-2. every stochastic branch deposits a differentiable ``log h`` into
-   ``ParticleState.logh_acc`` (sections 7.3 and 8.1).
-
-Given those, the entire content of the adjoint is the **DiCE magic box** applied to
-that accumulator.  ``magic(L)`` is identically 1 in value and ``dL`` in gradient, so
-
-    J~ = (rho/N) sum_i magic(L_i) phi_i
-
-has the same *value* as the plain objective and a gradient that is
-``pathwise + score``.  Section 11.2 shows term by term that this is [P2]
-eq. ``gamma_rules``; ``tests/test_adjoint_oracle.py`` asserts it against both
-papers' hand-coded recursions.
-
-**Two gradients, and they are not the same quantity.**  :func:`objective` and
-:func:`surrogate` return identical values and *different* derivatives, and mixing
-them up is the most likely way to misread a verification run:
-
-===================  ==========================================================
-``objective``        ``d/dtheta`` of *this realisation* at frozen randomness.
-                     Matches a fixed-key finite difference to round-off, and is
-                     what a step-function-free FD sweep measures.
-``surrogate``        ``d/dtheta`` of ``E[J]``.  Includes the score terms, so it
-                     sees parameters that reach ``J`` **only** through frozen
-                     decisions -- ``diam``, ``omega``, ``tref``, ``dt``,
-                     ``fnum``.  A fixed-key FD reports exactly ``0.0`` for those
-                     (section 13.4), so it must be checked against an *ensemble*
-                     FD instead.
-===================  ==========================================================
+``surrogate`` retains the terminal-label P2 comparison estimator. Agreement with
+that recursion is not proof of an expected-gradient identity after arbitrary
+partner changes. ``trajectory_surrogate`` scores a complete scalar objective;
+its log probability must count each event exactly once. Neither repairs frozen
+geometric support or integer-count support changes. P3 inflow instead uses the
+separate distributional solver in ``ensemble_inflow``.
 """
 
 from __future__ import annotations
@@ -99,28 +70,13 @@ def objective(phi, alive, rho=1.0):
 
 
 def surrogate(phi, logh_acc, alive, rho=1.0, baseline=None):
-    """``J~``, the section-11.1 surrogate.  Value ``== J``, gradient ``dE[J]``.
+    """Terminal-label P2 surrogate, with the same primal value as ``objective``.
 
-    Args:
-        phi: ``f64[N]`` per-particle objective values.
-        logh_acc: ``f64[N]`` the score accumulator ``L``, filled by ``collide``.
-        alive: ``bool[N]``.
-        rho: as in :func:`objective`.
-        baseline: reward baseline ``b``.  ``None`` reproduces the papers'
-            estimator exactly (``b = 0``); ``"mean"`` uses the live-particle mean
-            of ``phi``; a float is used as given.
-
-    The gradient is ``(rho/N) sum_i [grad(phi_i) + (phi_i - b) grad(L_i)]``.  The
-    first term is the pathwise ``D`` recursion of [P2] eq. ``back_D``; the second
-    is ``eta``, because ``L_i`` and ``L_i1`` each accumulated the *same*
-    ``log h_i^k``, so the coefficient of ``d log h/d v_i`` is ``phi_i + phi_i1`` --
-    exactly [P2] eq. ``back_eta``.
-
-    **The baseline is value-neutral and bias-free**: ``magic == 1`` in value so the
-    ``- b`` and ``+ b`` cancel, and ``E[grad L] == 0`` so subtracting a constant
-    leaves the estimator unbiased.  Section 11.4 measures **84x** variance
-    reduction from ``b = mean(phi)`` on the count score, and calls it mandatory
-    there rather than optional.
+    Each collision deposits its log probability on both participating labels.
+    This reproduces the tested paper recursion; it is not a general expected
+    derivative for arbitrary later partner changes or population-normalized
+    open-boundary rewards. ``None`` or a constant independent baseline is allowed.
+    A same-trajectory reward mean is biased and rejected.
     """
     w = alive_weights(alive)
     b = _resolve_baseline(baseline, phi, w)
@@ -131,9 +87,21 @@ def _resolve_baseline(baseline, phi, w):
     """``b`` as a traced scalar, ``stop_gradient``-ed so it cannot carry a path."""
     if baseline is None:
         return 0.0
-    if baseline == "mean":
-        return lax.stop_gradient(jnp.sum(w * phi))
-    return jnp.float64(baseline)
+    if isinstance(baseline, str):
+        raise ValueError("Use an independent baseline; the same-trajectory mean is biased")
+    return lax.stop_gradient(jnp.float64(baseline))
+
+
+def trajectory_surrogate(value, log_probability, baseline=0.0):
+    """Full-trajectory likelihood estimator of a scalar expected objective.
+
+    Each random event must occur exactly once in ``log_probability``. The baseline
+    must be independent of the scored outcomes (or measurable before those events).
+    This covers nonlinear/population-normalized rewards, unlike terminal-label
+    attribution. It does not supply missing geometric support derivatives.
+    """
+    b = _resolve_baseline(baseline, None, None)
+    return magic(log_probability) * (value - b) + b
 
 
 # --- objective functionals -------------------------------------------------
@@ -171,7 +139,7 @@ def phi_windowed(x, v, inner, axis=0, center=0.0, width=1.0):
 # --- entry points ----------------------------------------------------------
 
 
-def dice_reward(state: ParticleState, table, phi, rho=1.0, baseline=None):
+def dice_reward(state: ParticleState, table, phi, rho=1.0, baseline=None, score_mode="paper"):
     """One timestep's contribution to a **windowed** objective, causal DiCE form.
 
     Signature matches what :func:`jax_dsmc.simulate.run` expects of its ``reward``
@@ -185,6 +153,9 @@ def dice_reward(state: ParticleState, table, phi, rho=1.0, baseline=None):
     measured at ~3x variance and flat in the horizon).
     """
     del table
+    if score_mode == "trajectory":
+        value = objective(phi(state.x, state.v), state.alive, rho)
+        return trajectory_surrogate(value, state.logh_acc[0], baseline)
     return surrogate(phi(state.x, state.v), state.logh_acc, state.alive, rho, baseline)
 
 
@@ -202,11 +173,14 @@ def terminal_objective(
     collide_only=False,
     baseline=None,
     scored=True,
+    score_mode="trajectory",
 ):
     """Run the solve and return ``J = (rho/N) sum_i phi(x_M, v_M)``.
 
     ``scored`` selects which of the two gradients this function carries:
-    ``True`` gives :func:`surrogate` (``dE[J]/dtheta``, the production estimator),
+    ``True`` uses full trajectory likelihood by default; ``score_mode="paper"``
+    selects the terminal-label comparison estimator. Count probabilities are valid
+    only within a fixed rounding-support interval; mesh memberships remain frozen.
     ``False`` gives :func:`objective` (pathwise only, what a fixed-key finite
     difference measures).  The **value is identical either way**.
 
@@ -223,11 +197,16 @@ def terminal_objective(
         base_key,
         collide_only=collide_only,
         emit_moments="none",
+        score_mode=score_mode,
         **kw,
     )
     vals = phi(st.x, st.v)
     j = (
-        surrogate(vals, st.logh_acc, st.alive, rho, baseline)
+        (
+            trajectory_surrogate(objective(vals, st.alive, rho), st.logh_acc[0], baseline)
+            if score_mode == "trajectory"
+            else surrogate(vals, st.logh_acc, st.alive, rho, baseline)
+        )
         if scored
         else objective(vals, st.alive, rho)
     )
@@ -247,6 +226,7 @@ def windowed_objective(
     bc=None,
     collide_only=False,
     baseline=None,
+    score_mode="trajectory",
 ):
     """Run the solve accumulating ``J = sum_k r(x_k, v_k)`` in the causal DiCE form.
 
@@ -256,7 +236,9 @@ def windowed_objective(
     Returns ``(J, (state, cstate, diag))``.
     """
     kw = {} if bc is None else {"bc": bc}
-    reward = functools.partial(dice_reward, phi=phi, rho=rho, baseline=baseline)
+    reward = functools.partial(
+        dice_reward, phi=phi, rho=rho, baseline=baseline, score_mode=score_mode
+    )
     (st, cs, j), (_, diag) = run(
         state,
         cstate,
@@ -268,6 +250,7 @@ def windowed_objective(
         collide_only=collide_only,
         emit_moments="none",
         reward=reward,
+        score_mode=score_mode,
         **kw,
     )
     return j, (st, cs, diag)

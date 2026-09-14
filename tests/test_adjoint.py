@@ -196,7 +196,7 @@ def test_windowed_objective_is_causal_and_value_neutral(dim):
     )
     args = (state, cstate, grid, sp, params, static, key, phi)
     j_dice, _ = adjoint.windowed_objective(*args, rho=1.0, bc=BC.SPECULAR)
-    j_plain, _ = adjoint.windowed_objective(*args, rho=1.0, bc=BC.SPECULAR, baseline="mean")
+    j_plain, _ = adjoint.windowed_objective(*args, rho=1.0, bc=BC.SPECULAR, baseline=3.0)
     # the baseline is also value-neutral, so all three agree
     np.testing.assert_allclose(float(j_dice), float(j_plain), rtol=1e-13)
     assert np.isfinite(float(j_dice)) and float(j_dice) > 0.0
