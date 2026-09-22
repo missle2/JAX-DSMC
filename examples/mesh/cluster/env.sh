@@ -31,6 +31,11 @@ else
   source "${JAX_VENV:-/projects/${USER}/jax-env}/bin/activate"
 fi
 export JAX_ENABLE_X64=1
+# Pin the backend.  Without this JAX falls back to the CPU when a node's driver refuses
+# cuInit and the job runs to completion at a quarter of the speed (2026-09-22: every
+# ah200 job landed on one broken node, `cuInit(0) failed: CUDA_ERROR_UNKNOWN`, and burned
+# 2 h per seed on the CPU).  job.sbatch's preflight turns that into an immediate exit.
+if [ "${GPU_KIND}" = "mi100" ]; then export JAX_PLATFORMS=rocm; else export JAX_PLATFORMS=cuda; fi
 export XLA_PYTHON_CLIENT_PREALLOCATE=false   # several seed workers may share a GPU
 export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_enable_command_buffer=}"  # the WSL crash guard; harmless here
 export PYTHONUNBUFFERED=1

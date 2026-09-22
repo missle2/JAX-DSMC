@@ -15,15 +15,18 @@
 # Wall time: sphere 8 h/seed, mode2 4 h/seed, optimisation 12 h (S <= 2) / 24 h (S >= 4,
 # the gpu-normal maximum); every job resumes from its artifact, so a job that hits its
 # limit is simply resubmitted (`submit_curc.sh <group>` again: finished rows/iterates are
-# skipped).  GPU_KIND=h200 (default, CUDA venv) -> ah200 / gpu:h200; GPU_KIND=a100 (CUDA
-# venv) -> aa100 / gpu:a100-40gb; GPU_KIND=mi100 -> ami100 / gpu:mi100 (needs a jax >=
-# 0.4.36 module, see env.sh).  PART / GRES_TYPE override the partition / gres name
+# skipped).  GPU_KIND=a100 (default, CUDA venv) -> aa100 / gpu:a100-40gb; GPU_KIND=h200
+# -> ah200 / gpu:h200 (faster, but run check_env there first: on 2026-09-22 the ah200
+# jobs all landed on one node whose driver refuses cuInit); GPU_KIND=mi100 -> ami100 /
+# gpu:mi100 (needs a jax >= 0.4.36 module, see env.sh).  Nodes listed in bad_nodes.txt
+# (written by a job's preflight) and in EXCLUDE_NODES are excluded from every submission.
+# PART / GRES_TYPE override the partition / gres name
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
 [ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|all"; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
-GPU_KIND="${GPU_KIND:-h200}"
+GPU_KIND="${GPU_KIND:-a100}"
 case "${GPU_KIND}" in
   h200) PART="${PART:-ah200}"; GRES="${GRES_TYPE:-h200}"; CORES=32; MEM=128; PER_NODE=4 ;;
   a100) PART="${PART:-aa100}"; GRES="${GRES_TYPE:-a100-40gb}"; CORES=21; MEM=70; PER_NODE=3 ;;
@@ -36,6 +39,12 @@ PY="${PYTHON:-${JAX_VENV:-/projects/${USER}/jax-env}/bin/python3}"
 [ -x "${PY}" ] || PY=python3
 "${PY}" -c 'import sys; sys.exit(sys.version_info < (3, 8))' || { echo "${PY} is $("${PY}" -V); need >= 3.8 (set PYTHON or JAX_VENV)"; exit 1; }
 mkdir -p examples/mesh/cluster/logs
+# nodes a preflight found unusable, plus anything the caller names
+BAD_FILE=examples/mesh/cluster/bad_nodes.txt
+EXCLUDE="$(cat "${BAD_FILE}" 2>/dev/null | sort -u | paste -sd, -)"
+if [ -n "${EXCLUDE_NODES:-}" ]; then EXCLUDE="${EXCLUDE:+${EXCLUDE},}${EXCLUDE_NODES}"; fi
+EXCLUDE_ARG=()
+if [ -n "${EXCLUDE}" ]; then EXCLUDE_ARG=(--exclude="${EXCLUDE}"); echo "excluding ${EXCLUDE}"; fi
 for group in "${GROUPS_TO_RUN[@]}"; do
   case "${group}" in
     sphere) HOURS=8 ;;
@@ -52,7 +61,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     n="${GPUS[$i]}"
     hours="${HOURS}"
     if [ "${group}" = "opt" ] && [ "${n}" -le 2 ]; then hours=12; fi
-    sbatch --job-name="${group}_${NAMES[$i]}" \
+    sbatch --job-name="${group}_${NAMES[$i]}" "${EXCLUDE_ARG[@]}" \
       --partition="${PART}" --gres="gpu:${GRES}:${n}" \
       --cpus-per-task=$((CORES * n)) --mem="$((MEM * n))G" --time="${hours}:00:00" \
       --export=ALL,CMD="${CMDS[$i]}",GPU_KIND="${GPU_KIND}" \

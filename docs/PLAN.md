@@ -597,9 +597,21 @@ the seeds × {GD, Adam} optimiser study are set up for CURC Alpine
 (`examples/mesh/cluster/`: `check_env.sbatch`, then `submit_curc.sh sphere|mode2|opt` —
 one right-sized job per seed for the gradients, one per (S, optimiser) with the S seeds
 of an iterate on min(S, 4) GPUs (`optimize.py --workers`) — then `collect.py`), not run
-here.  The H200 partition (`ah200`, 4 per node, `gpu-normal`) with a CUDA venv (jax
-0.6.2 verified on Alpine 2026-09-21; the A100s are the fallback): the MI100 `jax`
-module is 0.4.7, the code needs ≥ 0.4.36.  Neither the diffuse circle nor the specular capsule gates them (all
+here.  The `aa100` partition with a CUDA venv (jax 0.6.2, verified on Alpine
+2026-09-21): the MI100 `jax` module is 0.4.7, the code needs ≥ 0.4.36.  **The H200
+attempt failed (2026-09-22)**: all eleven `ah200` jobs were scheduled onto one node
+whose driver refuses `cuInit`, JAX fell back to the CPU silently and each seed took
+6900 s instead of ~1800 s.  `env.sh` now pins `JAX_PLATFORMS`, `job.sbatch` runs
+`check_env --quick` as a preflight and records a failing node in `bad_nodes.txt`, which
+`submit_curc.sh` excludes from later submissions; `h200` is opt-in after `check_env`
+passes there.  **Sphere gate (LS3) passes** on those CPU runs (the backend does not
+change the arithmetic): 7 seeds, 3.417 ± 0.045 vs CRN FD 3.488 ± 0.036 (h = 0.05) /
+3.475 ± 0.038 (0.02) e-20, z = −1.75 / −0.91, and against the free-molecular `2F/r` =
+3.286 e-20 (the box is ±2, so a few per cent of blockage is expected).  Its `∇λ` parts
+are +0.95 ± 0.23 e-21, 4σ from zero and exactly the tally's shortfall — the sphere's
+box has *specular* side walls (`boundary o r r`), so reflected particles do return to
+the body; this is the case where the stratified fit (§7.9) has real work to do, and the
+mixed-pool run should be repeated with it.  Neither the diffuse circle nor the specular capsule gates them (all
 cluster bodies are specular and curved everywhere).  Every optimisation iterate also
 records the field movie of its first seed's forward (`frames_k.npz`: block-wise warm-up
 under the RNG contract, bitwise the same run) for `examples.mesh.movie`'s GIF of fill →
