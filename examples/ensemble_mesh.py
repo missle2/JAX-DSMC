@@ -46,7 +46,7 @@ import forward as F
 
 from examples.ensemble_inlet_shock import device_backward
 from examples.gradient_bench import RESULTS
-from jax_dsmc import ensemble_backward, initialize, shape, simulate
+from jax_dsmc import ensemble_backward, initialize, sample, shape, simulate, sort
 from jax_dsmc.constants import K_BOLTZ
 from jax_dsmc.grid import num_cells
 from jax_dsmc.mesh import cut
@@ -229,9 +229,36 @@ def _run(
     )
 
 
-def forward(cfg, parameter, value, key, capture, body=None):
+@jax.jit
+def _snapshot(state, grid, params, sp):
+    """One :class:`CellMoments` of a state (the frame of a field movie)."""
+    return sample.moments(state, sort.build_table(state, grid), grid, params, sp)
+
+
+def _frame(step, state, grid, params, sp):
+    m = _snapshot(state, grid, params, sp)
+    return {
+        "step": step,
+        "nrho": np.asarray(m.nrho, dtype=np.float32),
+        "u": np.asarray(m.u, dtype=np.float32),
+        "temp": np.asarray(m.temp, dtype=np.float32),
+    }
+
+
+def stack_frames(frames):
+    """A list of :func:`_frame` dicts -> one dict of stacked arrays (``step`` leading)."""
+    return {key: np.stack([f[key] for f in frames]) for key in ("step", "nrho", "u", "temp")}
+
+
+def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
     """Empty start, ``warmup`` uncaptured steps, then the captured steps.  Returns
-    ``(state0, final, diag, rec, tallies, setup)`` with ``setup`` the run's objects."""
+    ``(state0, final, diag, rec, tallies, setup)`` with ``setup`` the run's objects.
+
+    ``frames_every > 0`` (a divisor of ``warmup``) runs the warm-up in blocks of that
+    many steps -- the RNG contract makes the run identical -- and puts a field snapshot of
+    the state at every block end plus the final state (the fill of the flow around this
+    body, then its steady state) into ``setup["frames"]`` (:func:`stack_frames`; per-cell
+    ``nrho``, ``u``, ``temp`` in float32, a few kB per frame).  The optimiser's movie."""
     grid, mesh, sp, params, static, faces, res, wall, capacity = build(
         cfg, parameter, value, cfg["steps"], body
     )
@@ -241,12 +268,24 @@ def forward(cfg, parameter, value, key, capture, body=None):
     state = initialize.initial_state(key, flow, grid, sp, static, n_alive=0)
     cstate = initialize.initial_collide_state(flow, grid, sp, static)
     common = (grid, sp, params, key, faces, wall, res, mesh)
-    if cfg["warmup"]:
+    frames = []
+    if frames_every > 0:
+        if cfg["warmup"] % frames_every:
+            raise ValueError(f"frames_every {frames_every} must divide warmup {cfg['warmup']}")
+        frames.append(_frame(0, state, grid, params, sp))
+        warm = dataclasses.replace(static, n_steps=frames_every)
+        for k0 in range(0, cfg["warmup"], frames_every):
+            (state, cstate), aux = _run(state, cstate, *common, warm, capacity, k0, False)
+            require_valid(aux[1])
+            frames.append(_frame(k0 + frames_every, state, grid, params, sp))
+    elif cfg["warmup"]:
         warm = dataclasses.replace(static, n_steps=cfg["warmup"])
         (state, cstate), aux = _run(state, cstate, *common, warm, capacity, 0, False)
         require_valid(aux[1])
     state0 = state
     (final, _), aux = _run(state0, cstate, *common, static, capacity, cfg["warmup"], capture)
+    if frames_every > 0:
+        frames.append(_frame(cfg["warmup"] + cfg["steps"], final, grid, params, sp))
     setup = {
         "grid": grid,
         "mesh": mesh,
@@ -255,6 +294,7 @@ def forward(cfg, parameter, value, key, capture, body=None):
         "static": static,
         "faces": faces,
         "wall": wall,
+        "frames": stack_frames(frames) if frames else None,
     }
     return state0, final, aux[1], (aux[2] if capture else None), aux[-1], setup
 
@@ -287,14 +327,23 @@ def _check(diag):
 
 
 def shape_terms(
-    cfg, key, body=None, parameter="radius", neighbors=32, timing_band=0.2, variants=None
+    cfg,
+    key,
+    body=None,
+    parameter="radius",
+    neighbors=32,
+    timing_band=0.2,
+    variants=None,
+    frames_every=0,
 ):
     """One seed: forward, traced replay (hit rewards), value-form backward, shape terms
     on the geometry (all four ``grad_x lambda`` variants, or the ``variants`` named).
     Returns ``(all_terms, info, setup)``; ``info`` carries the objective, the hit count and
-    the timings."""
+    the timings; ``setup["frames"]`` the field movie of the forward (``frames_every``)."""
     value0 = nominal(cfg, parameter)
-    state0, final, diag, rec, tallies, s = forward(cfg, parameter, value0, key, True, body)
+    state0, final, diag, rec, tallies, s = forward(
+        cfg, parameter, value0, key, True, body, frames_every
+    )
     _check(diag)
     static, grid, mesh, wall, sp, params = (
         s["static"],

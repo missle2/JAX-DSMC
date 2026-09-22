@@ -196,3 +196,35 @@ def test_step_is_bitwise_box_only_when_the_body_is_unreachable():
     for a, b in zip(jax.tree.leaves(ref[0]), jax.tree.leaves(out[0]), strict=True):
         assert bool((a == b).all())
     assert int(out[1][1].surface_hits.sum()) == 0
+
+
+def test_field_frames_leave_the_mesh_forward_bitwise_unchanged():
+    """``ensemble_mesh.forward(frames_every=k)`` runs the warm-up in blocks of ``k`` steps
+    and snapshots the fields at every block end (the optimiser's movie); the RNG contract
+    (keys from the absolute step index) makes the run identical to the one-block warm-up."""
+    from examples import ensemble_mesh as EM  # noqa: PLC0415
+
+    cfg = EM.default_config()
+    cfg.update({"warmup": 6, "steps": 4, "window": 2, "fnum_scale": 64.0})
+    key = jax.random.key(3)
+    value = EM.nominal(cfg, "radius")
+    state_a, final_a, diag_a, _rec, tallies_a, s_a = EM.forward(cfg, "radius", value, key, False)
+    state_b, final_b, diag_b, _rec, tallies_b, s_b = EM.forward(
+        cfg, "radius", value, key, False, frames_every=3
+    )
+    assert s_a["frames"] is None
+    frames = s_b["frames"]
+    assert list(frames["step"]) == [0, 3, 6, 10]
+    assert frames["nrho"].dtype == np.float32
+    assert frames["nrho"].shape == (4, num_cells(s_b["grid"]))
+    assert frames["u"].shape == (4, num_cells(s_b["grid"]), 3)
+    assert float(frames["nrho"][0].max()) == 0.0  # the empty box
+    assert float(frames["nrho"][-1].max()) > 0.0
+    for a, b in ((state_a, state_b), (final_a, final_b)):
+        np.testing.assert_array_equal(np.asarray(a.x), np.asarray(b.x))
+        np.testing.assert_array_equal(np.asarray(a.v), np.asarray(b.v))
+        np.testing.assert_array_equal(np.asarray(a.alive), np.asarray(b.alive))
+    np.testing.assert_array_equal(np.asarray(tallies_a.momentum), np.asarray(tallies_b.momentum))
+    assert int(diag_a.surface_hits.sum()) == int(diag_b.surface_hits.sum())
+    with pytest.raises(ValueError, match="must divide"):
+        EM.forward(cfg, "radius", value, key, False, frames_every=4)

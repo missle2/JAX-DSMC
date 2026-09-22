@@ -21,9 +21,13 @@ re-invocation of this script in worker mode (``--eval-coef`` ...); the combinati
 same mean, so ``W`` changes the wall time only.
 
 Artifacts under ``examples/mesh/results/optimize/<tag>/``: ``history.json`` (one row per
-iterate: objective mean and SE over the seeds, area, step, gradient norms, seconds) and
-``coef_<k>.npy``; ``--plot`` draws ``figures/optimize_circle.png`` (shape sequence, drag
-and area histories) from them.
+iterate: objective mean and SE over the seeds, area, step, gradient norms, seconds),
+``coef_<k>.npy`` and ``frames_<k>.npz`` (the field movie of the first seed's forward at
+iterate ``k``: per-cell ``nrho``, ``u``, ``temp`` every ``--frames-every`` warm-up steps
+and at the end, float32 -- ~1 MB per iterate on the finer circle; ``0`` disables);
+``--plot`` draws ``figures/optimize_circle.png`` (shape sequence, drag and area
+histories) from them and ``examples.mesh.movie`` strings the frames into a GIF (fill of
+the flow around every iterate, then the shape change).
 """
 
 from __future__ import annotations
@@ -76,6 +80,7 @@ def default_config():
             "adam_beta1": 0.9,
             "adam_beta2": 0.999,
             "workers": 1,
+            "frames_every": 50,
         }
     )
     return cfg
@@ -128,34 +133,48 @@ def adam_direction(g, state, k, beta1, beta2, eps=1e-30):
     return m_hat / (np.sqrt(v_hat) + eps), (m, v)
 
 
-def seed_terms(cfg, ls, seeds):
+FRAME_KEYS = ("step", "nrho", "u", "temp")
+
+
+def seed_terms(cfg, ls, seeds, frames_for=None):
     """Per-seed coefficient gradient (pathwise + score), objective, hits and seconds of the
-    seeds ``seeds`` (indices; key ``seed_start + i``), stacked."""
+    seeds ``seeds`` (indices; key ``seed_start + i``), stacked.  The seed ``frames_for``
+    (if in ``seeds``) also records the field movie of its forward (``cfg["frames_every"]``;
+    keys ``frame_<name>``)."""
     grads, objs, hits, secs = [], [], [], []
+    out = {}
     for i in seeds:
         key = jax.random.key(cfg["seed_start"] + int(i))
         t0 = time.time()
-        all_terms, info, _s = EM.shape_terms(
-            cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],)
+        every = cfg["frames_every"] if frames_for is not None and int(i) == frames_for else 0
+        all_terms, info, s = EM.shape_terms(
+            cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],), every
         )
         terms = all_terms[cfg["variant"]]
         grads.append(np.asarray(terms.pathwise + terms.score))
         objs.append(info["objective"])
         hits.append(info["hits"])
         secs.append(time.time() - t0)
-    return {
-        "gradient": np.stack(grads),
-        "objective": np.asarray(objs, dtype=float),
-        "hits": np.asarray(hits, dtype=float),
-        "seconds": np.asarray(secs, dtype=float),
-    }
+        if s["frames"] is not None:
+            out.update({f"frame_{name}": s["frames"][name] for name in FRAME_KEYS})
+    out.update(
+        {
+            "gradient": np.stack(grads),
+            "objective": np.asarray(objs, dtype=float),
+            "hits": np.asarray(hits, dtype=float),
+            "seconds": np.asarray(secs, dtype=float),
+        }
+    )
+    return out
 
 
 def _combine(parts):
     grads = np.concatenate([p["gradient"] for p in parts])
     objs = np.concatenate([p["objective"] for p in parts])
     n = len(objs)
+    frames = [p for p in parts if "frame_step" in p]
     return {
+        "frames": {name: frames[0][f"frame_{name}"] for name in FRAME_KEYS} if frames else None,
         "gradient": grads.mean(axis=0),
         "gradient_seed_sd": float(grads.std(axis=0, ddof=1).mean()) if n > 1 else float("nan"),
         "objective": float(objs.mean()),
@@ -166,8 +185,9 @@ def _combine(parts):
 
 
 def averaged_terms(cfg, ls, seeds):
-    """Mean over the seeds of the coefficient gradient and the objective, in this process."""
-    return _combine([seed_terms(cfg, ls, seeds)])
+    """Mean over the seeds of the coefficient gradient and the objective, in this process;
+    the field movie of the first seed."""
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
 
 
 def visible_devices():
@@ -213,6 +233,8 @@ def parallel_terms(cfg, ls, seeds, out: Path, k: int, argv):
             str(coef_path),
             "--eval-out",
             str(part),
+            "--eval-frames-for",
+            str(seeds[0]),
             "--eval-seeds",
             *mine,
         ]
@@ -227,16 +249,17 @@ def parallel_terms(cfg, ls, seeds, out: Path, k: int, argv):
         if code != 0:
             raise RuntimeError(f"worker failed (exit {code}), see {log.name}")
         z = np.load(part)
-        parts.append({key: z[key] for key in ("gradient", "objective", "hits", "seconds")})
+        parts.append({key: z[key] for key in z.files})
         part.unlink()
     return _combine(parts)
 
 
-def evaluate_worker(cfg, coef_path: str, seeds, out_path: str):
-    """Worker entry: the level set of ``coef_path`` on the seeds ``seeds`` -> ``out_path``."""
+def evaluate_worker(cfg, coef_path: str, seeds, out_path: str, frames_for=None):
+    """Worker entry: the level set of ``coef_path`` on the seeds ``seeds`` -> ``out_path``
+    (the field movie too if ``frames_for`` is one of them)."""
     _grid, ls = initial_levelset(cfg)
     ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(coef_path)))
-    np.savez(out_path, **seed_terms(cfg, ls, seeds))
+    np.savez(out_path, **seed_terms(cfg, ls, seeds, frames_for))
 
 
 def surface_polyline(ls: LevelSet, lo, hi, n: int = 400):
@@ -323,6 +346,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
         }
         history.append(row)
         np.save(out / f"coef_{k + 1}.npy", np.asarray(new.coef))
+        if avg["frames"] is not None:
+            np.savez(out / f"frames_{k}.npz", **avg["frames"])
         hist_path.write_text(
             json.dumps(
                 {
@@ -415,13 +440,14 @@ def main(argv=None):
     p.add_argument("--eval-coef", default=None, help=argparse.SUPPRESS)
     p.add_argument("--eval-seeds", type=int, nargs="*", default=None, help=argparse.SUPPRESS)
     p.add_argument("--eval-out", default=None, help=argparse.SUPPRESS)
+    p.add_argument("--eval-frames-for", type=int, default=None, help=argparse.SUPPRESS)
     argv = list(sys.argv[1:] if argv is None else argv)
     args = p.parse_args(argv)
     cfg = {k: getattr(args, k) for k in cfg}
     ensemble_backward.configure(args.pullback, args.substeps, args.partners, "staged")
     out = Path(RESULTS) / cfg["tag"]
     if args.eval_coef is not None:
-        evaluate_worker(cfg, args.eval_coef, args.eval_seeds, args.eval_out)
+        evaluate_worker(cfg, args.eval_coef, args.eval_seeds, args.eval_out, args.eval_frames_for)
         return
     if args.plot:
         os.makedirs(FIGURES, exist_ok=True)

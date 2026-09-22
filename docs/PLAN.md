@@ -600,7 +600,10 @@ of an iterate on min(S, 4) GPUs (`optimize.py --workers`) — then `collect.py`)
 here.  The H200 partition (`ah200`, 4 per node, `gpu-normal`) with a CUDA venv (jax
 0.6.2 verified on Alpine 2026-09-21; the A100s are the fallback): the MI100 `jax`
 module is 0.4.7, the code needs ≥ 0.4.36.  Neither the diffuse circle nor the specular capsule gates them (all
-cluster bodies are specular and curved everywhere).
+cluster bodies are specular and curved everywhere).  Every optimisation iterate also
+records the field movie of its first seed's forward (`frames_k.npz`: block-wise warm-up
+under the RNG contract, bitwise the same run) for `examples.mesh.movie`'s GIF of fill →
+shape step → fill.
 
 **Further note — hierarchical (multi-level) grids, deliberately not built yet.** SPARTA
 refines parent cells into child grids (`create_grid ... level`, `adapt_grid`), which is

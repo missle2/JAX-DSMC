@@ -93,7 +93,21 @@ an optimisation iterate developed a flat, cap-terminated face; the drag history 
 `collect.py` draws `figures/optimize_convergence.png` (J per iterate and per unit cost `S
 × iterates` for every run, the area constraint), `figures/gradient_seed_convergence.png`
 (bootstrap SE of the `cos 2θ` gradient vs the number of seeds against 1 % of the FD) and
-prints the sphere gate row; everything from the artifacts.
+prints the sphere gate row; everything from the artifacts.  `python3 -m
+examples.mesh.movie --tag circle_fine_S4_gd` strings an optimisation's
+`frames_<k>.npz` (the first seed's forward at every iterate: fields every 50 warm-up
+steps from the empty box, then the steady state) and `coef_<k>.npy` into
+`figures/optimize_<tag>.gif` — fill, shape step, fill, … with the drag history alongside.
+
+## Disk
+
+The jobs write small files to the repository under `/projects` (250 GB quota): the
+gradient jobs one JSON row each (≤ 100 kB), the optimisations per iterate `coef_k.npy`
+(~250 kB at `h_φ = 0.0625`) + `frames_k.npz` (16 frames × 5 floats × 1600 cells in
+float32 ≈ 0.5 MB) + two small `.log`s — about 15 MB per run, ~150 MB for the whole study;
+the venv is ~4 GB.  Nothing here needs `/scratch/alpine` (90-day purge); the 1.1 GB of
+VTK series under `examples/mesh/results/vtk` on the workstation comes from the forward
+visualisation runs (`forward.py --vtk-every`), which the cluster study does not run.
 
 What the study answers: (1) does the 3-D shape gradient pass the same gate as the circle;
 (2) how many seeds a gradient evaluation needs at the finer resolution (the SE vs S curve);
