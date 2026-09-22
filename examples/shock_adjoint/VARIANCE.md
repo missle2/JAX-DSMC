@@ -1,5 +1,15 @@
 # The score estimator's variance — study results
 
+> **Provenance (2026-09-16).** The logs behind these tables and figures were produced by
+> the pre-branch code (`bafec3d`): the same forward random streams as then, and the
+> score estimator with the *same-trajectory mean baseline* that
+> [`docs/ADJOINT_BRANCH_REVIEW.md`](../../docs/ADJOINT_BRANCH_REVIEW.md) §4.10 measures
+> as biased (−18 % on `diam`).  The variance-*scaling* conclusions (sd ∝ N^−1/2, ∝ √M, the
+> pathwise/score split) do not depend on the baseline and still hold; the estimator
+> itself is superseded by the ensemble adjoint (review §5, `examples/gradient_bench`),
+> which is where the current variance numbers live.  Not re-run on the branch: the
+> figures here are a historical record of the score route.
+
 Everything below was measured on the Mach-2 reflected-shock case, `D = 2` unless stated,
 with `φ = T_y` — [P2]'s own objective. Regenerate the tables and figures with:
 

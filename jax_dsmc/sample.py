@@ -309,39 +309,61 @@ def merge_accumulators(a: MomentAccumulator, b: MomentAccumulator) -> MomentAccu
     P and q store sums of centered pressure and heat-flux numerators; u is the
     pooled density-weighted mean. Translation terms include bulk fluctuations.
     """
-    w = a.nrho+b.nrho
-    inv = jnp.where(w > 0, 1/jnp.maximum(w, jnp.finfo(w.dtype).tiny), 0.)
-    delta = b.u-a.u
-    u = a.u + (b.nrho*inv)[:, None]*delta
-    da, db = a.u-u, b.u-u
+    w = a.nrho + b.nrho
+    inv = jnp.where(w > 0, 1 / jnp.maximum(w, jnp.finfo(w.dtype).tiny), 0.0)
+    delta = b.u - a.u
+    u = a.u + (b.nrho * inv)[:, None] * delta
+    da, db = a.u - u, b.u - u
+
     def shifted(acc, d):
-        outer = d[:, :, None]*d[:, None, :]
-        pressure = acc.P + (acc.mass*acc.nrho)[:, None, None]*outer
-        heat = acc.q + .5*(jnp.trace(acc.P, axis1=1, axis2=2)[:, None]*d
-                          + 2*jnp.einsum('nij,nj->ni', acc.P, d)
-                          + (acc.mass*acc.nrho)[:, None]*d*jnp.sum(d*d, axis=1)[:, None])
+        outer = d[:, :, None] * d[:, None, :]
+        pressure = acc.P + (acc.mass * acc.nrho)[:, None, None] * outer
+        heat = acc.q + 0.5 * (
+            jnp.trace(acc.P, axis1=1, axis2=2)[:, None] * d
+            + 2 * jnp.einsum("nij,nj->ni", acc.P, d)
+            + (acc.mass * acc.nrho)[:, None] * d * jnp.sum(d * d, axis=1)[:, None]
+        )
         return pressure, heat
+
     pa, qa = shifted(a, da)
     pb, qb = shifted(b, db)
-    pressure = pa+pb
-    return MomentAccumulator(nrho=w, u=u, temp=jnp.trace(pressure, axis1=1, axis2=2)/(3*K_BOLTZ),
-                             P=pressure, q=qa+qb, count=a.count+b.count,
-                             n_samples=a.n_samples+b.n_samples, mass=a.mass)
+    pressure = pa + pb
+    return MomentAccumulator(
+        nrho=w,
+        u=u,
+        temp=jnp.trace(pressure, axis1=1, axis2=2) / (3 * K_BOLTZ),
+        P=pressure,
+        q=qa + qb,
+        count=a.count + b.count,
+        n_samples=a.n_samples + b.n_samples,
+        mass=a.mass,
+    )
 
 
 def accumulate(acc: MomentAccumulator, m: CellMoments) -> MomentAccumulator:
     """Pool raw particle statistics; empty samples affect density, not mean velocity."""
-    one = MomentAccumulator(nrho=m.nrho, u=m.u, temp=m.temp, P=m.P, q=m.q,
-                            count=m.count, n_samples=jnp.float64(1), mass=acc.mass)
+    one = MomentAccumulator(
+        nrho=m.nrho,
+        u=m.u,
+        temp=m.temp,
+        P=m.P,
+        q=m.q,
+        count=m.count,
+        n_samples=jnp.float64(1),
+        mass=acc.mass,
+    )
     return merge_accumulators(acc, one)
 
 
 def finalize(acc: MomentAccumulator) -> CellMoments:
     """Normalize pooled moments; occupancy masks are available as count > 0."""
-    inv = jnp.where(acc.n_samples > 0, 1/jnp.maximum(acc.n_samples, 1.), 0.)
-    temp = jnp.where(acc.nrho > 0, acc.temp/jnp.maximum(acc.nrho, jnp.finfo(jnp.float64).tiny), 0.)
-    return CellMoments(nrho=acc.nrho*inv, u=acc.u, temp=temp,
-                       P=acc.P*inv, q=acc.q*inv, count=acc.count*inv)
+    inv = jnp.where(acc.n_samples > 0, 1 / jnp.maximum(acc.n_samples, 1.0), 0.0)
+    temp = jnp.where(
+        acc.nrho > 0, acc.temp / jnp.maximum(acc.nrho, jnp.finfo(jnp.float64).tiny), 0.0
+    )
+    return CellMoments(
+        nrho=acc.nrho * inv, u=acc.u, temp=temp, P=acc.P * inv, q=acc.q * inv, count=acc.count * inv
+    )
 
 
 def pressure_scalar(m: CellMoments) -> jax.Array:

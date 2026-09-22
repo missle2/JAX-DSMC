@@ -593,6 +593,19 @@ def cell_volume(grid):
 > SPARTA arrives at the same place from the other side -- its domain is always
 > three-dimensional and a "1-D" run is one cell in `y` and `z` with real extents.
 
+**Embedded surfaces (2026-09-17, `jax_dsmc/mesh/`).** The four names above are unchanged;
+`cell_volume` returns `grid.volume` when that per-cell array is set (`mesh.cut.with_volume`),
+and `cell_of` is used as-is — the cut-cell machinery is a *separate* per-cell table set
+(`Mesh`: `cell_type`, `volume`, `candidates[C, S_max]`, `csurfs[C, S_cell]`,
+`outside_corner`, element `normals`/`areas`) built once on the host (`mesh/cut.py`, SPARTA
+`cut2d.cpp` / `cut3d.cpp` / `grid_surf.cpp` semantics: inclusive clip test, corner parity
+along an irrational ray, stratified sub-grid flow fractions, split cells refused) and a
+surface-aware `mesh.geometry.first_hit(x, v, grid, mesh, exclude)` that returns the box result
+unless an element (`2D + e`) or the analytic body (`2D`) is hit strictly earlier.  Every table
+is indexed by the flat cell id and padded with `-1`, so a hierarchical grid later replaces only
+`cell_of` / `cell_bounds` (see PLAN Phase 5 further note).  `neighbour_cell(cell, axis, side,
+grid)` is the one addition to this module: the cell-walk tracker's neighbour resolution.
+
 ### 4.1 Gradient behaviour, stated honestly
 
 `cell_of` contains a `floor`, so `d(cell_of)/dx = 0` almost everywhere. Cell membership is a
@@ -623,6 +636,98 @@ nothing now and means the non-uniform mesh of M5 is a drop-in replacement.
 - `sum(cell_volume(grid)) == prod(hi - lo)` to machine precision;
 - `grad(lambda lo: sum(cell_volume(GridSpec(lo, hi, n))))` is finite and matches the analytic
   derivative of the box volume.
+
+### 4.4 Level-set bodies (`jax_dsmc/mesh/levelset.py`, 2026-09-20)
+
+A third body kind next to the polygon and the analytic circle/sphere: `LevelSet(coef
+f64[m_1, …, m_D] traced; lo f64[D]; h static; n_sample, n_bisect static)`, the shape
+representation of the optimiser.  φ is a uniform **cubic B-spline** (C2; the normal
+`∇φ/|∇φ|` is C1), body `φ < 0`, normal into the flow, single surface id `2D` and model row
+`2D` exactly as the analytic body — so tracking, `exclude`-free re-hit logic, tallies,
+kernel scores and the replayed shape VJP (`shape.geometry` returns `coef`) reuse the
+analytic path.
+
+- **Evaluation.** `u = (x − lo)/h`, `i = floor(u)`, `f = u − i`; the four weights per axis
+  are the cubic B-spline basis on `f`, the four derivative weights their `f`-derivatives
+  over `h`; one `4^D` block gather `coef[i−1 .. i+2]` and `D + 1` separable contractions
+  give `φ` and `∇φ`.  Coefficient `j` is centred at `lo + j h`; the valid domain
+  `u ∈ [1, m − 2]` must contain the simulation box (checked at construction).
+- **Hit.** Along `x + s v̂`, `s ∈ [0, reach]`, `reach = n_sample · h/2` (sample spacing
+  `h/2`; `stencil_sufficient` for this kind is `|v| · remaining ≤ reach`): the first
+  `+ → −` sign change between consecutive samples brackets the entry root; a start with
+  `φ ≤ 0`, `|φ| ≤ tol` and `v · ∇φ < 0` hits at `t = 0`; a start deeper inside returns
+  `inf` (the post-step inside check counts it).  No `exclude`: after a reflection φ
+  increases along `v_out`, so the reflection point is never a `+ → −` crossing.  `n_bisect`
+  bisections on the bracket, then **one Newton step from the bracket, the bracket search
+  being a function of `stop_gradient` inputs** — the `where` selections of the bisection
+  carry no derivative and the Newton step restores the implicit-function derivative
+  `∂t/∂coef = −B_j(x_hit)/(v·∇φ)` (and `∂t/∂x`, `∂t/∂v` likewise); freezing the search's
+  inputs rather than only its output keeps reverse mode from tracing the two loops.
+  Measured (LS0, `figures/mesh_levelset_checks.png`): surface and hit errors fall as
+  `h⁴` (circle: 2e-5 → 6e-9 in `|φ|` on the surface from h = 0.5 to 0.0625; hit
+  position 1e-6 at h = 0.125), tunnelling only for chords shorter than one sample
+  spacing (a fraction ~5e-5 of the circle's hits, grazing, carrying no momentum).  Tunnelling (a grazing dip shorter than the spacing) is
+  counted (LS0 grazing family, post-step inside check), not solved.
+- **Host tables** (`cut.py` branches): `_global_outside = φ > 0`; a cell is CUT iff the
+  coefficients whose support meets it change sign (convex-hull property: conservative,
+  never misses a cut cell); `stencil` = the same test on the dilated cell; `csurfs`
+  lists id 0 in CUT cells; `_plane_distance = |φ|`; volume fractions by the existing
+  sub-sampling; `exact_flow_volume` is not available (reported as the sub-sampled value).
+- **Construction.** `from_analytic(centre, radius, lo, h, m)` (exact SDF at the knots);
+  `from_surface(points, elements, …)` (unsigned distance in JAX, sign from the host ray
+  parity; linear in the knot values, so `∂coef/∂points` exists); the knot values are
+  interpolated by the separable `(1, 4, 1)/6` system with natural end conditions,
+  applied as one precomputed inverse per axis (`tensordot`), differentiable.
+  `reinitialise(ls, n_iter)`: closest-point projection `x ← x − φ ∇φ/|∇φ|²` from every
+  knot, distance to the projected point with the sign of φ, refit.
+- **Silhouette term** (`shape.silhouette_cotangent`, `ShapeTerms.silhouette`;
+  `gradient(silhouette_band=ε_b, reward=...)`): for every survivor the closest approach
+  of its *undeflected* flight, `φ_min = min_s φ(x + s v̂)` (`levelset.closest_approach`:
+  the hit-search samples plus 16 golden-section steps; `φ_min < 0` = hit on the first
+  pass with that penetration depth, `> 0` = miss by that distance).  Particles with
+  `|φ_min| < ε_b` change outcome when the surface moves by more than `φ_min` there.  The
+  term is the VJP of `φ(x*)` (`x*` frozen; `∂φ_min/∂coef_j = B_j(x*)` by the envelope
+  theorem) with cotangent `c = −(V_hit − V_miss) / (2 ε_b)`: the band on *both* sides of
+  the surface estimates the density of `φ_min` at zero (window `2 ε_b`; each side alone
+  describes one direction of the move and the derivative is the same from both).  `V` of
+  the realised outcome is the particle's reward-to-go; the virtual outcome — a straight
+  flight for a hit particle, a re-emission from `x*` under the body's wall model (fresh
+  draws, `_virtual_hit`) for a miss particle — is valued by `ensemble_device.value_query`
+  (the step's λ fit at the virtual post-move state, one-sided by the virtual velocity's
+  side of `n(x*)`) plus the virtual hit's reward (`reward` applied to a virtual events
+  row).  Specular wall: `V_hit → V_miss` at grazing incidence, the term is O(ε_b) → 0
+  (measured 0.5 % of the diffuse value on constructed rays); diffuse wall: on constructed
+  rays with `λ = 0` it reproduces (new hits per unit radius) × (absorbed x-momentum) to
+  0.04 % at `ε_b = 0.02`, 2.5 % at 0.1 (`tests/test_mesh_adjoint.py::test_silhouette_term`).
+- **Grazing regularisation** (`LevelSet.grazing`, `AnalyticBody.grazing`, static `eps`):
+  the hit-time derivative's `1/(v·n)` is evaluated with `|v·n| ≥ eps |v| |n|` in the
+  tangent only (`levelset.regularised_quotient`: primal exact, tangent of the numerator
+  over the clipped denominator).  Its mean converges but its variance diverges
+  logarithmically at grazing incidence (one hit at `|v·n|/|v| = 3e-3` was 15 % of a
+  window's tally sum, review §7.7).  Measured on the circle's radius tally term (8 CRN
+  seeds, `scratch/mesh/probe_grazing_sweep.py`, `figures/grazing_regularisation.png`):
+  seed sd 8.4 % → 4.2 % (eps 0.03) → 2.9 % (0.1) → 2.1 % (0.3), paired bias +0.5 ± 1.8 %,
+  −1.2 ± 2.3 %, −7.4 ± 2.4 %; largest per-hit weight 3.4e4 → 4.4e3 at 0.1.  Default
+  for the optimiser and the cluster study: `eps = 0.05`.  The same `eps` floors the
+  **emission side**: the diffuse normal score `∂_n log q = v_out/v_n − …` carries
+  `v_t/v_n` from the Rayleigh `log v_n` (flux-weighted cosine law: `P(v_n/|v| < eps) =
+  eps²`, `E[(1/v_n)²]` log-divergent, the same class), so `shape.normal_score` evaluates
+  the derivative of `log v_n` at `max(v_n, eps |v_out|)`
+  (`sampling.log_diffuse_density(..., floor)`; primal exact; bias `≈ eps/2` of the
+  `v_t/v_n` part).  Without it the plate's score term swung 3.3 … 10.7 e-21 across seeds
+  at `h_φ = 0.0625` (review §7.8); the floor removes the outlier hit only.
+- **Hybrid normal term** (diffuse element hits): the hit's own reward is exact in
+  `v_out`, so `wall_adjoint._element_events` forms the surface tally from the **traced**
+  sample (`d/dn E[r] = E[∂r/∂v_out ∂v_out/∂n]`, reparameterised, bounded weights) while
+  the post-hit state and the events carry the frozen sample; the normal score is
+  weighted by the value-to-go **after** the hit (`to_go[1:]`, `λ + r_later`) when a
+  tally cotangent is given, by `to_go[:-1]` otherwise.  The frame in the derivative is
+  parallel-transported from the primal one (`sampling.diffuse_velocity_general`): the
+  incident-velocity frame's derivative has a `1/|v_t,in|` tail at normal incidence and
+  the isotropic tangential law does not care which frame is used.  Measured on the GP
+  plate over 4 CRN seeds (`figures/plate_estimators.png`, review §7.8): normal-term
+  seed sd 3.1 (score) → 2.3 (score + floor) → 0.77 e-21 (hybrid) at no bias; total
+  1.191 ± 0.068 vs CRN FD 1.17–1.34 e-20 at steps 0.0125–0.2 (|z| ≤ 1.6).
 
 ---
 
@@ -1862,6 +1967,11 @@ draw, so `dJ/dv_wall` is too.
 
 ### 9.4.1 M7: what was built, and what each parameter costs
 
+> **2026-09-15:** the score-function routes in this section are superseded for
+> decision-driven parameters by the ensemble adjoint (route b) —
+> [ADJOINT_BRANCH_REVIEW.md](ADJOINT_BRANCH_REVIEW.md) §5.  The parameter table below
+> stays as the record of what the pathwise/score routes can and cannot do.
+
 **Built** (all default-off, so every M1-M5 forward result is unchanged -- verified: the Couette
 gate reproduces pre-M7 output to every digit, and a 30 000-step inflow shock reproduces all six
 moments and every diagnostic with zero mismatches):
@@ -1913,6 +2023,152 @@ horizon where it dominates, only ensemble size helps -- at `M^-1/2`.
 Validation lives in `examples/couette/gradients.py` (against continuum Couette with Maxwell
 slip, and against `dT/dT_wall = 1` exactly) and `examples/shock/gradients.py` (against
 Rankine-Hugoniot).
+
+### 9.6 Embedded surfaces: the element branch and the two trackers (2026-09-17)
+
+`wall_adjoint._advance_impl(..., mesh, tracker, max_walk)` extends the chronological tracker
+of 9.4 to elements.  Per pass, `first_hit` is the minimum over the box faces and the
+particle's candidate elements (`mesh.candidates[cell_of(x)]`, the stencil) with SPARTA's
+rules: a hit needs `v . n < 0` (normals point into the flow), the element just left is
+excluded until the next box-face event (`exclude i32[N]`, `update.cpp`), ties go to the box
+face, then the lowest element id, no push-off epsilon.  The element branch
+(`_element_events`) gathers the flat normal (exact for an analytic body), applies the model
+row `2D + model` of `WallParams` — specular `v - 2 (v . n) n`, or SPARTA's diffuse law in the
+`(n, t1, t2)` frame (`sampling.diffuse_velocity_general`) with the accommodation Bernoulli
+drawn once per pass like the box faces — records every element hit in `WallEvents` under
+its surface id, and tallies per surface (`SurfaceTallies` has `2D + E` rows).  The stencil's
+sufficient condition `|v| (budget - elapsed) <= radius * h_min` is checked every pass and
+counted as `stencil_overrun`.  `tracker = "walk"` (`mesh/walk.py`) is SPARTA's cell walk:
+`max_walk` iterations of {earliest element of the cell's own list strictly before the exit
+face -> reflect; else exit face -> box rule or step to the neighbour and reset `exclude`; else
+done}; unfinished particles are discarded and counted (`MAXSTUCK`).  Both end with the
+inside-body parity test (`inside_polygon`, SPARTA `outside_surfs` toward the cell's known
+outside corner) that kills and counts a mis-tracked particle.  The fourth return value is a
+`TrackerCounts` whenever a mesh is present; `simulate.run(mesh=..., emit_surface=True)`
+appends the per-step tallies to the output.  Newborn tracking in `inflow.inject` takes the
+same path (entrants' birth-step hits are recorded, not tallied).
+
+### 9.7 The mesh-aware adjoint: value-form rewards and the replayed wall map (2026-09-18)
+
+Three additions, all outside the ensemble core (`ensemble_device.py` grows two optional
+inputs and one helper; the collision pull-back is untouched):
+
+* **Value-form rewards.** `backward[_virtual](..., phi_step f64[M, N], hit_reward f64[M, K, N])`.
+  The carried value at step `k`'s post-collision state includes the reward collected there,
+  so `phi_step[k]` joins `mu` *before* the step's pull-back (`_add_step_reward`); the rewards
+  of the step's hits join on the move pull-back (`_move_pullback`: `mu_prev = lam + sum_j r_j`
+  on survivors; a newborn's go to its source score).  The weight of a hit's kernel score
+  (`from_device(..., hit_reward)`, `Hits.values`) is the reward-to-go **from that draw
+  onward**: `lam + r_j + r_{j+1} + ...` — the hit's own reward is a function of the drawn
+  velocity and must be in the weight (leaving it out made the G2 shear gradient read
+  `-0.0004` against an FD of `-0.0165`).  Both arrays are per slot, already divided by the
+  normalization, nonzero only on the objective's window; `phi_final` is unchanged.
+* **`grad_x` from the fit.** `field_query` returns `(value, grad_x, grad_v)` — the linear
+  slopes of the same local quadratic fit per unscaled coordinate; `cell_query(...,
+  gradients=True)` and `node_gradients(x, v, alive, lam, grid, ...)` give them at every
+  alive slot's own state from its cell's nodes.
+* **`jax_dsmc/shape.py`: the replayed wall map.** Under the RNG contract the move of step
+  `k` is `apply_faces(x_pre, v_pre, alive, key_for(base, k, STAGE_MOVE), geometry)`, a pure
+  function of the record's previous post-collision state; `shape.wall_map` re-runs it with
+  `trace=True` (the `WallEvents` gain `x_hit`, `v_in`, `normal` — `None` in a forward
+  record, so the record's size is unchanged) and `shape.gradient` is one `lax.scan` over the
+  captured steps applying `jax.vjp` with respect to the geometry (`AnalyticBody`, or the
+  `points` of a `Surface`; `with_geometry` rebuilds normals and areas, never the cut
+  volumes or cell tables) with the cotangents the backward provides: `grad_x lambda`,
+  `grad_v lambda` at each survivor's post-move state (`node_gradients`), `lam + r` on the
+  move's log-probability, the objective's weights on the step's tallies, and
+  `(lam + r_after) grad_n log q(v_out | n)` on the normal of every diffuse-branch element
+  hit (`sampling.log_diffuse_density`, frame-independent; `r_after` = the step's later
+  hit rewards).  The diffuse re-emission velocity is `stop_gradient` in the post-hit
+  state and the events of `_element_events` — a kernel's parameters and normal enter the
+  *value* only through its score (review §5.9) — but the surface tally is formed from
+  the traced sample, so the hit's own reward is pathwise through the reparameterised
+  sampler (the hybrid normal term of §4.4, 2026-09-21; without a tally cotangent the
+  weight is `lam + r_from` as before); the specular branch and the hit point are
+  pathwise.  `ShapeTerms` reports the pathwise and score parts separately plus
+  `replay_error` (relative, roundoff: the replay is the forward's arithmetic in another
+  compilation, so `< 1e-12` rather than bitwise) and the element hits per step.
+  `shape.replay` is the forward-only pass that evaluates per-hit rewards (`reward(events,
+  tallies, rec_k, step) -> f64[K, N]`) for the backward.  Not in the VJP by design: the
+  cut-volume dependence of the NTC attempt count (gate G5) and the element-assignment
+  jumps of a flat-normal polygon (the edge-band score, plan §2 item 5).
+* **The hit-timing band term** (`shape.timing_cotangent`, `gradient(timing_jump=,
+  timing_band=)`).  The pathwise VJP differentiates a *fixed* hit set.  A reward that
+  jumps at a hit — a velocity-dependent per-step reward (`v_y^2`), or a per-hit reward at
+  the window's edges — also depends on *which step* a hit falls in, and moving the
+  surface moves hits across step boundaries.  Measured on G3 (plane, windowed `v_y^2`):
+  the pathwise term alone read `+0.82 ± 0.23` against an FD of `+0.05 ± 0.15`; the
+  boundary term, estimated from the hits within a band `Δ·dt` of the step end (`jump ×
+  density`, `−jump/(Δ dt)` on each band hit's traced `time`, then through the same VJP so
+  any body's `∂t_hit/∂θ` is exact), is `−0.43 ± 0.02` (bands 0.2 and 0.4 agree to 1 %) and
+  closes the gap.  This is the value-preserving analogue of the ε hit-timing score with
+  no forward regularisation — the reason G3a's ε-score had no resolvable mean on hit-
+  reward windows is that a per-hit reward jumps only at the two window edges, where the
+  terms cancel in a steady state.  Rule: a value-form objective is either continuous
+  across hits (position-based, or per-hit) or it carries this term.
+* **What G3 established (review §7.6, item 3).**  With the plane collisionless, the exact
+  value gradient at any state is a replica average (`scratch/mesh/probe_plane_fitbias.py`),
+  so the fitted `∇λ` could be tested directly: the two-sided fit is biased (−0.030 ±
+  0.011 on an x/v-part of +0.0030 ± 0.0007), the one-sided fit much less so but still
+  low (−0.005 ± 0.0015 on the 32-seed run; −0.28 ± 0.18 on the `v_y²` objective's
+  +0.36 ± 0.12) — the local fit's position slope next to a surface remains the weak link
+  (review §7.6 item 3).
+  The estimator with the exact gradient equals the *truncated* FD on both the shear
+  (+0.003 vs +0.0017 ± 0.0026) and the `v_y²` objective (−0.09 ± 0.12 vs −0.149 ± 0.037;
+  `probe_plane_truncated_fd.py`: warm-up at θ = 0, captured steps perturbed), not the full
+  FD (+0.017): the difference is the capture-start state's own θ-dependence —
+  gate G6's horizon term — which for a translated wall is the accumulated delay of every
+  earlier bounce (one round trip ≈ 40 steps).  So per-hit sensitivities of a translation
+  are time delays (`∂x_post/∂θ = (v_in − v_out)/v_n`), the per-hit signal is a
+  window-end quantity, and the fitted slope carries its neighbours' value noise
+  (per-seed sd 0.03–0.08 against a CRN FD's 0.014): unbiased, poorly resolved.
+  Recorded, not built: the adjoint-equation identity `v·∇_x λ = −(reward rate) − Q*λ +
+  ∂_t λ` for the along-flight component (a value, not a slope), and pooled fits (G4).
+  **One-sided fits, generally** (`mesh.geometry.nearest_normal`, `shape.local_normals`,
+  `backward_virtual(normals=)`): a query's nodes are restricted to the sign of `v·n` of
+  the nearest surface within one cell width (elements of the cell's candidate list by
+  point–segment / point–triangle distance, DIFFUSE box faces by plane distance).
+  Measured by particle class against replica-exact truths (review §7.6 item 4): halves
+  the slope error and cuts the value error 20–30 % on the receding population next to a
+  reward-carrying surface, costs 0–3 % elsewhere; `normals=None` is bitwise the old
+  two-sided estimator.
+* **Pooled fits and the along-flight identity** (`node_gradients(pool=)`,
+  `ensemble_device.pooled_tables`, `grid.cell_neighbourhood`; `shape.along_flight`,
+  `Replay.timing_reward`, `shape.gradient(lam_timing=)`, `shape.gradient_variants`).
+  Pooling draws the `k` nearest one-sided nodes from the `3^D` block of cells around the
+  query's cell (`k = 96`).  The along-flight identity: in collisionless free flight
+  `V(x − s v, v)` is the value of the same particle delayed by `s`, so `v·∇_xV = −T` with
+  `T` the value of the *timing rewards* `τ` (the band term's per-hit change of the
+  objective per unit delay, `timing_cotangent`), carried by a second value-form backward
+  with `hit_reward = τ`; the cotangent keeps the fitted perpendicular part and replaces
+  the component along `v` by `−T`.  With collisions the identity acquires `−Q*V + ∂_tV`,
+  neglected (≤ 0.3 % collisions per particle-step in the cases run).  The four variants
+  (one-sided; pooled; along-flight; pooled + along-flight) are compared against
+  replica-exact gradients and on the production runs in review §7.6 item 5
+  (`figures/estimator_variants.png`): the along-flight identity removes the bias
+  (plane `v_y²`: z −2.9 → −0.7 against the truncated FD), pooling removes the variance
+  (4–7× lower per-seed sd on the circle radius) but keeps a bias on its own; pooled +
+  along-flight is the runners' default (`--variant`), the others stay in every artifact.
+  **Not resolved by any of them:** the x/v-part of a translated flat wall (exact
+  +0.0032 ± 0.0006 on the shear probe; pooled / along variants read 0, the realised `T`
+  being a sparse sum whose sample SE understates its uncertainty; the one-sided fit is
+  consistent but 3× noisier).  Radius-type controls are FD-consistent to a few per cent
+  because their tally term is exact; translation-type controls are not resolved.
+  **Open issue / decision (2026-09-20):** shape controls are restricted to normal
+  displacements of curved surfaces (radius-type) until the translation-type x/v-part
+  is resolved; tangential translations of flat walls are not supported as optimisation
+  controls.  First optimisation case: circle → airfoil-like shape (sphere analogue in
+  3-D) by normal displacements only.
+  **Representation (2026-09-20):** shapes are optimised as a C1 level set
+  (`jax_dsmc/mesh/levelset.py`, cubic B-spline coefficients on their own finer grid,
+  §4.4), not as polygon vertices: a flat-normal polygon's vertex jump term (the corner
+  delta of the Hadamard derivative) is representation-induced and vanishes on a C1
+  surface, where the pathwise VJP of the replayed wall map is complete for specular
+  walls; only the diffuse silhouette term survives (near-miss set `min φ ∈ (0, ε)`).
+  Radius-type controls act through the reflected velocity: on the analytic circle the
+  tally term alone reproduces `F/r` (1.28 vs 1.23 e-20, the whole fixed-hit-set
+  derivative of a specular cylinder) and the total, 1.44 ± 0.09 e-20, agrees with the
+  CRN FD 1.40 ± 0.01 e-20 (48 seeds, z = 0.5); the `∇_xλ` part is again the noise.
 
 ### 9.5 Tests (`tests/test_move.py`), parametrised over `D in {1, 2, 3}`
 
@@ -2014,6 +2270,16 @@ looks like it is not decaying. `FieldMovie.set_limits` takes them from the physi
 unset they are captured from the first frame and then held.
 
 ### 10.2 `jax_dsmc/output.py` and `jax_dsmc/viz.py` — writing results out
+
+*2026-09-17 amendment:* cut cells keep the `.vtr` rectilinear output (cells are still boxes)
+with a `volume_fraction` field; the surface itself goes out as `.vtp` polydata
+(`output.write_vtp_surface(points, elements, cell_data)`, lines in 2-D / triangles in 3-D)
+carrying the per-element loads; `viz.draw_surface` / `field_snapshot(surface=...)` overlay
+it on the field pictures (3-D: the triangles' intersection with the drawing plane).  Because
+cells stay boxes, a per-cell field drawn on the `.vtr` looks blocky at the body; the
+`.vtu` written by `output.write_vtu_flow(mask=cut.flow_mask(...))` and `draw_field(mask=)`
+draw the same per-cell values on the flow sub-cells only (body carved out at `h/sub`), so
+the pictures show where the surface is without inventing sub-cell field values.
 
 Separate modules from `sample.py`; listed here because they consume its moments. **All output is
 host-side, called outside the jitted step**, so nothing perturbs the compiled loop.

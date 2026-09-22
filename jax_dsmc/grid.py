@@ -89,6 +89,24 @@ def cell_of(x: jnp.ndarray, grid: GridSpec) -> jnp.ndarray:
     return flat.astype(jnp.int32)
 
 
+def neighbour_cell(cell: jnp.ndarray, axis: int, side: int, grid: GridSpec) -> tuple:
+    """The cell across face ``(axis, side)`` of ``cell``: ``(i32[N] index, bool[N] exists)``.
+
+    ``exists`` is False when that face of the cell is a face of the box; the index is
+    then the cell itself.  This is the one piece of neighbour arithmetic the cell-walk
+    tracker (:mod:`jax_dsmc.mesh.walk`) needs, kept here so a hierarchical grid changes
+    only this module (section 4).
+    """
+    strides = _row_major_strides(grid.n)
+    n_axis = int(grid.n[axis])
+    idx = (cell // strides[axis]) % n_axis
+    target = idx + (1 if side else -1)
+    exists = (target >= 0) & (target < n_axis)
+    return jnp.where(exists, cell + (1 if side else -1) * strides[axis], cell).astype(
+        jnp.int32
+    ), exists
+
+
 def cell_volume(grid: GridSpec) -> jnp.ndarray:
     """Volume of every cell, ``f64[C]``.  TRACED through ``lo``/``hi``.
 
@@ -97,7 +115,12 @@ def cell_volume(grid: GridSpec) -> jnp.ndarray:
     drop-in replacement.  This is one of the two routes by which a gradient
     reaches the mesh geometry (the NTC attempt count of section 8.1; the other is
     moment normalisation in ``sample.py``).
+
+    A cut-cell grid carries its per-cell flow volumes in ``grid.volume`` (set by
+    ``mesh.cut.build_mesh``); those are returned as they are.
     """
+    if grid.volume.shape[0] > 0:
+        return grid.volume
     dx = spacing(grid)
     # `transverse` makes this a TRUE volume at D < 3: a D-dimensional run is a
     # 3-D gas uniform in the 3-D suppressed directions, so `prod(dx)` alone is a
@@ -110,6 +133,25 @@ def _cell_multi_index(grid: GridSpec) -> jnp.ndarray:
     C = num_cells(grid)
     axes = jnp.unravel_index(jnp.arange(C, dtype=jnp.int32), tuple(int(nd) for nd in grid.n))
     return jnp.stack(axes, axis=-1).astype(jnp.int32)
+
+
+def cell_neighbourhood(grid: GridSpec, radius: int = 1) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """The ``(2 radius + 1)^D`` block of cells around every cell: ``(i32[C, B] index,
+    bool[C, B] exists)``; a block position outside the box has ``exists`` False and the
+    cell's own index.  Static shapes; no periodic wrap (the pooled fits of the ensemble
+    adjoint only need the neighbours that share the cell's surface)."""
+    multi = _cell_multi_index(grid)  # (C, D)
+    d = len(grid.n)
+    offsets = jnp.stack(
+        jnp.meshgrid(*([jnp.arange(-radius, radius + 1)] * d), indexing="ij"), axis=-1
+    ).reshape(-1, d)  # (B, D)
+    target = multi[:, None, :] + offsets[None, :, :]
+    n = jnp.asarray(grid.n)
+    exists = jnp.all((target >= 0) & (target < n), axis=-1)
+    strides = jnp.asarray(_row_major_strides(grid.n))
+    index = jnp.sum(jnp.clip(target, 0, n - 1) * strides, axis=-1).astype(jnp.int32)
+    own = jnp.arange(index.shape[0], dtype=jnp.int32)[:, None]
+    return jnp.where(exists, index, own), exists
 
 
 def cell_bounds(grid: GridSpec) -> tuple[jnp.ndarray, jnp.ndarray]:

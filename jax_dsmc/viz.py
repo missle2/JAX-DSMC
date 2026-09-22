@@ -456,6 +456,22 @@ def field_to_grid(field: Any, n: tuple[int, ...]) -> np.ndarray:
     return np.asarray(field).reshape(tuple(int(x) for x in n))
 
 
+def masked_field(field: Any, n: tuple[int, ...], mask: np.ndarray) -> np.ndarray:
+    """Upsample a per-cell field by the sub-cell ``mask`` (``bool[C, sub^D]``,
+    :func:`jax_dsmc.mesh.cut.flow_mask`): the cell value on every flow sub-cell, ``NaN``
+    inside the body.  Returns the ``(n_0 sub, n_1 sub[, n_2 sub])`` grid, x leading, that
+    :func:`draw_field` draws when given ``mask``."""
+    g = field_to_grid(field, n)
+    D = g.ndim
+    sub = round(mask.shape[1] ** (1.0 / D))
+    m = mask.reshape((*g.shape, *((sub,) * D)))
+    # interleave: (n0, n1, sub, sub) -> (n0, sub, n1, sub) -> (n0 sub, n1 sub)
+    order = [a for d in range(D) for a in (d, D + d)]
+    m = np.transpose(m, order).reshape(tuple(int(x) * sub for x in g.shape))
+    big = np.kron(g, np.ones((sub,) * D))
+    return np.where(m, big, np.nan)
+
+
 def draw_field(
     ax,
     field: Any,
@@ -468,6 +484,7 @@ def draw_field(
     vmin: float | None = None,
     vmax: float | None = None,
     plane: Plane | None = None,
+    mask: np.ndarray | None = None,
 ) -> Any:
     """Draw one per-cell field, dispatching on dimension.
 
@@ -478,8 +495,10 @@ def draw_field(
     these pictures exist to show.
 
     Returns the mappable (or ``None`` in 1-D) so the caller can attach a colourbar.
+    ``mask`` (``bool[C, sub^D]``) blanks the body of a cut-cell grid at sub-cell
+    resolution (:func:`masked_field`); the values stay per cell.
     """
-    g = field_to_grid(field, n)
+    g = field_to_grid(field, n) if mask is None else masked_field(field, n, mask)
     lo = np.asarray(lo, dtype=float)
     hi = np.asarray(hi, dtype=float)
     d = g.ndim
@@ -499,7 +518,18 @@ def draw_field(
     ax0, ax1 = 0, 1
     if d == 3:
         pl = plane or Plane(0, fraction=0.0)
-        g, (ax0, ax1) = pl.cut(g)
+        if mask is None:
+            g, (ax0, ax1) = pl.cut(g)
+        else:
+            # the upsampled grid: slice at the same fraction of the finer resolution
+            fine = Plane(
+                pl.axis,
+                index=None
+                if pl.index is None
+                else pl.index * (g.shape[pl.axis] // int(n[pl.axis])),
+                fraction=pl.fraction,
+            )
+            g, (ax0, ax1) = fine.cut(g)
         label = f"{label}   [{pl.label(tuple(int(x) for x in n))}]"
 
     # imshow wants (row, col) = (vertical, horizontal), so transpose: the first
@@ -520,6 +550,88 @@ def draw_field(
     return im
 
 
+def draw_surface(
+    ax,
+    points: Any,
+    elements: Any,
+    *,
+    plane: Plane | None = None,
+    lo: Any = None,
+    hi: Any = None,
+    color: str = INK,
+    lw: float = 1.2,
+) -> None:
+    """Overlay an embedded surface on a field picture drawn by :func:`draw_field`.
+
+    2-D: every line element is drawn.  3-D: the triangles are intersected with the
+    axis-aligned ``plane`` (the same one handed to :func:`draw_field`; ``lo``/``hi``
+    and the grid resolution are needed to locate it) and the resulting segments are
+    drawn in the two surviving axes.  An analytic body is passed as ``points`` of
+    shape ``(1, D)`` (the centre) and ``elements`` a float radius.
+    """
+    pts = np.asarray(points, dtype=float)
+    d = pts.shape[1]
+    ax.set_aspect("equal")  # a circle must look like one
+    if not hasattr(elements, "shape") or np.asarray(elements).ndim == 0:
+        # analytic circle / sphere: a circle of the given radius in the drawing plane
+        r = float(elements)
+        c = pts[0]
+        if d == 3:
+            pl = plane or Plane(0, fraction=0.0)
+            keep = [a for a in range(3) if a != pl.axis]
+            z = _plane_position(pl, lo, hi)
+            if z is None or abs(z - c[pl.axis]) >= r:
+                return
+            r = float(np.sqrt(r * r - (z - c[pl.axis]) ** 2))
+            c = c[keep]
+        t = np.linspace(0.0, 2.0 * np.pi, 361)
+        ax.plot(c[0] + r * np.cos(t), c[1] + r * np.sin(t), color=color, lw=lw)
+        return
+    el = np.asarray(elements)
+    if d == 2:
+        seg = pts[el]  # (E, 2, 2)
+        for a, b in seg:
+            ax.plot([a[0], b[0]], [a[1], b[1]], color=color, lw=lw, solid_capstyle="round")
+        return
+    pl = plane or Plane(0, fraction=0.0)
+    z = _plane_position(pl, lo, hi)
+    if z is None:
+        return
+    keep = [a for a in range(3) if a != pl.axis]
+    tri = pts[el]  # (E, 3, 3)
+    for t in tri:
+        cut = _triangle_plane_segment(t, pl.axis, z)
+        if cut is not None:
+            ax.plot(cut[:, keep[0]], cut[:, keep[1]], color=color, lw=lw)
+
+
+def _plane_position(plane: Plane, lo: Any, hi: Any) -> float | None:
+    """Coordinate of an axis-aligned plane; ``fraction`` is along ``[lo, hi]``."""
+    if lo is None or hi is None:
+        return None
+    lo = np.asarray(lo, dtype=float)
+    hi = np.asarray(hi, dtype=float)
+    if plane.index is not None:
+        return None  # a cell index needs the resolution; callers pass ``fraction``
+    return float(lo[plane.axis] + plane.fraction * (hi[plane.axis] - lo[plane.axis]))
+
+
+def _triangle_plane_segment(tri: np.ndarray, axis: int, z: float) -> np.ndarray | None:
+    """The segment where a triangle crosses the plane ``x[axis] = z`` (``(2, 3)`` or ``None``)."""
+    s = tri[:, axis] - z
+    pts = []
+    for i in range(3):
+        j = (i + 1) % 3
+        if (s[i] < 0.0) != (s[j] < 0.0):
+            w = s[i] / (s[i] - s[j])
+            pts.append(tri[i] + w * (tri[j] - tri[i]))
+        elif s[i] == 0.0:
+            pts.append(tri[i])
+    if len(pts) < 2:
+        return None
+    return np.asarray(pts[:2])
+
+
 def field_snapshot(
     path: str,
     fields: dict[str, Any],
@@ -532,6 +644,8 @@ def field_snapshot(
     cmaps: dict[str, str] | None = None,
     dpi: int = 110,
     plane: Plane | None = None,
+    surface: tuple[Any, Any] | None = None,
+    mask: np.ndarray | None = None,
 ) -> str:
     """Write one PNG with a panel per named field.
 
@@ -539,6 +653,8 @@ def field_snapshot(
     Per-frame autoscaling makes an animation unreadable: the colours stop meaning
     a value and start meaning "relative to this frame", so a decaying shock looks
     like it is not decaying at all.  :class:`FieldMovie` handles this for you.
+    ``surface = (points, elements)`` overlays an embedded surface on every panel
+    (:func:`draw_surface`; an analytic body as ``(centre[None, :], radius)``).
     """
     limits = limits or {}
     cmaps = cmaps or {}
@@ -557,9 +673,12 @@ def field_snapshot(
             vmin=vmin,
             vmax=vmax,
             plane=plane,
+            mask=mask,
         )
         if im is not None:
             fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
+        if surface is not None and im is not None:
+            draw_surface(ax, surface[0], surface[1], plane=plane, lo=lo, hi=hi)
     if title:
         fig.suptitle(title, color=INK, fontsize=11)
     return savefig(fig, path, dpi=dpi)

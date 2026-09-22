@@ -18,6 +18,7 @@ measurement rather than by reading a reference code:
 from __future__ import annotations
 
 import functools
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -38,6 +39,8 @@ from jax_dsmc.rng import (
     STAGE_NTC_ROUND,
     STAGE_PAIR,
     STAGE_SCATTER,
+    indexed_randint,
+    indexed_uniform,
     key_for,
 )
 from jax_dsmc.safe import safe_log, safe_pow
@@ -95,9 +98,9 @@ def vremax_init(temp0, omega, tref, mr, prefactor, n_cells, g_groups, k_ev=K_EV,
 
 def remainder_count(mean, remainder):
     """Forward NTC carry law. Returns (new remainder, integer count)."""
-    total = mean+remainder
+    total = mean + remainder
     count = jnp.floor(total)
-    return lax.stop_gradient(total-count), lax.stop_gradient(count).astype(jnp.int32)
+    return lax.stop_gradient(total - count), lax.stop_gradient(count).astype(jnp.int32)
 
 
 def rounded_weak_derivative(mean, continuation, side="right"):
@@ -111,8 +114,8 @@ def rounded_weak_derivative(mean, continuation, side="right"):
         raise ValueError("side must be left or right")
     n = jnp.floor(mean).astype(jnp.int32)
     if side == "left":
-        n = n-jnp.asarray(mean == n, jnp.int32)
-    return continuation(n+1)-continuation(n)
+        n = n - jnp.asarray(mean == n, jnp.int32)
+    return continuation(n + 1) - continuation(n)
 
 
 def certified_majorant(state, table, sp):
@@ -123,12 +126,16 @@ def certified_majorant(state, table, sp):
     """
     cells = table.counts.shape[0]
     weight = state.alive.astype(jnp.float64)
-    mean = jax.ops.segment_sum(weight[:, None]*state.v, table.cell, cells)/jnp.maximum(table.counts[:, None], 1)
-    energy = jax.ops.segment_sum(weight*jnp.sum((state.v-mean[table.cell])**2, axis=1), table.cell, cells)
-    upper2 = jnp.maximum(2*energy, vr2_clamp(sp, 0, 0))
-    bound = sp.prefactor[0, 0]*upper2**(1-sp.omega[0, 0])
-    valid = (sp.omega[0, 0] >= .5) & (sp.omega[0, 0] <= 1.)
-    return jnp.where(valid, bound*(1+1e-12), jnp.nan)
+    mean = jax.ops.segment_sum(weight[:, None] * state.v, table.cell, cells) / jnp.maximum(
+        table.counts[:, None], 1
+    )
+    energy = jax.ops.segment_sum(
+        weight * jnp.sum((state.v - mean[table.cell]) ** 2, axis=1), table.cell, cells
+    )
+    upper2 = jnp.maximum(2 * energy, vr2_clamp(sp, 0, 0))
+    bound = sp.prefactor[0, 0] * upper2 ** (1 - sp.omega[0, 0])
+    valid = (sp.omega[0, 0] >= 0.5) & (sp.omega[0, 0] <= 1.0)
+    return jnp.where(valid, bound * (1 + 1e-12), jnp.nan)
 
 
 def attempt_count(counts, vremax, volume, dt, fnum, key):
@@ -155,7 +162,10 @@ def attempt_count(counts, vremax, volume, dt, fnum, key):
     cell* -- it is a per-cell decision, not a per-pair one (section 7.3, ``j=1``).
     """
     npc = counts.astype(jnp.float64)
-    f = 0.5 * npc * (npc - 1.0) * vremax * dt * fnum / volume
+    # a cut-cell grid has zero-volume (body) cells: no attempts there, and no 0/0
+    has_volume = volume > 0.0
+    f = 0.5 * npc * (npc - 1.0) * vremax * dt * fnum / jnp.where(has_volume, volume, 1.0)
+    f = jnp.where(has_volume, f, 0.0)
     u = random.uniform(key, npc.shape, dtype=jnp.float64)
     lower = jnp.floor(f)
     frac = f - lower
@@ -255,6 +265,25 @@ def decision_weights(k):
     return jnp.mod((jnp.arange(k, dtype=jnp.float64) + 1.0) * PHI_INV, 1.0) + 0.5
 
 
+class PairRecord(NamedTuple):
+    """What an attempt slot decided, for the ensemble adjoint's realized-pair quadrature.
+
+    Shapes ``(A_max, C)`` (``(A_max, C, 3)`` for the velocities).  ``pi``/``pj`` are
+    particle slots (``N`` = the scratch row on inactive attempts), ``accept`` the frozen
+    decision, ``vi``/``vj`` the **pre**-collision velocities the pair was drawn with --
+    the post-collision ones are the next state's.  The velocities are the partner
+    "ghosts" of section 5.1 of the branch review: the field is interpolated there.
+    """
+
+    pi: jax.Array
+    pj: jax.Array
+    accept: jax.Array
+    vi: jax.Array
+    vj: jax.Array
+    vi_post: jax.Array
+    vj_post: jax.Array
+
+
 def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
     """One attempt slot, vectorised across all cells.  Body of the section-8.4 scan.
 
@@ -324,7 +353,16 @@ def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
             + 0.125 * frame_is_well_defined(vi, vj)
         )
     )
-    return (v, logh, qmax, nviol, margin, lax.stop_gradient(chk)), None
+    record = PairRecord(
+        pi,
+        pj,
+        accept,
+        lax.stop_gradient(vi),
+        lax.stop_gradient(vj),
+        lax.stop_gradient(vi_n),
+        lax.stop_gradient(vj_n),
+    )
+    return (v, logh, qmax, nviol, margin, lax.stop_gradient(chk)), record
 
 
 def collide(  # noqa: PLR0915 -- collision stages stay together for deterministic replay
@@ -339,8 +377,10 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     step,
     base_key,
     score_mode="paper",
+    capture=False,
 ):
-    """One collision step.  Returns ``(state, cstate, diag)``.
+    """One collision step.  Returns ``(state, cstate, diag)``, plus the
+    :class:`PairRecord` of every attempt slot when ``capture`` is true.
 
     Sequential within a cell -- slot ``a+1`` sees the velocities written by slot
     ``a``, so a particle can collide twice in a step, matching both reference codes
@@ -382,7 +422,7 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     if static.count_scheme == "remainder":
         if score_mode == "trajectory":
             raise ValueError("Remainder carry has no implemented expectation-gradient correction")
-        mean = .5*table.counts*(table.counts-1)*sigma*params.dt*params.fnum/volume
+        mean = 0.5 * table.counts * (table.counts - 1) * sigma * params.dt * params.fnum / volume
         remain, n = remainder_count(mean, remainder[:, 0, 0])
         remainder = remain[:, None, None]
         logP = jnp.zeros_like(mean)
@@ -397,14 +437,11 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     k_pi, k_pr = random.split(key_for(base_key, step, STAGE_PAIR))
     k_chi, k_eps = random.split(key_for(base_key, step, STAGE_SCATTER))
     # Slot-addressed streams preserve all earlier attempts when A_max grows.
-    slots = jnp.arange(A)
-    def draw(key, fn):
-        return jax.vmap(lambda slot: fn(random.fold_in(key, slot)))(slots)
-    u_i = draw(k_pi, lambda key: random.randint(key, (C,), 0, npc_safe))
-    u_r = draw(k_pr, lambda key: random.randint(key, (C,), 0, npc_safe-1))
-    u_acc = draw(key_for(base_key, step, STAGE_ACCEPT), lambda key: random.uniform(key, (C,), dtype=jnp.float64))
-    u_chi = draw(k_chi, lambda key: random.uniform(key, (C,), dtype=jnp.float64))
-    u_eps = draw(k_eps, lambda key: random.uniform(key, (C,), dtype=jnp.float64))
+    u_i = indexed_randint(k_pi, A, (C,), npc_safe)
+    u_r = indexed_randint(k_pr, A, (C,), npc_safe - 1)
+    u_acc = indexed_uniform(key_for(base_key, step, STAGE_ACCEPT), A, (C,))
+    u_chi = indexed_uniform(k_chi, A, (C,))
+    u_eps = indexed_uniform(k_eps, A, (C,))
 
     # v and logh carry an extra SCRATCH ROW at index N (8.4.1).
     v0 = jnp.concatenate([state.v, jnp.zeros((1, 3), dtype=state.v.dtype)])
@@ -429,7 +466,7 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     )
     init = (v0, logh0, sigma, jnp.int32(0), jnp.float64(jnp.inf), jnp.float64(0.0))
     xs = (jnp.arange(A), u_i, u_r, u_acc, u_chi, u_eps)
-    (v, logh, qmax, nviol, margin, chk), _ = lax.scan(body, init, xs)
+    (v, logh, qmax, nviol, margin, chk), pairs = lax.scan(body, init, xs)
 
     # --- the COUNT score (8.1) ------------------------------------------------
     # logP is a PER-CELL term: the decision "how many pairs to attempt" applies to
@@ -456,13 +493,33 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
         inflow_injected=jnp.array(0, jnp.int32),
         inflow_shortfall=jnp.array(0.0, jnp.float64),
         count_support_boundary=jnp.sum(
-            (table.counts > 1) &
-            ((.5*table.counts*(table.counts-1)*sigma*params.dt*params.fnum/volume) > 0) &
-            (jnp.mod(.5*table.counts*(table.counts-1)*sigma*params.dt*params.fnum/volume, 1.) == 0),
-            dtype=jnp.int32),
+            (table.counts > 1)
+            & (
+                (0.5 * table.counts * (table.counts - 1) * sigma * params.dt * params.fnum / volume)
+                > 0
+            )
+            & (
+                jnp.mod(
+                    0.5
+                    * table.counts
+                    * (table.counts - 1)
+                    * sigma
+                    * params.dt
+                    * params.fnum
+                    / volume,
+                    1.0,
+                )
+                == 0
+            ),
+            dtype=jnp.int32,
+        ),
         configuration_invalid=jnp.asarray(
-            jnp.any(~jnp.isfinite(params.fnum) | (params.fnum <= 0) | (params.fnum != params.fnum[0]))
-            | jnp.any(~jnp.isfinite(sigma)), jnp.int32),
+            jnp.any(
+                ~jnp.isfinite(params.fnum) | (params.fnum <= 0) | (params.fnum != params.fnum[0])
+            )
+            | jnp.any(~jnp.isfinite(sigma)),
+            jnp.int32,
+        ),
     )
     new_state = ParticleState(
         x=state.x,
@@ -472,4 +529,6 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
         logh_acc=jnp.broadcast_to(logh, (n_part,)) if score_mode == "trajectory" else logh[:n_part],
     )
     vremax_next = jnp.maximum(cstate.vremax, qmax[:, None, None])
-    return new_state, CollideState(vremax=vremax_next, remainder=remainder), diag
+    result = (new_state, CollideState(vremax=vremax_next, remainder=remainder), diag)
+    # the per-cell majorant is what turns a virtual pair's rate into its NTC acceptance
+    return (*result, pairs, lax.stop_gradient(sigma)) if capture else result

@@ -126,3 +126,28 @@ def test_custom_terminal_reward_is_carried_to_backward(reconstruction):
     np.testing.assert_allclose(
         ei.backward(scaled, seed=5), 3 * ei.backward(ordinary, seed=5), rtol=1e-10, atol=1e-12
     )
+
+
+def test_backward_never_pairs_a_retained_state_with_itself():
+    """A self-pair is an identically zero four-term sample and biases the correction."""
+    cfg = ei.Config(
+        n_initial=64, cells=2, dt=0.025, steps=1, retained=4, source_samples=4, partners=64
+    )
+    trace = ei.forward(cfg, np.full((2, 3), 4.0), seed=3)
+    seen = {}
+    original = ei.four_term
+
+    def spy(target_gain, partner_gain, target_loss, partner_loss):
+        seen["loss"] = (np.asarray(target_loss), np.asarray(partner_loss))
+        return original(target_gain, partner_gain, target_loss, partner_loss)
+
+    ei.four_term = spy
+    try:
+        ei.backward(trace, cfg, seed=1)
+    finally:
+        ei.four_term = original
+    target_loss, partner_loss = seen["loss"]
+    # with 64 partners per target and <= 4 retained states, sampling WITH self would
+    # make target and partner losses coincide for ~1/4 of the samples
+    same = np.mean(np.isclose(target_loss, partner_loss))
+    assert same < 0.02

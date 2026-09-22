@@ -149,6 +149,33 @@ def sample_flux_normal(key: jax.Array, n: int, temp_wall, mass) -> jnp.ndarray:
     return thermal_speed(temp_wall, mass) * safe_sqrt(-2.0 * jnp.log1p(-u))
 
 
+def standard_diffuse_draws(key, n):
+    """The parameter-free randomness of one diffuse re-emission: ``(z, r)``.
+
+    ``z`` is ``f64[n, 3]`` standard normal and ``r`` is ``f64[n]`` standard Rayleigh
+    (``sqrt(-2 log(1 - u))``).  :func:`diffuse_velocity_from_draws` turns them into a
+    re-emitted velocity for any face, so a bounce pass that may hit one of ``2D``
+    faces draws once rather than once per face -- a particle hits at most one face
+    per pass, so reusing the draw across faces leaves every marginal law unchanged.
+    """
+    k_perp, k_tan = jax.random.split(key)
+    z = jax.random.normal(k_tan, (n, 3), dtype=jnp.float64)
+    u = jax.random.uniform(k_perp, (n,), dtype=jnp.float64)
+    return z, safe_sqrt(-2.0 * jnp.log1p(-u))
+
+
+def diffuse_velocity_from_draws(z, r, temp_wall, mass, axis, inward, vwall):
+    """Diffuse re-emission from standard draws; reparameterised in ``temp_wall``.
+
+    ``temp_wall`` is a scalar or three per-component temperatures ([P3] Test 3);
+    the normal component uses ``temp_wall[axis]``.
+    """
+    tangential = thermal_speed(temp_wall, mass) * z
+    normal_temp = temp_wall if jnp.ndim(temp_wall) == 0 else temp_wall[axis]
+    v_perp = inward * thermal_speed(normal_temp, mass) * r
+    return tangential.at[:, axis].set(v_perp) + vwall
+
+
 def sample_diffuse_velocity(key, n, temp_wall, mass, axis, inward, vwall):
     """Full post-wall velocity for an **axis-aligned** diffuse wall, ``f64[n, 3]``.
 
@@ -165,11 +192,8 @@ def sample_diffuse_velocity(key, n, temp_wall, mass, axis, inward, vwall):
     cross-product construction -- and its ``lensq3(tangent1) == 0`` degeneracy --
     does not arise at all.
     """
-    k_perp, k_tan = jax.random.split(key)
-    v = thermal_speed(temp_wall, mass) * jax.random.normal(k_tan, (n, 3), dtype=jnp.float64)
-    normal_temp = temp_wall if jnp.ndim(temp_wall) == 0 else temp_wall[axis]
-    v_perp = inward * sample_flux_normal(k_perp, n, normal_temp, mass)
-    return v.at[:, axis].set(v_perp) + vwall
+    z, r = standard_diffuse_draws(key, n)
+    return diffuse_velocity_from_draws(z, r, temp_wall, mass, axis, inward, vwall)
 
 
 def sample_tau(key, n: int, dt, epsilon):
@@ -241,3 +265,99 @@ def sample_inflow_velocity(key: jax.Array, temp, mass, vstream, normal) -> jnp.n
     ``while_loop``, or the M8 inflow work cannot differentiate it (section 12).
     """
     raise NotImplementedError("inflow sampling is milestone 5")
+
+
+def _tangent_frame(normal: jnp.ndarray, v_in: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Orthonormal tangents ``(t1, t2)`` of a unit ``normal``, ``f64[n, 3]`` each.
+
+    ``t1`` is the incident velocity's tangential part (SPARTA
+    ``surf_collide_diffuse.cpp:237-246``); when that vanishes (normal incidence) the
+    fallback is the perpendicular ``normal x e_k`` with ``k`` the smallest normal
+    component -- never parallel to ``normal``, so never degenerate -- chosen with
+    ``jnp.where`` rather than SPARTA's random vector, so the frame is deterministic.
+    ``t2 = normal x t1``.
+    """
+    vn = jnp.sum(v_in * normal, axis=1, keepdims=True)
+    t1 = v_in - vn * normal
+    norm1 = jnp.sqrt(jnp.sum(t1 * t1, axis=1, keepdims=True))
+    scale = jnp.sqrt(jnp.sum(v_in * v_in, axis=1, keepdims=True))
+    degenerate = norm1 <= 1e-12 * scale
+    k = jnp.argmin(jnp.abs(normal), axis=1)
+    e_k = jax.nn.one_hot(k, 3, dtype=jnp.float64)
+    alt = jnp.cross(normal, e_k)
+    alt = alt / jnp.sqrt(jnp.sum(alt * alt, axis=1, keepdims=True))
+    t1 = jnp.where(degenerate, alt, t1 / jnp.where(degenerate, 1.0, norm1))
+    return t1, jnp.cross(normal, t1)
+
+
+def _log_with_floored_derivative(vn, floor):
+    """``log(vn)`` with the exact primal and the derivative ``1 / max(vn, floor)``."""
+    den = jax.lax.stop_gradient(jnp.maximum(jnp.maximum(vn, floor), 1e-300))
+    primal = jax.lax.stop_gradient(jnp.log(jnp.maximum(vn, 1e-300)))
+    return primal + (vn - jax.lax.stop_gradient(vn)) / den
+
+
+def log_diffuse_density(v_out, normal, temp, mass, vwall, floor=0.0):
+    """Log density of the diffuse re-emission law of :func:`diffuse_velocity_general` at
+    the realised ``v_out`` (``f64[n, 3]``): the flux-weighted Maxwellian in the frame of
+    the unit ``normal`` (``f64[n, 3]``, into the flow), tangential drift ``vwall``,
+
+        q(v | n) = v_n / s^2 exp(-v_n^2 / 2 s^2) * exp(-|v_t - u|^2 / 2 s^2) / (2 pi s^2),
+        s^2 = k T / m,   v_n = v . n,   v_t = v - v_n n.
+
+    The value is frame-independent (the tangent frame of the sampler only reparameterises
+    the isotropic tangential Gaussian), so its gradients in ``temp``, ``vwall`` and
+    ``normal`` are the kernel scores of the ensemble adjoint (review section 5.3): the
+    wall parameters and -- through ``normal`` -- the shape enter a diffuse hit only here.
+    ``temp`` is a scalar or ``f64[n]``.  ``-inf`` where ``v_n <= 0``.
+
+    The normal score carries ``v_t / v_n`` from ``log v_n`` -- a Rayleigh ``v_n`` makes
+    its variance diverge logarithmically at grazing emission.  ``floor`` (scalar or
+    ``f64[n]``, ``0`` = exact) is the grazing regularisation of that term: the primal is
+    unchanged and only the derivative of ``log v_n`` is evaluated at ``max(v_n, floor)``
+    (the same cut-off as :func:`jax_dsmc.mesh.levelset.regularised_quotient` on the hit
+    time; bias ``O(floor / s)``).
+    """
+    s2 = K_BOLTZ * temp / mass
+    s2 = jnp.broadcast_to(jnp.asarray(s2), (v_out.shape[0],))
+    vn = jnp.sum(v_out * normal, axis=1)
+    vt = v_out - vn[:, None] * normal
+    tangential = jnp.sum((vt - vwall) ** 2, axis=1)
+    return jnp.where(
+        vn > 0.0,
+        _log_with_floored_derivative(vn, floor)
+        - vn**2 / (2.0 * s2)
+        - tangential / (2.0 * s2)
+        - 2.0 * jnp.log(s2)
+        - jnp.log(2.0 * jnp.pi),
+        -jnp.inf,
+    )
+
+
+def diffuse_velocity_general(z, r, normal, temp, mass, vwall, v_in):
+    """Diffuse re-emission from a surface of arbitrary unit ``normal``, ``f64[n, 3]``.
+
+    The same law as :func:`diffuse_velocity_from_draws`, written in the ``(n, t1, t2)``
+    frame of SPARTA ``surf_collide_diffuse.cpp:213-245``: the normal component is the
+    flux-weighted ``sqrt(kT/m) * r`` (``r`` standard Rayleigh), the two tangential
+    components are ``sqrt(kT/m) * z``; ``vwall`` is added afterwards and is required to
+    be tangential (see :func:`assert_tangential_wall`).  ``z, r`` are the draws of
+    :func:`standard_diffuse_draws` (``z[:, 2]`` is unused here); ``normal`` is
+    ``f64[n, 3]`` pointing into the flow, zero-padded when ``D < 3``; ``v_in`` (the
+    incident velocity) only fixes the tangent frame, see :func:`_tangent_frame`.
+    ``temp`` is a scalar (a per-axis triple has no meaning off the axes).
+    Reparameterised in ``temp`` and in ``normal``: ``d/dtemp`` and ``d/dnormal`` are
+    pathwise.  The tangential Gaussian is isotropic, so the law does not depend on the
+    frame and any smooth frame field is a valid reparameterisation; the derivative uses
+    the frame **parallel-transported** from the primal one (``t1(n) = normalise(a - (a .
+    n) n)`` with ``a`` the frozen primal ``t1``), whose derivative ``-(a . dn) n`` is
+    bounded -- the incident-velocity frame's own derivative carries ``1 / |v_t,in|`` at
+    normal incidence, a log-divergent variance for no change in the law.
+    """
+    t1, _t2 = _tangent_frame(normal, v_in)
+    a = jax.lax.stop_gradient(t1)
+    t1 = a - jnp.sum(a * normal, axis=1, keepdims=True) * normal
+    t1 = t1 / jnp.sqrt(jnp.sum(t1 * t1, axis=1, keepdims=True))
+    t2 = jnp.cross(normal, t1)
+    sigma = thermal_speed(temp, mass)
+    return sigma * (r[:, None] * normal + z[:, :1] * t1 + z[:, 1:2] * t2) + vwall

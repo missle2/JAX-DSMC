@@ -1,0 +1,22 @@
+{
+ "n": 40000,
+ "cells": 100,
+ "npc": 400.0,
+ "steps": 50,
+ "attempts": 128,
+ "npc_max": 1024,
+ "k": 32,
+ "forward_ms_per_step": 11.705159280099906,
+ "forward_capture_ms_per_step": 16.34613629998057,
+ "ensemble_backward_ms_per_step": 25.003888079954777,
+ "pathwise_vjp_ms_per_step": 60.47188277996611,
+ "backward_compile_s": 8.061833356994612,
+ "backward_temp_MB": 7.010176,
+ "backward_argument_MB": 110.880048,
+ "accepted_pairs_per_step": 452.8,
+ "max_attempts": 22,
+ "clipped": 0,
+ "lambda0_finite": true,
+ "backend": "gpu",
+ "jax": "0.6.2"
+}

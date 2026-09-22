@@ -1,0 +1,50 @@
+{
+ "estimator": "ensemble adjoint, route (b), host backward",
+ "config": {
+  "parameter": "mach",
+  "particles": 3200,
+  "cells": 80,
+  "steps": 300,
+  "attempts": 192,
+  "dt": 0.2,
+  "majorant": "certified",
+  "neighbors": 32,
+  "exact_last": false,
+  "no_collision_term": false,
+  "pullback": "virtual",
+  "substeps": 2,
+  "partners": 8,
+  "nodes": "staged",
+  "device": true,
+  "objective": "density-ratio",
+  "seed_start": 32,
+  "fd_steps": "0.1,0.05"
+ },
+ "requested_seeds": 24,
+ "complete": false,
+ "fd_steps": [
+  0.1,
+  0.05
+ ],
+ "rows": [
+  {
+   "seed": 0,
+   "objective": 2.2198952879581153,
+   "gradient": 1.7657364083881437,
+   "fd": [
+    2.5607638888888906,
+    2.142857142857144
+   ]
+  },
+  {
+   "seed": 1,
+   "objective": 2.5638297872340425,
+   "gradient": 2.6506060740493758,
+   "fd": [
+    3.0239064794038617,
+    1.8903879041233473
+   ]
+  }
+ ],
+ "elapsed": 814.7330529689789
+}

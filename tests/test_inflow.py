@@ -356,3 +356,79 @@ def test_two_sided_inflow_shock_delivers_its_upstream_state_and_conserves_mass()
     assert r["flux_ratio"] == pytest.approx(1.0, rel=0.05), (
         f"mass flux not conserved end to end: ratio {r['flux_ratio']:.4f}"
     )
+
+
+# --- newborns take the step's wall treatment (branch fix B1) -----------------------
+
+
+def _birth_case():
+    grid = GridSpec(jnp.zeros(1), jnp.ones(1), (2,))
+    n = 256
+    state = ParticleState(
+        jnp.zeros((n, 1)),
+        jnp.zeros((n, 3)),
+        jnp.zeros(n, jnp.int32),
+        jnp.zeros(n, bool),
+        jnp.zeros(n),
+    )
+    # a fast, dense reservoir into a short box, so most entrants reach the far diffuse
+    # wall within the step (dt * u_stream = 3 box lengths) and bounce off it once
+    res = inflow.InflowParams.uniform(1, 20.0, 1.0, [10.0, 0.0, 0.0])
+    wall = WallParams.uniform(1, 1.0, acc=0.5)
+    faces = Faces((BC.INFLOW, BC.DIFFUSE))
+    return state, grid, faces, res, wall, n
+
+
+def test_newborns_use_the_relaxed_accommodation_of_the_step():
+    """`acc_delta` blends the re-emitted velocity; a hard branch cannot produce a blend."""
+    state, grid, faces, res, wall, n = _birth_case()
+    key = jax.random.key(5)
+    hard, _, _ = inflow.inject(
+        state, grid, faces, res, K_BOLTZ, 1.0, 0.3, key, n, wall=wall, track=True
+    )
+    soft, _, _ = inflow.inject(
+        state, grid, faces, res, K_BOLTZ, 1.0, 0.3, key, n, wall=wall, track=True, acc_delta=0.2
+    )
+    assert int(jnp.sum(hard.alive)) > 20
+    # same births and realisation; the blend changes the re-emitted velocities (and,
+    # through them, which entrants make it back out through the inflow face)
+    assert not np.array_equal(
+        np.sort(np.asarray(hard.v[hard.alive, 1])), np.sort(np.asarray(soft.v[soft.alive, 1]))
+    )
+    # relaxed accommodation carries NO Bernoulli score; hard accommodation does
+    assert float(jnp.sum(jnp.abs(hard.logh_acc[hard.alive]))) > 0.0
+    born_score_soft = soft.logh_acc[soft.alive]
+    np.testing.assert_allclose(
+        np.asarray(born_score_soft), np.asarray(born_score_soft[0]), atol=1e-12
+    )
+
+
+def test_newborns_keep_their_birth_step_wall_score_in_paper_mode():
+    """The hard-accommodation Bernoulli score of an entrant's first wall hit is its own."""
+    state, grid, faces, res, wall, n = _birth_case()
+    key = jax.random.key(6)
+    out, _, _ = inflow.inject(
+        state, grid, faces, res, K_BOLTZ, 1.0, 0.3, key, n, wall=wall, track=True
+    )
+    scores = np.asarray(out.logh_acc[out.alive])
+    # the count score is one scalar shared by all entrants; wall hits add log(acc) or
+    # log(1-acc) = log(0.5) on top, so at least two distinct values must appear
+    assert len(np.unique(np.round(scores, 10))) >= 2
+    assert np.any(
+        np.isclose(scores - scores.min(), 0.0) | np.isclose(scores - scores.min(), -np.log(0.5))
+    )
+
+
+def test_newborn_time_regularisation_follows_epsilon():
+    """With `epsilon > 0` the entrant's travel time is random, so positions must differ."""
+    state, grid, faces, res, wall, n = _birth_case()
+    key = jax.random.key(7)
+    a, _, _ = inflow.inject(
+        state, grid, faces, res, K_BOLTZ, 1.0, 0.3, key, n, wall=wall, track=True
+    )
+    b, _, _ = inflow.inject(
+        state, grid, faces, res, K_BOLTZ, 1.0, 0.3, key, n, wall=wall, track=True, epsilon=0.02
+    )
+    assert not np.array_equal(
+        np.sort(np.asarray(a.x[a.alive, 0])), np.sort(np.asarray(b.x[b.alive, 0]))
+    )

@@ -260,13 +260,13 @@ def test_sim_params_fnum_is_per_cell_not_scalar():
 
 def test_grid_spec_splits_traced_geometry_from_static_resolution():
     g = _grid()
-    assert traced_fields(GridSpec) == ("lo", "hi", "transverse")
+    assert traced_fields(GridSpec) == ("lo", "hi", "transverse", "volume")
     assert static_fields(GridSpec) == ("n",)
     leaves, treedef = jax.tree_util.tree_flatten(g)
     # lo, hi and transverse are traced geometry; `n` is static and stays in the
     # treedef.  `transverse` carries the extent of the 3 - D suppressed directions,
     # so `cell_volume` is a true volume at every D -- see GridSpec.
-    assert len(leaves) == 3
+    assert len(leaves) == 4  # lo, hi, transverse, volume (empty unless cut cells)
     assert all(hasattr(x, "dtype") for x in leaves), "every traced leaf must be an array"
     assert GRID_N in treedef.node_data()[1]  # `n` lives in the treedef, not the leaves
     assert num_cells_of(g.n) == C
@@ -391,7 +391,7 @@ def test_check_fnum_uniform_rejects_a_non_uniform_multi_cell_field():
 def test_containers_nest_into_a_single_pytree():
     bundle = (_particle_state(), _collide_state(), _cell_table(), _params(), _grid())
     leaves, treedef = jax.tree_util.tree_flatten(bundle)
-    assert len(leaves) == 5 + 2 + 4 + 3 + 3  # GridSpec carries lo, hi AND transverse
+    assert len(leaves) == 5 + 2 + 4 + 4 + 3  # GridSpec carries lo, hi, transverse, volume
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
     assert rebuilt[4].n == GRID_N
     doubled = jax.jit(_identity)(bundle)

@@ -7,6 +7,14 @@ machinery M2 has; inflow and walls arrive with M4/M5.
 python3 -m examples.shock --dims 1 2 3 --plot        # sine steepening, all dimensions
 ```
 
+> **Provenance (2026-09-15).** `figures/shock_d{1,2,3}.png`, the Bird normal-shock
+> figures and `figures/inflow_driven.png` were regenerated on the branch (logs
+> `scratch/bench/refresh_shock_steepening.log`, `refresh_shock_bird.log`,
+> `examples/shock/results/inflow_driven.log`) because the branch's per-slot NTC streams
+> changed every forward realisation; the M2 gate (D=2 vs D=1 rms 2.37 %, D=3 vs D=1
+> 2.18 %, expected ~2.0 %), the Bird thickness and the RH ratios are unchanged within
+> their Monte Carlo scatter.
+
 ## 1. Sine steepening — the cross-dimensional gate
 
 `u_x(x, 0) = U0 sin(2πx/L)`, uniform in the other directions. Fast fluid overtakes slow, the

@@ -247,6 +247,19 @@ class Diagnostics:
     """Positive integer count means: ordinary two-sided score derivative is unsupported."""
     configuration_invalid: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
     """Invalid traced weights or certified-bound inputs; checked before reporting."""
+    surface_hits: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` embedded-surface (element / analytic body) hits resolved this step."""
+    stencil_overrun: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` particles whose remaining move exceeded the stencil tracker's dilation
+    (``|v| * remaining > radius * h``): an element outside the candidate list could have
+    been missed.  Must be zero; raise the stencil radius or use ``tracker="walk"``."""
+    walk_exhausted: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` particles the cell-walk tracker could not finish within ``K_walk``
+    iterations (cell crossings plus surface hits); the remainder of their move was
+    dropped.  Must be zero; raise ``K_walk``."""
+    inside_body: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` particles found inside the body after the move and killed (the catch-all
+    of SPARTA's tracking: a missed hit).  Must be zero."""
 
 
 # --- parameters -----------------------------------------------------------
@@ -296,6 +309,13 @@ class GridSpec:
     hi: jax.Array
     n: tuple[int, ...] = static_field()
     transverse: jax.Array = dataclasses.field(default_factory=lambda: jnp.float64(1.0))
+    volume: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(0, jnp.float64))
+    """``f64[C]`` per-cell **flow** volume, or the empty ``f64[0]`` for the uniform
+    ``prod(dx) * transverse``.  Set by :func:`jax_dsmc.mesh.cut.with_volume` for
+    cut-cell grids (``Mesh.volume``); :func:`jax_dsmc.grid.cell_volume` returns it when
+    its (static) length is ``C``, so the NTC attempt count, the moment normalisation and
+    the initial fill see the cut volumes without any other change.  An empty array
+    rather than ``None`` keeps the invariant that every traced leaf is an f64 array."""
 
 
 @register_dataclass
@@ -422,11 +442,21 @@ class SimStatic:
     checkpoint_block_size: int = 0
     count_scheme: str = "stochastic"
     majorant_mode: str = "thermal"
+    tracker: str = "stencil"
+    """Embedded-surface tracker: ``"stencil"`` (per-cell candidate lists, ``K_bounce``
+    passes) or ``"walk"`` (SPARTA's cell walk, ``K_walk`` iterations).  Ignored without a
+    mesh."""
+    K_walk: int = 8
+    """Trip count of the cell walk: cell crossings plus surface hits per particle per step."""
 
     def __post_init__(self) -> None:
         """Reject values that would produce a wrong shape rather than an error."""
         if not isinstance(self.checkpoint_block_size, int) or self.checkpoint_block_size < 0:
             raise ValueError("checkpoint_block_size must be a nonnegative integer")
+        if self.tracker not in ("stencil", "walk"):
+            raise ValueError("tracker must be stencil or walk")
+        if not isinstance(self.K_walk, int) or isinstance(self.K_walk, bool) or self.K_walk < 1:
+            raise ValueError(f"K_walk must be a positive Python int; got {self.K_walk!r}")
         if self.count_scheme not in ("stochastic", "remainder"):
             raise ValueError("count_scheme must be stochastic or remainder")
         if self.majorant_mode not in ("thermal", "certified"):

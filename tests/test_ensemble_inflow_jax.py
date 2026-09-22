@@ -109,3 +109,17 @@ def test_custom_reward_is_carried_and_configuration_mismatch_rejected():
     np.testing.assert_array_equal(a, b)
     with pytest.raises(ValueError, match="configuration"):
         device.backward(tr, replace(cfg, dt=0.1), jax.random.key(2))
+
+
+def test_partner_ranks_exclude_self_and_stay_valid():
+    n = jnp.array([4, 3, 1])
+    u = jax.random.uniform(jax.random.key(0), (3, 4, 4096), dtype=jnp.float64)
+    ids = device.partner_indices(n, u)
+    own = jnp.arange(4)[None, :, None]
+    valid = (jnp.arange(4)[None, :] < n[:, None])[..., None]
+    pairable = (n >= 2)[:, None, None]
+    assert not bool(jnp.any((ids == own) & valid & pairable))
+    assert bool(jnp.all((ids < n[:, None, None]) | ~valid))
+    # every other rank is equally likely: rank 0 of a 4-cell sees 1,2,3 at ~1/3 each
+    hist = jnp.bincount(ids[0, 0], length=4) / 4096
+    np.testing.assert_allclose(np.asarray(hist), [0, 1 / 3, 1 / 3, 1 / 3], atol=0.03)

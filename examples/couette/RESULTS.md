@@ -20,10 +20,10 @@ sweep's intercept and leaving its slope alone.
 | term | value |
 |---|---|
 | `Kn -> 0` intercept (at `dx/lambda = 0.30`) | 0.9971 ± 0.0095 |
-| cell-size correction (`dx -> 0`) | +0.0135 ± 0.0039 |
-| **`mu_meas/mu_CE`** | **1.0105 ± 0.0103** |
+| cell-size correction (`dx -> 0`) | +0.0133 ± 0.0039 |
+| **`mu_meas/mu_CE`** | **1.0104 ± 0.0103** |
 
-**+1.05 % from Chapman-Enskog, `|t| = 1.03`: consistent.**
+**+1.04 % from Chapman-Enskog, `|t| = 1.01`: consistent.**
 
 ## The gate: Chapman-Enskog as `Kn -> 0`
 
@@ -66,10 +66,10 @@ it spans 5.0 % over a 4x range, and the two
 finest points differ by +0.0101 ± 0.0039
 (`|z| = 2.58`) -- a real resolution dependence, not scatter.
 
-`O(dx^2)` describes it (residual +0.0028 at the coarsest
-point against -0.0174 for `O(dx)`) and extrapolates
-to **0.9863 as `dx -> 0`**, so the gate's own
-`dx/lambda = 0.30` sits +1.35 % low from
+`O(dx^2)` describes it (residual +0.0020 at the coarsest
+point against -0.0154 for `O(dx)`) and extrapolates
+to **0.9861 as `dx -> 0`**, so the gate's own
+`dx/lambda = 0.30` sits +1.33 % low from
 resolution alone.
 
 This **corrects an earlier reading of this study as flat**, which came from
@@ -106,12 +106,3 @@ Shear rate spread across `D = 1, 2, 3`: **0.2 %**.
 | D=2 | 24,000 | 3 | 9.2197e+03 ± 2.7e+01 | 16.2 | 0 |
 | D=3 | 32,000 | 3 | 9.2654e+03 ± 1.6e+01 | 16.3 | 0 |
 
-## Figures
-
-- `figures/knudsen.png`
-- `figures/knudsen_profiles.png`
-- `figures/convergence.png`
-- `figures/profiles.png`
-- `figures/wall_treatments.png`
-- `figures/wall_profiles.png`
-- `figures/dimensions.png`

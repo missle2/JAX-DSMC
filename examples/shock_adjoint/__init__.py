@@ -337,7 +337,7 @@ def _phi(cs: Case, lam):
     )
 
 
-def evaluate(theta, cs: Case, base_key, scored=True, baseline=None):
+def evaluate(theta, cs: Case, base_key, scored=True, baseline=None, score_mode="paper"):
     """``J`` at one parameter point and one base key.  Returns ``(J, diag)``.
 
     ``scored`` picks which gradient this carries -- :func:`jax_dsmc.adjoint.surrogate`
@@ -345,6 +345,11 @@ def evaluate(theta, cs: Case, base_key, scored=True, baseline=None):
     :func:`jax_dsmc.adjoint.objective` (pathwise only).  **The value is identical
     either way**, which is what makes the comparison fair: both modes difference
     the same numbers.
+
+    ``score_mode`` is pinned to ``"paper"`` (terminal-label attribution) because every
+    number in ``VARIANCE.md`` and the README was produced with it; the library's
+    :func:`terminal_objective` default moved to ``"trajectory"`` and this example must
+    not follow that silently.  Pass ``"trajectory"`` explicitly to compare estimators.
     """
     flow, sp, grid, params, static, lam = build(theta, cs)
     state = initial_state(base_key, flow, grid, sp, static)
@@ -372,6 +377,7 @@ def evaluate(theta, cs: Case, base_key, scored=True, baseline=None):
         bc=BC.SPECULAR,
         baseline=baseline,
         scored=scored,
+        score_mode=score_mode,
     )
     return j, diag
 

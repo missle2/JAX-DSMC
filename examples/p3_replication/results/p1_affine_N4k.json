@@ -1,0 +1,68 @@
+{
+  "backend": "jax gpu",
+  "config": {
+    "n_initial": 4000,
+    "cells": 40,
+    "dt": 0.025,
+    "steps": 20,
+    "retained": 512,
+    "source_samples": 1995,
+    "partners": 8,
+    "neighbors": 32,
+    "q0": 1.0,
+    "source_density": 1000.0,
+    "initial_std": 1.0,
+    "reconstruction": "affine"
+  },
+  "seeds": 8,
+  "fd_step": 0.1,
+  "injection_counts": [
+    1995,
+    1995
+  ],
+  "normalization": 83800,
+  "adjoint_normal_temperature": {
+    "mean": [
+      0.17870680991479346,
+      0.17783198210340886
+    ],
+    "se": [
+      0.0015525297992002537,
+      0.001634345467609156
+    ]
+  },
+  "finite_difference_normal_temperature": {
+    "mean": [
+      0.1446357842633289,
+      0.18042692308656516
+    ],
+    "se": [
+      0.0326754381705062,
+      0.026436021885708184
+    ]
+  },
+  "paired_difference": {
+    "mean": [
+      0.03407102565146457,
+      -0.002594940983156265
+    ],
+    "se": [
+      0.03333217903661185,
+      0.02639797038013365
+    ]
+  },
+  "objective": {
+    "mean": 3.200233877694447,
+    "se": 0.007869956291241702
+  },
+  "final_population": {
+    "mean": 65174.125,
+    "se": 45.39919661812782
+  },
+  "paper_adjoint_mean": [
+    0.15171883,
+    0.15157001
+  ],
+  "paper_resolution_reproduced": false,
+  "elapsed_seconds": 1884.2117328250006
+}

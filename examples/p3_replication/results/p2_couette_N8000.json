@@ -1,0 +1,48 @@
+{
+  "backend": "gpu",
+  "config": {
+    "particles": 8000,
+    "cells": 20,
+    "dt": 0.05,
+    "steps": 10,
+    "epsilon": 0.005,
+    "initial_std": 1.0,
+    "observable": "couette",
+    "score_mode": "paper",
+    "localize": true
+  },
+  "seeds": 32,
+  "fd_step": 0.05,
+  "adjoint": {
+    "mean": [
+      3.0108423168278913
+    ],
+    "se": [
+      0.01434657286061713
+    ]
+  },
+  "deterministic_fd": {
+    "mean": [
+      3.086821640979905
+    ],
+    "se": [
+      0.06385183205699639
+    ]
+  },
+  "regularized_fd": {
+    "mean": [
+      2.9877761085752788
+    ],
+    "se": [
+      0.06353032395731922
+    ]
+  },
+  "objective": {
+    "mean": 6.945389057755106,
+    "se": 0.015608671561566558
+  },
+  "paper_resolution_reproduced": false,
+  "regularization": "paper proximity cutoff",
+  "paper_couette_adjoint": 3.0283,
+  "paper_couette_fd": 3.0011
+}

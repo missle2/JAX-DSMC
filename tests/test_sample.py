@@ -340,12 +340,14 @@ def test_accumulator_averages_sums_once():
         m = sample.moments(state, build_table(state, grid), grid, _params(grid, 1.0), _species())
         acc = sample.accumulate(acc, m)
     pooled = jax.tree.map(lambda *a: jnp.concatenate(a), *states)
-    expected = sample.moments(pooled, build_table(pooled, grid), grid, _params(grid, 1.0), _species())
+    expected = sample.moments(
+        pooled, build_table(pooled, grid), grid, _params(grid, 1.0), _species()
+    )
     avg = sample.finalize(acc)
     np.testing.assert_allclose(avg.temp, expected.temp, rtol=1e-12)
     np.testing.assert_allclose(avg.u, expected.u, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(avg.P, expected.P/5, rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(avg.q, expected.q/5, rtol=1e-11, atol=1e-12)
+    np.testing.assert_allclose(avg.P, expected.P / 5, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(avg.q, expected.q / 5, rtol=1e-11, atol=1e-12)
 
 
 def test_empty_accumulator_finalizes_to_zero():

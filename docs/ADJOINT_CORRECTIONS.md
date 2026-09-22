@@ -3,7 +3,10 @@
 P3 source: [arXiv 2603.20946v2](../papers_reference/arXiv-2603.20946v2/main.tex), especially `MC_collision_adjoint_inflow`, `sampled_left_score_gradient_inflow`, and numerical Tests 1, 3 and 4.
 
 This document supersedes adjoint-validity claims in the historical PSEUDOCODE,
-PLAN, HANDOFF and ATTRIBUTION documents where they conflict. The review is
+PLAN, HANDOFF and ATTRIBUTION documents where they conflict. It was itself
+reviewed and benchmarked in [ADJOINT_BRANCH_REVIEW.md](ADJOINT_BRANCH_REVIEW.md),
+which records the defects found (and fixed) and the measured estimator variances;
+where the two disagree, the review is the later document. The review is
 [REVIEW_2026-09-14.md](REVIEW_2026-09-14.md); this file describes implemented changes and their limits.
 
 ## Isolation and review
@@ -116,8 +119,15 @@ not a substitute for complete trajectory likelihood.
 
 ### P3 inflow
 
-`ensemble_inflow` replaces trajectory AD as the supported P3 inlet-gradient
-method. It implements the local Maxwell model in the paper's inflow section:
+> **Superseded 2026-09-15** ([ADJOINT_BRANCH_REVIEW.md](ADJOINT_BRANCH_REVIEW.md) §5): the
+> production inlet gradient is the particle-carried ensemble adjoint of the *actual*
+> solver (`simulate.run(capture=True)` + `jax_dsmc/ensemble_backward.py`), validated
+> against finite differences for reservoir temperature and density.  `ensemble_inflow`
+> below remains the reference transcription of P3's own Maxwell model; its affine
+> reconstruction carries a measured Jensen bias, and the paper's Test-3 value is not a
+> target for it (review §4.12).
+
+`ensemble_inflow` implements the local Maxwell model in the paper's inflow section:
 
 - Full forward population, exact cell counts, unbiased rounded disjoint pairs,
   collision then absorbing transport then source injection.

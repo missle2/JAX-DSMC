@@ -21,6 +21,19 @@ file hardcoded a viscosity ratio from one run, that run was later shown to be a 
 draw of a noisy quantity, and the stale number outlived it. The logs are the source of
 truth and the report regenerates from them.
 
+## Provenance on the `fix/paper-adjoints` branch (2026-09-16)
+
+The branch changed every forward random stream (per-slot NTC streams, quantile inflow
+sampling) and rebuilt the diffuse-wall path (chronological tracker, per-bounce records),
+so which logs were produced by which code matters:
+
+| log / figure | produced by | note |
+|---|---|---|
+| `results/gate.log`, `figures/profiles.png` | **branch** (F1 gate, `scratch/bench/F1_couette_gate.log`) | `mu/mu_CE` 0.9656 ± 0.0061 vs main 0.9747 ± 0.0030 at the same `dx/λ = 0.30`: within the combined scatter |
+| `results/gradients.log`, `figures/gradients.png` | **branch** (`python3 -m examples.couette.gradients --seeds 512 --horizon-seeds 128`, 2026-09-15) | M7 pathwise `du/du_wall`, `dT/dT_wall`: worst |z| 2.3 over 12 slabs, 512 seeds; the seeds are now vmapped in batches of 64 (`SEED_BATCH`) because the tracker's per-bounce reverse-pass records no longer fit a 4 GB device at once |
+| `results/gradient_scaling.log`, `figures/gradient_scaling.png` | **branch** (2026-09-15) | |
+| `results/knudsen.log`, `converge.log`, `dims.log`, `walls.log` and their figures | **pre-branch** (`generated=2026-09-09/10`, main tree) | many-hour viscosity studies; the F1 gate above re-establishes the same physics on the branch at one configuration, so these were not re-run.  Their numbers are statistically equivalent, not bit-reproducible, from this branch |
+
 ## How the gate is defined, and why it took three tries to define it correctly
 
 `mu = -tau_ns / (du_s/dn)` measured in the bulk, against Bird 4.64 at the bulk

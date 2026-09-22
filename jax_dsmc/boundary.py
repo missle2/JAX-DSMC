@@ -186,14 +186,35 @@ class WallParams:
     acc: jax.Array
 
     @classmethod
-    def uniform(cls, dim: int, temp: float, acc: float = 1.0) -> WallParams:
-        """Every face the same, at rest."""
-        n = 2 * dim
+    def uniform(cls, dim: int, temp: float, acc: float = 1.0, n_models: int = 0) -> WallParams:
+        """Every face the same, at rest.  ``n_models`` extra rows for embedded surfaces.
+
+        Rows ``0 .. 2D - 1`` are the box faces; row ``2D + m`` is surface model ``m`` --
+        the ``diffuse T acc`` law of every element with ``Surface.model == m`` (an
+        analytic body is model 0).  ``acc = 0`` makes a model specular, exactly as
+        SPARTA's ``surf_collide ... diffuse T 0.0``.
+        """
+        n = 2 * dim + n_models
         return cls(
             temp=jnp.full((n,), temp, dtype=jnp.float64),
             vwall=jnp.zeros((n, 3), dtype=jnp.float64),
             acc=jnp.full((n,), acc, dtype=jnp.float64),
         )
+
+    def with_model(self, dim: int, model: int, temp=None, acc=None, vwall=None) -> WallParams:
+        """Set the ``diffuse T acc`` law (and tangential drift) of surface model ``model``."""
+        row = 2 * dim + model
+        if row >= self.acc.shape[0]:
+            raise ValueError(f"WallParams has no row for surface model {model} (D = {dim})")
+        out = self
+        if temp is not None:
+            out = dataclasses.replace(out, temp=out.temp.at[row].set(temp))
+        if acc is not None:
+            out = dataclasses.replace(out, acc=out.acc.at[row].set(acc))
+        if vwall is not None:
+            vwall = jnp.asarray(vwall, dtype=jnp.float64)
+            out = dataclasses.replace(out, vwall=out.vwall.at[row].set(vwall))
+        return out
 
     def with_wall_velocity(self, axis: int, side: int, vwall) -> WallParams:
         """Set one face sliding.  Checks the tangency restriction eagerly."""
@@ -277,15 +298,23 @@ def _diffuse_velocity(v, wall, mass, axis, side, key, delta=0.0):
     sensitivity lives in this score.  Without it ``dJ/d(acc)`` reads exactly 0.0, which
     is a plausible-looking wrong answer rather than an obvious failure.
     """
-    f = 2 * axis + side
-    inward = 1.0 if side == 0 else -1.0
     n = v.shape[0]
     k_new, k_acc = jax.random.split(key)
-    fresh = sampling.sample_diffuse_velocity(
-        k_new, n, wall.temp[f], mass, axis, inward, wall.vwall[f]
+    z, r = sampling.standard_diffuse_draws(k_new, n)
+    u = jax.random.uniform(k_acc, (n,), dtype=jnp.float64)
+    return diffuse_from_draws(v, wall, mass, axis, side, (z, r, u), delta)
+
+
+def diffuse_from_draws(v, wall, mass, axis, side, draws, delta=0.0):
+    """:func:`_diffuse_velocity` on pre-drawn ``(z, r, u)`` -- see
+    :func:`sampling.standard_diffuse_draws` for why a bounce pass draws once."""
+    f = 2 * axis + side
+    inward = 1.0 if side == 0 else -1.0
+    z, r, u = draws
+    fresh = sampling.diffuse_velocity_from_draws(
+        z, r, wall.temp[f], mass, axis, inward, wall.vwall[f]
     )
     # `surf_collide_diffuse.cpp:211` -- `random->uniform() > acc` takes the specular branch
-    u = jax.random.uniform(k_acc, (n,), dtype=jnp.float64)
     took_diffuse = u <= wall.acc[f]
     v_spec = v.at[:, axis].multiply(-1.0)
     # `delta > 0` relaxes the Bernoulli threshold into a smooth blend, which makes `acc`
@@ -516,6 +545,12 @@ def apply_faces(
     score_spread="particle",
     acc_delta=0.0,
     max_bounces=4,
+    return_events=False,
+    mesh=None,
+    tracker="stencil",
+    max_walk=8,
+    return_tallies=False,
+    trace=False,
 ):
     """Advance one step under per-face rules, closed form.
 
@@ -546,18 +581,46 @@ def apply_faces(
     production timestep.
     """
     D = x_old.shape[-1]
-    if BC.DIFFUSE in faces.bcs:
-        # Lazy import breaks the boundary dispatch import cycle.
+    if BC.DIFFUSE in faces.bcs or mesh is not None:
+        # Lazy import breaks the boundary dispatch import cycle.  An embedded surface
+        # (`mesh`) always takes the chronological tracker; the fourth element is then a
+        # `wall_adjoint.TrackerCounts`.
         from jax_dsmc.wall_adjoint import advance  # noqa: PLC0415
 
         result = advance(
-            x_old, v, alive, grid, faces, wall, mass, dt, key, epsilon=epsilon, acc_delta=acc_delta, max_bounces=max_bounces
+            x_old,
+            v,
+            alive,
+            grid,
+            faces,
+            wall,
+            mass,
+            dt,
+            key,
+            epsilon=epsilon,
+            acc_delta=acc_delta,
+            max_bounces=max_bounces,
+            return_events=return_events,
+            mesh=mesh,
+            tracker=tracker,
+            max_walk=max_walk,
+            return_tallies=return_tallies,
+            trace=trace,
         )
         if score_spread == "cell":
-            return (*result[:4], spread_score_over_cell(result[4], x_old, alive, grid))
-        if score_spread != "particle":
+            result = (
+                *result[:4],
+                spread_score_over_cell(result[4], x_old, alive, grid),
+                *result[5:],
+            )
+        elif score_spread != "particle":
             raise ValueError("score_spread must be particle or cell")
         return result
+    if return_events or return_tallies:
+        raise ValueError(
+            "Wall events and surface tallies come from the chronological tracker "
+            "(DIFFUSE faces or an embedded surface) only"
+        )
     keys = jax.random.split(key, 2 * D + 3)
     # [P3] section 4: the regularised step.  `epsilon == 0` gives `tau == dt` exactly.
     tau = sampling.sample_tau(keys[2 * D + 2], x_old.shape[0], dt, epsilon)

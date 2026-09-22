@@ -21,7 +21,13 @@ def validate_inputs(sp, params, static):
 
 def require_valid(diagnostics, migration=None, *, gradients=False):
     failures = {}
-    for name in ("attempts_clipped", "majorant_violations", "wall_recrossed", "inflow_shortfall", "configuration_invalid"):
+    for name in (
+        "attempts_clipped",
+        "majorant_violations",
+        "wall_recrossed",
+        "inflow_shortfall",
+        "configuration_invalid",
+    ):
         value = np.asarray(getattr(diagnostics, name))
         if not np.isfinite(value).all() or np.any(value != 0):
             failures[name] = float(np.sum(value))

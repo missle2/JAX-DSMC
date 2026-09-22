@@ -506,6 +506,121 @@ what cut cells need; and freshly injected inflow parcels get a randomized `stepF
 their first move (`dsmcFreeStreamInflowPatch.C`), a deliberate anti-pileup measure that prevents
 an artificial density spike on the inflow face.
 
+
+**Status 2026-09-16 — in progress on `fix/paper-adjoints` (`jax_dsmc/mesh/`).** The
+embedded-surface layer is being built exactly as settled above: the Cartesian grid stays,
+the body is a `Surface` (SPARTA line/triangle files, normals into the flow) or an
+`AnalyticBody`, overlapped cells are cut (per-cell flow volume, candidate-element tables),
+and two trackers share one event routine — the dilated-stencil earliest-hit loop and
+SPARTA's cell-by-cell walk (`update.cpp:879-1547`) as the robust reference. Split cells are
+detected and refused (convex bodies only for now). The plan, gates and figure list are in
+`docs/ADJOINT_BRANCH_REVIEW.md` §7 once the phases land.
+
+**Status 2026-09-17 — phases A (geometry) and B (forward) built; gates in
+`examples/mesh/` (see its README).** Geometry: cell counts, cut-cell set and per-cell flow
+volumes match SPARTA's dumps (max error 1.3e-3 of a cell at `sub = 32`, 4.7e-5 at 3-D
+`sub = 16`), candidate lists equal a brute-force clip.  Forward: both trackers, element
+models, tallies, `.vtp` output; the argon circle duplicate reproduces SPARTA's fill curve,
+surface-collision rate (139 vs 140.5 per step), total drag (+0.3 %, |z| = 1.4) and fields
+(4 seeds each); the SPARTA `compute grid temp` is un-centred.
+
+**Status 2026-09-18 — phase C (mesh-aware adjoint) built** (PSEUDOCODE §9.7, review
+§7.6): value-form rewards in the device backward, `grad_x` from the fit, the traced
+replay of the wall map and its VJP w.r.t. the geometry (`jax_dsmc/shape.py`), the diffuse
+normal score, the hit-timing band term.  G1 and G2 pass (|z| ≤ 0.8).  G3 (embedded plane
+translation) exposed and fixed two estimator defects (the timing jump of velocity-
+dependent step rewards; the bias of a two-sided fit next to a wall) and one open problem:
+the variance of the fitted-`∇_xλ` term on translation-type controls (unbiased, per-seed sd
+several times the CRN FD's).
+
+**Status 2026-09-20 — phase D measured; open issue.** Analytic circle radius
+(`examples/ensemble_mesh.py`): estimator 1.44 ± 0.09 e-20 vs CRN FD 1.40 ± 0.01 e-20 (48
+seeds, z 0.5), tally term 1.28 ≈ `F/r` 1.23; `centre_x` consistent with zero.  Four `∇_xλ`
+estimators (one-sided, pooled, along-flight, pooled + along-flight; review §7.6 item 5)
+compared on the plane and the circle: none resolves the x/v-part of a translated flat
+wall (exact +0.003 on the shear probe; pooled / along read 0; one-sided consistent at 3×
+the noise), and the circle variants spread by 2–7 % of the total through the x-part.
+**Decision: shape controls restricted to normal displacements of curved surfaces**
+(radius-type; the exact tally term carries the gradient) until the translation-type
+x/v-part is resolved — recorded options: replica evaluation at the displaced state
+(collisionless only), the ε timing score (4–8× the FD sd), or a different estimator.
+First optimisation case to demonstrate feasibility: circle → airfoil-like shape (and
+the sphere analogue) by normal displacements only.
+
+**Representation decision (2026-09-20): level set.** Shape optimisation deforms a C1
+level set (`jax_dsmc/mesh/levelset.py`, uniform cubic B-spline coefficients on a finer
+grid, single surface id like the analytic body), not the 50-point polygon: the polygon's
+vertex edge-band term is representation-induced and vanishes on a C1 surface, so the
+pathwise VJP is complete for specular walls; only the diffuse silhouette term (physics)
+survives, in φ-form.  Density/porous representations rejected (intermediate densities
+have no kinetic meaning for an impermeable wall).  Gates: LS0 geometry (CPU), LS1 forward
+vs the analytic circle, LS2 `dJ/dcoef · (∂φ/∂r = −1)` vs the analytic radius gradient;
+then `examples/mesh/optimize.py` (H1-smoothed gradient, area constraint, CRN line search,
+periodic reinitialisation).  The vertex edge-band score is not built.
+
+**Status 2026-09-20 (evening) — phase E built and gated (review §7.7).**
+`jax_dsmc/mesh/levelset.py` (`LevelSet` = third `Mesh.kind`; hit search = sampled
+bracket + bisection + Newton step with the search under `stop_gradient`; host tables by
+the coefficient-sign test; `from_analytic`, `from_surface`, `reinitialise`,
+`body_volume`), wired into `geometry.first_hit / surface_normal / inside_polygon /
+stencil_sufficient / nearest_normal`, `walk.py`, `wall_adjoint` (the remaining budget
+now reaches `first_hit`), `cut.py`, `shape.geometry / with_geometry`.  LS0: 20 CPU tests
+(`tests/test_mesh_levelset.py`) + `geometry_checks.py` (`h⁴` convergence, tunnelling only
+below one sample spacing).  LS1/LS2 (`ensemble_mesh --body levelset`, 4 seeds, CRN):
+objective / hits / FD identical to the analytic run (2e-6 / 0 / 1e-4); gradient per
+estimator variant identical on 3 of 4 seeds (1e-4), 4 % apart on one seed through a
+near-grazing hit's `1/(v·n)` derivative (the pathwise estimator's heavy tail, measured
+by `scratch/mesh/probe_grazing_tally.py`).  `mode2` (`cos 2θ` normal displacement, 4 seeds):
+ensemble −1.587 ± 0.030 e-20 vs CRN FD −1.617 ± 0.029 / −1.571 ± 0.059 e-20, z = +0.7 /
+−0.2, per-seed sd 3.8 % (the radius: 45 % — a zero-mean mode leaves the exact tally
+term dominant).  First optimisation (`examples/mesh/optimize.py`, 8 iterates × 2 CRN
+seeds, 55 min): drag −7.4 % at area constant to 1e-11, monotone, `figures/
+optimize_circle.png`; resumable.  Grazing heavy tail of the tally term measured
+(one hit at `|v·n|/|v| = 3e-3` = 15 % of a window's tally sum).  Not yet: Kn 0.5 (G4/G5).
+
+**Status 2026-09-21 (later) — the two remaining terms (review §7.8).**  Grazing
+regularisation of the hit-time derivative (`grazing = eps` on both bodies, tangent only):
+the tally term's seed sd 8.4 % → 2.9 % at eps = 0.1 with bias < 2 %; default 0.05.
+Silhouette band term for diffuse walls (`shape.silhouette_cotangent`, one passing per
+trajectory, virtual outcomes valued from the leaving population) with the GP capsule
+plate case (`--case plate --acc 1 --parameter width`): at `h_φ = 0.125` 80 % of the FD (the
+three-knot cap under-resolves the score term); at `h_φ = 0.0625` with the cut-off,
+1.274 ± 0.159 vs FD 1.336 ± 0.060 e-20, z = −0.4 (4 seeds), silhouette = `2Φ_tip` and
+score + x = `2(Φ_flat − Φ_tip)` as the capsule reference requires.  The score term's
+44 % seed sd is the emission-side `v_t / v_n` tail of the normal score, now floored by
+the same `grazing` (shipped as the **hybrid** normal term: the
+hit's own reward pathwise through the reparameterised sample (parallel-transported
+frame), the value-to-go after the hit on the score — normal-term seed sd 3.1 → 0.77
+e-21 at no bias; GP 1.191 ± 0.068 vs FD 1.169 ± 0.096 (h = 0.05, z = +0.2) e-20).
+The sphere gradient, the finer circle (48 k particles, 40 × 40, `h_φ = 0.0625`) and
+the seeds × {GD, Adam} optimiser study are set up for CURC Alpine
+(`examples/mesh/cluster/`: `check_env.sbatch`, then `submit_curc.sh sphere|mode2|opt` —
+one right-sized job per seed for the gradients, one per (S, optimiser) with the S seeds
+of an iterate on min(S, 3) GPUs (`optimize.py --workers`) — then `collect.py`), not run
+here.  The A100 partition with a CUDA venv: the MI100 `jax` module is 0.4.7, the code
+needs ≥ 0.4.36.  Neither the diffuse circle nor the specular capsule gates them (all
+cluster bodies are specular and curved everywhere).
+
+**Further note — hierarchical (multi-level) grids, deliberately not built yet.** SPARTA
+refines parent cells into child grids (`create_grid ... level`, `adapt_grid`), which is
+what makes resolution near a body and later mesh adaptation affordable. It is notable work
+here and not needed for the first shape gradients, so it is deferred; but every new table of
+`jax_dsmc.mesh` is laid out **per leaf cell** (`cell_type[C]`, `volume[C]`, `candidates[C, S]`,
+`csurfs[C, S]`, `outside_corner[C]`, per-cell `h` read through `grid.cell_bounds`), never by
+`grid.n` arithmetic, so the extension is confined to:
+
+| touch point | change for a two-level grid |
+|---|---|
+| `grid.cell_of` | static-depth descent: coarse `floor` → `child_offset[c0]` (−1 if unrefined) → child `floor`; leaf ids are a flat range |
+| `grid.cell_bounds` / `cell_volume` | per-leaf `lo[C], hi[C]` tables instead of `unravel_index` |
+| `output.write_vtr` | `.vtu`, or one `.vtr` per level |
+| `viz.field_to_grid` | rasterise leaves onto the finest level |
+| `decomp.slab_of`, `sub_grid` | slabs by coordinate, leaf ranges per slab |
+| `ensemble_backward` / `ensemble_device` fit metric `scale = dx` | per-query cell `h` |
+| stencil sufficient test `|v| dt ≤ R h` | per-cell `h` (already read from `cell_bounds`) |
+
+Nothing in `sort`, `collide`, `sample`, `inflow` or the trackers needs to change.
+
 ---
 
 ## Phase 6 — M6: the pathwise + score adjoint

@@ -76,6 +76,7 @@ N_SLAB = 6  # coarse bins: the gradient profile needs samples per bin, not resol
 #: enough that chaotic amplification has not yet destroyed the pathwise derivative.
 HORIZON = 200
 SEEDS = 512
+SEED_BATCH = 64
 HORIZONS = (10, 25, 50, 100, 200, 400, 800)
 
 
@@ -166,8 +167,11 @@ def measure(case=CASE, n_slab=N_SLAB, seeds=SEEDS, n_steps=None):
         )(theta)
 
     keys = jax.random.split(jax.random.PRNGKey(0), seeds)
-    out = jax.jit(jax.vmap(jac))(keys)
-    got = {k: np.asarray(v) for k, v in out.items()}
+    # the branch's wall tracker keeps per-bounce records in the reverse pass, so the
+    # 512-seed vmap no longer fits a 4 GB device at once: run it in batches of seeds
+    batched = jax.jit(jax.vmap(jac))
+    parts = [batched(keys[i : i + SEED_BATCH]) for i in range(0, seeds, SEED_BATCH)]
+    got = {k: np.concatenate([np.asarray(p[k]) for p in parts]) for k in parts[0]}
     return {
         "du_dwall": got["u_wall"][:, :n_slab],
         "dT_dTwall": got["T_wall"][:, n_slab:],
@@ -248,8 +252,10 @@ def horizon_study(case=CASE, n_slab=N_SLAB, seeds=128, horizons=HORIZONS):
                     theta
                 )["u_wall"]
             )
-        )(keys)
-        a = np.asarray(g)
+        )
+        a = np.concatenate(
+            [np.asarray(g(keys[i : i + SEED_BATCH])) for i in range(0, seeds, SEED_BATCH)]
+        )
         rows.append(
             (m, float(a.mean()), float(a.std(ddof=1) / math.sqrt(seeds)), float(a.std(ddof=1)))
         )

@@ -113,14 +113,35 @@ def test_inlet_candidate_streams_are_capacity_independent():
 def test_source_allocation_diagnostics_close_requested_birth_identity():
     n = 8
     grid = GridSpec(jnp.zeros(1), jnp.ones(1), (1,))
-    state = ParticleState(jnp.zeros((n,1)),jnp.zeros((n,3)),jnp.zeros(n,jnp.int32),
-                          jnp.zeros(n,bool),jnp.zeros(n))
-    res = inflow.InflowParams.uniform(1,10*np.sqrt(2*np.pi),1.)
-    _, inserted, shortfall, diag = inflow.inject(state,grid,Faces.uniform(BC.INFLOW,1),res,
-        K_BOLTZ,1.,1.,jax.random.key(2),6,return_diagnostics=True)
+    state = ParticleState(
+        jnp.zeros((n, 1)),
+        jnp.zeros((n, 3)),
+        jnp.zeros(n, jnp.int32),
+        jnp.zeros(n, bool),
+        jnp.zeros(n),
+    )
+    res = inflow.InflowParams.uniform(1, 10 * np.sqrt(2 * np.pi), 1.0)
+    _, inserted, shortfall, diag = inflow.inject(
+        state,
+        grid,
+        Faces.uniform(BC.INFLOW, 1),
+        res,
+        K_BOLTZ,
+        1.0,
+        1.0,
+        jax.random.key(2),
+        6,
+        return_diagnostics=True,
+    )
     assert int(diag.requested) == 20
     assert int(diag.inserted) == int(inserted) == 8
     assert int(diag.candidate_overflow) == 8
     assert int(diag.storage_overflow) == 4
-    assert int(diag.requested) == int(diag.inserted+diag.escaped+diag.sampler_failed+diag.candidate_overflow+diag.storage_overflow)
+    assert int(diag.requested) == int(
+        diag.inserted
+        + diag.escaped
+        + diag.sampler_failed
+        + diag.candidate_overflow
+        + diag.storage_overflow
+    )
     assert float(shortfall) == 12

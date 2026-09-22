@@ -1,0 +1,56 @@
+################################################################################
+# 2d flow around a circle -- single-species argon variant of
+# sparta/examples/circle/in.circle (same grid, density, fnum, timestep, walls).
+#
+# Run:  spa_serial -var seed 12345 -in in.circle_ar -log log.circle_ar.12345
+#
+# The "comm/sort" and "twopass" options make runs reproducible (they match
+# MPI/Kokkos runs) and are kept from the shipped input.
+################################################################################
+
+seed	    	    ${seed}
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+create_grid 	    20 20 1
+balance_grid        rcb cell
+
+global		    nrho 1.0 fnum 0.001
+
+species		    ar.species Ar
+mixture		    ar Ar vstream 100.0 0 0
+
+read_surf           data.circle
+surf_collide	    1 diffuse 300.0 0.0
+surf_modify         all collide 1
+
+collide             vss ar ar.vss
+
+fix		    in emit/face ar xlo twopass
+
+timestep 	    0.0001
+
+# (a) per-cell geometry and flow volume (area in 2d), written once at step 0
+compute             vol property/grid all id xc yc vol
+dump                gvol grid all 1000 grid_vol.circle_ar.${seed}.txt id xc yc vol
+dump_modify         gvol first yes
+
+# (b) surface loads averaged over the last 300 steps (2d: "area" = line length)
+compute             s surf all all n press px py pz shx shy shz fx fy fz ke
+fix                 as ave/surf all 1 300 1000 c_s[*] ave one
+dump                dsurf surf all 1000 surf_ave.circle_ar.${seed}.txt &
+                    id v1x v1y v2x v2y area f_as[*]
+
+# (c) cell fields averaged over the last 300 steps
+compute             g grid all all n nrho u v w temp
+fix                 ag ave/grid all 1 300 1000 c_g[*] ave one
+dump                dgrid grid all 1000 grid_ave.circle_ar.${seed}.txt &
+                    id xc yc f_ag[*]
+
+# (d) fill curves every 10 steps
+stats		    10
+stats_style	    step cpu np nattempt ncoll nscoll nscheck nexit nbound
+run 		    1000

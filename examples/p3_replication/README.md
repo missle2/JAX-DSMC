@@ -30,3 +30,26 @@ Neither differentiates hard cell memberships.
 `--reconstruction affine` is the direct local-affine inlet field from the paper.
 `ballistic` fits the residual after subtracting known collisionless transport.
 Reservoir and reconstruction dependence remain visible in the saved results.
+
+## Route (b) on P3's model, and the paper's Test-3 value
+
+`jax_dsmc/ensemble_particle.py` is the particle-carried quadrature of the same ensemble
+adjoint (review §5.1–5.2): no retained frames, interpolation only at the collided
+partners' ghosts.  Its verification experiments are one CLI:
+
+```sh
+python3 -m examples.p3_replication.route_b_experiments two-step --seeds 240 --a-seeds 16
+python3 -m examples.p3_replication.route_b_experiments compare --n0 2000 --seeds 16
+python3 -m examples.p3_replication.route_b_experiments scale --n0 16000 --seeds 32
+python3 -m examples.p3_replication.route_b_experiments scale --n0 16000 --seeds 128 --seed-start 32
+python3 -m examples.p3_replication.route_b_experiments fd --n0 16000 --seeds 1600 --workers 10
+python3 -m examples.p3_replication.route_b_report        # figures/route_b_agreement.png
+```
+
+Artifacts live in `results/route_b/`.  **The paper's 0.1517 is not a target for this
+transcription**: the transcribed forward differs from the paper's at the inlet (final
+population +1.7 %, wall-cell temperature 4.2 vs 3.73 — review §4.12), and the
+transcription's own gradient is 0.144–0.147 by a 1600-seed finite difference and by both
+adjoint routes.  `report.py` (`figures/p3_inlet_convergence.png`) covers the retained-
+frame budget sweep; the affine-vs-ballistic gap there is the interpolant's Jensen bias
+(`route_b_experiments recon-bias`).

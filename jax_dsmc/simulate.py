@@ -41,11 +41,76 @@ from jax_dsmc.collide.ntc import collide, decision_weights
 from jax_dsmc.move import move_with_decisions
 from jax_dsmc.rng import STAGE_INFLOW, STAGE_MOVE, key_for
 from jax_dsmc.state import CollideState, ParticleState
+from jax_dsmc.validation import require_valid, validate_inputs
+from jax_dsmc.wall_adjoint import WallEvents, no_wall_events
+
+
+@jax.tree_util.register_dataclass
+@dataclasses.dataclass(frozen=True)
+class EventRecord:
+    """One step's stochastic events, as the ensemble adjoint needs them (stacked over steps).
+
+    ``x``/``v``/``alive`` are the state the collisions were drawn from (after transport,
+    walls and injection); the post-collision state is the *next* step's pre-move state.
+    ``born_face`` is ``-1`` except on slots born this step, whose sampled velocity is
+    ``born_v``.  ``pairs`` is :class:`jax_dsmc.collide.ntc.PairRecord`.
+    """
+
+    x: jax.Array
+    v: jax.Array
+    alive: jax.Array
+    born_face: jax.Array
+    born_v: jax.Array
+    pairs: object
+    v_post: jax.Array
+    """velocities after the collisions: with ``x`` and ``alive`` this is the state at ``t_{k+1}``."""
+    walls: object
+    """:class:`jax_dsmc.wall_adjoint.WallEvents` -- the step's diffuse-face hits per slot."""
+    sigma: jax.Array
+    """``f64[C]`` the collision majorant the step's attempts were accepted against."""
+
 
 jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
 
 
-def _step(
+def _event_record(moved, source, wall_events, captured, state, static, diffuse):
+    """Assemble one step's :class:`EventRecord`; entrants' birth-step hits are theirs."""
+    k_events = static.K_walk if static.tracker == "walk" else static.K_bounce
+    walls = wall_events[0] if diffuse else no_wall_events(static.N, k_events)
+    if diffuse and source is not None:
+        born = source.born_face >= 0
+        walls = WallEvents(
+            jnp.where(born[None, :], source.born_walls.face, walls.face),
+            jnp.where(born[None, :, None], source.born_walls.v_out, walls.v_out),
+            jnp.where(born[None, :], source.born_walls.diffuse, walls.diffuse),
+        )
+    return EventRecord(
+        x=moved.x,
+        v=moved.v,
+        alive=moved.alive,
+        born_face=source.born_face if source is not None else jnp.full(static.N, -1, jnp.int32),
+        born_v=source.born_v if source is not None else jnp.zeros((static.N, 3)),
+        pairs=captured[0],
+        v_post=state.v,
+        walls=walls,
+        sigma=captured[1],
+    )
+
+
+def _tracking_diagnostics(counts, tracker):
+    """Split a ``wall_adjoint.TrackerCounts`` into the old ``recrossed`` slot and the mesh
+    diagnostics of :class:`Diagnostics` (all of which must stay zero)."""
+    tracking = {
+        "surface_hits": counts.surface_hits,
+        "stencil_overrun": counts.stencil_overrun,
+        "inside_body": counts.inside_body,
+    }
+    if tracker == "walk":
+        tracking["walk_exhausted"] = counts.exhausted
+    return counts.exhausted, tracking
+
+
+def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event order is readable
     carry,
     k,
     grid,
@@ -64,6 +129,9 @@ def _step(
     score_spread="particle",
     acc_delta=0.0,
     score_mode="paper",
+    capture=False,
+    mesh=None,
+    emit_surface=False,
 ):
     """One timestep.  Module-level and bound with ``partial`` (decision 14).
 
@@ -90,6 +158,9 @@ def _step(
     recrossed = jnp.array(0, jnp.int32)
     injected = jnp.array(0, jnp.int32)
     shortfall = jnp.float64(0.0)
+    wall_events = []
+    tracking = {}
+    tallies = None
     if not collide_only:
         if faces is None:
             state, fold = move_with_decisions(state, grid, params.dt, bc)
@@ -99,7 +170,8 @@ def _step(
         else:
             # per-face path (section 9.4): thermal walls, inflow, mixed geometries
             k_move = key_for(base_key, k, STAGE_MOVE)
-            x, v, alive, recrossed, logh_bc = boundary.apply_faces(
+            record_walls = capture and (BC.DIFFUSE in faces.bcs or mesh is not None)
+            x, v, alive, recrossed, logh_bc, *extra = boundary.apply_faces(
                 state.x,
                 state.v,
                 state.alive,
@@ -113,7 +185,18 @@ def _step(
                 score_spread=score_spread,
                 acc_delta=acc_delta,
                 max_bounces=static.K_bounce,
+                return_events=record_walls,
+                mesh=mesh,
+                tracker=static.tracker,
+                max_walk=static.K_walk,
+                return_tallies=emit_surface,
             )
+            # `advance` appends the events, then the tallies
+            if emit_surface:
+                tallies = extra.pop()
+            wall_events = extra
+            if mesh is not None:
+                recrossed, tracking = _tracking_diagnostics(recrossed, static.tracker)
             fold = boundary.fold_index(x, grid, BC.PERIODIC)
             w = decision_weights(fold.size).reshape(fold.shape)
             bc_chk = lax.stop_gradient(jnp.sum(w * fold))
@@ -139,12 +222,25 @@ def _step(
                     params.dt,
                     key_for(base_key, k, STAGE_INFLOW),
                     capacity,
-                    wall=wall, max_bounces=static.K_bounce, track=True, score_mode=score_mode, return_diagnostics=True,
+                    wall=wall,
+                    max_bounces=static.K_bounce,
+                    track=True,
+                    score_mode=score_mode,
+                    return_diagnostics=True,
+                    epsilon=params.epsilon,
+                    acc_delta=acc_delta,
+                    mesh=mesh,
+                    tracker=static.tracker,
+                    max_walk=static.K_walk,
                 )
     table = sort.build_table(state, grid)
-    # the cell temperature feeds the a-priori majorant floor (section 7.2.3)
-    m = sample.moments(state, table, grid, params, sp)
-    state, cstate, diag = collide(
+    # Only the cell temperature feeds the a-priori majorant floor (section 7.2.3);
+    # the full moments -- pressure tensor and heat flux, an (N, 3, 3) intermediate --
+    # are formed once, AFTER the collisions, so the emitted snapshot describes the
+    # returned state (and costs nothing when `emit_moments == "none"`).
+    temp = sample.cell_temperature(state, table, grid, sp)
+    moved = state  # post-move, post-injection, pre-collision: what the collisions were drawn from
+    state, cstate, diag, *captured = collide(
         state,
         table,
         cstate,
@@ -152,32 +248,53 @@ def _step(
         sp,
         params,
         static,
-        m.temp,
+        temp,
         k,
         base_key,
         score_mode=score_mode,
+        capture=capture,
     )
+    record = None
+    if capture:
+        record = _event_record(
+            moved,
+            source_details if res is not None else None,
+            wall_events,
+            captured,
+            state,
+            static,
+            faces is not None
+            and not collide_only
+            and (BC.DIFFUSE in faces.bcs or mesh is not None),
+        )
     if res is not None:
-        diag = dataclasses.replace(diag,
+        diag = dataclasses.replace(
+            diag,
             inflow_requested=source_details.requested,
             inflow_escaped=source_details.escaped,
             inflow_sampler_failed=source_details.sampler_failed,
             inflow_candidate_overflow=source_details.candidate_overflow,
             inflow_storage_overflow=source_details.storage_overflow,
-            inflow_tracking_exhausted=source_details.tracking_exhausted)
+            inflow_tracking_exhausted=source_details.tracking_exhausted,
+        )
         source_support = jnp.int32(0)
         for axis in range(len(grid.n)):
             for side in (0, 1):
                 if faces.of(axis, side) is boundary.BC.INFLOW:
-                    mean = inflow.target_count(res, grid, axis, side, sp.mass[0], params.fnum[0], params.dt)
+                    mean = inflow.target_count(
+                        res, grid, axis, side, sp.mass[0], params.fnum[0], params.dt
+                    )
                     source_support += jnp.asarray((mean > 0) & (mean == jnp.floor(mean)), jnp.int32)
-        diag = dataclasses.replace(diag, count_support_boundary=diag.count_support_boundary+source_support)
+        diag = dataclasses.replace(
+            diag, count_support_boundary=diag.count_support_boundary + source_support
+        )
     diag = dataclasses.replace(
         diag,
         decision_checksum=diag.decision_checksum + bc_chk,
         wall_recrossed=recrossed,
         inflow_injected=injected,
         inflow_shortfall=shortfall,
+        **tracking,
     )
     new_carry = (state, cstate) if reward is None else (state, cstate, j_acc + reward(state, table))
     if emit_moments == "none":
@@ -186,9 +303,58 @@ def _step(
         # C = 1.5e8, which is the regime the multi-device runs live in.  The
         # diagnostics stay: they are per-step SCALARS, and `A_max` resizing needs
         # them.  Snapshots come from `chunk_moments` instead.
-        return new_carry, (None, diag)
-    m = sample.moments(state, table, grid, params, sp)
-    return new_carry, (m, diag)
+        m = None
+    else:
+        m = sample.moments(state, table, grid, params, sp)
+    out = (m, diag) if record is None else (m, diag, record)
+    if emit_surface:
+        out = (*out, tallies)
+    return new_carry, out
+
+
+def _probe_step(body, step0, carry):
+    return body(carry, step0)
+
+
+def _zeros_like_shape(a):
+    return jnp.zeros(a.shape, a.dtype)
+
+
+def _flatten_blocks(a, n_steps):
+    return a.reshape((-1, *a.shape[2:]))[:n_steps]
+
+
+def _padded_step(carry, offset, body, step0, size, n_steps, padding, block_index):
+    """One step of a checkpoint block; steps past ``n_steps`` are no-ops."""
+    index = block_index * size + offset
+    return lax.cond(
+        index < n_steps,
+        functools.partial(_live_step, body=body, index=step0 + index),
+        functools.partial(_dead_step, padding=padding),
+        carry,
+    )
+
+
+def _live_step(carry, body, index):
+    return body(carry, index)
+
+
+def _dead_step(carry, padding):
+    return carry, padding
+
+
+def _block(carry, block_index, body, step0, size, n_steps, padding):
+    """A block of ``size`` steps, rematerialised as a unit (module-level, decision 14)."""
+    step = functools.partial(
+        _padded_step,
+        body=body,
+        step0=step0,
+        size=size,
+        n_steps=n_steps,
+        padding=padding,
+        block_index=block_index,
+    )
+    return lax.scan(step, carry, jnp.arange(size))
 
 
 def run(
@@ -211,8 +377,16 @@ def run(
     score_spread: str = "particle",
     acc_delta: float = 0.0,
     score_mode: str = "paper",
+    capture: bool = False,
+    mesh=None,
+    emit_surface: bool = False,
 ):
     """Run ``static.n_steps`` timesteps.
+
+    ``capture=True`` appends a stacked :class:`EventRecord` to the per-step output --
+    the post-move/pre-collision state, the newborn faces and sampled velocities, and
+    every attempt slot's pair decision -- which is what the ensemble adjoint
+    (:mod:`jax_dsmc.ensemble_backward`) consumes.  The forward itself is unchanged.
 
     ``score_mode="paper"`` keeps terminal-label accumulators. ``"trajectory"``
     stores the same accumulated stochastic correction in every slot, counting each event
@@ -241,13 +415,22 @@ def run(
     chunks -- see :func:`run_adaptive` -- without the chunk boundaries changing a
     single random draw: chunking ``[0, 200)`` into two halves consumes exactly the
     stream that one 200-step call would have.
+
+    ``mesh`` embeds a surface (:func:`jax_dsmc.mesh.cut.build_mesh`); it needs ``faces``
+    and a ``grid`` carrying the mesh's flow volumes (:func:`jax_dsmc.mesh.cut.with_volume`).
+    ``static.tracker`` selects the stencil or the cell-walk tracker.  ``emit_surface``
+    appends the step's :class:`jax_dsmc.surface.SurfaceTallies` (rows ``2D`` box faces
+    then the elements; extensive momentum / energy / heat of the resident particles'
+    hits -- entrants' birth-step hits are not tallied) as the last element of the
+    per-step output.
     """
     if res is not None and (faces is None or collide_only or capacity < 1):
         raise ValueError("Sources require faces, transport, and positive candidate capacity")
+    if mesh is not None and (faces is None or collide_only):
+        raise ValueError("An embedded surface requires per-face rules and transport")
     # Concrete public calls reject unsupported physics immediately. Traced calls
     # must be constructed through a validated setup or checked_run.
     if not any(isinstance(x, jax.core.Tracer) for x in jax.tree.leaves((sp, params))):
-        from jax_dsmc.validation import validate_inputs
         validate_inputs(sp, params, static)
     if score_mode not in ("paper", "trajectory"):
         raise ValueError("score_mode must be paper or trajectory")
@@ -267,10 +450,13 @@ def run(
         score_spread=score_spread,
         acc_delta=acc_delta,
         score_mode=score_mode,
+        capture=capture,
         faces=faces,
         wall=wall,
         res=res,
         capacity=capacity,
+        mesh=mesh,
+        emit_surface=emit_surface,
     )
     policy = getattr(jax.checkpoint_policies, static.remat_policy, None)
     body = jax.checkpoint(body, policy=policy, static_argnums=())
@@ -278,22 +464,18 @@ def run(
     if static.checkpoint_block_size == 0:
         return lax.scan(body, init, step0 + jnp.arange(static.n_steps))
     size = static.checkpoint_block_size
-    blocks = (static.n_steps+size-1)//size
-    output_shape = jax.eval_shape(lambda carry: body(carry, step0), init)[1]
-    padding = jax.tree.map(lambda a: jnp.zeros(a.shape, a.dtype), output_shape)
-    def block(carry, block_index):
-        def step(carry, offset):
-            index = block_index*size+offset
-            return lax.cond(index < static.n_steps,
-                            lambda c: body(c, step0+index),
-                            lambda c: (c, padding), carry)
-        return lax.scan(step, carry, jnp.arange(size))
+    blocks = (static.n_steps + size - 1) // size
+    output_shape = jax.eval_shape(functools.partial(_probe_step, body, step0), init)[1]
+    padding = jax.tree.map(_zeros_like_shape, output_shape)
+    block = functools.partial(
+        _block, body=body, step0=step0, size=size, n_steps=static.n_steps, padding=padding
+    )
     final, outputs = lax.scan(jax.checkpoint(block), init, jnp.arange(blocks))
-    outputs = jax.tree.map(lambda a: a.reshape((-1, *a.shape[2:]))[:static.n_steps], outputs)
+    outputs = jax.tree.map(functools.partial(_flatten_blocks, n_steps=static.n_steps), outputs)
     return final, outputs
 
 
-def run_adaptive(
+def run_adaptive(  # noqa: PLR0915 -- the resize/retry loop reads best as one unit
     state: ParticleState,
     cstate: CollideState,
     grid,
@@ -400,7 +582,7 @@ def run_adaptive(
             a_max = new_a
             state, cstate = saved  # redo THIS chunk only, from where it began
             continue
-        from jax_dsmc.validation import require_valid
+
         require_valid(diag)
         if chunk_moments:
             table = sort.build_table(state, grid)
@@ -430,7 +612,7 @@ def run_adaptive(
 
 def checked_run(state, cstate, grid, sp, params, static, base_key, **kwargs):
     """Host wrapper: validate configuration and all returned trajectory diagnostics."""
-    from jax_dsmc.validation import require_valid, validate_inputs
+
     validate_inputs(sp, params, static)
     result = run(state, cstate, grid, sp, params, static, base_key, **kwargs)
     require_valid(result[1][1])

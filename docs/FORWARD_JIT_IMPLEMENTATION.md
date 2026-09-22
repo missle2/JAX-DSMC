@@ -1,6 +1,7 @@
 # Forward/JIT follow-up implementation
 
-This work follows `ADJOINT_CORRECTIONS.md` on `fix/paper-adjoints`. The baseline for
+This work follows `ADJOINT_CORRECTIONS.md` on `fix/paper-adjoints`; both are
+reviewed in [ADJOINT_BRANCH_REVIEW.md](ADJOINT_BRANCH_REVIEW.md). The baseline for
 this follow-up is `1de4928`. It retains NTC and uniform random collision partners;
 there is no Poisson collision mode and no collision subcell/neighbor scheme.
 
@@ -216,6 +217,13 @@ gradient be treated as shape-sensitive evidence. The present moving-wall
 tracker and surface tallies do not yet constitute a general moving-mesh adjoint.
 
 ## Remaining solver gates before general-grid shape optimization
+
+> Status 2026-09-15 ([ADJOINT_BRANCH_REVIEW.md](ADJOINT_BRANCH_REVIEW.md) §5): gate 1
+> (membership sensitivity) and gate 2 (count support) are handled by construction in the
+> ensemble adjoint, which replaces the score estimators for decision-driven parameters;
+> gate 6's finite-horizon validation exists for inlet, wall and kernel controls
+> (`examples/gradient_bench`); gates 3–5 stand.  `rounded_weak_derivative` and
+> `count_support_boundary` are no longer on the critical path.
 
 1. Isolate and correct hard cell-membership sensitivity when a control moves
    particles across a cell face; current pathwise VJP freezes the discrete cell

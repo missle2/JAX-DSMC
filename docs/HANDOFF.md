@@ -1,6 +1,102 @@
 # Handoff — state of play
 
 > Adjoint implementation update: see [corrections, P3 methods, and validation limits](ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.
+>
+> **2026-09-15 review of that update:** [ADJOINT_BRANCH_REVIEW.md](ADJOINT_BRANCH_REVIEW.md)
+> — verdicts on each change, nine defects (B1-B9, most fixed there), the gap list to general
+> meshes, and the measured estimator variances.  Three traps it adds to this file's list:
+>
+> * **The forward random stream changed on this branch** (per-slot `fold_in` in `ntc.collide`,
+>   inverse-CDF inlet sampling, one draw per wall pass).  Every artifact produced before it
+>   (BKW, shock, Couette, VARIANCE.md) is statistically but not bitwise reproducible; the
+>   forward gates were re-run (review §4.7).
+> * **`terminal_objective` / `windowed_objective` default to `score_mode="trajectory"`**,
+>   `run` / `dice_reward` to `"paper"`.  `examples/shock_adjoint` pins `"paper"` explicitly;
+>   do the same in any example whose numbers are documented.
+> * **`baseline="mean"` is rejected** — it was biased.  A baseline must come from independent
+>   seeds (the `gradient_bench` pilots show how).
+> * **The production gradient for decision-driven parameters is the ensemble adjoint**
+>   (`simulate.run(capture=True)` + `jax_dsmc/ensemble_backward.py`, review §5), not a
+>   score.  It is validated on the inlet shock against 384-seed finite differences for
+>   reservoir temperature and density, wall speed / temperature, `diam` / `omega`; the
+>   device port, the pathwise-inside-ensemble terms and shape are open (review §5.0).
+>   Two rules learned the hard way: the ghost interpolant must be at least quadratic
+>   (affine: −8 % at 30 particles/cell), and the collision pull-back must be the
+>   sequential one (`SEQUENTIAL=True`; the Δt-linearised form was −10 % at 0.16
+>   collisions/particle/step).  Every per-step event (wall bounces, newborn hits) is
+>   recorded individually — do not reintroduce "last event × count" shortcuts.
+> * **The shipped collision pull-back is the virtual-partner one** (`ensemble_backward`
+>   defaults `VIRTUAL = (4, 8)`, `VIRTUAL_NODES = "staged"`; device
+>   `ensemble_device.backward_virtual`; runners `--pullback virtual`, artifacts tagged
+>   `_virt{S}x{K}st`).  Against 1200–1800-seed FD arbiters it is unbiased to < 1 % at
+>   S = 4 (residual O(Δt/S)) with a per-seed sd 5–56× below the sequential form's, which
+>   blows up above ~0.5 collisions/particle/step (review §5.12, `pullback_scan.png`).
+>   Two rules: the fit nodes must be the NTC step's **staged** intermediate states (the
+>   end-of-step state at every substep is −6 % biased, and no substep count fixes it), and
+>   the partner count K is a *stability* knob on long horizons, not only a variance one
+>   (K = 2 blew up 1e5× over 300 steps at 40 particles/cell where K = 8 decayed; the
+>   device path refuses a backward whose rms λ grows > 100×).  The sequential form
+>   (`configure("sequential")`) stays the exact reference; untagged artifacts are its.
+>   `examples/gradient_bench/provenance.py` re-evaluates seed 0 of every artifact against
+>   the current code; run it before trusting a figure.  Never run more than two JAX CPU
+>   processes at once on this machine (a 3.5 h stall on 2026-09-16 came from four).
+> * **Embedded surfaces (2026-09-17, `jax_dsmc/mesh/`)**: SPARTA-style cut cells on the
+>   Cartesian grid.  Conventions that everything relies on — element normals point **into
+>   the flow** (SPARTA `z x (p2 - p1)` / `(p2 - p1) x (p3 - p1)`; `data.circle` is listed
+>   counter-clockwise with each line running from point `k + 1` to `k`); surface ids are
+>   `2D + e` after the `2D` box faces, an analytic body is id `2D`; `WallParams` rows
+>   `2D + model` carry each element model's `diffuse T acc` (`acc = 0` = specular, as
+>   SPARTA's `diffuse 300 0.0`); `GridSpec.volume` (empty = uniform) carries the cut
+>   volumes so NTC, moments and the fill see them with no other change; **split cells are
+>   refused** (`SplitCellError`); two trackers share one element branch — the stencil
+>   (`mesh.candidates`, dilation `radius` cells, diagnostic `stencil_overrun` must be 0)
+>   and SPARTA's cell walk (`mesh/walk.py`, `SimStatic.tracker="walk"`, `K_walk`, exact
+>   for any move length, `walk_exhausted` must be 0; agrees with the stencil to roundoff,
+>   not bitwise, because it advances to every cell face); `inside_body` is the catch-all
+>   (killed and counted).  SPARTA's `compute grid temp` is the **un-centred** `(m/3k)<v^2>`.
+>   The GPU under WSL segfaults in XLA's CUDA-graph command buffers on the mesh step with
+>   an inflow source: `examples/mesh/forward.py` sets `XLA_FLAGS=--xla_gpu_enable_command_buffer=`.
+>   Gates: `examples/mesh/geometry_checks.py` (cell counts 264/88/48 and 7256/304/440,
+>   per-cell volumes vs SPARTA dumps), `tests/test_mesh_*.py`, `examples/mesh/report.py`
+>   (FG1–FG4, FG7 vs the rebuilt argon SPARTA runs), `free_molecular.py` (FG5),
+>   `tests/test_mesh_forward.py` (FG6, FG8), `record_budget.py` (G9),
+>   `scratch/mesh/probe_window_score.py` (G3a).  Plan: `~/.claude/plans/jolly-exploring-knuth.md`.
+> * **Mesh-aware adjoint (2026-09-18, phase C; PSEUDOCODE §9.7)**: value-form rewards
+>   (`backward[_virtual](phi_step=, hit_reward=)`; a hit's score weight is the reward-to-go
+>   **from its own draw onward**, `lam + r_j + r_{j+1} + …`), `field_query` → `(value, grad_x,
+>   grad_v)` + `node_gradients`, and `jax_dsmc/shape.py` — the traced replay of the step's
+>   wall map (`advance(trace=True)` fills `WallEvents.x_hit/v_in/normal`; `None` in records)
+>   and its `jax.vjp` w.r.t. the geometry with the backward's cotangents; the diffuse
+>   re-emission velocity is `stop_gradient` in the post-hit state and the events (kernels
+>   enter the VALUE by score, incl. the normal via `sampling.log_diffuse_density`), but
+>   **the surface tally is formed from the traced sample** (2026-09-21, review §7.8 GP):
+>   the hit's own reward is pathwise through the reparameterised sampler (frame
+>   parallel-transported from the primal one — the incident-velocity frame's derivative
+>   has a `1/|v_t,in|` tail) and the normal score is weighted by the value-to-go *after*
+>   the hit; this cut the plate's normal-term seed sd 4×.  `grazing = eps` on both bodies
+>   floors the hit-time derivative's `1/(v·n)` and the score's `1/(v_out·n)` (tangent only).  `replay_error` is relative and roundoff (`< 1e-12`), not
+>   bitwise: same arithmetic, another compilation.  Gates: G1/G2 `examples.ensemble_couette
+>   --objective energy-window|shear-window --device`, G3 `examples.mesh.ensemble_plane`
+>   (rectangle body whose left face is the moving Couette wall; control = translation);
+>   tables/figure from `examples/mesh/report.py` (`adjoint_gates`).  Not in the VJP: the
+>   cut-volume term (G5) and the polygon edge-band score (phase E).  **Open issue
+>   (2026-09-20)**: no `∇_xλ` estimator (one-sided / pooled / along-flight) resolves the
+>   x/v-part of a translated flat wall; shape controls are restricted to normal
+>   displacements of curved surfaces (radius-type), first optimisation case circle →
+>   airfoil-like shape by normal displacements only (review §7.6 item 5).  **Shape
+>   representation = C1 level set** (`jax_dsmc/mesh/levelset.py`, cubic B-spline
+>   coefficients, `kind == "levelset"`, single surface id like the analytic body); the
+>   polygon edge-band score is not built (representation-induced, vanishes on a C1
+>   surface).  Trap: the ray–surface bisection has zero derivative — the final Newton
+>   step (the bracket search a function of `stop_gradient` inputs) is what carries
+>   `∂t/∂coef`.  Gates LS0 (`tests/test_mesh_levelset.py`), LS2 radius and `cos 2θ`
+>   mode (`ensemble_mesh --body levelset`, z = −1.4 / +0.7 at 4 seeds, review §7.7);
+>   the per-seed entry point for an optimiser is `ensemble_mesh.shape_terms(cfg, key,
+>   body, variants=(...))`, the optimiser `examples/mesh/optimize.py`.  Run the circle
+>   gradients with `--substeps 1 --partners 2` (collisionless: partners only cost).
+> * **The P3 paper's Test-3 value 0.1517 is not a target**: the transcribed forward
+>   differs from the paper's at the inlet (review §4.12); the transcription's own gradient
+>   is 0.144-0.147 by a 1600-seed FD and by both adjoint routes.
 
 Written for someone picking this up cold. It covers what exists, what is in flight, and — mostly
 — **the traps**, because this project has already produced two defects that would have shipped

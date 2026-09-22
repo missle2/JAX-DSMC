@@ -77,13 +77,21 @@ def test_global_likelihood_matches_exact_enumeration_after_changing_partners():
 
 @pytest.mark.parametrize("observable", ["constant", "position"])
 def test_wall_expected_derivative_against_one_particle_quadrature(observable):
-    # Independent identical particles implement many draws of ONE particle, no collisions.
+    """``d/dx E[phi]`` for one particle a distance 0.11 from a wall, ``tau ~ N(0.1, 0.02^2)``.
+
+    Independent identical particles implement many draws of ONE particle, no
+    collisions.  The interval score is ``~ -25`` per particle here (``phi(z)/Phi(z)/(v eps)``
+    at ``z = 0.5``), so a 65536-particle mean has a standard error of ~0.1-0.2: the
+    check is made over independent keys and judged against its own standard error,
+    with a cap on that error so the test keeps its power.  A single-key tolerance of
+    0.06 passed only by the luck of one draw.
+    """
     n = 65536
     grid = GridSpec(lo=jnp.array([0.0]), hi=jnp.array([1.0]), n=(1,))
     faces = boundary.Faces.uniform(boundary.BC.DIFFUSE, 1)
     wall = boundary.WallParams.uniform(1, 1.0, acc=0.0)
 
-    def value(x):
+    def value(x, key):
         out = boundary.apply_faces(
             jnp.full((n, 1), x),
             jnp.tile(jnp.array([[1.0, 0.0, 0.0]]), (n, 1)),
@@ -93,15 +101,18 @@ def test_wall_expected_derivative_against_one_particle_quadrature(observable):
             wall,
             K_BOLTZ,
             0.1,
-            jax.random.PRNGKey(8),
+            key,
             epsilon=0.02,
         )
         phi = jnp.ones(n) if observable == "constant" else out[0][:, 0]
         return adjoint.surrogate(phi, out[4], out[2])
 
-    got = jax.jit(jax.grad(value))(0.89)
+    grad = jax.jit(jax.grad(value))
+    draws = np.array([float(grad(0.89, jax.random.PRNGKey(s))) for s in range(12)])
     expected = 0.0 if observable == "constant" else 2 * ndtr(0.5) - 1
-    np.testing.assert_allclose(got, expected, atol=0.06)
+    se = draws.std(ddof=1) / np.sqrt(len(draws))
+    assert se < 0.12, f"estimator too noisy to test: se={se:.3f}"
+    assert abs(draws.mean() - expected) < 3.5 * se, (draws.mean(), expected, se)
 
 
 def test_relaxed_wall_score_is_zero():

@@ -2,7 +2,7 @@ See [forward/JIT follow-up status](docs/FORWARD_JIT_IMPLEMENTATION.md) for curre
 
 # JAX-DSMC
 
-> Adjoint implementation update: see [corrections, P3 methods, and validation limits](docs/ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.
+> Adjoint implementation update: see [corrections, P3 methods, and validation limits](docs/ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below. Its review, the gradient benchmark, and the **production gradient estimator** — the particle-carried ensemble adjoint (`simulate.run(capture=True)` + `jax_dsmc/ensemble_backward.py`, validated against finite differences for inlet, wall and collision-kernel parameters) — are in [ADJOINT_BRANCH_REVIEW.md](docs/ADJOINT_BRANCH_REVIEW.md); run `python3 -m examples.gradient_bench.report` for its tables and figures.
 
 Differentiable Direct Simulation Monte Carlo in JAX, built so that a **discrete adjoint** for the
 inhomogeneous Boltzmann equation falls out of the forward solve rather than requiring a second

@@ -31,6 +31,8 @@ random numbers across perturbed runs.
 
 from __future__ import annotations
 
+import functools
+
 import jax
 import jax.numpy as jnp
 from jax import random
@@ -89,13 +91,35 @@ def key_for_slot(stage_key: jax.Array, slot) -> jax.Array:
     return random.fold_in(stage_key, slot)
 
 
+def _uniform_at(key, i, shape):
+    return random.uniform(random.fold_in(key, i), shape, dtype=jnp.float64)
+
+
+def _normal_at(key, i, shape):
+    return random.normal(random.fold_in(key, i), shape, dtype=jnp.float64)
+
+
+def _randint_at(key, i, shape, maxval):
+    return random.randint(random.fold_in(key, i), shape, 0, maxval)
+
+
 def indexed_uniform(key, n, trailing_shape=()):
-    """Capacity-independent candidate draws, batched into one compiled operation."""
-    return jax.vmap(lambda i: random.uniform(random.fold_in(key, i), trailing_shape,
-                                            dtype=jnp.float64))(jnp.arange(n))
+    """Capacity-independent candidate draws, batched into one compiled operation.
+
+    Draw ``i`` depends only on ``(key, i)``, so growing ``n`` appends draws and
+    leaves every earlier one unchanged (section 1, rule 3).  Bodies are module-level
+    and bound with ``partial`` (decision 14).
+    """
+    return jax.vmap(functools.partial(_uniform_at, key, shape=trailing_shape))(jnp.arange(n))
 
 
 def indexed_normal(key, n, trailing_shape=()):
-    """Normal counterpart of indexed_uniform, stable under capacity growth."""
-    return jax.vmap(lambda i: random.normal(random.fold_in(key, i), trailing_shape,
-                                           dtype=jnp.float64))(jnp.arange(n))
+    """Normal counterpart of :func:`indexed_uniform`, stable under capacity growth."""
+    return jax.vmap(functools.partial(_normal_at, key, shape=trailing_shape))(jnp.arange(n))
+
+
+def indexed_randint(key, n, trailing_shape, maxval):
+    """``randint`` counterpart; ``maxval`` may be an array of ``trailing_shape``."""
+    return jax.vmap(functools.partial(_randint_at, key, shape=trailing_shape, maxval=maxval))(
+        jnp.arange(n)
+    )

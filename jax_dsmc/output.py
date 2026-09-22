@@ -328,6 +328,160 @@ def write_vtp(
     return _write_lines(path, lines)
 
 
+def write_vtp_surface(
+    path: str,
+    points: Any,
+    elements: Any,
+    cell_data: dict[str, Any] | None = None,
+    binary: bool = True,
+) -> str:
+    """Write an embedded surface (2-D lines / 3-D triangles) as VTK ``.vtp`` polydata.
+
+    Args:
+        path: output filename; ``.vtp`` is appended if missing.
+        points: ``f64[P, D]`` (``D < 3`` zero-padded).
+        elements: ``i32[E, D]`` vertex indices -- lines in 2-D, triangles in 3-D.
+        cell_data: name -> ``[E]`` or ``[E, k]`` per-element arrays (pressure, shear,
+            heat flux, hit counts).
+
+    Lines go in the ``<Lines>`` block and triangles in ``<Polys>``, so ParaView renders
+    the surface itself rather than its vertices.
+    """
+    if not path.endswith(".vtp"):
+        path += ".vtp"
+    pts = np.asarray(points, dtype=np.float64)
+    el = np.asarray(elements, dtype=np.int64)
+    n_pts = pts.shape[0]
+    n_el, d = el.shape
+    if pts.shape[1] < 3:
+        pts = np.pad(pts, ((0, 0), (0, 3 - pts.shape[1])))
+    block = "Lines" if d == 2 else "Polys"
+    counts = {"NumberOfVerts": 0, "NumberOfLines": 0, "NumberOfStrips": 0, "NumberOfPolys": 0}
+    counts["NumberOfLines" if d == 2 else "NumberOfPolys"] = n_el
+    piece = " ".join(f'{k}="{v}"' for k, v in counts.items())
+    lines = [
+        _XML_HEADER,
+        '<VTKFile type="PolyData" version="1.0" byte_order="LittleEndian" header_type="UInt64">',
+        "  <PolyData>",
+        f'    <Piece NumberOfPoints="{n_pts}" {piece}>',
+        "      <Points>",
+        _data_array("Points", pts, 3, binary),
+        "      </Points>",
+        f"      <{block}>",
+        _data_array("connectivity", el.ravel(), 1, binary),
+        _data_array("offsets", np.arange(1, n_el + 1, dtype=np.int64) * d, 1, binary),
+        f"      </{block}>",
+        "      <CellData>",
+    ]
+    for name, raw in (cell_data or {}).items():
+        arr = np.asarray(raw)
+        if arr.shape[0] != n_el:
+            raise ValueError(f"cell field {name!r} has {arr.shape[0]} rows, expected {n_el}")
+        arr = arr.reshape(n_el, -1)
+        lines.append(_data_array(name, arr, arr.shape[1], binary))
+    lines += ["      </CellData>", "    </Piece>", "  </PolyData>", "</VTKFile>"]
+    return _write_lines(path, lines)
+
+
+def write_vtu_flow(  # noqa: PLR0915 -- one writer, kept whole
+    path: str,
+    lo: Any,
+    hi: Any,
+    n: tuple[int, ...],
+    mask: np.ndarray,
+    fields: dict[str, Any],
+    binary: bool = True,
+) -> str:
+    """Write the **flow region** of a cut-cell grid as a VTK ``.vtu`` of sub-cell boxes.
+
+    ``mask`` is ``bool[C, sub^D]`` (:func:`jax_dsmc.mesh.cut.flow_mask`): every True
+    sub-cell becomes one quad (2-D) / hexahedron (3-D) carrying its parent cell's field
+    values.  The body is thereby carved out of the picture at ``h / sub`` resolution while
+    every value stays exactly the per-cell value of the ``.vtr`` -- this file changes how
+    the cells are drawn, not what they contain.
+    """
+    if not path.endswith(".vtu"):
+        path += ".vtu"
+    lo = np.asarray(lo, dtype=float)
+    hi = np.asarray(hi, dtype=float)
+    D = len(n)
+    C = int(np.prod(n))
+    sub = round(mask.shape[1] ** (1.0 / D))
+    if sub**D != mask.shape[1]:
+        raise ValueError(f"mask width {mask.shape[1]} is not sub^{D}")
+    dx = (hi - lo) / np.asarray(n, dtype=float)
+    cell_idx = np.stack(np.unravel_index(np.arange(C), n), axis=1)  # (C, D), row-major
+    sub_idx = np.stack(np.indices((sub,) * D), axis=-1).reshape(-1, D)  # last axis fastest
+    # cells entirely in the flow stay ONE box; only partially-masked cells are subdivided
+    # (a 20^3 grid subdivided everywhere at sub = 4 is 100 MB per frame)
+    whole = mask.all(axis=1)
+    part = ~whole & mask.any(axis=1)
+    cells_p, subs_p = np.nonzero(mask & part[:, None])
+    corner = np.concatenate(
+        [
+            lo + cell_idx[whole] * dx,
+            lo + (cell_idx[cells_p] * sub + sub_idx[subs_p]) * (dx / sub),
+        ]
+    )
+    size = np.concatenate(
+        [np.broadcast_to(dx, (int(whole.sum()), D)), np.broadcast_to(dx / sub, (cells_p.size, D))]
+    )
+    cells = np.concatenate([np.nonzero(whole)[0], cells_p])
+    M = corner.shape[0]
+    if D == 2:
+        offsets = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=float)
+        vtk_type, npts = 9, 4  # VTK_QUAD
+    elif D == 3:
+        offsets = np.array(
+            [
+                [0, 0, 0],
+                [1, 0, 0],
+                [1, 1, 0],
+                [0, 1, 0],
+                [0, 0, 1],
+                [1, 0, 1],
+                [1, 1, 1],
+                [0, 1, 1],
+            ],
+            dtype=float,
+        )
+        vtk_type, npts = 12, 8  # VTK_HEXAHEDRON
+    else:
+        raise NotImplementedError("write_vtu_flow needs D = 2 or 3")
+    pts = corner[:, None, :] + offsets[None, :, :] * size[:, None, :]  # (M, npts, D)
+    # share the corner points between neighbouring boxes (8x fewer points in 3-D): snap to
+    # the sub-grid lattice so equal corners compare equal
+    lattice = np.rint((pts.reshape(-1, D) - lo) / (dx / sub)).astype(np.int64)
+    uniq, conn = np.unique(lattice, axis=0, return_inverse=True)
+    pts = lo + uniq * (dx / sub)
+    if D < 3:
+        pts = np.pad(pts, ((0, 0), (0, 3 - D)))
+    lines = [
+        _XML_HEADER,
+        '<VTKFile type="UnstructuredGrid" version="1.0" byte_order="LittleEndian" '
+        'header_type="UInt64">',
+        "  <UnstructuredGrid>",
+        f'    <Piece NumberOfPoints="{pts.shape[0]}" NumberOfCells="{M}">',
+        "      <Points>",
+        _data_array("Points", pts, 3, binary),
+        "      </Points>",
+        "      <Cells>",
+        _data_array("connectivity", conn.reshape(-1).astype(np.int64), 1, binary),
+        _data_array("offsets", np.arange(1, M + 1, dtype=np.int64) * npts, 1, binary),
+        _data_array("types", np.full(M, vtk_type, dtype=np.uint8), 1, binary),
+        "      </Cells>",
+        "      <CellData>",
+    ]
+    for name, raw in fields.items():
+        arr = np.asarray(raw)
+        if arr.shape[0] != C:
+            raise ValueError(f"field {name!r} has {arr.shape[0]} rows, expected C = {C}")
+        arr = arr.reshape(C, -1)[cells]
+        lines.append(_data_array(name, arr, arr.shape[1], binary))
+    lines += ["      </CellData>", "    </Piece>", "  </UnstructuredGrid>", "</VTKFile>"]
+    return _write_lines(path, lines)
+
+
 # --- collections: what makes ParaView animate ---------------------------------
 
 

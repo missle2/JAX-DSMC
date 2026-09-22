@@ -1,0 +1,152 @@
+{
+ "circle": {
+  "case": "circle",
+  "dim": 2,
+  "n_points": 50,
+  "n_elements": 50,
+  "sub": 32,
+  "build_seconds": 0.703449010848999,
+  "counts": [
+   264,
+   88,
+   48
+  ],
+  "counts_sparta": [
+   264,
+   88,
+   48
+  ],
+  "counts_match": true,
+  "cut_set_matches_sparta_partial": true,
+  "n_partial_sparta": 44,
+  "n_touched_full": 4,
+  "flow_volume_exact": 71.80002244802083,
+  "flow_volume_sparta_dump": 71.80002232,
+  "flow_volume_sparta_log": 71.8,
+  "flow_volume_ours": 71.800048828125,
+  "total_error": 2.6508124999970184e-05,
+  "max_cell_error": 0.0012788506249999994,
+  "max_cell_error_uncut": 0.0,
+  "cell_volume": 0.25,
+  "S_cell": 3,
+  "S_max": 6,
+  "body_volume_polygon": 28.19997755197918,
+  "body_volume_analytic": 28.274333882308138,
+  "analytic_counts": [
+   260,
+   88,
+   52
+  ],
+  "analytic_flow_volume": 71.720947265625,
+  "analytic_flow_volume_exact": 71.72566611769186,
+  "brute_force_mismatched_cells": 0,
+  "stencil_is_superset": true,
+  "watertight": {
+   "segments": 2076,
+   "even_crossings": true,
+   "max": 2
+  }
+ },
+ "sphere": {
+  "case": "sphere",
+  "dim": 3,
+  "n_points": 602,
+  "n_elements": 1200,
+  "sub": 16,
+  "build_seconds": 8.929671049118042,
+  "counts": [
+   7256,
+   304,
+   440
+  ],
+  "counts_sparta": [
+   7256,
+   304,
+   440
+  ],
+  "counts_match": true,
+  "cut_set_matches_sparta_partial": true,
+  "n_partial_sparta": 416,
+  "n_touched_full": 24,
+  "flow_volume_exact": 59.861713454452996,
+  "flow_volume_sparta_dump": 59.86171328220002,
+  "flow_volume_sparta_log": 59.8617,
+  "flow_volume_ours": 59.86164257812503,
+  "total_error": -7.070407498698997e-05,
+  "max_cell_error": 4.737000000000144e-05,
+  "max_cell_error_uncut": 1.734723475976807e-18,
+  "cell_volume": 0.008000000000000002,
+  "S_cell": 22,
+  "S_max": 79,
+  "body_volume_polygon": 4.138286545547007,
+  "body_volume_analytic": 4.1887902047863905,
+  "analytic_counts": [
+   7220,
+   304,
+   476
+  ],
+  "analytic_flow_volume": 59.811287109375044,
+  "analytic_flow_volume_exact": 59.81120979521361,
+  "brute_force_mismatched_cells": 0,
+  "stencil_is_superset": true,
+  "watertight": {
+   "segments": 3518,
+   "even_crossings": true,
+   "max": 2
+  }
+ },
+ "convergence": {
+  "circle": [
+   {
+    "sub": 4,
+    "max_cell_error": 0.026817100000000003,
+    "total_error": 0.028102679999999963,
+    "rms_cell_error": 0.0108473323119481
+   },
+   {
+    "sub": 8,
+    "max_cell_error": 0.013339499999999997,
+    "total_error": -0.00705357000000003,
+    "rms_cell_error": 0.004077344867674049
+   },
+   {
+    "sub": 16,
+    "max_cell_error": 0.004550437499999997,
+    "total_error": -0.00998325750000003,
+    "rms_cell_error": 0.001889628323322534
+   },
+   {
+    "sub": 32,
+    "max_cell_error": 0.0012788506249999994,
+    "total_error": 2.6508124999970184e-05,
+    "rms_cell_error": 0.000473100518738553
+   },
+   {
+    "sub": 64,
+    "max_cell_error": 0.00042435843749999945,
+    "total_error": -0.0002786676562500298,
+    "rms_cell_error": 0.00014991176493123662
+   }
+  ],
+  "sphere": [
+   {
+    "sub": 4,
+    "max_cell_error": 0.0006981599999999989,
+    "total_error": 0.004411717800013018,
+    "rms_cell_error": 0.0001867836010861995
+   },
+   {
+    "sub": 8,
+    "max_cell_error": 0.0001698950000000015,
+    "total_error": 0.001036717800013039,
+    "rms_cell_error": 4.177758672573407e-05
+   },
+   {
+    "sub": 16,
+    "max_cell_error": 4.737000000000144e-05,
+    "total_error": -7.070407498698997e-05,
+    "rms_cell_error": 1.0832495665497584e-05
+   }
+  ]
+ }
+}

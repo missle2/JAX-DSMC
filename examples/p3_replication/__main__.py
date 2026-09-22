@@ -6,9 +6,11 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
+import jax
 import numpy as np
 
 from jax_dsmc import ensemble_inflow as ei
+from jax_dsmc import ensemble_inflow_jax as ji
 
 
 def summary(values):
@@ -21,7 +23,7 @@ def summary(values):
     }
 
 
-def main():
+def main():  # noqa: PLR0915 -- one CLI driver, both backends
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--backend", choices=("host", "jax"), default="host")
     parser.add_argument("--cells", type=int, default=40)
@@ -41,7 +43,8 @@ def main():
         parser.error("Use at least one seed and a positive FD step below 4")
     cfg = ei.Config(
         n_initial=args.particles,
-        cells=args.cells, steps=args.steps,
+        cells=args.cells,
+        steps=args.steps,
         retained=args.retained,
         source_samples=args.source_samples,
         partners=args.partners,
@@ -52,32 +55,41 @@ def main():
     counts = ei.nominal_counts(cfg, temperatures)
     backend = "numpy/scipy host"
     if args.backend == "jax":
-        import jax
-
-        from jax_dsmc import ensemble_inflow_jax as ji
-        capacity = args.capacity or (cfg.n_initial+cfg.steps*sum(counts))
+        capacity = args.capacity or (cfg.n_initial + cfg.steps * sum(counts))
         compiled_forward = jax.jit(lambda t, key: ji.forward(cfg, t, key, counts, capacity))
         compiled_backward = jax.jit(lambda tr, key: ji.backward(tr, cfg, key))
+
         def forward(t, seed):
             tr = compiled_forward(t, jax.random.key(seed))
             if bool(tr.invalid):
                 raise RuntimeError("Invalid JAX trace: capacity, disjoint count, or temperature")
             return tr
+
         def backward(tr, seed):
             return np.asarray(compiled_backward(tr, jax.random.key(seed)))
+
         backend = "jax " + jax.default_backend()
     else:
+
         def forward(t, seed):
             return ei.forward(cfg, t, seed=seed, injection_counts=counts)
+
         def backward(tr, seed):
             return ei.backward(tr, seed=seed)
+
     gradients, differences, objectives, populations = [], [], [], []
     start = time.monotonic()
     for seed in range(args.seeds):
         trace = forward(temperatures, seed)
         gradients.append(backward(trace, 10000 + seed)[:, 0])
         objectives.append(float(trace.objective))
-        populations.append(int(trace.frames.counts[-1].sum() if args.backend == "jax" else trace.frames[-1].counts.sum()))
+        populations.append(
+            int(
+                trace.frames.counts[-1].sum()
+                if args.backend == "jax"
+                else trace.frames[-1].counts.sum()
+            )
+        )
         fd = []
         for side in (0, 1):
             plus, minus = temperatures.copy(), temperatures.copy()

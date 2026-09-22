@@ -35,7 +35,7 @@ from jax_dsmc.geometry import surface_measure  # noqa: E402
 from jax_dsmc.rng import indexed_normal, indexed_uniform  # noqa: E402
 from jax_dsmc.safe import safe_log  # noqa: E402
 from jax_dsmc.state import ParticleState  # noqa: E402
-from jax_dsmc.wall_adjoint import advance  # noqa: E402
+from jax_dsmc.wall_adjoint import WallEvents, advance, no_wall_events  # noqa: E402
 
 ACCUMULATOR_FIELDS = ("logh_acc",)
 """Per-particle state that is a *history* and so must be reset on slot reuse.
@@ -206,10 +206,11 @@ def flux_integral(s):
     Unlike the legacy SPARTA-compatible mol_inflow helper, retains inward tails
     for outward drift below -3. Gaussian tails use log_ndtr to avoid erf cancellation.
     """
-    shift = jnp.minimum(s, 0.)**2
-    scaled = (.5*jnp.exp(-s*s+shift)
-              + s*jnp.sqrt(jnp.pi)*jnp.exp(shift+log_ndtr(jnp.sqrt(2.)*s)))
-    return jnp.maximum(scaled, 0.)*jnp.exp(-shift)/jnp.sqrt(jnp.pi)
+    shift = jnp.minimum(s, 0.0) ** 2
+    scaled = 0.5 * jnp.exp(-s * s + shift) + s * jnp.sqrt(jnp.pi) * jnp.exp(
+        shift + log_ndtr(jnp.sqrt(2.0) * s)
+    )
+    return jnp.maximum(scaled, 0.0) * jnp.exp(-shift) / jnp.sqrt(jnp.pi)
 
 
 def flux_cdf(y, s):
@@ -219,10 +220,12 @@ def flux_cdf(y, s):
     Tested over speed ratios [-10, 10]; residual checks reject failed inversion.
     """
     shift = jnp.minimum(s, 0.0) ** 2
+
     def tail(z):
-        return (0.5 * jnp.exp(-(z-s)**2 + shift)
-                + s * jnp.sqrt(jnp.pi)
-                * jnp.exp(shift + log_ndtr(jnp.sqrt(2.) * (s-z))))
+        return 0.5 * jnp.exp(-((z - s) ** 2) + shift) + s * jnp.sqrt(jnp.pi) * jnp.exp(
+            shift + log_ndtr(jnp.sqrt(2.0) * (s - z))
+        )
+
     return 1.0 - tail(y) / tail(jnp.zeros_like(y))
 
 
@@ -231,14 +234,16 @@ def flux_quantile(u, s):
     """Inverse normalized drifting flux CDF, with an implicit pathwise tangent."""
     u, s = jnp.broadcast_arrays(u, s)
     lo = jnp.zeros_like(u)
-    hi = jnp.maximum(s, 0.) + 12.0
+    hi = jnp.maximum(s, 0.0) + 12.0
+
     def bisect(_, bounds):
         a, b = bounds
-        mid = (a+b)/2
+        mid = (a + b) / 2
         left = flux_cdf(mid, s) < u
         return jnp.where(left, mid, a), jnp.where(left, b, mid)
+
     lo, hi = jax.lax.fori_loop(0, 64, bisect, (lo, hi))
-    return (lo+hi)/2
+    return (lo + hi) / 2
 
 
 @flux_quantile.defjvp
@@ -248,7 +253,7 @@ def _flux_quantile_jvp(primals, tangents):
     y = flux_quantile(u, s)
     _, fy = jax.jvp(lambda z: flux_cdf(z, s), (y,), (jnp.ones_like(y),))
     _, fs = jax.jvp(lambda drift: flux_cdf(y, drift), (s,), (jnp.ones_like(s),))
-    return y, (du-fs*ds)/jnp.maximum(fy, jnp.finfo(y.dtype).tiny)
+    return y, (du - fs * ds) / jnp.maximum(fy, jnp.finfo(y.dtype).tiny)
 
 
 def sample_surface_velocities(key, n, temperature, stream, normal, mass):
@@ -257,24 +262,23 @@ def sample_surface_velocities(key, n, temperature, stream, normal, mass):
     Gaussian tangents are projected directly, avoiding frame branches. The normal
     flux speed uses the implicit inverse CDF. Shape/support corrections are separate.
     """
-    vscale = jnp.sqrt(2*K_BOLTZ*temperature/mass)
+    vscale = jnp.sqrt(2 * K_BOLTZ * temperature / mass)
     drift = jnp.dot(stream, normal)
-    s = drift/vscale
+    s = drift / vscale
     kn, kt = jax.random.split(key)
-    u = jnp.clip(indexed_uniform(kn, n), jnp.finfo(jnp.float64).eps,
-                 1-jnp.finfo(jnp.float64).eps)
-    speed = flux_quantile(u,s)
-    accepted = jnp.isfinite(speed) & (jnp.abs(flux_cdf(speed,s)-u) < 1e-10)
-    gaussian = indexed_normal(kt,n,(3,))*vscale/jnp.sqrt(2.)+stream
-    velocity = gaussian+(speed*vscale-jnp.sum(gaussian*normal,axis=1))[:,None]*normal
-    return velocity,accepted
+    u = jnp.clip(indexed_uniform(kn, n), jnp.finfo(jnp.float64).eps, 1 - jnp.finfo(jnp.float64).eps)
+    speed = flux_quantile(u, s)
+    accepted = jnp.isfinite(speed) & (jnp.abs(flux_cdf(speed, s) - u) < 1e-10)
+    gaussian = indexed_normal(kt, n, (3,)) * vscale / jnp.sqrt(2.0) + stream
+    velocity = gaussian + (speed * vscale - jnp.sum(gaussian * normal, axis=1))[:, None] * normal
+    return velocity, accepted
 
 
 def sample_face_velocities(key, n, res, axis, side, mass):
     """Cartesian adapter to the pathwise arbitrary-normal source sampler."""
-    f = 2*axis+side
-    normal = jnp.zeros(3).at[axis].set(1. if side == 0 else -1.)
-    return sample_surface_velocities(key,n,res.temp[f],res.vstream[f],normal,mass)
+    f = 2 * axis + side
+    normal = jnp.zeros(3).at[axis].set(1.0 if side == 0 else -1.0)
+    return sample_surface_velocities(key, n, res.temp[f], res.vstream[f], normal, mass)
 
 
 def sample_face_positions(key, n, grid, axis, side):
@@ -295,9 +299,39 @@ class InjectionDiagnostics:
     candidate_overflow: jax.Array
     storage_overflow: jax.Array
     tracking_exhausted: jax.Array
+    born_face: jax.Array = None
+    """``i32[N]``: the face each slot was born at THIS step, ``-1`` elsewhere.  Filled
+    only by :func:`inject`; the ensemble adjoint reads it to attach source scores."""
+    born_v: jax.Array = None
+    """``f64[N, 3]``: the velocity each newborn was **sampled** with (before its first
+    wall interaction), which is what the source density's score is a function of."""
+    born_walls: object = None
+    """:class:`jax_dsmc.wall_adjoint.WallEvents` of the newborns' birth-step flight
+    (``(K_bounce, N)``), so their diffuse hits are scored like everyone else's."""
 
 
-def inject(state, grid, faces, res, mass, fnum, dt, key, capacity, *, wall=None, max_bounces=4, track=False, score_mode="paper", return_diagnostics=False):  # noqa: PLR0915 -- source accounting remains one replayable event
+def inject(  # noqa: PLR0915 -- source accounting remains one replayable event
+    state,
+    grid,
+    faces,
+    res,
+    mass,
+    fnum,
+    dt,
+    key,
+    capacity,
+    *,
+    wall=None,
+    max_bounces=4,
+    track=False,
+    score_mode="paper",
+    return_diagnostics=False,
+    epsilon=0.0,
+    acc_delta=0.0,
+    mesh=None,
+    tracker="stencil",
+    max_walk=8,
+):
     """Emit through every ``INFLOW`` face into dead slots.  Static shapes throughout.
 
     Returns ``(state, injected, shortfall)``.
@@ -317,11 +351,19 @@ def inject(state, grid, faces, res, mass, fnum, dt, key, capacity, *, wall=None,
     ``x_face + dtremain * v``.  Without it every entrant would sit exactly on the face
     at the start of the step and produce an artificial density spike there.
     """
+    # the walk records one event row per iteration, the stencil one per pass
+    k_events = max_walk if (mesh is not None and tracker == "walk") else max_bounces
+
     if score_mode not in ("paper", "trajectory"):
         raise ValueError("score_mode must be paper or trajectory")
     trajectory = state.logh_acc[0]
-    details = InjectionDiagnostics(*(jnp.int32(0) for _ in range(7)))
     n_part = state.x.shape[0]
+    details = InjectionDiagnostics(
+        *(jnp.int32(0) for _ in range(7)),
+        born_face=jnp.full(n_part, -1, jnp.int32),
+        born_v=jnp.zeros((n_part, 3)),
+        born_walls=no_wall_events(n_part, k_events),
+    )
     # dead slots first; `argsort` on a bool puts False (dead) ahead of True
     order = jnp.argsort(state.alive.astype(jnp.int32), stable=True)
     n_dead = jnp.sum(~state.alive)
@@ -355,22 +397,47 @@ def inject(state, grid, faces, res, mass, fnum, dt, key, capacity, *, wall=None,
 
             xf = sample_face_positions(k_x, capacity, grid, axis, side)
             vf, accepted = sample_face_velocities(k_v, capacity, res, axis, side, mass)
+            v_sampled = vf
             sampler_failed = jnp.sum((jnp.arange(capacity) < n_emit) & ~accepted, dtype=jnp.int32)
             exhausted = jnp.int32(0)
             frac = dt * indexed_uniform(k_t, capacity)
             if track:
                 wanted_birth = (jnp.arange(capacity) < n_emit) & accepted
-                xf, vf, surviving, exhausted, boundary_score = advance(
-                    xf, vf, wanted_birth, grid, faces, wall, mass, frac,
-                    jax.random.fold_in(k_t, 1), max_bounces=max_bounces)
+                # Newborns take the SAME wall treatment as everyone else this step:
+                # the regularised time and the relaxed accommodation are physics
+                # switches, not per-population choices.
+                xf, vf, surviving, exhausted, boundary_score, hits = advance(
+                    xf,
+                    vf,
+                    wanted_birth,
+                    grid,
+                    faces,
+                    wall,
+                    mass,
+                    frac,
+                    jax.random.fold_in(k_t, 1),
+                    epsilon=epsilon,
+                    acc_delta=acc_delta,
+                    max_bounces=max_bounces,
+                    return_events=True,
+                    mesh=mesh,
+                    tracker=tracker,
+                    max_walk=max_walk,
+                )
+                if mesh is not None:
+                    # `TrackerCounts`: an entrant the tracker lost (or found in the body)
+                    # is an invalid source step, like an unresolved travel
+                    exhausted = exhausted.exhausted + exhausted.inside_body
                 # Absorption is physical; unresolved travel is an invalid source step.
                 shortfall = shortfall + exhausted
                 escaped = jnp.sum(wanted_birth & ~surviving, dtype=jnp.int32)
                 accepted = accepted & surviving
-                trajectory = trajectory+jnp.sum(boundary_score)
+                trajectory = trajectory + jnp.sum(boundary_score)
             else:
                 xf = xf + vf[:, : len(grid.n)] * frac[:, None]
                 escaped = jnp.int32(0)
+                boundary_score = jnp.zeros(capacity)
+                hits = no_wall_events(capacity, k_events)
 
             wanted = (jnp.arange(capacity) < n_emit) & accepted
             # Compact actual candidates, not the padded per-face allocation.
@@ -380,24 +447,42 @@ def inject(state, grid, faces, res, mass, fnum, dt, key, capacity, *, wall=None,
             revive = revive.at[slots].set(True, mode="drop")
             x_new = x_new.at[slots].set(xf, mode="drop")
             v_new = v_new.at[slots].set(vf, mode="drop")
-            logh_new = logh_new.at[slots].set(log_p_count, mode="drop")
+            # An entrant's own birth-step wall events belong to it (paper mode); the
+            # trajectory scalar already carries them in `trajectory`.
+            logh_new = logh_new.at[slots].set(log_p_count + boundary_score, mode="drop")
             inserted = jnp.sum(take, dtype=jnp.int32)
             injected = injected + inserted
             used = used + inserted
             # Include sampler failures and requested integer births beyond capacity.
             shortfall = shortfall + n_emit - inserted - escaped
-            trajectory = trajectory+log_p_count
+            trajectory = trajectory + log_p_count
             details = InjectionDiagnostics(
-                details.requested+n_emit, details.inserted+inserted, details.escaped+escaped,
-                details.sampler_failed+sampler_failed,
-                details.candidate_overflow+jnp.maximum(n_emit-capacity, 0),
-                details.storage_overflow+jnp.sum(wanted, dtype=jnp.int32)-inserted,
-                details.tracking_exhausted+jnp.asarray(exhausted,jnp.int32))
+                details.requested + n_emit,
+                details.inserted + inserted,
+                details.escaped + escaped,
+                details.sampler_failed + sampler_failed,
+                details.candidate_overflow + jnp.maximum(n_emit - capacity, 0),
+                details.storage_overflow + jnp.sum(wanted, dtype=jnp.int32) - inserted,
+                details.tracking_exhausted + jnp.asarray(exhausted, jnp.int32),
+                born_face=details.born_face.at[slots].set(2 * axis + side, mode="drop"),
+                born_v=details.born_v.at[slots].set(v_sampled, mode="drop"),
+                born_walls=WallEvents(
+                    details.born_walls.face.at[:, slots].set(hits.face, mode="drop"),
+                    details.born_walls.v_out.at[:, slots].set(hits.v_out, mode="drop"),
+                    details.born_walls.diffuse.at[:, slots].set(hits.diffuse, mode="drop"),
+                ),
+            )
 
     # AFTER `revive_slots`, which zeroes the accumulator for revived slots (gap U6): an
     # entrant has no inherited history, but the decision that created it is its own.
     state = revive_slots(state, revive, x_new, v_new)
-    state = dataclasses.replace(state, logh_acc=(jnp.broadcast_to(trajectory, (n_part,))
-                                if score_mode == "trajectory" else state.logh_acc+logh_new))
+    state = dataclasses.replace(
+        state,
+        logh_acc=(
+            jnp.broadcast_to(trajectory, (n_part,))
+            if score_mode == "trajectory"
+            else state.logh_acc + logh_new
+        ),
+    )
     result = (state, injected, shortfall)
     return (*result, details) if return_diagnostics else result

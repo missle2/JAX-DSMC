@@ -282,10 +282,14 @@ def backward(trace, cfg=None, seed=0, terminal_reward=None):
             for j in range(cfg.cells):
                 pool = frame.points[j, frame.valid[j]]
                 n = len(pool)
-                if not n:
+                if n < 2:
+                    offset += n
                     continue
                 a = np.repeat(pool, cfg.partners, axis=0)
-                partner_indices = rng.integers(n, size=n * cfg.partners)
+                # Partners are OTHER retained states: a self-pair has zero relative
+                # velocity and contributes an identically zero four-term sample.
+                own = np.repeat(np.arange(n), cfg.partners)
+                partner_indices = (own + 1 + rng.integers(max(n - 1, 1), size=n * cfg.partners)) % n
                 b = pool[partner_indices].copy()
                 base = values[offset : offset + n].copy()
                 ap, bp = a.copy(), b.copy()

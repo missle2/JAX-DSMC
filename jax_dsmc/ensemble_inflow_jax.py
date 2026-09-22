@@ -101,6 +101,21 @@ def local_affine(points, values, valid, query, neighbors, scale, tile=128):
     return lax.scan(batch, None, q)[1].reshape(-1)[:nq]
 
 
+def partner_indices(counts, uniform):
+    """Uniform partner ranks among the OTHER valid retained states of each cell.
+
+    ``counts`` is ``i32[C]`` valid states per cell and ``uniform`` is
+    ``f64[C, R, P]``.  A self-pair has zero relative velocity and is an identically
+    zero four-term sample, so admitting it biases the collision correction by
+    ``O(1/R)``; ranks beyond ``counts`` are junk and must be masked by the caller.
+    """
+    own = jnp.arange(uniform.shape[1])[None, :, None]
+    n = counts[:, None, None]
+    return (own + 1 + jnp.floor(uniform * jnp.maximum(n - 1, 1)).astype(jnp.int32)) % jnp.maximum(
+        n, 1
+    )
+
+
 def _key(key, stage, step=0, side=0):
     return random.fold_in(random.fold_in(random.fold_in(key, stage), step), side)
 
@@ -291,7 +306,7 @@ def backward(trace, cfg, key, terminal_reward=None, tile=128):  # noqa: PLR0915 
         if cfg.q0:
             n = valid.sum(axis=1)
             u = random.uniform(_key(key, 0, k), (cfg.cells, cfg.retained, cfg.partners))
-            ids = jnp.floor(u * jnp.maximum(n[:, None, None], 1)).astype(jnp.int32)
+            ids = partner_indices(n, u)
             b = targets[jnp.arange(cfg.cells)[:, None, None], ids]
             a = jnp.broadcast_to(targets[:, :, None], b.shape)
             av, bv = _scatter(a[..., 1:], b[..., 1:], _key(key, 1, k))
@@ -302,9 +317,17 @@ def backward(trace, cfg, key, terminal_reward=None, tile=128):  # noqa: PLR0915 
                 - base[..., None]
                 - base[jnp.arange(cfg.cells)[:, None, None], ids]
             )
-            values = base + cfg.dt * cfg.q0 * trace.frames.counts[
-                k, :, None
-            ] * cfg.cells / cfg.n_initial * correction.mean(axis=-1)
+            pairable = (n >= 2)[:, None]
+            values = base + jnp.where(
+                pairable,
+                cfg.dt
+                * cfg.q0
+                * trace.frames.counts[k, :, None]
+                * cfg.cells
+                / cfg.n_initial
+                * correction.mean(axis=-1),
+                0.0,
+            )
         return (jnp.where(valid, values, 0.0).reshape(-1), gradient), None
 
     (_, gradient), _ = lax.scan(

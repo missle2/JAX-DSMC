@@ -71,6 +71,13 @@ The cases here sit at `N·C·M` = `1.3e6` (D=1), `5.1e6` (D=2), `2.0e7` (D=3).
 
 ## Results — mode A, `D = 1, 2, 3`
 
+> Regenerated on the branch 2026-09-15 (`python3 -m examples.shock_adjoint --mode pathwise`,
+> log `scratch/bench/refresh_shock_adjoint_pathwise.log`): the branch changed the NTC
+> random stream (per-slot streams) and pins this example to the terminal-label score
+> (`score_mode="paper"`); all nine cases still PASS, worst case 1.5 (ratio to the
+> tolerance).  The mode-B / variance figures further down are pre-branch — see the banner
+> in [`VARIANCE.md`](VARIANCE.md).
+
 `python3 -m examples.shock_adjoint --mode pathwise` (250 s on one RTX 3050 Ti).
 Every sweep is 7 points spanning ±15% of Bird's Mach-2 argon reference, and the
 finite-difference step is re-bisected at every point until the decision checksum

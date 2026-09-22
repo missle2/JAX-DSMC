@@ -513,6 +513,26 @@ UNVERIFIED = [
         "non-uniform fnum without reweighting breaks mass conservation",
         "exhibit the mass drift with particles crossing cells; assert the setup guard fires",
     ),
+    (
+        "U11",
+        "M7",
+        "a production estimator exists for parameters that act only through decisions "
+        "(inlet density, diameter, omega, accommodation)",
+        # Opened 2026-09-15 by docs/ADJOINT_BRANCH_REVIEW.md.  Three candidates: the
+        # terminal-label score (biased, U2), the once-per-event trajectory score
+        # (unbiased; variance grows with the number of scored events; needs an
+        # independent baseline), and P3's ensemble adjoint (low variance, but only
+        # implemented for Maxwell molecules on P3's own forward model).  The
+        # `examples/gradient_bench` studies measure the first two; the third needs a
+        # VSS-kernel four-term backward and retained frames inside `simulate.run`.
+        # 2026-09-15, measured (docs/ADJOINT_BRANCH_REVIEW.md sections 4.9, 5.4-5.5):
+        # the trajectory score FAILS the gate (SE ratio 1.7 -> 59 from M = 5 to 40); the
+        # particle-carried ensemble adjoint (route b, `jax_dsmc/ensemble_backward.py`)
+        # PASSES on the inlet shock -- SE ratio 3.1-3.2 for temperature, 0.43 for density,
+        # |z| <= 1.8 against the CRN finite difference at 16-1000 particles/cell.
+        "SETTLED for the inlet shock: use the ensemble adjoint.  Open for walls (kernel "
+        "pull-back), diam/omega (rate weights) and the device port",
+    ),
 ]
 
 # These three fail silently -- no error, no NaN, no diagnostic. Same shape as the
