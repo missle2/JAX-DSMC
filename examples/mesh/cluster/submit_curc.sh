@@ -30,6 +30,11 @@ case "${GPU_KIND}" in
   mi100) PART="${PART:-ami100}"; GRES="${GRES_TYPE:-mi100}"; CORES=21; MEM=70; PER_NODE=3 ;;
   *) echo "unknown GPU_KIND ${GPU_KIND} (h200|a100|mi100)"; exit 1 ;;
 esac
+# study.py needs python >= 3.8 (annotations); the login node's /usr/bin/python3 is 3.6, so
+# use the jobs' venv interpreter (PYTHON overrides).
+PY="${PYTHON:-${JAX_VENV:-/projects/${USER}/jax-env}/bin/python3}"
+[ -x "${PY}" ] || PY=python3
+"${PY}" -c 'import sys; sys.exit(sys.version_info < (3, 8))' || { echo "${PY} is $("${PY}" -V); need >= 3.8 (set PYTHON or JAX_VENV)"; exit 1; }
 mkdir -p examples/mesh/cluster/logs
 for group in "${GROUPS_TO_RUN[@]}"; do
   case "${group}" in
@@ -38,10 +43,11 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     opt) HOURS=24 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
-  STUDY=(python3 -m examples.mesh.cluster.study --group "${group}" --gpus-per-node "${PER_NODE}")
+  STUDY=("${PY}" -m examples.mesh.cluster.study --group "${group}" --gpus-per-node "${PER_NODE}")
   mapfile -t NAMES < <("${STUDY[@]}" --names)
   mapfile -t CMDS < <("${STUDY[@]}" --list)
   mapfile -t GPUS < <("${STUDY[@]}" --gpus | awk '{print $2}')
+  [ ${#NAMES[@]} -gt 0 ] && [ ${#NAMES[@]} -eq ${#CMDS[@]} ] || { echo "no jobs listed for ${group}"; exit 1; }
   for i in "${!NAMES[@]}"; do
     n="${GPUS[$i]}"
     hours="${HOURS}"

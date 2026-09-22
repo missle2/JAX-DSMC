@@ -35,7 +35,7 @@ python3 -m examples.mesh.cluster.collect           # merges the seed files, figu
 | `check_env.sbatch` / `check_env.py` | asserts JAX ≥ 0.4.36 (the code uses `jax.tree.map`, `jax.random.key`, `register_dataclass(data_fields, meta_fields)`), an accelerator, float64; runs a 40-step level-set circle with its shape terms; `gpu-normal` on one H200 (on `gpu-testing` only an A100 MIG slice `a100_3g.20gb` is given) |
 | `study.py` | the job matrix by group (`--group sphere\|mode2\|opt --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |
 | `job.sbatch` | one job: resources from the `sbatch` line, the command from `CMD` |
-| `submit_curc.sh` | one `sbatch` per job line with a GPU's share of the node (H200: 32 cores, 128 GB; A100: 21 cores, 70 GB), the group's wall time; `GPU_KIND=a100\|mi100`, `PART`, `GRES_TYPE` override the partition / GPU |
+| `submit_curc.sh` | one `sbatch` per job line with a GPU's share of the node (H200: 32 cores, 128 GB; A100: 21 cores, 70 GB), the group's wall time; `GPU_KIND=a100\|mi100`, `PART`, `GRES_TYPE` override the partition / GPU; builds the job list with the venv's python (the login node's `python3` is 3.6; `PYTHON` overrides) |
 | `collect.py` | per-seed files → artifacts, `figures/optimize_convergence.png`, `figures/gradient_seed_convergence.png`, the sphere gate row |
 
 Every command **resumes from its own artifact** (seed rows / optimiser iterates already

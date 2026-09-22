@@ -15,6 +15,8 @@
 #SBATCH --gres=gpu:h200:1
 #SBATCH --time=00:20:00
 #SBATCH --output=examples/mesh/cluster/logs/%x_%j.out
+#SBATCH --mail-type=END,FAIL,TIME_LIMIT
+#SBATCH --mail-user=aakash.jain@colorado.edu
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR}"
 # shellcheck disable=SC1091

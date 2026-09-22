@@ -8,6 +8,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --output=examples/mesh/cluster/logs/%x_%j.out
+#SBATCH --mail-type=END,FAIL,TIME_LIMIT
+#SBATCH --mail-user=aakash.jain@colorado.edu
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR}"
 # shellcheck disable=SC1091
