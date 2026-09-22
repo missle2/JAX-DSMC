@@ -2,7 +2,7 @@
 # One study job on CURC Alpine.  Resources (--gres, --cpus-per-task, --mem, --time,
 # --job-name) come from submit_curc.sh on the sbatch command line; the command comes in
 # the environment variable CMD (--export=ALL,CMD=...).  Runs from the repository root.
-#SBATCH --partition=aa100
+#SBATCH --partition=ah200
 #SBATCH --qos=gpu-normal
 #SBATCH --account=ucb-general
 #SBATCH --nodes=1

@@ -19,7 +19,8 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, 20
   iterates, ``S`` CRN seeds per iterate for ``S in SEED_COUNTS`` and both optimisers
   (same step, smoothing and band; Adam's step is its learning rate); the ``S`` seeds of an
-  iterate run concurrently on ``min(S, GPUS_PER_NODE)`` GPUs (``optimize.py --workers``).
+  iterate run concurrently on ``min(S, gpus_per_node)`` GPUs (``optimize.py --workers``;
+  ``--gpus-per-node`` = the partition's GPUs per node, default ``GPUS_PER_NODE``).
 
 Settings shared by the finer circle jobs: ``levelset_samples = 16`` so the hit search
 reach ``16 h_phi / 2 = 0.5`` still covers the fastest moves, ``grazing = 0.05`` (the
@@ -37,7 +38,7 @@ OPTIMIZERS = ("gd", "adam")
 SPHERE_SEEDS = 8
 MODE2_SEEDS = 32
 SEED_START = 32
-GPUS_PER_NODE = 3  # CURC Alpine ami100 / aa100 nodes
+GPUS_PER_NODE = 4  # CURC Alpine ah200 nodes (aa100 / ami100 have 3)
 FINE = "--fnum-scale 1 --grid-scale 2 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05"
 PULLBACK = "--substeps 1 --partners 2"
 RESULTS = "examples/gradient_bench/results"
@@ -58,7 +59,7 @@ def seed_jobs(base: str, artifact: str, n_seeds: int) -> dict[str, str]:
     }
 
 
-def jobs(group: str) -> dict[str, str]:
+def jobs(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, str]:
     if group == "sphere":
         base = (
             "python3 -m examples.ensemble_mesh --case sphere --body levelset --parameter radius "
@@ -79,18 +80,18 @@ def jobs(group: str) -> dict[str, str]:
                 out[f"opt_S{s}_{opt}"] = (
                     f"python3 -m examples.mesh.optimize --tag circle_fine_S{s}_{opt} "
                     f"--optimizer {opt} --iterations 20 --seeds-per-iterate {s} "
-                    f"--workers {min(s, GPUS_PER_NODE)} {FINE} --step 0.05 --smooth 2 "
+                    f"--workers {min(s, gpus_per_node)} {FINE} --step 0.05 --smooth 2 "
                     f"--band 1.0 {PULLBACK}"
                 )
         return out
     raise ValueError(group)
 
 
-def gpus(group: str) -> dict[str, int]:
-    """GPUs per job: one per seed job; ``min(S, GPUS_PER_NODE)`` per optimisation."""
+def gpus(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, int]:
+    """GPUs per job: one per seed job; ``min(S, gpus_per_node)`` per optimisation."""
     if group != "opt":
         return dict.fromkeys(jobs(group), 1)
-    return {f"opt_S{s}_{opt}": min(s, GPUS_PER_NODE) for s in SEED_COUNTS for opt in OPTIMIZERS}
+    return {f"opt_S{s}_{opt}": min(s, gpus_per_node) for s in SEED_COUNTS for opt in OPTIMIZERS}
 
 
 def main(argv=None):
@@ -99,12 +100,13 @@ def main(argv=None):
     ap.add_argument("--list", action="store_true", help="print the job commands, one per line")
     ap.add_argument("--names", action="store_true", help="print the job names")
     ap.add_argument("--gpus", action="store_true", help="print `name gpus` per job")
+    ap.add_argument("--gpus-per-node", type=int, default=GPUS_PER_NODE)
     args = ap.parse_args(argv)
-    for name, cmd in jobs(args.group).items():
+    for name, cmd in jobs(args.group, args.gpus_per_node).items():
         if args.names:
             print(name)
         elif args.gpus:
-            print(name, gpus(args.group)[name])
+            print(name, gpus(args.group, args.gpus_per_node)[name])
         else:
             print(cmd)
 

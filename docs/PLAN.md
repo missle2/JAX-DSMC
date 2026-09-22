@@ -596,9 +596,10 @@ The sphere gradient, the finer circle (48 k particles, 40 × 40, `h_φ = 0.0625`
 the seeds × {GD, Adam} optimiser study are set up for CURC Alpine
 (`examples/mesh/cluster/`: `check_env.sbatch`, then `submit_curc.sh sphere|mode2|opt` —
 one right-sized job per seed for the gradients, one per (S, optimiser) with the S seeds
-of an iterate on min(S, 3) GPUs (`optimize.py --workers`) — then `collect.py`), not run
-here.  The A100 partition with a CUDA venv: the MI100 `jax` module is 0.4.7, the code
-needs ≥ 0.4.36.  Neither the diffuse circle nor the specular capsule gates them (all
+of an iterate on min(S, 4) GPUs (`optimize.py --workers`) — then `collect.py`), not run
+here.  The H200 partition (`ah200`, 4 per node, `gpu-normal`) with a CUDA venv (jax
+0.6.2 verified on Alpine 2026-09-21; the A100s are the fallback): the MI100 `jax`
+module is 0.4.7, the code needs ≥ 0.4.36.  Neither the diffuse circle nor the specular capsule gates them (all
 cluster bodies are specular and curved everywhere).
 
 **Further note — hierarchical (multi-level) grids, deliberately not built yet.** SPARTA

@@ -27,7 +27,7 @@ def main() -> int:
     print(f"jax {jax.__version__}  backend {jax.default_backend()}  devices {jax.devices()}")
     if version < MIN_JAX:
         print(
-            f"jax {jax.__version__} is older than {'.'.join(map(str, MIN_JAX))}: use the CUDA venv route (env.sh, GPU_KIND=a100); the rocm/5.3.0 jax module is 0.4.7"
+            f"jax {jax.__version__} is older than {'.'.join(map(str, MIN_JAX))}: use the CUDA venv route (env.sh, GPU_KIND=h200 or a100); the rocm/5.3.0 jax module is 0.4.7"
         )
         return 1
     if jax.default_backend() == "cpu":
