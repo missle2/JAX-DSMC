@@ -654,6 +654,53 @@ def test_pooled_one_sided_node_gradients_are_exact_on_a_quadratic_field():
     np.testing.assert_array_equal(np.asarray(tables[2]).sum(axis=1), expect)
 
 
+def test_stratified_node_gradients_ignore_the_other_class():
+    """Two populations in every cell -- "about to hit" with ``lam = 2 m v_x`` and
+    "reflected" with ``lam = 0`` (the phase-space split next to a wall): the mixed fit of
+    a reflected particle reads a ``d lam / d v_x`` of order ``2 m P(hit)`` (the specular
+    capsule's -27 %), the class-stratified fit reads zero, and the hitting class keeps
+    its exact slope."""
+    key = jax.random.PRNGKey(5)
+    n, dim = 800, 2
+    grid = GridSpec(jnp.zeros(dim), jnp.ones(dim), (4, 3))
+    x = jax.random.uniform(key, (n, dim))
+    v = jax.random.normal(jax.random.fold_in(key, 1), (n, 3))
+    klass = jax.random.bernoulli(jax.random.fold_in(key, 2), 0.5, (n,))
+    lam = jnp.where(klass, 2.0 * v[:, 0], 0.0)
+    alive = jnp.ones(n, bool)
+    scale = jnp.array([0.25, 1 / 3, 1.0, 1.0, 1.0])
+    for pool, k in ((0, 24), (1, 96)):
+        _gx, gv_mixed = ensemble_device.node_gradients(
+            x, v, alive, lam, grid, 128, scale, k, pool=pool
+        )
+        _gx, gv = ensemble_device.node_gradients(
+            x, v, alive, lam, grid, 128, scale, k, pool=pool, klass=klass
+        )
+        mixed = np.asarray(gv_mixed[:, 0])[~np.asarray(klass)]
+        assert abs(mixed.mean()) > 0.5  # the mixture's slope, order 2 P(hit)
+        np.testing.assert_allclose(np.asarray(gv[:, 0])[~np.asarray(klass)], 0.0, atol=1e-9)
+        np.testing.assert_allclose(np.asarray(gv[:, 0])[np.asarray(klass)], 2.0, rtol=1e-4)
+        np.testing.assert_allclose(np.asarray(gv[:, 1:])[np.asarray(klass)], 0.0, atol=1e-4)
+
+
+def test_hit_ahead_marks_later_body_hits_only():
+    """``shape.hit_ahead``: true at the steps strictly before a slot's body hit (surface
+    id ``>= 2D``); box-face hits (``< 2D``) and the hit's own step do not count."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    m, k, n, dim = 5, 2, 3, 2
+    face = np.full((m, k, n), -1, np.int32)
+    face[3, 0, 0] = 2 * dim + 4  # slot 0: body hit at step 3
+    face[1, 1, 1] = 1  # slot 1: a box face at step 1 only
+    face[0, 0, 2] = 2 * dim  # slot 2: body hit at step 0 (nothing ahead of it)
+    face[4, 1, 2] = 2 * dim  # ... and again at step 4
+    rec = SimpleNamespace(x=jnp.zeros((m, n, dim)), walls=SimpleNamespace(face=jnp.asarray(face)))
+    ahead = np.asarray(shape.hit_ahead(rec, None))
+    np.testing.assert_array_equal(ahead[:, 0], [True, True, True, False, False])
+    np.testing.assert_array_equal(ahead[:, 1], [False] * m)
+    np.testing.assert_array_equal(ahead[:, 2], [True, True, True, True, False])
+
+
 def test_along_flight_replaces_only_the_component_along_the_velocity():
     gx = jnp.array([[1.0, 2.0], [0.3, -0.4]])
     v = jnp.array([[3.0, 0.0, 5.0], [1.0, 1.0, 0.0]])

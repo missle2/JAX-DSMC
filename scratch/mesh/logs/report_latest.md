@@ -54,16 +54,19 @@
 | G3 | embedded plane position, windowed shear [two-sided fit, no timing term: superseded] | 32 | -0.01806 | -0.01217 ± 0.0054 (pathwise -0.01217, score +0, timing +0) | +0.04312 ± 0.01 (0.01) | truncated FD +0.00173 ± 0.0026 (64 seeds), z = -2.33 | -4.81 | False |
 | G3 | embedded plane position, windowed shear | 32 | -0.01806 | -0.001785 ± 0.005 (pathwise -0.001703, score +0, timing -8.124e-05) | +0.04312 ± 0.01 (0.01) | truncated FD +0.00173 ± 0.0026 (64 seeds), z = -0.63 | -3.97 | True |
 | G3 | embedded plane position, windowed shear | 32 | -0.01814 | +0.0141 ± 0.014 (pathwise +0.01162, score +0, timing +0.002482) | +0.01881 ± 0.0081 (0.01) | truncated FD +0.01696 ± 0.0023 (64 seeds), z = -0.21 | -0.30 | True |
-| D | analytic circle radius, windowed drag | 48 | 3.697e-20 | +1.44e-20 ± 8.9e-22 (pathwise +1.44e-20, score +0, timing +7.059e-22) | +1.395e-20 ± 2e-22 (0.05) | +1.232e-20 (F/r) | +0.49 | True |
-| D | analytic circle radius, windowed drag | 35 | 3.701e-20 | +1.452e-20 ± 1.1e-21 (pathwise +1.452e-20, score +0, timing +9.598e-22) | +1.407e-20 ± 2.2e-22 (0.05) | +1.234e-20 (F/r) | +0.40 | True |
-| D | analytic circle centre_x, windowed drag | 32 | 3.7e-20 | -8.496e-22 ± 6.3e-22 (pathwise -8.496e-22, score +0, timing -6.028e-22) | -6.878e-23 ± 1.7e-22 (0.1) | +0 (F/r) | -1.20 | True |
-| LS2 | level-set circle radius, windowed drag | 4 | 3.68e-20 | +1.207e-20 ± 8.9e-22 (pathwise +1.207e-20, score +0, timing -3.233e-22) | +1.398e-20 ± 1e-21 (0.05) | +1.227e-20 (F/r) | -1.39 | True |
-| LS2 | level-set circle cos 2θ mode, windowed drag | 4 | 3.68e-20 | -1.587e-20 ± 3e-22 (pathwise -1.587e-20, score +0, timing +1.531e-22) | -1.571e-20 ± 5.9e-22 (0.05) | +0 (F/r) | -0.23 | True |
-| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] | 4 | 1.872e-20 | +1.274e-20 ± 1.6e-21 (pathwise -1.541e-22, score +7.041e-21, timing +6.46e-22, silhouette +5.853e-21) | +1.169e-20 ± 9.6e-22 (0.05) | +0 (F/r) | +0.57 | True |
-| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] | 4 | 1.872e-20 | +1.228e-20 ± 1.3e-21 (pathwise -1.541e-22, score +6.577e-21, timing +6.46e-22, silhouette +5.853e-21) | +1.169e-20 ± 9.6e-22 (0.05) | +0 (F/r) | +0.36 | True |
-| GP | diffuse capsule plate half-width, windowed drag (silhouette term) | 4 | 1.872e-20 | +1.191e-20 ± 6.8e-22 (pathwise +6.039e-21, score +2.265e-23, timing +6.46e-22, silhouette +5.853e-21) | +1.169e-20 ± 9.6e-22 (0.05) | +0 (F/r) | +0.19 | True |
-| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] | 4 | 1.859e-20 | +1.104e-20 ± 2.5e-22 (pathwise -2.022e-22, score +5.783e-21, timing +2.783e-22, silhouette +5.463e-21) | +1.305e-20 ± 1.4e-21 (0.05) | +0 (F/r) | -1.41 | True |
-| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] | 2 | 1.872e-20 | +1.039e-20 ± 7.5e-22 (pathwise +1.026e-20, score +0, timing -3.734e-22, silhouette +1.295e-22) | +1.354e-20 ± 9.6e-22 (0.05) | +0 (F/r) | -2.59 | False |
+| D | analytic circle radius, windowed drag [mixed-pool ∇λ fits] | 48 | 3.697e-20 | +1.44e-20 ± 8.9e-22 (pathwise +1.44e-20, score +0, timing +7.059e-22) | +1.395e-20 ± 2e-22 (0.05) | +1.232e-20 (F/r) | +0.49 | True |
+| D | analytic circle radius, windowed drag [mixed-pool ∇λ fits] | 35 | 3.701e-20 | +1.452e-20 ± 1.1e-21 (pathwise +1.452e-20, score +0, timing +9.598e-22) | +1.407e-20 ± 2.2e-22 (0.05) | +1.234e-20 (F/r) | +0.40 | True |
+| D | analytic circle centre_x, windowed drag [mixed-pool ∇λ fits] | 32 | 3.7e-20 | -8.496e-22 ± 6.3e-22 (pathwise -8.496e-22, score +0, timing -6.028e-22) | -6.878e-23 ± 1.7e-22 (0.1) | +0 (F/r) | -1.20 | True |
+| LS2 | level-set circle radius, windowed drag [mixed-pool ∇λ fits] | 4 | 3.68e-20 | +1.207e-20 ± 8.9e-22 (pathwise +1.207e-20, score +0, timing -3.233e-22) | +1.398e-20 ± 1e-21 (0.05) | +1.227e-20 (F/r) | -1.39 | True |
+| LS2 | level-set circle cos 2θ mode, windowed drag [mixed-pool ∇λ fits] | 4 | 3.68e-20 | -1.587e-20 ± 3e-22 (pathwise -1.587e-20, score +0, timing +1.531e-22) | -1.571e-20 ± 5.9e-22 (0.05) | +0 (F/r) | -0.23 | True |
+| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] [mixed-pool ∇λ fits] | 4 | 1.872e-20 | +1.274e-20 ± 1.6e-21 (pathwise -1.541e-22, score +7.041e-21, timing +6.46e-22, silhouette +5.853e-21) | +1.169e-20 ± 9.6e-22 (0.05) | +0 (F/r) | +0.57 | True |
+| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] [mixed-pool ∇λ fits] | 4 | 1.872e-20 | +1.228e-20 ± 1.3e-21 (pathwise -1.541e-22, score +6.577e-21, timing +6.46e-22, silhouette +5.853e-21) | +1.169e-20 ± 9.6e-22 (0.05) | +0 (F/r) | +0.36 | True |
+| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [mixed-pool ∇λ fits] | 4 | 1.872e-20 | +1.191e-20 ± 6.8e-22 (pathwise +6.039e-21, score +2.265e-23, timing +6.46e-22, silhouette +5.853e-21) | +1.169e-20 ± 9.6e-22 (0.05) | +0 (F/r) | +0.19 | True |
+| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] | 4 | 1.861e-20 | +1.337e-20 ± 3.6e-22 (pathwise +1.359e-20, score +0, timing +1.85e-22, silhouette -2.201e-22) | +1.355e-20 ± 3.8e-22 (0.05) | +0 (F/r) | -0.35 | True |
+| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [mixed-pool ∇λ fits] | 4 | 1.861e-20 | +9.452e-21 ± 6.7e-22 (pathwise +9.672e-21, score +0, timing +1.85e-22, silhouette -2.201e-22) | +1.355e-20 ± 3.8e-22 (0.05) | +0 (F/r) | -5.32 | False |
+| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 4 | 1.859e-20 | +1.104e-20 ± 2.5e-22 (pathwise -2.022e-22, score +5.783e-21, timing +2.783e-22, silhouette +5.463e-21) | +1.305e-20 ± 1.4e-21 (0.05) | +0 (F/r) | -1.41 | True |
+| GP | diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 2 | 1.872e-20 | +1.039e-20 ± 7.5e-22 (pathwise +1.026e-20, score +0, timing -3.734e-22, silhouette +1.295e-22) | +1.354e-20 ± 9.6e-22 (0.05) | +0 (F/r) | -2.59 | False |
+| GD | diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms) | 4 | 4.142e-20 | +1.312e-20 ± 5.2e-22 (pathwise +5.139e-21, score -2.04e-22, timing +3.586e-22, silhouette +8.183e-21) | +1.128e-20 ± 1.6e-21 (0.05) | +1.381e-20 (F/r) | +1.10 | True |
 
 Fit bias on the plane (replica-exact value gradients, 3 seeds, x/v-part of the windowed shear estimator): true +0.0030 ± 0.0007; one-sided fit +0.0048 ± 0.0025 (bias +0.0017 ± 0.0024); two-sided fit -0.0265 ± 0.0114 (bias -0.0295 ± 0.0114)
 
@@ -73,17 +76,17 @@ Fit bias on the plane (replica-exact value gradients, 3 seeds, x/v-part of the w
 
 | quantity | max |Δ| / max |analytic| over common seeds |
 |---|---|
-| objective | 2.14e-06 |
-| fd | 9.38e-05 |
-| hits | 0.00e+00 |
-| pathwise_tally | 3.58e-02 |
-| timing | 2.23e-06 |
-| gradient, variant `one` (x-part, v-part) | 2.31e-02 (1.90e-03, 2.69e-03) |
-| gradient, variant `one_pool` (x-part, v-part) | 3.30e-02 (8.33e-04, 7.12e-03) |
-| gradient, variant `along` (x-part, v-part) | 3.13e-02 (2.25e-03, 2.69e-03) |
-| gradient, variant `along_pool` (x-part, v-part) | 3.38e-02 (5.43e-04, 7.12e-03) |
+| objective | 1.34e-01 |
+| fd | 1.26e-01 |
+| hits | 2.54e-02 |
+| pathwise_tally | 7.21e-01 |
+| timing | 4.38e-01 |
+| gradient, variant `one` (x-part, v-part) | 7.79e-01 (1.79e+00, 1.00e+00) |
+| gradient, variant `one_pool` (x-part, v-part) | 7.95e-01 (8.87e+00, 1.00e+00) |
+| gradient, variant `along` (x-part, v-part) | 4.91e-01 (2.11e+00, 1.00e+00) |
+| gradient, variant `along_pool` (x-part, v-part) | 3.35e-01 (3.26e+00, 1.00e+00) |
 
-level set (`along_pool`): 4 seeds, ensemble +1.207e-20 ± 8.9e-22, FD +1.398e-20 ± 1e-21, z(FD) = -1.39; same seeds analytic mean +1.196e-20 vs level set +1.207e-20; per-seed gradient difference ≤ 0.2337 seed-sd (seeds [0, 1, 2, 3])
+level set (`along_pool`): 4 seeds, ensemble +1.312e-20 ± 5.2e-22, FD +1.128e-20 ± 1.6e-21, z(FD) = +1.10; same seeds analytic mean +1.196e-20 vs level set +1.312e-20; per-seed gradient difference ≤ 2.3170 seed-sd (seeds [0, 1, 2, 3])
 
 ### Grazing regularisation of the tally term (circle radius, CRN seeds)
 
@@ -161,36 +164,48 @@ along-flight identity per particle: (-T) - v.grad V = -1.29e-05 ± 2.8e-05 (rms 
 | embedded plane position, windowed shear | 32 | one-sided, pooled 3^D (k = 96) | +0.0004305 ± 0.0052 | 0.03 | +0.000512 ± 0.00049 | -0.22 |
 | embedded plane position, windowed shear | 32 | one-sided + along-flight identity | +0.001387 ± 0.0052 | 0.03 | +0.00147 ± 0.00075 | -0.06 |
 | embedded plane position, windowed shear | 32 | pooled + along-flight identity | +0.001431 ± 0.0053 | 0.03 | +0.00151 ± 0.0007 | -0.05 |
-| analytic circle radius, windowed drag | 35 | one-sided fit | +1.452e-20 ± 1.1e-21 | 6.6e-21 | +1.48e-21 ± 1.1e-21 | +0.40 |
-| analytic circle radius, windowed drag | 35 | one-sided, pooled 3^D (k = 96) | +1.377e-20 ± 1.6e-22 | 9.2e-22 | +1.35e-21 ± 7e-23 | -1.11 |
-| analytic circle radius, windowed drag | 35 | one-sided + along-flight identity | +1.434e-20 ± 5.3e-22 | 3.2e-21 | +1.3e-21 ± 4.8e-22 | +0.47 |
-| analytic circle radius, windowed drag | 35 | pooled + along-flight identity | +1.353e-20 ± 2.4e-22 | 1.4e-21 | +1.1e-21 ± 1.6e-22 | -1.65 |
-| level-set circle radius, windowed drag | 4 | one-sided fit | +1.449e-20 ± 3.5e-21 | 7.1e-21 | +2.3e-21 ± 3.3e-21 | +0.14 |
-| level-set circle radius, windowed drag | 4 | one-sided, pooled 3^D (k = 96) | +1.29e-20 ± 7.1e-22 | 1.4e-21 | +8.21e-22 ± 1.3e-22 | -0.86 |
-| level-set circle radius, windowed drag | 4 | one-sided + along-flight identity | +1.259e-20 ± 1.7e-21 | 3.4e-21 | +3.92e-22 ± 1.2e-21 | -0.71 |
-| level-set circle radius, windowed drag | 4 | pooled + along-flight identity | +1.207e-20 ± 8.9e-22 | 1.8e-21 | -5.71e-24 ± 3.4e-22 | -1.39 |
-| level-set circle cos 2θ mode, windowed drag | 4 | one-sided fit | -1.529e-20 ± 7.7e-22 | 1.5e-21 | +2.47e-22 ± 1.1e-21 | +0.44 |
-| level-set circle cos 2θ mode, windowed drag | 4 | one-sided, pooled 3^D (k = 96) | -1.674e-20 ± 4.1e-22 | 8.3e-22 | -1.15e-21 ± 1.5e-22 | -1.43 |
-| level-set circle cos 2θ mode, windowed drag | 4 | one-sided + along-flight identity | -1.467e-20 ± 6e-22 | 1.2e-21 | +8.66e-22 ± 6.5e-22 | +1.24 |
-| level-set circle cos 2θ mode, windowed drag | 4 | pooled + along-flight identity | -1.587e-20 ± 3e-22 | 6.1e-22 | -2.76e-22 ± 1.4e-22 | -0.23 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] | 4 | one-sided fit | +1.268e-20 ± 1.9e-21 | 3.7e-21 | -2.14e-22 ± 4.6e-22 | +0.47 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] | 4 | one-sided, pooled 3^D (k = 96) | +1.147e-20 ± 1.6e-21 | 3.1e-21 | -1.42e-21 ± 1.1e-22 | -0.11 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] | 4 | one-sided + along-flight identity | +1.291e-20 ± 1.8e-21 | 3.5e-21 | +1.6e-23 ± 2.1e-22 | +0.61 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] | 4 | pooled + along-flight identity | +1.274e-20 ± 1.6e-21 | 3.2e-21 | -1.54e-22 ± 5.3e-24 | +0.57 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] | 4 | one-sided fit | +1.222e-20 ± 1.5e-21 | 3e-21 | -2.14e-22 ± 4.6e-22 | +0.30 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] | 4 | one-sided, pooled 3^D (k = 96) | +1.101e-20 ± 1.3e-21 | 2.5e-21 | -1.42e-21 ± 1.1e-22 | -0.43 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] | 4 | one-sided + along-flight identity | +1.245e-20 ± 1.5e-21 | 3e-21 | +1.6e-23 ± 2.1e-22 | +0.43 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] | 4 | pooled + along-flight identity | +1.228e-20 ± 1.3e-21 | 2.6e-21 | -1.54e-22 ± 5.3e-24 | +0.36 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) | 4 | one-sided fit | +1.185e-20 ± 4.8e-22 | 9.6e-22 | -2.14e-22 ± 4.6e-22 | +0.16 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) | 4 | one-sided, pooled 3^D (k = 96) | +1.065e-20 ± 5.9e-22 | 1.2e-21 | -1.42e-21 ± 1.1e-22 | -0.92 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) | 4 | one-sided + along-flight identity | +1.208e-20 ± 7.5e-22 | 1.5e-21 | +1.6e-23 ± 2.1e-22 | +0.33 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) | 4 | pooled + along-flight identity | +1.191e-20 ± 6.8e-22 | 1.4e-21 | -1.54e-22 ± 5.3e-24 | +0.19 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] | 4 | one-sided fit | +1.109e-20 ± 5.3e-22 | 1.1e-21 | -1.58e-22 ± 4.1e-22 | -1.31 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] | 4 | one-sided, pooled 3^D (k = 96) | +9.831e-21 ± 1.7e-22 | 3.3e-22 | -1.41e-21 ± 1.4e-22 | -2.29 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] | 4 | one-sided + along-flight identity | +1.226e-20 ± 5.9e-22 | 1.2e-21 | +1.01e-21 ± 6.5e-22 | -0.52 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] | 4 | pooled + along-flight identity | +1.104e-20 ± 2.5e-22 | 5.1e-22 | -2.02e-22 ± 4.5e-23 | -1.41 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] | 2 | one-sided fit | +1.276e-20 ± 1.6e-21 | 2.3e-21 | -1.8e-22 ± 9.5e-22 | -0.41 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] | 2 | one-sided, pooled 3^D (k = 96) | +9.694e-21 ± 7.1e-22 | 1e-21 | -1.33e-21 ± 6.7e-23 | -3.23 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] | 2 | one-sided + along-flight identity | +1.299e-20 ± 1.5e-21 | 2.1e-21 | +5.36e-23 ± 7.9e-22 | -0.31 |
-| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] | 2 | pooled + along-flight identity | +1.039e-20 ± 7.5e-22 | 1.1e-21 | -6.31e-22 ± 2.9e-23 | -2.59 |
+| analytic circle radius, windowed drag [mixed-pool ∇λ fits] | 35 | one-sided fit | +1.452e-20 ± 1.1e-21 | 6.6e-21 | +1.48e-21 ± 1.1e-21 | +0.40 |
+| analytic circle radius, windowed drag [mixed-pool ∇λ fits] | 35 | one-sided, pooled 3^D (k = 96) | +1.377e-20 ± 1.6e-22 | 9.2e-22 | +1.35e-21 ± 7e-23 | -1.11 |
+| analytic circle radius, windowed drag [mixed-pool ∇λ fits] | 35 | one-sided + along-flight identity | +1.434e-20 ± 5.3e-22 | 3.2e-21 | +1.3e-21 ± 4.8e-22 | +0.47 |
+| analytic circle radius, windowed drag [mixed-pool ∇λ fits] | 35 | pooled + along-flight identity | +1.353e-20 ± 2.4e-22 | 1.4e-21 | +1.1e-21 ± 1.6e-22 | -1.65 |
+| level-set circle radius, windowed drag [mixed-pool ∇λ fits] | 4 | one-sided fit | +1.449e-20 ± 3.5e-21 | 7.1e-21 | +2.3e-21 ± 3.3e-21 | +0.14 |
+| level-set circle radius, windowed drag [mixed-pool ∇λ fits] | 4 | one-sided, pooled 3^D (k = 96) | +1.29e-20 ± 7.1e-22 | 1.4e-21 | +8.21e-22 ± 1.3e-22 | -0.86 |
+| level-set circle radius, windowed drag [mixed-pool ∇λ fits] | 4 | one-sided + along-flight identity | +1.259e-20 ± 1.7e-21 | 3.4e-21 | +3.92e-22 ± 1.2e-21 | -0.71 |
+| level-set circle radius, windowed drag [mixed-pool ∇λ fits] | 4 | pooled + along-flight identity | +1.207e-20 ± 8.9e-22 | 1.8e-21 | -5.71e-24 ± 3.4e-22 | -1.39 |
+| level-set circle cos 2θ mode, windowed drag [mixed-pool ∇λ fits] | 4 | one-sided fit | -1.529e-20 ± 7.7e-22 | 1.5e-21 | +2.47e-22 ± 1.1e-21 | +0.44 |
+| level-set circle cos 2θ mode, windowed drag [mixed-pool ∇λ fits] | 4 | one-sided, pooled 3^D (k = 96) | -1.674e-20 ± 4.1e-22 | 8.3e-22 | -1.15e-21 ± 1.5e-22 | -1.43 |
+| level-set circle cos 2θ mode, windowed drag [mixed-pool ∇λ fits] | 4 | one-sided + along-flight identity | -1.467e-20 ± 6e-22 | 1.2e-21 | +8.66e-22 ± 6.5e-22 | +1.24 |
+| level-set circle cos 2θ mode, windowed drag [mixed-pool ∇λ fits] | 4 | pooled + along-flight identity | -1.587e-20 ± 3e-22 | 6.1e-22 | -2.76e-22 ± 1.4e-22 | -0.23 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] [mixed-pool ∇λ fits] | 4 | one-sided fit | +1.268e-20 ± 1.9e-21 | 3.7e-21 | -2.14e-22 ± 4.6e-22 | +0.47 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] [mixed-pool ∇λ fits] | 4 | one-sided, pooled 3^D (k = 96) | +1.147e-20 ± 1.6e-21 | 3.1e-21 | -1.42e-21 ± 1.1e-22 | -0.11 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] [mixed-pool ∇λ fits] | 4 | one-sided + along-flight identity | +1.291e-20 ± 1.8e-21 | 3.5e-21 | +1.6e-23 ± 2.1e-22 | +0.61 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] [mixed-pool ∇λ fits] | 4 | pooled + along-flight identity | +1.274e-20 ± 1.6e-21 | 3.2e-21 | -1.54e-22 ± 5.3e-24 | +0.57 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] [mixed-pool ∇λ fits] | 4 | one-sided fit | +1.222e-20 ± 1.5e-21 | 3e-21 | -2.14e-22 ± 4.6e-22 | +0.30 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] [mixed-pool ∇λ fits] | 4 | one-sided, pooled 3^D (k = 96) | +1.101e-20 ± 1.3e-21 | 2.5e-21 | -1.42e-21 ± 1.1e-22 | -0.43 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] [mixed-pool ∇λ fits] | 4 | one-sided + along-flight identity | +1.245e-20 ± 1.5e-21 | 3e-21 | +1.6e-23 ± 2.1e-22 | +0.43 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] [mixed-pool ∇λ fits] | 4 | pooled + along-flight identity | +1.228e-20 ± 1.3e-21 | 2.6e-21 | -1.54e-22 ± 5.3e-24 | +0.36 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [mixed-pool ∇λ fits] | 4 | one-sided fit | +1.185e-20 ± 4.8e-22 | 9.6e-22 | -2.14e-22 ± 4.6e-22 | +0.16 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [mixed-pool ∇λ fits] | 4 | one-sided, pooled 3^D (k = 96) | +1.065e-20 ± 5.9e-22 | 1.2e-21 | -1.42e-21 ± 1.1e-22 | -0.92 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [mixed-pool ∇λ fits] | 4 | one-sided + along-flight identity | +1.208e-20 ± 7.5e-22 | 1.5e-21 | +1.6e-23 ± 2.1e-22 | +0.33 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [mixed-pool ∇λ fits] | 4 | pooled + along-flight identity | +1.191e-20 ± 6.8e-22 | 1.4e-21 | -1.54e-22 ± 5.3e-24 | +0.19 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] | 4 | one-sided fit | +1.335e-20 ± 4.3e-22 | 8.7e-22 | -2.42e-24 ± 5.8e-25 | -0.36 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] | 4 | one-sided, pooled 3^D (k = 96) | +1.336e-20 ± 3.9e-22 | 7.8e-22 | -2.83e-23 ± 1.8e-22 | -0.35 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] | 4 | one-sided + along-flight identity | +1.335e-20 ± 4.3e-22 | 8.6e-22 | -3.24e-25 ± 2.3e-24 | -0.35 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] | 4 | pooled + along-flight identity | +1.337e-20 ± 3.6e-22 | 7.2e-22 | -1.93e-23 ± 7.7e-23 | -0.35 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [mixed-pool ∇λ fits] | 4 | one-sided fit | +1.289e-20 ± 1.4e-21 | 2.8e-21 | -5.79e-22 ± 3.1e-22 | -0.46 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [mixed-pool ∇λ fits] | 4 | one-sided, pooled 3^D (k = 96) | +8.791e-21 ± 6.5e-22 | 1.3e-21 | -1.29e-21 ± 5.6e-23 | -6.36 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [mixed-pool ∇λ fits] | 4 | one-sided + along-flight identity | +1.301e-20 ± 1.3e-21 | 2.5e-21 | -4.65e-22 ± 2e-22 | -0.41 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [mixed-pool ∇λ fits] | 4 | pooled + along-flight identity | +9.452e-21 ± 6.7e-22 | 1.3e-21 | -6.27e-22 ± 4.5e-23 | -5.32 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 4 | one-sided fit | +1.109e-20 ± 5.3e-22 | 1.1e-21 | -1.58e-22 ± 4.1e-22 | -1.31 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 4 | one-sided, pooled 3^D (k = 96) | +9.831e-21 ± 1.7e-22 | 3.3e-22 | -1.41e-21 ± 1.4e-22 | -2.29 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 4 | one-sided + along-flight identity | +1.226e-20 ± 5.9e-22 | 1.2e-21 | +1.01e-21 ± 6.5e-22 | -0.52 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 4 | pooled + along-flight identity | +1.104e-20 ± 2.5e-22 | 5.1e-22 | -2.02e-22 ± 4.5e-23 | -1.41 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 2 | one-sided fit | +1.276e-20 ± 1.6e-21 | 2.3e-21 | -1.8e-22 ± 9.5e-22 | -0.41 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 2 | one-sided, pooled 3^D (k = 96) | +9.694e-21 ± 7.1e-22 | 1e-21 | -1.33e-21 ± 6.7e-23 | -3.23 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 2 | one-sided + along-flight identity | +1.299e-20 ± 1.5e-21 | 2.1e-21 | +5.36e-23 ± 7.9e-22 | -0.31 |
+| diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_φ = 0.125] [mixed-pool ∇λ fits] | 2 | pooled + along-flight identity | +1.039e-20 ± 7.5e-22 | 1.1e-21 | -6.31e-22 ± 2.9e-23 | -2.59 |
+| diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms) | 4 | one-sided fit | +7.21e-21 ± 2.4e-21 | 4.8e-21 | -4.5e-21 ± 2.5e-21 | -1.43 |
+| diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms) | 4 | one-sided, pooled 3^D (k = 96) | +1.194e-20 ± 3.7e-21 | 7.5e-21 | +2.35e-22 ± 3.7e-21 | +0.16 |
+| diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms) | 4 | one-sided + along-flight identity | +1.175e-20 ± 1.2e-21 | 2.4e-21 | +4.35e-23 ± 1.2e-21 | +0.23 |
+| diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms) | 4 | pooled + along-flight identity | +1.312e-20 ± 5.2e-22 | 1e-21 | +1.41e-21 ± 3.8e-22 | +1.10 |
 wrote /home/aakash/jax_dsmc/JAX-DSMC-adjoint/examples/mesh/results/forward_gates.json

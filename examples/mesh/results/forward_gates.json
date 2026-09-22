@@ -1101,7 +1101,7 @@
    "z": 0.4895330894366895,
    "pass": true,
    "gate": "D",
-   "label": "analytic circle radius, windowed drag",
+   "label": "analytic circle radius, windowed drag [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_circle_radius_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_circle_radius_f4_H700_M300_W200_virt1x2st_dev_variants.json": {
@@ -1137,7 +1137,7 @@
    "z": 0.39813898473336334,
    "pass": true,
    "gate": "D",
-   "label": "analytic circle radius, windowed drag",
+   "label": "analytic circle radius, windowed drag [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_circle_radius_f4_H700_M300_W200_virt1x2st_dev_variants.json"
   },
   "ensemble_mesh_circle_centre_x_f4_H700_M300_W200_virt1x2st_dev.json": {
@@ -1173,7 +1173,7 @@
    "z": -1.2010163739309685,
    "pass": true,
    "gate": "D",
-   "label": "analytic circle centre_x, windowed drag",
+   "label": "analytic circle centre_x, windowed drag [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_circle_centre_x_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_circle_levelset0.125_radius_f4_H700_M300_W200_virt1x2st_dev.json": {
@@ -1209,7 +1209,7 @@
    "z": -1.394452556023443,
    "pass": true,
    "gate": "LS2",
-   "label": "level-set circle radius, windowed drag",
+   "label": "level-set circle radius, windowed drag [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_circle_levelset0.125_radius_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_circle_levelset0.125_mode2_f4_H700_M300_W200_virt1x2st_dev.json": {
@@ -1245,7 +1245,7 @@
    "z": -0.23416303465796784,
    "pass": true,
    "gate": "LS2",
-   "label": "level-set circle cos 2\u03b8 mode, windowed drag",
+   "label": "level-set circle cos 2\u03b8 mode, windowed drag [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_circle_levelset0.125_mode2_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_prefloor_width_f4_H700_M300_W200_virt1x2st_dev.json": {
@@ -1283,7 +1283,7 @@
    "z": 0.5680609227658411,
    "pass": true,
    "gate": "GP",
-   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only]",
+   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_prefloor_width_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_scoreform_width_f4_H700_M300_W200_virt1x2st_dev.json": {
@@ -1321,7 +1321,7 @@
    "z": 0.36457387597438345,
    "pass": true,
    "gate": "GP",
-   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor]",
+   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_scoreform_width_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
@@ -1359,8 +1359,84 @@
    "z": 0.19456276306897807,
    "pass": true,
    "gate": "GP",
-   "label": "diffuse capsule plate half-width, windowed drag (silhouette term)",
+   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_width_f4_H700_M300_W200_virt1x2st_dev.json"
+  },
+  "ensemble_mesh_plate_levelset0.0625_sil0.03_gz0.05_vchit_width_f4_H700_M300_W200_virt1x2st_dev.json": {
+   "seeds": 4,
+   "objective": 1.8613541623938692e-20,
+   "ensemble": 1.337174474884775e-20,
+   "ensemble_se": 3.575772576023391e-22,
+   "fd": {
+    "0.1": {
+     "mean": 1.3510505504745375e-20,
+     "se": 5.0387059482906785e-22,
+     "z": -0.22458399341786814
+    },
+    "0.05": {
+     "mean": 1.3554651867497102e-20,
+     "se": 3.80525600143655e-22,
+     "z": -0.35028288302192984
+    }
+   },
+   "pathwise": 1.3591838994475832e-20,
+   "score": 0.0,
+   "timing": 1.849689915417426e-22,
+   "analytic": 0.0,
+   "pathwise_x_mean": -1.9311226862529434e-23,
+   "pathwise_x_se": 7.698111615012052e-23,
+   "pathwise_v_mean": 5.1803307324708133e-23,
+   "pathwise_v_se": 2.1919075458333237e-22,
+   "pathwise_tally_mean": 1.3559346914013653e-20,
+   "pathwise_tally_se": 3.2960292781881523e-22,
+   "timing_mean": 1.849689915417426e-22,
+   "timing_se": 3.0447257925687554e-22,
+   "silhouette_mean": -2.2009424562808215e-22,
+   "silhouette_se": 2.040634106965559e-22,
+   "reference_h": 0.05,
+   "z": -0.35028288302192984,
+   "pass": true,
+   "gate": "GP",
+   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette]",
+   "artifact": "ensemble_mesh_plate_levelset0.0625_sil0.03_gz0.05_vchit_width_f4_H700_M300_W200_virt1x2st_dev.json"
+  },
+  "ensemble_mesh_plate_levelset0.0625_sil0.03_gz0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
+   "seeds": 4,
+   "objective": 1.8613541623938692e-20,
+   "ensemble": 9.451936577093541e-21,
+   "ensemble_se": 6.709842361739661e-22,
+   "fd": {
+    "0.1": {
+     "mean": 1.3510505504745375e-20,
+     "se": 5.0387059482906785e-22,
+     "z": -4.836754918014212
+    },
+    "0.05": {
+     "mean": 1.3554651867497102e-20,
+     "se": 3.80525600143655e-22,
+     "z": -5.318703154679716
+    }
+   },
+   "pathwise": 9.672030822721625e-21,
+   "score": 0.0,
+   "timing": 1.849689915417426e-22,
+   "analytic": 0.0,
+   "pathwise_x_mean": -6.266236448690684e-22,
+   "pathwise_x_se": 4.546570670093872e-23,
+   "pathwise_v_mean": -3.2606924464229643e-21,
+   "pathwise_v_se": 3.2175831728662953e-22,
+   "pathwise_tally_mean": 1.3559346914013656e-20,
+   "pathwise_tally_se": 3.296029278188159e-22,
+   "timing_mean": 1.849689915417426e-22,
+   "timing_se": 3.0447257925687554e-22,
+   "silhouette_mean": -2.2009424562808215e-22,
+   "silhouette_se": 2.040634106965559e-22,
+   "reference_h": 0.05,
+   "z": -5.318703154679716,
+   "pass": false,
+   "gate": "GP",
+   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [mixed-pool \u2207\u03bb fits]",
+   "artifact": "ensemble_mesh_plate_levelset0.0625_sil0.03_gz0.05_width_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_plate_levelset0.125_acc1_sil0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
    "seeds": 4,
@@ -1397,7 +1473,7 @@
    "z": -1.412731421317347,
    "pass": true,
    "gate": "GP",
-   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_\u03c6 = 0.125]",
+   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_\u03c6 = 0.125] [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_plate_levelset0.125_acc1_sil0.05_width_f4_H700_M300_W200_virt1x2st_dev.json"
   },
   "ensemble_mesh_plate_levelset0.125_sil0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
@@ -1435,8 +1511,46 @@
    "z": -2.5932012648613356,
    "pass": false,
    "gate": "GP",
-   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_\u03c6 = 0.125]",
+   "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_\u03c6 = 0.125] [mixed-pool \u2207\u03bb fits]",
    "artifact": "ensemble_mesh_plate_levelset0.125_sil0.05_width_f4_H700_M300_W200_virt1x2st_dev.json"
+  },
+  "ensemble_mesh_circle_levelset0.125_acc1_sil0.05_gz0.05_vchit_radius_f4_H700_M300_W200_virt1x2st_dev.json": {
+   "seeds": 4,
+   "objective": 4.1419851482781613e-20,
+   "ensemble": 1.3117972935244984e-20,
+   "ensemble_se": 5.161057628399508e-22,
+   "fd": {
+    "0.1": {
+     "mean": 1.4420972331979684e-20,
+     "se": 2.871894935173881e-22,
+     "z": -2.2061205034667526
+    },
+    "0.05": {
+     "mean": 1.1284289745102203e-20,
+     "se": 1.577409172341415e-21,
+     "z": 1.104831952887254
+    }
+   },
+   "pathwise": 5.138878590213375e-21,
+   "score": -2.039615463900944e-22,
+   "timing": 3.586114036723556e-22,
+   "analytic": 1.3806617160927207e-20,
+   "pathwise_x_mean": 1.4115971853538711e-21,
+   "pathwise_x_se": 3.834044915900212e-22,
+   "pathwise_v_mean": 0.0,
+   "pathwise_v_se": 0.0,
+   "pathwise_tally_mean": 3.727281404859503e-21,
+   "pathwise_tally_se": 7.852998305885981e-23,
+   "timing_mean": 3.586114036723556e-22,
+   "timing_se": 2.0971174570324286e-21,
+   "silhouette_mean": 8.183055891421704e-21,
+   "silhouette_se": 4.627931414926293e-22,
+   "reference_h": 0.05,
+   "z": 1.104831952887254,
+   "pass": true,
+   "gate": "GD",
+   "label": "diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms)",
+   "artifact": "ensemble_mesh_circle_levelset0.125_acc1_sil0.05_gz0.05_vchit_radius_f4_H700_M300_W200_virt1x2st_dev.json"
   }
  },
  "levelset_vs_analytic": {
@@ -1447,7 +1561,7 @@
    3
   ],
   "artifact_analytic": "ensemble_mesh_circle_radius_f4_H700_M300_W200_virt1x2st_dev_variants.json",
-  "artifact_levelset": "ensemble_mesh_circle_levelset0.125_radius_f4_H700_M300_W200_virt1x2st_dev.json",
+  "artifact_levelset": "ensemble_mesh_circle_levelset0.125_acc1_sil0.05_gz0.05_vchit_radius_f4_H700_M300_W200_virt1x2st_dev.json",
   "objective": {
    "analytic": [
     3.580102392348234e-20,
@@ -1456,12 +1570,12 @@
     3.660567961163451e-20
    ],
    "levelset": [
-    3.5801012080002893e-20,
-    3.744914045426248e-20,
-    3.736326197783197e-20,
-    3.6605674937767943e-20
+    4.083315052528704e-20,
+    4.179598281089783e-20,
+    4.152375670270391e-20,
+    4.1526515892237664e-20
    ],
-   "max_rel_diff": 2.140426035166692e-06
+   "max_rel_diff": 0.13437257335306166
   },
   "pathwise_tally": {
    "analytic": [
@@ -1471,12 +1585,12 @@
     1.3144061535951136e-20
    ],
    "levelset": [
-    1.2287080232895946e-20,
-    1.1037918811389458e-20,
-    1.2975412235408582e-20,
-    1.3144020654811851e-20
+    3.812646831871841e-21,
+    3.753572115238577e-21,
+    3.4985494686812024e-21,
+    3.844357203646393e-21
    ],
-   "max_rel_diff": 0.03576425377192826
+   "max_rel_diff": 0.7209768944600699
   },
   "timing": {
    "analytic": [
@@ -1486,12 +1600,12 @@
     -1.4337582274685844e-23
    ],
    "levelset": [
-    7.550523056528484e-22,
-    3.4341841716363176e-21,
-    -5.4680941820193864e-21,
-    -1.4339431945513796e-23
+    -1.141796613097069e-21,
+    4.910316725616743e-21,
+    -4.7131877227525735e-21,
+    2.3791132249223217e-21
    ],
-   "max_rel_diff": 2.2319210153355206e-06
+   "max_rel_diff": 0.4377110901041474
   },
   "hits": {
    "analytic": [
@@ -1501,12 +1615,12 @@
     10447
    ],
    "levelset": [
-    10329,
-    10452,
-    10409,
-    10447
+    10211,
+    10380,
+    10144,
+    10345
    ],
-   "max_rel_diff": 0.0
+   "max_rel_diff": 0.02535399923459625
   },
   "fd": {
    "analytic": [
@@ -1516,12 +1630,12 @@
     1.317112531729112e-20
    ],
    "levelset": [
-    1.4882407735058155e-20,
-    1.332778753454052e-20,
-    1.4493324785702485e-20,
-    1.317140721186703e-20
+    1.3837671498419797e-20,
+    1.520869442751986e-20,
+    1.4382376454909592e-20,
+    1.425514694706949e-20
    ],
-   "max_rel_diff": 9.383214544191645e-05
+   "max_rel_diff": 0.12629023940244413
   },
   "variants": {
    "one": {
@@ -1533,12 +1647,12 @@
       2.0656456587056468e-20
      ],
      "levelset": [
-      1.5971330855797903e-20,
-      4.343371088800765e-21,
-      1.7002712990024124e-20,
-      2.065524285289819e-20
+      1.03489074984551e-20,
+      1.9049035021095038e-21,
+      1.202466594843247e-20,
+      4.560983832450564e-21
      ],
-     "max_rel_diff": 0.023113178337137046
+     "max_rel_diff": 0.7791981498265041
     },
     "pathwise_x": {
      "analytic": [
@@ -1548,12 +1662,12 @@
       9.604562409768753e-21
      ],
      "levelset": [
-      4.1021845462751935e-21,
-      -6.265415284956608e-21,
-      1.7498646207559505e-21,
-      9.603933615610365e-21
+      -2.6652652738438303e-21,
+      -9.461372509374269e-21,
+      1.7416462787293456e-21,
+      -7.601050713628056e-21
      ],
-     "max_rel_diff": 0.0018968130111477518
+     "max_rel_diff": 1.7914000023464958
     },
     "pathwise_v": {
      "analytic": [
@@ -1563,12 +1677,12 @@
       -2.092167358663424e-21
      ],
      "levelset": [
-      -4.179339233732427e-22,
-      -4.291324376320701e-22,
-      2.2774361338595823e-21,
-      -2.092711417524028e-21
+      -0.0,
+      -0.0,
+      -0.0,
+      -0.0
      ],
-     "max_rel_diff": 0.002687758256437759
+     "max_rel_diff": 1.0
     }
    },
    "one_pool": {
@@ -1580,12 +1694,12 @@
       1.405548588773111e-20
      ],
      "levelset": [
-      1.3450972844071863e-20,
-      1.0833492920447201e-20,
-      1.3247861127865906e-20,
-      1.4055108242909993e-20
+      9.294700469184852e-21,
+      2.1543520337071033e-20,
+      3.789819511927037e-21,
+      1.3135533395828582e-20
      ],
-     "max_rel_diff": 0.03296904353558189
+     "max_rel_diff": 0.794951055553573
     },
     "pathwise_x": {
      "analytic": [
@@ -1595,12 +1709,12 @@
       1.0055475523511962e-21
      ],
      "levelset": [
-      6.4843683551711205e-22,
-      5.452637526596634e-22,
-      1.0857740157306992e-21,
-      1.0053355599735822e-21
+      -3.719472303114082e-21,
+      1.0177244325587262e-20,
+      -6.493200157776086e-21,
+      9.7349884974996e-22
      ],
-     "max_rel_diff": 0.0008334686683603002
+     "max_rel_diff": 8.867436988825721
     },
     "pathwise_v": {
      "analytic": [
@@ -1610,12 +1724,12 @@
       -9.412320057122268e-23
      ],
      "levelset": [
-      5.154557756588147e-22,
-      -7.496896436019219e-22,
-      -8.133251232733755e-22,
-      -9.424797187544284e-23
+      -0.0,
+      -0.0,
+      -0.0,
+      -0.0
      ],
-     "max_rel_diff": 0.0071221604693726985
+     "max_rel_diff": 1.0
     }
    },
    "along": {
@@ -1627,12 +1741,12 @@
       1.2702505408796082e-20
      ],
      "levelset": [
-      1.4798428158984066e-20,
-      7.79917994413226e-21,
-      1.504965492544818e-20,
-      1.270097812553687e-20
+      1.264046461246475e-20,
+      1.47242215380632e-20,
+      9.5127459680495e-21,
+      1.0121980457069059e-20
      ],
-     "max_rel_diff": 0.0313044739515353
+     "max_rel_diff": 0.4914733651237381
     },
     "pathwise_x": {
      "analytic": [
@@ -1642,12 +1756,12 @@
       1.6506112315083704e-21
      ],
      "levelset": [
-      2.9292818494613666e-21,
-      -2.8096064296251226e-21,
-      -2.0319344381998467e-22,
-      1.649668888249045e-21
+      -3.73708159834184e-22,
+      3.3579455265794284e-21,
+      -7.702737016536221e-22,
+      -2.0400540890095654e-21
      ],
-     "max_rel_diff": 0.002246411383246394
+     "max_rel_diff": 2.105438024575371
     },
     "pathwise_v": {
      "analytic": [
@@ -1657,12 +1771,12 @@
       -2.092167358663424e-21
      ],
      "levelset": [
-      -4.179339233732408e-22,
-      -4.291324376320686e-22,
-      2.2774361338595853e-21,
-      -2.092711417524031e-21
+      -0.0,
+      -0.0,
+      -0.0,
+      -0.0
      ],
-     "max_rel_diff": 0.0026877582564364417
+     "max_rel_diff": 1.0
     }
    },
    "along_pool": {
@@ -1674,12 +1788,12 @@
       1.311222618799558e-20
      ],
      "levelset": [
-      1.3739243698733728e-20,
-      9.73075626409679e-21,
-      1.169775942525505e-20,
-      1.3112035555474223e-20
+      1.3866497498817044e-20,
+      1.386717777035844e-20,
+      1.1678750242478623e-20,
+      1.3059466229325829e-20
      ],
-     "max_rel_diff": 0.03376870486134353
+     "max_rel_diff": 0.3347650688232745
     },
     "pathwise_x": {
      "analytic": [
@@ -1689,12 +1803,12 @@
       6.22878526156658e-23
      ],
      "levelset": [
-      9.36707690178977e-22,
-      -5.574729036907431e-22,
-      -4.643276868801576e-22,
-      6.226287253781625e-23
+      8.523247265181097e-22,
+      2.5009017588746666e-21,
+      1.3957305727755019e-21,
+      8.974316832472063e-22
      ],
-     "max_rel_diff": 0.0005427465071447962
+     "max_rel_diff": 3.2634189281238517
     },
     "pathwise_v": {
      "analytic": [
@@ -1704,12 +1818,12 @@
       -9.412320057122268e-23
      ],
      "levelset": [
-      5.154557756588155e-22,
-      -7.496896436019213e-22,
-      -8.133251232733751e-22,
-      -9.424797187544284e-23
+      -0.0,
+      -0.0,
+      -0.0,
+      -0.0
      ],
-     "max_rel_diff": 0.007122160469372004
+     "max_rel_diff": 1.0
     }
    }
   },
@@ -1722,50 +1836,52 @@
     1.311222618799558e-20
    ],
    "levelset": [
-    1.3739243698733728e-20,
-    9.73075626409679e-21,
-    1.169775942525505e-20,
-    1.3112035555474223e-20
+    1.3866497498817044e-20,
+    1.386717777035844e-20,
+    1.1678750242478623e-20,
+    1.3059466229325829e-20
    ],
-   "max_rel_diff": 0.03376870486134353,
+   "max_rel_diff": 0.3347650688232745,
    "seed_sd_analytic": 1.9855051333615032e-21,
-   "max_abs_diff_over_seed_sd": 0.23372594707300168
+   "max_abs_diff_over_seed_sd": 2.3170353461570516
   },
   "levelset_stats": {
    "seeds": 4,
-   "objective": 3.680477236246632e-20,
-   "ensemble": 1.2069948735889948e-20,
-   "ensemble_se": 8.88952422591312e-22,
+   "objective": 4.1419851482781613e-20,
+   "ensemble": 1.3117972935244984e-20,
+   "ensemble_se": 5.161057628399508e-22,
    "fd": {
     "0.1": {
-     "mean": 1.3968731816792048e-20,
-     "se": 4.239238891219588e-22,
-     "z": -1.9279739237780447
+     "mean": 1.4420972331979684e-20,
+     "se": 2.871894935173881e-22,
+     "z": -2.2061205034667526
     },
     "0.05": {
-     "mean": 1.3982459134017672e-20,
-     "se": 1.0444197716696372e-21,
-     "z": -1.394452556023443
+     "mean": 1.1284289745102203e-20,
+     "se": 1.577409172341415e-21,
+     "z": 1.104831952887254
     }
    },
-   "pathwise": 1.2069948735889948e-20,
-   "score": 0.0,
-   "timing": -3.2329928416893363e-22,
-   "analytic": 1.2268257454155442e-20,
-   "pathwise_x_mean": -5.707506963526868e-24,
-   "pathwise_x_se": 3.4248405057109424e-22,
-   "pathwise_v_mean": -2.8545174077298094e-22,
-   "pathwise_v_se": 3.125405133062741e-22,
-   "pathwise_tally_mean": 1.236110798362646e-20,
-   "pathwise_tally_se": 4.784202874969261e-22,
-   "timing_mean": -3.2329928416893363e-22,
-   "timing_se": 1.8673933437449494e-21,
+   "pathwise": 5.138878590213375e-21,
+   "score": -2.039615463900944e-22,
+   "timing": 3.586114036723556e-22,
+   "analytic": 1.3806617160927207e-20,
+   "pathwise_x_mean": 1.4115971853538711e-21,
+   "pathwise_x_se": 3.834044915900212e-22,
+   "pathwise_v_mean": 0.0,
+   "pathwise_v_se": 0.0,
+   "pathwise_tally_mean": 3.727281404859503e-21,
+   "pathwise_tally_se": 7.852998305885981e-23,
+   "timing_mean": 3.586114036723556e-22,
+   "timing_se": 2.0971174570324286e-21,
+   "silhouette_mean": 8.183055891421704e-21,
+   "silhouette_se": 4.627931414926293e-22,
    "reference_h": 0.05,
-   "z": -1.394452556023443,
+   "z": 1.104831952887254,
    "pass": true
   },
   "analytic_mean_same_seeds": 1.1955049016429095e-20,
-  "levelset_mean_same_seeds": 1.2069948735889948e-20
+  "levelset_mean_same_seeds": 1.3117972935244984e-20
  },
  "grazing_regularisation": {
   "seeds": 8,
@@ -2461,7 +2577,7 @@
     }
    },
    "ensemble_mesh_circle_radius_f4_H700_M300_W200_virt1x2st_dev_variants.json": {
-    "label": "analytic circle radius, windowed drag",
+    "label": "analytic circle radius, windowed drag [mixed-pool \u2207\u03bb fits]",
     "seeds": 35,
     "reference": {
      "mean": 1.4067590092009425e-20,
@@ -2502,7 +2618,7 @@
     }
    },
    "ensemble_mesh_circle_levelset0.125_radius_f4_H700_M300_W200_virt1x2st_dev.json": {
-    "label": "level-set circle radius, windowed drag",
+    "label": "level-set circle radius, windowed drag [mixed-pool \u2207\u03bb fits]",
     "seeds": 4,
     "reference": {
      "mean": 1.3982459134017672e-20,
@@ -2543,7 +2659,7 @@
     }
    },
    "ensemble_mesh_circle_levelset0.125_mode2_f4_H700_M300_W200_virt1x2st_dev.json": {
-    "label": "level-set circle cos 2\u03b8 mode, windowed drag",
+    "label": "level-set circle cos 2\u03b8 mode, windowed drag [mixed-pool \u2207\u03bb fits]",
     "seeds": 4,
     "reference": {
      "mean": -1.57148131914113e-20,
@@ -2584,7 +2700,7 @@
     }
    },
    "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_prefloor_width_f4_H700_M300_W200_virt1x2st_dev.json": {
-    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only]",
+    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form, hit-time cut-off only] [mixed-pool \u2207\u03bb fits]",
     "seeds": 4,
     "reference": {
      "mean": 1.1685915575565379e-20,
@@ -2625,7 +2741,7 @@
     }
    },
    "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_scoreform_width_f4_H700_M300_W200_virt1x2st_dev.json": {
-    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor]",
+    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [score form + emission-side floor] [mixed-pool \u2207\u03bb fits]",
     "seeds": 4,
     "reference": {
      "mean": 1.1685915575565379e-20,
@@ -2666,7 +2782,7 @@
     }
    },
    "ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
-    "label": "diffuse capsule plate half-width, windowed drag (silhouette term)",
+    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [mixed-pool \u2207\u03bb fits]",
     "seeds": 4,
     "reference": {
      "mean": 1.1685915575565379e-20,
@@ -2706,8 +2822,90 @@
      "z": 0.19456276306897807
     }
    },
+   "ensemble_mesh_plate_levelset0.0625_sil0.03_gz0.05_vchit_width_f4_H700_M300_W200_virt1x2st_dev.json": {
+    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette]",
+    "seeds": 4,
+    "reference": {
+     "mean": 1.3554651867497102e-20,
+     "se": 3.80525600143655e-22,
+     "z": -0.35028288302192984
+    },
+    "one": {
+     "mean": 1.3348457165209516e-20,
+     "se": 4.3252891792857275e-22,
+     "sd": 8.650578358571455e-22,
+     "x_part": -2.417976379376258e-24,
+     "x_part_se": 5.8014604910381885e-25,
+     "z": -0.3579202826264441
+    },
+    "one_pool": {
+     "mean": 1.3362737152683035e-20,
+     "se": 3.8852742385842776e-22,
+     "sd": 7.770548477168555e-22,
+     "x_part": -2.831882302724681e-23,
+     "x_part_se": 1.7668565610065003e-22,
+     "z": -0.3528933558341834
+    },
+    "along": {
+     "mean": 1.3350551170196212e-20,
+     "se": 4.310770582812484e-22,
+     "sd": 8.621541165624967e-22,
+     "x_part": -3.2397139267982052e-25,
+     "x_part_se": 2.280709122161713e-24,
+     "z": -0.35495657359409977
+    },
+    "along_pool": {
+     "mean": 1.337174474884775e-20,
+     "se": 3.575772576023391e-22,
+     "sd": 7.151545152046782e-22,
+     "x_part": -1.9311226862529434e-23,
+     "x_part_se": 7.698111615012052e-23,
+     "z": -0.35028288302192984
+    }
+   },
+   "ensemble_mesh_plate_levelset0.0625_sil0.03_gz0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
+    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [mixed-pool \u2207\u03bb fits]",
+    "seeds": 4,
+    "reference": {
+     "mean": 1.3554651867497102e-20,
+     "se": 3.80525600143655e-22,
+     "z": -5.318703154679716
+    },
+    "one": {
+     "mean": 1.2893527111083896e-20,
+     "se": 1.3755980489506163e-21,
+     "sd": 2.7511960979012325e-21,
+     "x_part": -5.790263110563945e-22,
+     "x_part_se": 3.1496916226859544e-22,
+     "z": -0.4632127158546145
+    },
+    "one_pool": {
+     "mean": 8.790709103313042e-21,
+     "se": 6.453538443418888e-22,
+     "sd": 1.2907076886837775e-21,
+     "x_part": -1.2878511186495684e-21,
+     "x_part_se": 5.59219052030694e-23,
+     "z": -6.358815760267582
+    },
+    "along": {
+     "mean": 1.300708771782282e-20,
+     "se": 1.2745391781767905e-21,
+     "sd": 2.549078356353581e-21,
+     "x_part": -4.654657043174721e-22,
+     "x_part_se": 1.9934229093458425e-22,
+     "z": -0.4116616614289991
+    },
+    "along_pool": {
+     "mean": 9.451936577093541e-21,
+     "se": 6.709842361739661e-22,
+     "sd": 1.3419684723479322e-21,
+     "x_part": -6.266236448690684e-22,
+     "x_part_se": 4.546570670093872e-23,
+     "z": -5.318703154679716
+    }
+   },
    "ensemble_mesh_plate_levelset0.125_acc1_sil0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
-    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_\u03c6 = 0.125]",
+    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [coarse h_\u03c6 = 0.125] [mixed-pool \u2207\u03bb fits]",
     "seeds": 4,
     "reference": {
      "mean": 1.3045175911299088e-20,
@@ -2748,7 +2946,7 @@
     }
    },
    "ensemble_mesh_plate_levelset0.125_sil0.05_width_f4_H700_M300_W200_virt1x2st_dev.json": {
-    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_\u03c6 = 0.125]",
+    "label": "diffuse capsule plate half-width, windowed drag (silhouette term) [specular wall: no silhouette] [coarse h_\u03c6 = 0.125] [mixed-pool \u2207\u03bb fits]",
     "seeds": 2,
     "reference": {
      "mean": 1.3538193218210753e-20,
@@ -2786,6 +2984,47 @@
      "x_part": -6.3103250262910865e-22,
      "x_part_se": 2.8805513661907395e-23,
      "z": -2.593201264861336
+    }
+   },
+   "ensemble_mesh_circle_levelset0.125_acc1_sil0.05_gz0.05_vchit_radius_f4_H700_M300_W200_virt1x2st_dev.json": {
+    "label": "diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms)",
+    "seeds": 4,
+    "reference": {
+     "mean": 1.1284289745102203e-20,
+     "se": 1.577409172341415e-21,
+     "z": 1.104831952887254
+    },
+    "one": {
+     "mean": 7.20986519536191e-21,
+     "se": 2.3838883487912476e-21,
+     "sd": 4.767776697582495e-21,
+     "x_part": -4.496510554529202e-21,
+     "x_part_se": 2.5258015853798484e-21,
+     "z": -1.4253609780000642
+    },
+    "one_pool": {
+     "mean": 1.1940893428502876e-20,
+     "se": 3.7313977650039365e-21,
+     "sd": 7.462795530007873e-21,
+     "x_part": 2.345176786117636e-22,
+     "x_part_se": 3.654906866225788e-21,
+     "z": 0.16207966415214853
+    },
+    "along": {
+     "mean": 1.1749853143911628e-20,
+     "se": 1.2005094103791948e-21,
+     "sd": 2.4010188207583897e-21,
+     "x_part": 4.347739402051416e-23,
+     "x_part_se": 1.1605687210222268e-21,
+     "z": 0.234862326572818
+    },
+    "along_pool": {
+     "mean": 1.3117972935244984e-20,
+     "se": 5.161057628399508e-22,
+     "sd": 1.0322115256799015e-21,
+     "x_part": 1.4115971853538711e-21,
+     "x_part_se": 3.834044915900212e-22,
+     "z": 1.104831952887254
     }
    }
   }

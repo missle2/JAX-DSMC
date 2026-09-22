@@ -328,6 +328,9 @@ def ensemble_gradient(  # noqa: PLR0915 -- one seed, kept whole
         base_key=key,
         grid=grid,
         faces=faces(),
+        # G3's artifacts were measured with the mixed pool (the one-sided rule alone
+        # separates the populations at a flat wall); kept so provenance reproduces them
+        value_class="none",
         wall=wall,
         mass=MASS,
         dt=dt,

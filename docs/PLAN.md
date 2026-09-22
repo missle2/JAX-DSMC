@@ -605,6 +605,23 @@ records the field movie of its first seed's forward (`frames_k.npz`: block-wise 
 under the RNG contract, bitwise the same run) for `examples.mesh.movie`'s GIF of fill →
 shape step → fill.
 
+**Status 2026-09-22 — the specular capsule's `∇λ` parts (review §7.9).**  The fine
+specular capsule (h_φ 0.0625, grazing 0.05, 4 CRN seeds) reproduced the −27 % and
+located it: the tally term alone equals the FD seed by seed (the whole derivative of a
+convex collisionless body), the deficit is the post-hit `∇_xλ`/`∇_vλ` parts, whose true
+value is zero and which the fit read from a pool mixing about-to-hit (`λ ≈ 2 m v_x`)
+and reflected (`λ = 0`) particles — the one-sided velocity rule separates them at a
+flat wall only.  Fits are now stratified by the hit-ahead class (exact from the record,
+`shape.hit_ahead`, default `value_class="hit_ahead"`, artifacts `_vchit`): 1.356 ±
+0.011 vs FD 1.35 e-20, z = +0.08, the x/v parts zero within noise, paired SE 3× lower.
+The cluster jobs of 2026-09-21 are mixed-pool runs (noise, not bias, on curved
+specular bodies).  **Diffuse circle gate (GD)** on the same code, 4 seeds: 1.312 ± 0.052
+(no timing term) / 1.348 ± 0.25 (with) vs CRN FD 1.442 ± 0.03 (h = 0.1), 1.128 ± 0.16
+(0.05) and `F/r` 1.381 e-20 — the criterion is met (z −0.4 / +1.0) but the no-timing
+estimate is 9 % below the precise FD (z = −2.3), the plate's pattern; silhouette 61 %,
+tally 28 %.  Not closed: 8 more seeds and a silhouette band sweep decide it.
+Remaining after that: Kn 0.5 (G4/G5); the cluster results.
+
 **Further note — hierarchical (multi-level) grids, deliberately not built yet.** SPARTA
 refines parent cells into child grids (`create_grid ... level`, `adapt_grid`), which is
 what makes resolution near a body and later mesh adaptation affordable. It is notable work

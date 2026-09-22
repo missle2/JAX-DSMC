@@ -494,6 +494,11 @@ ADJOINT_GATES = (
         "ensemble_mesh_plate_levelset*_width_*.json",
     ),
     (
+        "GD",
+        "diffuse level-set circle radius, windowed drag (hybrid normal + silhouette terms)",
+        "ensemble_mesh_circle_levelset*_acc1_*_radius_*.json",
+    ),
+    (
         "LS3",
         "level-set sphere radius, windowed drag",
         "ensemble_mesh_sphere_levelset*_radius_*.json",
@@ -982,8 +987,10 @@ def adjoint_gates(path_fig) -> dict:
                 d = json.load(fh)
             if not d["rows"]:
                 continue
-            st = _gate_stats(d["rows"], d["fd_steps"])
             name = os.path.basename(path)
+            if gate == "LS2" and "_acc" in name:
+                continue  # the diffuse circle has its own row (GD)
+            st = _gate_stats(d["rows"], d["fd_steps"])
             note = " [two-sided fit, no timing term: superseded]" if "twosided" in name else ""
             note += " [one-sided ghost fits]" if "_1s" in name else ""
             for suffix, form_label in SCORE_FORMS:
@@ -991,6 +998,11 @@ def adjoint_gates(path_fig) -> dict:
             if gate == "GP":
                 note += " [specular wall: no silhouette]" if "_acc" not in name else ""
                 note += " [coarse h_φ = 0.125]" if "levelset0.125" in name else ""
+            # the grad-lambda fits: stratified by the hit-ahead class (2026-09-22) or the
+            # mixed pool of the earlier artifacts (a -27 % bias on the capsule)
+            mixed = d.get("config", {}).get("value_class", "none") == "none"
+            if name.startswith("ensemble_mesh_") and "plane" not in name and mixed:
+                note += " [mixed-pool ∇λ fits]"
             st.update({"gate": gate, "label": label + note, "artifact": name})
             gates[os.path.basename(path)] = st
     if not gates:

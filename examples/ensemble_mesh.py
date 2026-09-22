@@ -76,6 +76,7 @@ def default_config():
         "silhouette_band": 0.0,
         "grazing": 0.0,
         "grid_scale": 1,
+        "value_class": "hit_ahead",
     }
 
 
@@ -463,6 +464,7 @@ def shape_terms(
         timing_band=timing_band,
         silhouette_band=float(cfg["silhouette_band"]),
         reward=reward if cfg["silhouette_band"] > 0.0 else None,
+        value_class=cfg.get("value_class", "hit_ahead"),
     )
     t_shape = time.time() - t0
     for t in all_terms.values():
@@ -543,6 +545,9 @@ def artifact_tag(cfg):
         tag += f"_gz{cfg['grazing']:g}"
     if cfg["grid_scale"] > 1:
         tag += f"_grid{cfg['grid_scale']}"
+    if cfg.get("value_class", "hit_ahead") != "none":
+        # stratified grad-lambda fits (2026-09-22); untagged artifacts are the mixed pool
+        tag += "_vchit"
     return tag
 
 

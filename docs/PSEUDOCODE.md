@@ -2154,6 +2154,16 @@ inputs and one helper; the collision pull-back is untouched):
   being a sparse sum whose sample SE understates its uncertainty; the one-sided fit is
   consistent but 3× noisier).  Radius-type controls are FD-consistent to a few per cent
   because their tally term is exact; translation-type controls are not resolved.
+* **Stratified fits** (2026-09-22; `node_gradients(klass=)`, `shape.hit_ahead`,
+  `shape.gradient(value_class="hit_ahead")`, the runners' default).  The one-sided
+  rule separates the about-to-hit and just-left populations at a flat wall only: at a
+  cap, nodes leaving the tilted tangent plane still hit the flat face below, and the
+  fitted `∂λ/∂v_x` of a reflected particle reads the mixture (−27 % on the specular
+  capsule, whose true post-hit value gradient is zero; review §7.9).  The record holds
+  every slot's future, so the class is exact: a slot's nodes are the slots of its own
+  class, class = a body hit at a later captured step (`rec.walls.face ≥ 2D`).  Specular
+  capsule: 0.964 ± 0.037 → 1.356 ± 0.011 vs CRN FD 1.35 e-20 (z −11 → +0.08).
+  `"none"` is the mixed pool of the earlier artifacts; `ensemble_plane` keeps it.
   **Open issue / decision (2026-09-20):** shape controls are restricted to normal
   displacements of curved surfaces (radius-type) until the translation-type x/v-part
   is resolved; tangential translations of flat walls are not supported as optimisation

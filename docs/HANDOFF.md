@@ -74,7 +74,13 @@
 >   parallel-transported from the primal one — the incident-velocity frame's derivative
 >   has a `1/|v_t,in|` tail) and the normal score is weighted by the value-to-go *after*
 >   the hit; this cut the plate's normal-term seed sd 4×.  `grazing = eps` on both bodies
->   floors the hit-time derivative's `1/(v·n)` and the score's `1/(v_out·n)` (tangent only).  `replay_error` is relative and roundoff (`< 1e-12`), not
+>   floors the hit-time derivative's `1/(v·n)` and the score's `1/(v_out·n)` (tangent only).
+>   **The `∇λ` fits are stratified by the hit-ahead class** (2026-09-22, review §7.9;
+>   `shape.hit_ahead`, `node_gradients(klass=)`, `gradient(value_class=)`): a slot's
+>   nodes are the slots with the same "body hit at a later captured step" — the
+>   one-sided velocity rule alone mixes the populations at a curved cap (specular
+>   capsule −27 % → z = +0.08).  Artifacts of the stratified fit carry `_vchit`; the
+>   plane runner keeps `"none"`.  `replay_error` is relative and roundoff (`< 1e-12`), not
 >   bitwise: same arithmetic, another compilation.  Gates: G1/G2 `examples.ensemble_couette
 >   --objective energy-window|shear-window --device`, G3 `examples.mesh.ensemble_plane`
 >   (rectangle body whose left face is the moving Couette wall; control = translation);

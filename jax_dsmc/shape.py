@@ -454,7 +454,7 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
 ):
     """One step of the shape VJP (module-level ``scan`` body)."""
     x, v, alive, g_x, g_v, g_tally, g_score, g_time, g_sil, err = carry
-    rec_k, lam_k, step, r_k, tally_weight, lam_timing_k = xs
+    rec_k, lam_k, step, r_k, tally_weight, lam_timing_k, klass_k = xs
     key = key_for(setup["base_key"], step, STAGE_MOVE)
     f = functools.partial(wall_map, x=x, v=v, alive=alive, key=key, **setup["map"])
     primal, vjp = jax.vjp(f, geom)
@@ -463,7 +463,8 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     survivors = alive & rec_k.alive & (rec_k.born_face < 0)
     err = jnp.maximum(err, _mismatch(x_post, v_post, rec_k, survivors, setup["map"]["grid"]))
     # value gradients at the post-move state (the record's), on survivors only, from the
-    # one-sided fit over the nodes on the hit particle's side of its last surface
+    # one-sided fit over the nodes on the hit particle's side of its last surface, of the
+    # particle's own class (a body hit ahead or not)
     gx, gv = node_gradients(
         rec_k.x,
         rec_k.v,
@@ -471,6 +472,7 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         lam_k,
         setup["map"]["grid"],
         direction=_last_normal(events),
+        klass=klass_k,
         **fit,
     )
     if lam_timing_k is not None:
@@ -630,6 +632,7 @@ def replay(
         "pool",
         "silhouette_band",
         "reward",
+        "value_class",
     ),
 )
 def gradient(
@@ -661,6 +664,7 @@ def gradient(
     lam_timing=None,
     silhouette_band=0.0,
     reward=None,
+    value_class="hit_ahead",
 ):
     """The shape gradient of the captured window: :class:`ShapeTerms` shaped like
     :func:`geometry` ``(mesh)``.  ``silhouette_band > 0`` (a length, level-set bodies
@@ -678,7 +682,14 @@ def gradient(
     1)^D`` block of cells; ``lam_timing`` ``f64[M, N]`` (the value of the timing rewards of
     :func:`replay`, from a second backward) switches the along-flight component of
     ``grad_x lambda`` to the identity of :func:`along_flight`.
+
+    ``value_class`` stratifies the ``grad lambda`` fits (:func:`node_gradients`):
+    ``"hit_ahead"`` (default) fits a particle's value from the particles of its own class,
+    class = a body hit at a later captured step; ``"none"`` is the mixed pool of the
+    phase-D artifacts.
     """
+    if value_class not in ("hit_ahead", "none"):
+        raise ValueError(value_class)
     setup = _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static)
     geom = geometry(mesh)
     fit = {"npc_max": npc_max, "scale": scale, "k": k, "basis": basis, "chunk": chunk, "pool": pool}
@@ -698,13 +709,26 @@ def gradient(
         hit_reward = jnp.zeros((m, records.walls.face.shape[1], lam.shape[1]))
     if tally_weight is None:
         tally_weight = jnp.ones(m)
+    klass = hit_ahead(records, mesh) if value_class == "hit_ahead" else None
     zero_g = jax.tree.map(jnp.zeros_like, geom)
     init = (state0.x, state0.v, state0.alive, *([zero_g] * 6), jnp.float64(0.0))
     (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, err), hits = lax.scan(
-        body, init, (records, lam, steps, hit_reward, tally_weight, lam_timing)
+        body, init, (records, lam, steps, hit_reward, tally_weight, lam_timing, klass)
     )
     total = jax.tree.map(lambda a, b, c: a + b + c, g_x, g_v, g_tally)
     return ShapeTerms(total, g_x, g_v, g_tally, g_score, g_time, g_sil, err, hits)
+
+
+def hit_ahead(records, mesh):
+    """``bool[M, N]``: does the slot hit the body (a surface id ``>= 2D``) at a captured
+    step *after* this one -- the value class of the stratified fit (the reward of that
+    hit is in the slot's value; a slot without one carries only what collisions and the
+    window edges give it)."""
+    dim = records.x.shape[-1]
+    del mesh
+    hit = jnp.any(records.walls.face >= 2 * dim, axis=1)  # (M, N)
+    later = jnp.flip(jnp.cumsum(jnp.flip(hit, 0), axis=0), 0) - hit.astype(jnp.int32)
+    return later > 0
 
 
 VARIANTS = {

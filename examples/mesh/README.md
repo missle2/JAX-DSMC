@@ -99,3 +99,15 @@ sampled bracket + bisection + one Newton step with the bracket under `stop_gradi
 (the bisection alone has no derivative), normals `∇φ/|∇φ|`, no `exclude` (re-hits are
 ruled by the sign pattern of φ), host cut tables by the coefficient-sign test; the
 search reach `n_sample · h_φ / 2` is the level set's `stencil_sufficient` bound.
+
+The specular capsule (`--case plate --acc 0`) closed the last open estimator question
+(review §7.9): its −27 % was the `∇_xλ`/`∇_vλ` parts, which are zero for a convex
+collisionless body and were read from a fit pool mixing about-to-hit and reflected
+particles at the cap.  The fits are now stratified by the hit-ahead class (`shape.
+hit_ahead`, runner default `--value-class hit_ahead`, artifacts tagged `_vchit`):
+1.356 ± 0.011 vs CRN FD 1.35 e-20, z = +0.08.
+The diffuse circle (`--case circle --acc 1 --parameter radius --silhouette-band 0.05
+--grazing 0.05`, gate GD) on the same code, 4 seeds: 1.312 ± 0.052 (no timing term)
+vs CRN FD 1.442 ± 0.03 (h = 0.1), 1.128 ± 0.16 (0.05) and `F/r` 1.381 e-20 — the
+criterion is met but the estimate is 9 % below the precise FD (z = −2.3, the plate's
+pattern); the silhouette term is 61 % of it.  Not closed: more seeds and a band sweep.

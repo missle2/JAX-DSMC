@@ -1689,3 +1689,100 @@ five steps on the same seeds (`scratch/mesh/probe_plate_fd_steps.py`,
 **GP passes at every step** (|z| ≤ 1.6); the gate's reference is the finest resolved
 step.  The specular capsule's open question (its `∇_vλ` part, −25 %) is untouched by
 this: the diffuse plate's `v` part is zero by construction.
+
+### 7.9 The specular capsule's `∇λ` parts: population mixing, and the stratified fit (2026-09-22)
+
+**The measurement that settled it.** The specular capsule rerun at the GP resolution
+(`h_φ = 0.0625`, 16 samples, `grazing = 0.05`, 4 CRN seeds, `scratch/mesh/logs/
+gp_plate_specular_fine.log`, artifact `ensemble_mesh_plate_levelset0.0625_sil0.03_gz0.05_
+width_…`) reproduces the coarse result: ensemble 0.964 ± 0.037 vs CRN FD 1.351 / 1.355
+e-20, z = −11 paired, again −27 %, so resolution is not the cause.  Its decomposition is
+the diagnosis: the **tally term alone matches the FD seed by seed** (1.29 / 1.44 / 1.31 /
+1.38 vs 1.243 / 1.480 / 1.309 / 1.372 e-20; tally + timing paired Δ = +0.01 ± 0.35 e-21,
+z = +0.04), the silhouette is ≈ 0 as it must be for a specular wall, and the whole
+deficit sits in the post-hit value-gradient parts, `∇_xλ` −0.63 and `∇_vλ` −3.26 ±
+0.32 e-21.  That the tally is the whole derivative is the physics, not a coincidence: for
+a convex body in a collisionless flow the own-reward derivatives of the cap hits are
+`dJ/dw` exactly (the cap's hit integral is translation-invariant, and the rays that
+transfer from the cap to the flat face at the C1 junction keep their reward), and a
+specularly reflected particle never re-hits a convex body, so its value-to-go — and its
+gradients — are zero.  Paired against the same CRN FD, the earlier specular artifacts say
+the same thing: tally + timing vs the full estimator is z = −0.9 / +1.0 on the analytic
+circle (48 seeds), −1.1 / −1.1 on the level-set circle, +0.3 / +0.5 on the `cos 2θ` mode
+— the `∇λ` parts add nothing measurable there but double the paired SE (1.1 vs 0.54
+e-21 on the analytic circle).
+
+**Why the fit is biased at a cap.** The value function next to a wall is discontinuous
+in phase space along the hit / no-hit boundary: particles about to hit carry their next
+hit's reward, `λ ≈ 2 m v_x` on the front face, particles that just left carry ≈ 0.  The
+one-sided rule (§7.6 item 5: nodes with `v · n > 0` for the query's last-hit normal)
+separates the two populations exactly at a *flat* wall, but not at the cap: a particle
+leaving the cap's tilted tangent plane can still be heading for the flat face below it,
+so the pool of a reflected query mixes in front-face-bound nodes, and the fitted
+`∂λ/∂v_x` reads the mixture's `d(2 m v_x)/dv` times the hit probability.  The sign
+follows: moving the hit toward the junction (what `∂x_hit/∂w` does) turns `v_out`
+toward `−x`, and a positive fitted slope times a negative `∂v_out,x/∂w` is negative.
+The magnitude is set by the curvature: `∂v_out/∂w ∝ ∂n/∂x_hit = 1/R`, 7.5× larger on
+the cap (R = 0.4) than on the circle (R = 3) — which is why the circle showed noise
+where the capsule shows a bias.
+
+**The stratified fit** (`ensemble_device.node_gradients(klass=)`, `shape.hit_ahead`,
+`shape.gradient(value_class="hit_ahead")`, the runners' default; `"none"` is the mixed
+pool).  The record holds every slot's future, so the class is exact: a slot's nodes are
+the slots of its own class, class = *a body hit at a later captured step*
+(`rec.walls.face ≥ 2D`, reverse cumulative OR).  For the collisionless convex bodies the
+post-hit class has `λ = 0` identically and the `∇λ` parts vanish; in a collisional gas
+the class-conditional fit is the smooth part of the value gradient, the class boundary
+(a hit-set change) being what the silhouette and timing terms carry.  The one-sided rule
+is kept (it is redundant for the class, harmless).  Unit test: two interleaved
+populations with `λ = 2 v_x` and `λ = 0` — the mixed fit of the zero class reads a slope
+of order `2 P(hit)`, the stratified fit reads 0 to the ridge, and the hitting class keeps
+its exact slope (`test_stratified_node_gradients_ignore_the_other_class`).
+
+| specular capsule, `h_φ = 0.0625` (4 CRN seeds) | ensemble | x part | v part | paired Δ vs FD | z |
+|---|---|---|---|---|---|
+| mixed pool (`…_gz0.05_width_…`) | 0.964 ± 0.037 e-20 | −0.63 e-21 | −3.26 ± 0.32 e-21 | −3.9 ± 0.4 e-21 | −11 |
+| hit-ahead class (`…_gz0.05_vchit_width_…`) | **1.356 ± 0.011 e-20** | −0.02 e-21 | +0.05 ± 0.22 e-21 | +0.05 ± 0.56 e-21 | **+0.08 / 0.00** |
+
+(CRN FD 1.351 ± 0.049 / 1.355 ± 0.049 e-20 at h = 0.1 / 0.05.)  The x/v parts are now
+zero within noise and the paired SE of the total is a third of the mixed pool's.  The
+G3 plane runner (`examples/mesh/ensemble_plane.py`) keeps `value_class="none"` so its
+artifacts reproduce; the phase-D/LS2 artifacts and the cluster jobs submitted on
+2026-09-21 are mixed-pool runs (noise, not bias, on curved specular bodies; the report
+marks them "[mixed-pool ∇λ fits]").  New artifacts carry `_vchit` in the name.
+
+**Diffuse circle (gate GD, 2026-09-22; artifact `ensemble_mesh_circle_levelset0.125_
+acc1_sil0.05_gz0.05_vchit_radius_…`, `scratch/mesh/logs/gd_circle_diffuse.log`, ~10
+min/seed incl. FD).**  The full diffuse estimator on the SPARTA circle at `acc = 1`,
+`T_w = 300 K`: hybrid normal term, silhouette band 0.05, grazing 0.05, stratified fits;
+4 CRN seeds.
+
+| term | e-20 |
+|---|---|
+| silhouette | 0.818 ± 0.046 |
+| tally (hit's own reward, hybrid) | 0.373 ± 0.008 |
+| x (`∇_xλ`, along-flight) | 0.141 ± 0.038 |
+| score (value-to-go after the hit) | −0.020 ± 0.009 |
+| **estimator (report convention, no timing term)** | **1.312 ± 0.052** |
+| timing (window edges) | 0.036 ± 0.21 (per seed −1.1, +4.9, −4.7, +2.4 e-21) |
+| with timing | 1.348 ± 0.25 |
+| analytic `F/r` (a diffuse cylinder's drag is linear in r; no blockage) | 1.381 |
+| CRN FD, h = 0.1 / 0.05 | 1.442 ± 0.03 / 1.128 ± 0.16 |
+| paired z, no timing | −2.3 / +1.0 |
+| paired z, with timing | −0.4 / +0.8 |
+
+The gate's criterion is met (the table's reference is the finest step; with the timing
+term |z| < 1 at both), but the sharper comparison is not comfortable: the h = 0.05 FD
+is the noisy one here (two seeds at 8.4–8.8 and two at 13–15 e-21, the `1/h` jump
+noise of a diffuse objective), so h = 0.1 is the better reference, and against it the
+no-timing estimator is 9 % low at z = −2.3 — the same pattern as the plate (1.191 vs
+1.336 at h = 0.1, z = −1.6, consistent at every other step).  The timing term's
+expectation is probably a few per cent, as on the specular circle (+0.7 e-21), which
+would leave a ~5 % deficit that four seeds cannot resolve against a ±2.1 e-21 timing
+noise (an edge hit's diffuse reward is itself a random draw, twice the specular
+circle's sd).  Two things the decomposition says: the silhouette term is 61 % of a
+diffuse body's radius derivative (45 % on the plate), so the band term is the main
+term for diffuse walls and its band-width bias — never swept (`silhouette_term.png`
+is not built) — is the first suspect for a residual few per cent; and the precision
+question is the timing term's variance.  **Not closed at 4 seeds**: what decides it is
+8 more seeds (the artifact resumes) and a band sweep (0.025 / 0.1) at 2 seeds each.

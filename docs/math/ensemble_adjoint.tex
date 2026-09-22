@@ -806,6 +806,31 @@ displacements of curved surfaces, which is sufficient for the first optimisation
 (a circle deformed toward an airfoil-like shape, and the sphere analogue); tangential
 translations of flat walls are not supported as controls.
 
+\paragraph{Stratifying the fit by the hit-ahead class.}
+The one-sided rule separates the two populations exactly at a flat wall and not at a
+curved one: a particle leaving a cap's tilted tangent plane can still be heading for the
+flat face below it, so the pool of a reflected query mixes in nodes that carry their
+next hit's reward, and the fitted $\partial\lambda/\partial v_x$ reads the mixture's
+$d(2 m v_x)/dv$ times the hit probability.  On the specular capsule (review
+section~7.9) this is a $-27\,\%$ bias of the total against the CRN FD, entirely in the
+$\nabla_x\lambda$, $\nabla_v\lambda$ parts, whose true value is zero: for a convex body
+in a collisionless flow a reflected particle never re-hits, and the own-reward (tally)
+term alone reproduces the FD seed by seed.  The record holds every particle's future,
+so the class is exact: the nodes of a query are the particles of its own class,
+\begin{equation}
+\label{eq:hit-ahead}
+\kappa_k^m = \mathbf 1\{\exists\, k' > k:\ \text{particle } m \text{ hits the body at
+step } k'\},
+\qquad \text{nodes of } (k, m) = \{\,m' : \kappa_k^{m'} = \kappa_k^m\,\}
+\end{equation}
+(\code{shape.hit\_ahead}, \code{node\_gradients(klass=)}).  For the collisionless
+convex bodies the post-hit class has $\lambda \equiv 0$ and the $\nabla\lambda$ parts
+vanish; in a collisional gas the class-conditional fit is the smooth part of the value
+gradient, the class boundary (a hit-set change) being what the silhouette and timing
+terms carry.  Specular capsule, four CRN seeds: $0.964 \pm 0.037 \to 1.356 \pm 0.011$
+against the FD $1.35 \times 10^{-20}$ ($z = -11 \to +0.08$), the x/v parts
+$-3.9 \to +0.05 \pm 0.6 \times 10^{-21}$.
+
 \emph{Representation.} The shape is optimised as a $C^1$ level set
 $\phi(x;\,c) = \sum_j c_j B_j(x)$ (uniform cubic B-splines on a grid finer than the
 DSMC grid; body $\phi<0$, normal $n=\nabla\phi/|\nabla\phi|$ into the flow), not as

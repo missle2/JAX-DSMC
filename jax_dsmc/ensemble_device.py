@@ -250,28 +250,48 @@ def backward(
 # --- virtual-partner pull-back ------------------------------------------------------
 
 
-def _chunk_query(args, node_x, node_v, node_valid, node_val, scale, k, basis, gradients):
+def _chunk_query(
+    args, node_x, node_v, node_valid, node_val, node_class, scale, k, basis, gradients
+):
     """Field values (and slopes) at one chunk of queries, each from its own cell's nodes;
     ``direction`` (``f64[chunk, 3]``, zero = no restriction) keeps only the nodes with
-    ``v . direction > 0`` -- the one-sided fit of the shape adjoint."""
-    c, q_x, q_v, direction = args
+    ``v . direction > 0`` -- the one-sided fit of the shape adjoint; ``node_class`` /
+    ``q_class`` (``bool``) keep only the nodes of the query's class."""
+    c, q_x, q_v, direction, q_class = args
     valid = node_valid[c]
     one_sided = jnp.any(direction != 0.0, axis=1)
     same_side = jnp.einsum("qpk,qk->qp", node_v[c], direction) > 0.0
     valid = valid & (same_side | ~one_sided[:, None])
+    if node_class is not None:
+        valid = valid & (node_class[c] == q_class[:, None])
     value, grad_x, grad_v = field_query(
         node_x[c], node_v[c], valid, node_val[c], q_x, q_v, scale, k, basis
     )
     return (value, grad_x, grad_v) if gradients else value
 
 
-def cell_query(tables, q_c, q_x, q_v, scale, k, basis, chunk, gradients=False, direction=None):
+def cell_query(
+    tables,
+    q_c,
+    q_x,
+    q_v,
+    scale,
+    k,
+    basis,
+    chunk,
+    gradients=False,
+    direction=None,
+    q_class=None,
+):
     """Field value at ``Q`` queries in cells ``q_c`` from per-cell node tables ``(C, P, .)``,
     ``chunk`` queries at a time (the per-query node gather is ``P x (D+3)`` floats).
     ``gradients=True`` returns ``(value, grad_x, grad_v)`` instead; ``direction``
     ``f64[Q, 3]`` restricts a query's nodes to those with ``v . direction > 0`` (rows of
-    zeros: no restriction)."""
-    node_x, node_v, node_valid, node_val = tables
+    zeros: no restriction).  A fifth table ``node_class`` (``bool[C, P]``) with ``q_class``
+    ``bool[Q]`` restricts them to the query's class -- the stratified fit of the shape
+    adjoint (:func:`node_gradients`)."""
+    node_x, node_v, node_valid, node_val, *rest = tables
+    node_class = rest[0] if rest else None
     q = q_c.shape[0]
     pad = (-q) % chunk
     c = jnp.pad(q_c, (0, pad)).reshape(-1, chunk)
@@ -280,18 +300,22 @@ def cell_query(tables, q_c, q_x, q_v, scale, k, basis, chunk, gradients=False, d
     if direction is None:
         direction = jnp.zeros((q, 3))
     d = jnp.pad(direction, ((0, pad), (0, 0))).reshape(-1, chunk, 3)
+    if q_class is None:
+        q_class = jnp.zeros(q, dtype=bool)
+    qc = jnp.pad(q_class, (0, pad)).reshape(-1, chunk)
     body = functools.partial(
         _chunk_query,
         node_x=node_x,
         node_v=node_v,
         node_valid=node_valid,
         node_val=node_val,
+        node_class=node_class,
         scale=scale,
         k=k,
         basis=basis,
         gradients=gradients,
     )
-    out = lax.map(body, (c, x, v, d))
+    out = lax.map(body, (c, x, v, d, qc))
     if gradients:
         value, grad_x, grad_v = out
         return (
@@ -308,7 +332,7 @@ def pooled_tables(tables, grid, pool):
     neighbourhood instead of the cell alone (more nodes and a wider position range for the
     slope, at the cost of a farther, less local kernel).  Block positions outside the box
     contribute no valid nodes."""
-    node_x, node_v, node_valid, node_val = tables
+    node_x, node_v, node_valid, node_val, *rest = tables
     nbr, exists = grid_neighbourhood(grid, pool)  # (C, B)
     c, b = nbr.shape
 
@@ -317,7 +341,7 @@ def pooled_tables(tables, grid, pool):
         return out.reshape(c, b * out.shape[2], *out.shape[3:])
 
     valid = (node_valid[nbr] & exists[:, :, None]).reshape(c, -1)
-    return widen(node_x), widen(node_v), valid, widen(node_val)
+    return (widen(node_x), widen(node_v), valid, widen(node_val), *[widen(t) for t in rest])
 
 
 def node_gradients(
@@ -333,6 +357,7 @@ def node_gradients(
     chunk=4096,
     direction=None,
     pool=0,
+    klass=None,
 ):
     """``(grad_x f64[N, D], grad_v f64[N, 3])`` of the carried adjoint at every alive slot's
     own state, from the per-cell fit of ``lam`` over the slot's cell (the slot is one of
@@ -349,14 +374,25 @@ def node_gradients(
     not ``grad_x lambda`` (gate G3: the sign of the plane's shear gradient came out
     wrong).  ``pool = 1`` draws the ``k`` nearest nodes from the ``3^D`` block of cells
     around the slot's cell (:func:`pooled_tables`) instead of the cell alone.
+
+    ``klass`` ``bool[N]`` **stratifies** the fit: a slot's nodes are the slots of its own
+    class.  The shape adjoint passes "has a body hit ahead in the window": a particle's
+    value jumps by its next hit's reward across the hit / no-hit boundary in phase space,
+    and next to a curved surface the velocity half-space of ``direction`` does not
+    separate the two (particles leaving a cap's tangent plane still hit the flat face
+    below it) -- the fitted ``grad_v lambda`` of a reflected particle then reads the
+    approaching population's ``d(2 m v_x)/dv``, a -27 % bias on the specular capsule
+    whose true post-hit value gradient is zero (review section 7.8).
     """
     ids, valid, cell, _, count = cell_nodes(x, alive, grid, npc_max)
     c = jnp.minimum(cell, count.shape[0] - 1)
     tables = (x[ids], v[ids], valid, lam[ids])
+    if klass is not None:
+        tables = (*tables, klass[ids])
     if pool:
         tables = pooled_tables(tables, grid, pool)
     _, grad_x, grad_v = cell_query(
-        tables, c, x, v, scale, k, basis, chunk, gradients=True, direction=direction
+        tables, c, x, v, scale, k, basis, chunk, gradients=True, direction=direction, q_class=klass
     )
     return jnp.where(alive[:, None], grad_x, 0.0), jnp.where(alive[:, None], grad_v, 0.0)
 
