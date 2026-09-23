@@ -8,6 +8,7 @@
 #   bash examples/mesh/cluster/submit_curc.sh mode2        # 32 jobs x 1 GPU
 #   bash examples/mesh/cluster/submit_curc.sh opt          # 8 jobs x {1,2,4} GPUs
 #   bash examples/mesh/cluster/submit_curc.sh all
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh check   # check_env on that kind
 #
 # Sizing per GPU = the node divided by its GPUs (CURC "Alpine hardware"): ah200 (4 H200,
 # 128 cores, 1.5 TB) -> 32 cores, 128 GB (a quarter of the memory would be 384 GB; the
@@ -20,18 +21,33 @@
 # jobs all landed on one node whose driver refuses cuInit); GPU_KIND=mi100 -> ami100 /
 # gpu:mi100 (needs a jax >= 0.4.36 module, see env.sh).  Nodes listed in bad_nodes.txt
 # (written by a job's preflight) and in EXCLUDE_NODES are excluded from every submission.
+# GPU_KIND=rtx -> the RTX PRO 6000 nodes: partition, gres name and per-GPU cores/memory are
+# read from `sinfo` (the first partition whose gres mentions "rtx"; RTX_MATCH overrides the
+# pattern), so nothing about those nodes is hard-coded.  They are Blackwell (sm_120): run
+# `check` on them first.  The group `check` submits check_env.sbatch on the chosen kind.
 # PART / GRES_TYPE override the partition / gres name
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
 [ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|all"; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
+[ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 GPU_KIND="${GPU_KIND:-a100}"
 case "${GPU_KIND}" in
   h200) PART="${PART:-ah200}"; GRES="${GRES_TYPE:-h200}"; CORES=32; MEM=128; PER_NODE=4 ;;
   a100) PART="${PART:-aa100}"; GRES="${GRES_TYPE:-a100-40gb}"; CORES=21; MEM=70; PER_NODE=3 ;;
   mi100) PART="${PART:-ami100}"; GRES="${GRES_TYPE:-mi100}"; CORES=21; MEM=70; PER_NODE=3 ;;
-  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|a100|mi100)"; exit 1 ;;
+  rtx)
+    # one line per node: "partition cpus memory_MB gres", e.g. "atesting 64 500000 gpu:rtx_pro_6000:4(S:0-1)"
+    LINE="$(sinfo -h -N -o "%P %c %m %G" | grep -i "${RTX_MATCH:-rtx}" | head -1 || true)"
+    [ -n "${LINE}" ] || { echo "no partition with an rtx gres in sinfo (set PART/GRES_TYPE or RTX_MATCH)"; exit 1; }
+    read -r P_SINFO NCPU MEM_MB G_SINFO <<< "${LINE}"
+    PART="${PART:-${P_SINFO%\*}}"
+    GRES="${GRES_TYPE:-$(echo "${G_SINFO}" | cut -d: -f2)}"
+    PER_NODE="$(echo "${G_SINFO}" | cut -d: -f3 | cut -d'(' -f1)"
+    CORES=$((NCPU / PER_NODE)); MEM=$((MEM_MB / 1024 * 9 / 10 / PER_NODE))
+    echo "rtx: partition ${PART}, gres gpu:${GRES}, ${PER_NODE}/node -> ${CORES} cores, ${MEM} GB per GPU" ;;
+  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|a100|rtx|mi100)"; exit 1 ;;
 esac
 # study.py needs python >= 3.8 (annotations); the login node's /usr/bin/python3 is 3.6, so
 # use the jobs' venv interpreter (PYTHON overrides).
@@ -39,6 +55,11 @@ PY="${PYTHON:-${JAX_VENV:-/projects/${USER}/jax-env}/bin/python3}"
 [ -x "${PY}" ] || PY=python3
 "${PY}" -c 'import sys; sys.exit(sys.version_info < (3, 8))' || { echo "${PY} is $("${PY}" -V); need >= 3.8 (set PYTHON or JAX_VENV)"; exit 1; }
 mkdir -p examples/mesh/cluster/logs
+if [ -n "${CHECK_ONLY:-}" ]; then
+  sbatch --partition="${PART}" --gres="gpu:${GRES}:1" --export=ALL,GPU_KIND="${GPU_KIND}" \
+    examples/mesh/cluster/check_env.sbatch
+  exit 0
+fi
 # nodes a preflight found unusable, plus anything the caller names
 BAD_FILE=examples/mesh/cluster/bad_nodes.txt
 EXCLUDE="$(cat "${BAD_FILE}" 2>/dev/null | sort -u | paste -sd, -)"
