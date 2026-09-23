@@ -398,6 +398,23 @@ def test_stencil_overrun_and_walk_finish():
     assert out_k[3].exhausted == 1 and not bool(out_k[2][0])
 
 
+def test_stuck_particle_is_deleted_and_counted():
+    # a particle bouncing between the body's top (y = 8) and the specular box face y = 10:
+    # ~10 reflections in one step.  With the budget it finishes; with 4 passes the stencil
+    # tracker deletes it (SPARTA MAXSTUCK) and counts it instead of leaving an unresolved hit
+    grid = _grid(2)
+    mesh = cut.build_mesh(_body(2), grid, radius=1)
+    x = jnp.array([[5.0, 9.0], [1.0, 1.0]])
+    v = jnp.array([[0.0, 1.0e5, 0.0], [10.0, 0.0, 0.0]])
+    dt = 1e-4  # 10.0 of travel: ~5 round trips across the 2.0 gap
+    alive = jnp.ones(2, bool)
+    full = _advance(x, v, alive, grid, _closed(2), _wall(2), mesh, "stencil", dt)
+    assert full[3].exhausted == 0 and bool(full[2][0])
+    short = _advance(x, v, alive, grid, _closed(2), _wall(2), mesh, "stencil", dt, max_bounces=4)
+    assert short[3].exhausted == 1 and short[3].inside_body == 0
+    assert not bool(short[2][0]) and bool(short[2][1])
+
+
 def test_inside_body_is_killed_and_counted():
     grid = _grid(2)
     mesh = cut.build_mesh(_polygon(), grid, radius=1)

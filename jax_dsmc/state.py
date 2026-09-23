@@ -260,6 +260,12 @@ class Diagnostics:
     inside_body: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
     """``i32`` particles found inside the body after the move and killed (the catch-all
     of SPARTA's tracking: a missed hit).  Must be zero."""
+    surface_stuck: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` particles the stencil tracker deleted because a hit was still unresolved
+    after ``K_bounce`` passes -- SPARTA's stuck particle (``MAXSTUCK``, deleted and
+    counted in ``nstuck``): repeated reflections in a concave pocket of the body.  A rate
+    to report, not an error; the replay deletes the same particle, so the adjoint stays
+    consistent (the particle leaves like an outflow)."""
 
 
 # --- parameters -----------------------------------------------------------

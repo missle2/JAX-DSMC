@@ -475,6 +475,7 @@ def shape_terms(
     info = {
         "objective": check,
         "hits": int(diag.surface_hits.sum()),
+        "stuck": int(diag.surface_stuck.sum()),
         "newborn_hit_share": newborn_share,
         "alive_final": int(final.alive.sum()),
         "lambda_rms": [float(np.sqrt(np.mean(lam[k][alive[k]] ** 2))) for k in (0, m // 2, m - 1)],

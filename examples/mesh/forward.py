@@ -96,6 +96,12 @@ TEMP = 273.15
 VSTREAM = 100.0
 T_SURF = 300.0
 DT = 1.0e-4
+# event passes per step.  A particle still unresolved after them -- repeated reflections
+# in a concave pocket of an optimised shape -- is deleted and counted (`surface_stuck`,
+# SPARTA MAXSTUCK).  Measured 2026-09-23 on the roughest optc shape (S1 gd iterate 8): 4
+# passes delete 1 particle in the last 300 steps (~1e-7 of particle-steps); 8 delete none
+# but cost +66 % forward time (every pass runs the hit search on all particles), so 4
+K_BOUNCE = 4
 BLOCK = 10  # SPARTA `stats 10`
 
 
@@ -135,7 +141,7 @@ def build(
         S=1,
         G=1,
         A_max=4,
-        K_bounce=4,
+        K_bounce=K_BOUNCE,
         n_steps=BLOCK,
         tracker=tracker,
         K_walk=8,

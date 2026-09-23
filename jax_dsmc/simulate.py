@@ -107,7 +107,10 @@ def _tracking_diagnostics(counts, tracker):
     }
     if tracker == "walk":
         tracking["walk_exhausted"] = counts.exhausted
-    return counts.exhausted, tracking
+        return counts.exhausted, tracking
+    # stencil: the stuck particles were deleted (SPARTA MAXSTUCK), a rate, not a failure
+    tracking["surface_stuck"] = counts.exhausted
+    return jnp.zeros_like(counts.exhausted), tracking
 
 
 def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event order is readable

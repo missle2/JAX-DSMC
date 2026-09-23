@@ -141,7 +141,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None):
     seeds ``seeds`` (indices; key ``seed_start + i``), stacked.  The seed ``frames_for``
     (if in ``seeds``) also records the field movie of its forward (``cfg["frames_every"]``;
     keys ``frame_<name>``)."""
-    grads, objs, hits, secs = [], [], [], []
+    grads, objs, hits, secs, stuck = [], [], [], [], []
     out = {}
     for i in seeds:
         key = jax.random.key(cfg["seed_start"] + int(i))
@@ -154,6 +154,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None):
         grads.append(np.asarray(terms.pathwise + terms.score))
         objs.append(info["objective"])
         hits.append(info["hits"])
+        stuck.append(info["stuck"])
         secs.append(time.time() - t0)
         if s["frames"] is not None:
             out.update({f"frame_{name}": s["frames"][name] for name in FRAME_KEYS})
@@ -162,6 +163,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None):
             "gradient": np.stack(grads),
             "objective": np.asarray(objs, dtype=float),
             "hits": np.asarray(hits, dtype=float),
+            "stuck": np.asarray(stuck, dtype=float),
             "seconds": np.asarray(secs, dtype=float),
         }
     )
@@ -180,6 +182,8 @@ def _combine(parts):
         "objective": float(objs.mean()),
         "objective_se": float(objs.std(ddof=1) / np.sqrt(n)) if n > 1 else float("nan"),
         "hits": float(np.concatenate([p["hits"] for p in parts]).mean()),
+        # particles deleted in concave pockets (SPARTA stuck), summed over the seeds
+        "stuck": float(np.concatenate([p.get("stuck", np.zeros(1)) for p in parts]).sum()),
         "seconds": float(np.concatenate([p["seconds"] for p in parts]).sum()),
     }
 
@@ -340,6 +344,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
             "objective_se": avg["objective_se"],
             "gradient_seed_sd": avg["gradient_seed_sd"],
             "hits": avg["hits"],
+            "stuck": avg["stuck"],
             "area": float(L.body_volume(ls, lo, hi, 4)),
             "area_after_step": area,
             "grad_norm": float(np.linalg.norm(g)),
@@ -368,7 +373,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
         print(
             f"iterate {k}: J = {row['objective']:.5g} ± {row['objective_se']:.2g}  area {row['area']:.4f} "
             f"-> {area:.4f} (shift {shift:+.4f})  |g| {row['grad_norm']:.3g}  predicted dJ {predicted:+.3g}  "
-            f"hits {row['hits']:.0f}  {row['seconds']:.0f}s",
+            f"hits {row['hits']:.0f}  stuck {row['stuck']:.0f}  {row['seconds']:.0f}s",
             flush=True,
         )
         ls = new

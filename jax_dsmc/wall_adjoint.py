@@ -89,7 +89,8 @@ class WallEvents(NamedTuple):
 class TrackerCounts(NamedTuple):
     """Per-step tracking diagnostics of the mesh path (all ``i32`` scalars).
 
-    ``exhausted``: particles with an unresolved hit after ``max_bounces`` passes (stencil)
+    ``exhausted``: particles with an unresolved hit after ``max_bounces`` passes (stencil;
+    deleted, SPARTA's stuck particle)
     or ``max_walk`` iterations (walk); ``surface_hits``: element / body hits resolved;
     ``stencil_overrun``: particles whose remaining move exceeded the stencil dilation;
     ``inside_body``: particles found inside the body after the move and killed.
@@ -458,6 +459,11 @@ def _advance_impl(
         x, v, alive, elapsed, logp, had_hit, tally, events, _, exclude, overrun, n_surf = carry
         distance, _ = _next_surface(x, v, grid, mesh, exclude, None)
         exhausted = alive & (elapsed + distance <= budget)
+        if mesh is not None:
+            # SPARTA `MAXSTUCK`: a particle still bouncing in a concave pocket after
+            # `max_bounces` passes is deleted and counted (`surface_stuck`), not left with
+            # an unresolved hit
+            alive = alive & ~exhausted
     elif tracker == "walk":
         from jax_dsmc.mesh.walk import walk  # noqa: PLC0415 -- walk imports this module
 
