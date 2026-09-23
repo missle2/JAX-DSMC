@@ -7,6 +7,7 @@
 #   bash examples/mesh/cluster/submit_curc.sh sphere       # 8 jobs x 1 GPU (one per seed)
 #   bash examples/mesh/cluster/submit_curc.sh mode2        # 32 jobs x 1 GPU
 #   bash examples/mesh/cluster/submit_curc.sh opt          # 8 jobs x {1,2,4} GPUs
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh optc   # coarser circle, fits rtx
 #   bash examples/mesh/cluster/submit_curc.sh all
 #   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh check   # check_env on that kind
 #
@@ -31,7 +32,7 @@
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|all"; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|all|check"; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 GPU_KIND="${GPU_KIND:-a100}"
@@ -75,9 +76,16 @@ for group in "${GROUPS_TO_RUN[@]}"; do
   case "${group}" in
     sphere) HOURS=8 ;;
     mode2) HOURS=4 ;;
-    opt) HOURS=24 ;;
+    opt|optc) HOURS=24 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
+  # the finer circle (240 k slots x 300 captured steps) peaks above a 24 GB MIG slice: the
+  # captured forward alone is 18.7 GB after rematerialisation and ran out of memory on every
+  # rtx opt job (2026-09-23).  The sphere (50 k slots) fits.
+  if [ "${GPU_KIND}" = "rtx" ] && [ "${group}" != "sphere" ] && [ "${group}" != "optc" ]; then
+    echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
+    continue
+  fi
   STUDY=("${PY}" -m examples.mesh.cluster.study --group "${group}" --gpus-per-node "${PER_NODE}")
   mapfile -t NAMES < <("${STUDY[@]}" --names)
   mapfile -t CMDS < <("${STUDY[@]}" --list)

@@ -56,9 +56,11 @@ def merge_seed_artifacts() -> dict[str, int]:
     return {os.path.basename(k): v for k, v in merged.items()}
 
 
-def load_histories():
+def load_histories(label="fine"):
+    """``history.json`` of the ``circle_<label>_S*`` runs (``fine``: opt, ``coarse``: optc)."""
     out = {}
-    for path in sorted(glob.glob(os.path.join(RESULTS_OPT, "circle_fine_S*_*", "history.json"))):
+    pattern = os.path.join(RESULTS_OPT, f"circle_{label}_S*_*", "history.json")
+    for path in sorted(glob.glob(pattern)):
         with open(path) as fh:
             h = json.load(fh)
         tag = os.path.basename(os.path.dirname(path))
@@ -190,10 +192,13 @@ def main():
     for name, n in merged.items():
         print(f"merged {n} seed files -> {name}")
     report["merged"] = merged
-    hist = load_histories()
-    if hist:
-        figure_optimize(hist, os.path.join(FIGURES, "optimize_convergence.png"))
-        report["optimize"] = {
+    report["optimize"] = {}
+    for label, suffix in (("fine", ""), ("coarse", "_coarse")):
+        hist = load_histories(label)
+        if not hist:
+            continue
+        figure_optimize(hist, os.path.join(FIGURES, f"optimize_convergence{suffix}.png"))
+        runs = {
             tag: {
                 "seeds_per_iterate": h["config"]["seeds_per_iterate"],
                 "optimizer": h["config"]["optimizer"],
@@ -204,9 +209,10 @@ def main():
             }
             for tag, h in hist.items()
         }
+        report["optimize"].update(runs)
         print("| run | S | optimiser | iterates | J first | J last | change | GPU s |")
         print("|---|---|---|---|---|---|---|---|")
-        for tag, r in report["optimize"].items():
+        for tag, r in runs.items():
             print(
                 f"| {tag} | {r['seeds_per_iterate']} | {r['optimizer']} | {r['iterates']} | {r['J_first']:.4g} | {r['J_last']:.4g} | {(r['J_last'] / r['J_first'] - 1) * 100:+.2f} % | {r['seconds']:.0f} |"
             )
