@@ -1,0 +1,35 @@
+[Wed Sep 23 10:49:07 MDT 2026] optc_opt_S1_adam on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+    MIG 1g.24gb     Device  0: (UUID: MIG-8aa95449-2f0d-5fb1-9461-1ab1ebce1788)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_coarse_S1_adam --optimizer adam --iterations 80 --seeds-per-iterate 1 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
+iterate 0: J = 3.6801e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0009)  |g| 7.92e-21  predicted dJ -1.74e-21  hits 41666  542s
+iterate 1: J = 3.5973e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0036)  |g| 6.26e-21  predicted dJ -1.45e-21  hits 41253  299s
+iterate 2: J = 3.5276e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0050)  |g| 6.78e-21  predicted dJ -1.47e-21  hits 41574  298s
+iterate 3: J = 3.445e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0067)  |g| 6.78e-21  predicted dJ -1.35e-21  hits 42491  299s
+iterate 4: J = 3.3902e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0086)  |g| 7.31e-21  predicted dJ -1.57e-21  hits 43423  300s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 465, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 461, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 313, in run
+    avg = averaged_terms(cfg, ls, seeds)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 190, in averaged_terms
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 150, in seed_terms
+    all_terms, info, s = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 348, in shape_terms
+    _check(diag)
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 324, in _check
+    require_valid(diag)
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/validation.py", line 44, in require_valid
+    raise RuntimeError(f"Invalid DSMC trajectory: {failures}")
+RuntimeError: Invalid DSMC trajectory: {'wall_recrossed': 1.0}
