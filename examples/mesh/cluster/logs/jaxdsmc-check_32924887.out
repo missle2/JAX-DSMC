@@ -1,0 +1,2 @@
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+slurmstepd: error: *** JOB 32924887 ON c3gpu-e7-u1 CANCELLED AT 2026-09-23T07:05:33 ***
