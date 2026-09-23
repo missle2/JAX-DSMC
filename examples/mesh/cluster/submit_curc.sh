@@ -25,6 +25,8 @@
 # read from `sinfo` (the first partition whose gres mentions "rtx"; RTX_MATCH overrides the
 # pattern), so nothing about those nodes is hard-coded.  They are Blackwell (sm_120): run
 # `check` on them first.  The group `check` submits check_env.sbatch on the chosen kind.
+# The nodes are MIG-partitioned (a 1g.24gb slice = a quarter card) and gpu-normal allows one
+# slice per job, so rtx jobs get 1 GPU.  Jobs whose name is already in squeue are skipped.
 # PART / GRES_TYPE override the partition / gres name
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
@@ -46,7 +48,10 @@ case "${GPU_KIND}" in
     GRES="${GRES_TYPE:-$(echo "${G_SINFO}" | cut -d: -f2)}"
     PER_NODE="$(echo "${G_SINFO}" | cut -d: -f3 | cut -d'(' -f1)"
     CORES=$((NCPU / PER_NODE)); MEM=$((MEM_MB / 1024 * 9 / 10 / PER_NODE))
-    echo "rtx: partition ${PART}, gres gpu:${GRES}, ${PER_NODE}/node -> ${CORES} cores, ${MEM} GB per GPU" ;;
+    echo "rtx: partition ${PART}, gres gpu:${GRES}, ${PER_NODE}/node -> ${CORES} cores, ${MEM} GB per GPU"
+    # gpu-normal allows ONE rtx MIG slice per job (sbatch Error 8, 2026-09-23): an opt job's
+    # S seeds then run one after another on its slice (optimize.py --workers 1)
+    PER_NODE=1 ;;
   *) echo "unknown GPU_KIND ${GPU_KIND} (h200|a100|rtx|mi100)"; exit 1 ;;
 esac
 # study.py needs python >= 3.8 (annotations); the login node's /usr/bin/python3 is 3.6, so
@@ -78,7 +83,12 @@ for group in "${GROUPS_TO_RUN[@]}"; do
   mapfile -t CMDS < <("${STUDY[@]}" --list)
   mapfile -t GPUS < <("${STUDY[@]}" --gpus | awk '{print $2}')
   [ ${#NAMES[@]} -gt 0 ] && [ ${#NAMES[@]} -eq ${#CMDS[@]} ] || { echo "no jobs listed for ${group}"; exit 1; }
+  # a job of the same name already queued or running writes the same artifact: skip it
+  QUEUED="$(squeue -h -u "${USER}" -o "%j" 2>/dev/null || true)"
   for i in "${!NAMES[@]}"; do
+    if grep -qx "${group}_${NAMES[$i]}" <<< "${QUEUED}"; then
+      echo "skip ${group}_${NAMES[$i]}: already queued"; continue
+    fi
     n="${GPUS[$i]}"
     hours="${HOURS}"
     if [ "${group}" = "opt" ] && [ "${n}" -le 2 ]; then hours=12; fi
