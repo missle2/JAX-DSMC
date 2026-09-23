@@ -356,6 +356,22 @@ def test_reinitialise_keeps_the_zero_set_and_restores_the_distance():
     np.testing.assert_allclose(np.asarray(L.value(ls_r, near)), 0.2, atol=2e-3)
 
 
+def test_repeated_reinitialise_is_stable_when_the_band_exceeds_the_old_eight_steps():
+    # n_sample = 16: band 3 h + 8 h = 11 h, beyond the 8 clipped steps the projection used
+    # to take; the knots that stopped short entered the surface cloud and two reinitialisations
+    # put spurious zero crossings ~0.5-0.7 off the circle (the optc GD runs, 2026-09-23)
+    ls = _levelset(2, n_sample=16)
+    xs = np.linspace(1.0, 9.0, 161)
+    pts = np.stack(np.meshgrid(xs, xs, indexing="ij"), axis=-1).reshape(-1, 2)
+    exact = np.linalg.norm(pts - 5.0, axis=1) - 3.0
+    near = np.abs(exact) < 1.5
+    for _ in range(3):
+        ls = L.reinitialise(ls)
+        phi = np.asarray(L.value(ls, jnp.asarray(pts)))
+        assert np.abs(phi - exact)[near].max() < 1e-3
+        assert not np.any((np.sign(phi) != np.sign(exact)) & (np.abs(exact) > 0.05))
+
+
 def _volume_of_coef(coef, ls):
     return L.body_volume(LevelSet(coef, ls.lo, ls.h), [0.0, 0.0], [10.0, 10.0], 4)
 

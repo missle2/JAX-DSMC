@@ -453,7 +453,7 @@ def project(ls: LevelSet, x: jax.Array, n_iter: int = 8) -> jax.Array:
     return jax.lax.fori_loop(0, n_iter, fn, x)
 
 
-def reinitialise(ls: LevelSet, n_iter: int = 8, band: float | None = None) -> LevelSet:
+def reinitialise(ls: LevelSet, n_iter: int | None = None, band: float | None = None) -> LevelSet:
     """Refit ``phi`` to the signed distance of its own zero set.
 
     Knots within ``band`` of the surface (``|phi| <= band``, default ``3 h + reach``) are
@@ -463,18 +463,30 @@ def reinitialise(ls: LevelSet, n_iter: int = 8, band: float | None = None) -> Le
     the error, far from the surface where only the sign and the Lipschitz bound matter).
     Signs are inherited from ``phi``.  Not differentiable (an optimiser calls it between
     iterates).
+
+    ``n_iter`` (default ``ceil(band / h) + 4``) must let a band knot travel the band: the
+    projection step is clipped to ``h``, and a knot that stops short would enter the cloud
+    as a false surface point (2026-09-23: the fixed 8 steps against the 11 h band of
+    ``n_sample = 16`` put rings of spurious zero crossings ~0.5-0.7 off the surface after
+    two iterates).  Knots whose projection still misses the surface (``|phi| > 1e-6 h``
+    there, e.g. near a medial axis) are left out of the cloud and take the cloud distance.
     """
     from scipy.spatial import cKDTree  # noqa: PLC0415 -- host-only dependency
 
     band = 3.0 * ls.h + ls.reach if band is None else float(band)
+    n_iter = math.ceil(band / ls.h) + 4 if n_iter is None else int(n_iter)
     x = knots(ls)
     phi = np.asarray(value(ls, x))
     in_band = np.abs(phi) <= band
     xb = jnp.asarray(np.asarray(x)[in_band])
     proj = np.asarray(project(ls, xb, n_iter))
+    converged = np.abs(np.asarray(value(ls, jnp.asarray(proj)))) <= 1e-6 * ls.h
+    if not converged.any():
+        raise ValueError("reinitialise: no band knot projected onto the surface")
     dist_band = np.linalg.norm(proj - np.asarray(xb), axis=1)
-    dist = cKDTree(proj).query(np.asarray(x))[0]
-    dist[in_band] = dist_band
+    dist = cKDTree(proj[converged]).query(np.asarray(x))[0]
+    band_idx = np.nonzero(in_band)[0]
+    dist[band_idx[converged]] = dist_band[converged]
     values = np.where(phi < 0.0, -dist, dist).reshape(ls.coef.shape)
     return LevelSet(interpolate(jnp.asarray(values)), ls.lo, ls.h, ls.n_sample, ls.n_bisect)
 

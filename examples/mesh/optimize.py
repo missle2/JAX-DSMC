@@ -320,6 +320,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
                 direction, adam_state, k, cfg["adam_beta1"], cfg["adam_beta2"]
             )
             np.savez(out / "adam_state.npz", m=adam_state[0], v=adam_state[1])
+            # the elementwise normalisation undoes the H1 smoothing (at k = 0 it is exactly
+            # sign(g): +-step jumps where g changes sign, overhangs a particle bounces in
+            # until the tracker's event budget runs out -- `wall_recrossed` on every optc Adam
+            # run, 2026-09-23), so the step itself is smoothed again
+            direction = smoothed_direction(direction, ls, cfg["smooth"], cfg["band"] + ls.h)
         scale = float(np.abs(direction).max())
         eta = cfg["step"] / max(scale, 1e-300)
         stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
