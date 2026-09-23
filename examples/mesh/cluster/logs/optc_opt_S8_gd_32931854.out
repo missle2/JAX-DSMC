@@ -1,0 +1,9 @@
+[Wed Sep 23 13:22:27 MDT 2026] optc_opt_S8_gd on c3gpu-e7-u5: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c693841e-1c67-0045-604c-b02ee0a15723)
+    MIG 1g.24gb     Device  0: (UUID: MIG-daff2e2b-cafe-5638-b224-f22b44098de8)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-77eb083b-cfeb-88cc-bb3c-649712864b4d)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-4373faaf-d9a0-1e18-5233-f0640f4a35c7)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-38f150cf-7b77-213d-04be-4384af6a13c4)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_coarse_S8_gd --optimizer gd --iterations 80 --seeds-per-iterate 8 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
+iterate 3: J = 3.6472e-20 ± 7.8e-23  area 28.2769 -> 28.2769 (shift -0.0032)  |g| 5.65e-21  predicted dJ -1.19e-21  hits 41578  stuck 0  2543s

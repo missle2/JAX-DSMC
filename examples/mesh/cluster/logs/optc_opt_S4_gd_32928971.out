@@ -9,3 +9,26 @@ python3 -m examples.mesh.optimize --tag circle_coarse_S4_gd --optimizer gd --ite
 iterate 0: J = 3.6979e-20 ± 8.3e-23  area 28.2769 -> 28.2769 (shift -0.0046)  |g| 3.92e-21  predicted dJ -7.67e-22  hits 41696  1410s
 iterate 1: J = 3.6456e-20 ± 9.4e-23  area 28.2769 -> 28.2769 (shift -0.0023)  |g| 7.49e-21  predicted dJ -6.2e-22  hits 41375  1158s
 iterate 2: J = 3.6389e-20 ± 9.6e-23  area 28.2769 -> 28.2769 (shift -0.0041)  |g| 3.73e-21  predicted dJ -5.82e-22  hits 41598  1160s
+iterate 3: J = 3.6213e-20 ± 1e-22  area 28.2769 -> 28.2769 (shift -0.0037)  |g| 4.39e-21  predicted dJ -8.01e-22  hits 41644  1163s
+iterate 4: J = 3.6177e-20 ± 1.1e-22  area 28.2769 -> 28.2769 (shift -0.0022)  |g| 5.28e-21  predicted dJ -7.38e-22  hits 41658  1163s
+iterate 5: J = 3.5832e-20 ± 9.1e-23  area 28.2769 -> 28.2769 (shift -0.0042)  |g| 4.13e-21  predicted dJ -6.8e-22  hits 41582  1159s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 465, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 461, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 313, in run
+    avg = averaged_terms(cfg, ls, seeds)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 190, in averaged_terms
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 150, in seed_terms
+    all_terms, info, s = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 348, in shape_terms
+    _check(diag)
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 327, in _check
+    raise RuntimeError(f"{name} fired")
+RuntimeError: inside_body fired

@@ -12,3 +12,26 @@ iterate 2: J = 3.5224e-20 ± 1.3e-22  area 28.2769 -> 28.2769 (shift -0.0047)  |
 iterate 3: J = 3.4514e-20 ± 1.6e-22  area 28.2769 -> 28.2769 (shift -0.0080)  |g| 5.42e-21  predicted dJ -1.37e-21  hits 42464  588s
 iterate 4: J = 3.3847e-20 ± 1.3e-22  area 28.2769 -> 28.2769 (shift -0.0094)  |g| 5.21e-21  predicted dJ -1.33e-21  hits 43380  589s
 iterate 5: J = 3.3284e-20 ± 1.3e-22  area 28.2769 -> 28.2769 (shift -0.0109)  |g| 4.96e-21  predicted dJ -1.32e-21  hits 44358  589s
+iterate 6: J = 3.2622e-20 ± 1.4e-22  area 28.2769 -> 28.2769 (shift -0.0125)  |g| 5.21e-21  predicted dJ -1.24e-21  hits 45338  595s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 465, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 461, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 313, in run
+    avg = averaged_terms(cfg, ls, seeds)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 190, in averaged_terms
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 150, in seed_terms
+    all_terms, info, s = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 345, in shape_terms
+    state0, final, diag, rec, tallies, s = forward(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 280, in forward
+    require_valid(aux[1])
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/validation.py", line 44, in require_valid
+    raise RuntimeError(f"Invalid DSMC trajectory: {failures}")
+RuntimeError: Invalid DSMC trajectory: {'wall_recrossed': 1.0}

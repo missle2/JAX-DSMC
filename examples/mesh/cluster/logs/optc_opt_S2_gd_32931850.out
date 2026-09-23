@@ -1,0 +1,12 @@
+[Wed Sep 23 13:22:26 MDT 2026] optc_opt_S2_gd on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+    MIG 1g.24gb     Device  0: (UUID: MIG-8aa95449-2f0d-5fb1-9461-1ab1ebce1788)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_coarse_S2_gd --optimizer gd --iterations 80 --seeds-per-iterate 2 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
+iterate 4: J = 3.612e-20 ± 1.4e-22  area 28.2769 -> 28.2769 (shift -0.0026)  |g| 5.95e-21  predicted dJ -7.32e-22  hits 41812  stuck 1  863s
+iterate 5: J = 3.5792e-20 ± 1.9e-22  area 28.2769 -> 28.2769 (shift -0.0038)  |g| 5.01e-21  predicted dJ -8.04e-22  hits 41846  stuck 0  577s
+iterate 6: J = 3.5855e-20 ± 1.9e-22  area 28.2769 -> 28.2769 (shift -0.0029)  |g| 6.46e-21  predicted dJ -1.04e-21  hits 41864  stuck 0  590s
+iterate 7: J = 3.5455e-20 ± 1.6e-22  area 28.2769 -> 28.2769 (shift -0.0035)  |g| 5.77e-21  predicted dJ -9.48e-22  hits 41845  stuck 0  584s

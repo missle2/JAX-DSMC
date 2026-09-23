@@ -7,3 +7,6 @@
 jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
 python3 -m examples.mesh.optimize --tag circle_coarse_S8_gd --optimizer gd --iterations 80 --seeds-per-iterate 8 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
 iterate 0: J = 3.7154e-20 ± 7.7e-23  area 28.2769 -> 28.2769 (shift -0.0046)  |g| 3.19e-21  predicted dJ -7.51e-22  hits 41780  2540s
+iterate 1: J = 3.6636e-20 ± 7.3e-23  area 28.2769 -> 28.2769 (shift -0.0040)  |g| 3.44e-21  predicted dJ -6.33e-22  hits 41450  2282s
+iterate 2: J = 3.662e-20 ± 7.5e-23  area 28.2769 -> 28.2769 (shift -0.0033)  |g| 4.69e-21  predicted dJ -8.34e-22  hits 41872  2282s
+slurmstepd: error: *** JOB 32928973 ON c3gpu-e7-u5 CANCELLED AT 2026-09-23T13:22:06 ***
