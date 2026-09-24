@@ -26,9 +26,11 @@ Conventions (fixed here, relied on everywhere in ``jax_dsmc.mesh``):
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 
 import jax
+import jax.numpy as jnp
 from jax.tree_util import register_dataclass
 
 from jax_dsmc.state import static_field
@@ -152,6 +154,10 @@ class Mesh:
             body.
         radius: STATIC int — stencil dilation in cells.
         kind: STATIC ``"surface" | "circle" | "sphere" | "levelset"``.
+        n_sub, split_of, split_table, sub_parent: the split cells' sub-cells (SPARTA
+            ``nsplit > 1``), as the :class:`jax_dsmc.state.GridSpec` fields of the same
+            names (:func:`jax_dsmc.mesh.cut.with_volume` copies them); ``volume`` then
+            has ``C + n_sub`` entries, the sub-cells' after the Cartesian cells'.
     """
 
     body: Surface | AnalyticBody | LevelSet
@@ -164,6 +170,10 @@ class Mesh:
     areas: jax.Array
     radius: int = static_field(default=1)
     kind: str = static_field(default="surface")
+    n_sub: int = static_field(default=0)
+    split_of: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(0, jnp.int32))
+    split_table: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros((0, 1), jnp.int32))
+    sub_parent: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(0, jnp.int32))
 
     @property
     def n_elements(self) -> int:

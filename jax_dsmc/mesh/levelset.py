@@ -224,6 +224,13 @@ def hit_body(
     inward = jnp.sum(vhat * g0, axis=1) < 0.0
     hit_now = on_surface & inward & moving
     deep = phi0 < -tol
+    # a start on the surface moving out of the body -- the state right after a reflection,
+    # phi = round-off of either sign -- is outside: its first sample interval must count
+    # as a `+ -> -` bracket, or a re-entry closer than one sample spacing (a grazing
+    # particle skimming a concave wall) is missed and the particle flies into the body
+    # (2026-09-23, optc S4 gd iterate 6: 0.4 deg incidence, 0.015 chords, spacing 0.031)
+    leaving = (jnp.abs(phi0) <= tol) & ~inward
+    phi_start = jnp.where(leaving, jnp.maximum(phi0, jnp.finfo(phi0.dtype).tiny), phi0)
     # the bracket search is a function of constants to AD (its inputs are frozen, not
     # just its output): reverse mode never traces the loops, only the Newton step below
     found, s_b = _bracket(
@@ -231,7 +238,7 @@ def hit_body(
         jax.lax.stop_gradient(x),
         jax.lax.stop_gradient(vhat),
         jax.lax.stop_gradient(ds),
-        jax.lax.stop_gradient(phi0),
+        jax.lax.stop_gradient(phi_start),
     )
     # Newton polish with the bracket frozen: the implicit-function derivative of the root
     phi_b, g_b = value_and_grad(ls, x + s_b[:, None] * vhat)

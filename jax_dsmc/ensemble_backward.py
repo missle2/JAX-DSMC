@@ -107,10 +107,19 @@ class Adjoint:
 
 
 def _cells(x, grid):
+    """Host twin of :func:`jax_dsmc.grid.collision_cell` (numpy)."""
     lo, hi, n = np.asarray(grid.lo), np.asarray(grid.hi), np.asarray(grid.n)
-    idx = np.floor((x - lo) / (hi - lo) * n).astype(int)
-    idx = np.clip(idx, 0, n - 1)
-    return np.ravel_multi_index(tuple(idx.T), tuple(n))
+    rel = (x - lo) / (hi - lo) * n
+    idx = np.clip(np.floor(rel).astype(int), 0, n - 1)
+    cell = np.ravel_multi_index(tuple(idx.T), tuple(n))
+    if int(getattr(grid, "n_sub", 0)) == 0:
+        return cell
+    table = np.asarray(grid.split_table)
+    per_axis = round(table.shape[1] ** (1.0 / n.size))
+    k = np.clip(np.floor((rel - idx) * per_axis).astype(int), 0, per_axis - 1)
+    flat = np.ravel_multi_index(tuple(k.T), (per_axis,) * n.size)
+    row = np.asarray(grid.split_of)[cell]
+    return np.where(row >= 0, table[np.maximum(row, 0), flat], cell)
 
 
 RIDGE_REL = 1e-8

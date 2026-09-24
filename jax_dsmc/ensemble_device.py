@@ -36,7 +36,7 @@ from jax import lax
 from jax_dsmc import sort
 from jax_dsmc.collide.vss import collision_rate, scatter
 from jax_dsmc.grid import cell_neighbourhood as grid_neighbourhood
-from jax_dsmc.grid import cell_of
+from jax_dsmc.grid import collision_cell
 from jax_dsmc.state import ParticleState
 
 jax.config.update("jax_enable_x64", True)
@@ -424,7 +424,7 @@ def value_query(
         tables = pooled_tables(tables, grid, pool)
     lo, hi = grid.lo, grid.hi
     q_x = jnp.clip(q_x, lo + 1e-9 * (hi - lo), hi - 1e-9 * (hi - lo))
-    q_c = jnp.minimum(cell_of(q_x, grid), count.shape[0] - 1)
+    q_c = jnp.minimum(collision_cell(q_x, grid), count.shape[0] - 1)
     return cell_query(tables, q_c, q_x, q_v, scale, k, basis, chunk, direction=direction)
 
 

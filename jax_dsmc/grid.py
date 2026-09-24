@@ -17,6 +17,8 @@ edge convention matches SPARTA's rule that a boundary particle is never lost.
 
 from __future__ import annotations
 
+import dataclasses
+
 import jax
 import jax.numpy as jnp
 from jax import lax
@@ -27,7 +29,13 @@ jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
 
 
 def num_cells(grid: GridSpec) -> int:
-    """Total number of cells ``C = prod(n)``.  STATIC (a Python int)."""
+    """Total number of cells ``C = prod(n) + n_sub`` (the Cartesian cells and the extra
+    sub-cells of split cells).  STATIC (a Python int)."""
+    return n_cartesian(grid) + int(grid.n_sub)
+
+
+def n_cartesian(grid: GridSpec) -> int:
+    """Number of Cartesian cells ``prod(n)``.  STATIC (a Python int)."""
     c = 1
     for nd in grid.n:
         c *= int(nd)
@@ -89,6 +97,63 @@ def cell_of(x: jnp.ndarray, grid: GridSpec) -> jnp.ndarray:
     return flat.astype(jnp.int32)
 
 
+def collision_cell(x: jnp.ndarray, grid: GridSpec) -> jnp.ndarray:
+    """Collision cell of each particle, ``i32[N]`` in ``[0, C)``: the Cartesian cell
+    (:func:`cell_of`), or, inside a split cell, the sub-cell of the flow region the
+    particle is in (SPARTA ``Update::split2d`` / ``split3d``).
+
+    The region comes from the split cell's raster ``grid.split_table`` (the collision
+    cell of each stratum of a ``sub^D`` sub-grid of the cell, built from the same
+    stratified samples and connected components as the cut volumes and the split test,
+    body strata mapped to the nearest region).  Geometry -- candidate lists, the stencil
+    test, the cell walk, the inside test -- keeps the Cartesian :func:`cell_of`; only the
+    per-cell physics (collision tables, moments, the adjoint's fits) uses this.  Without
+    split cells it is :func:`cell_of`, bitwise.
+    """
+    c = cell_of(x, grid)
+    if int(grid.n_sub) == 0:
+        return c
+    d = len(grid.n)
+    n_strata = int(grid.split_table.shape[1])
+    per_axis = round(n_strata ** (1.0 / d))
+    dx = spacing(grid)
+    rel = lax.stop_gradient((x - grid.lo) / dx)
+    frac = rel - jnp.clip(jnp.floor(rel), 0, jnp.asarray(grid.n) - 1)
+    k = jnp.clip(jnp.floor(frac * per_axis).astype(jnp.int32), 0, per_axis - 1)
+    flat = k[:, 0]
+    for a in range(1, d):
+        flat = flat * per_axis + k[:, a]
+    row = grid.split_of[c]
+    sub_cell = grid.split_table[jnp.maximum(row, 0), flat]
+    return jnp.where(row >= 0, sub_cell, c).astype(jnp.int32)
+
+
+def cartesian_volume(grid: GridSpec) -> jnp.ndarray:
+    """``f64[prod(n)]`` flow volume of every Cartesian cell: a split cell's sub-cell
+    volumes folded back onto it."""
+    vol = cell_volume(grid)
+    c0 = n_cartesian(grid)
+    if int(grid.n_sub) == 0:
+        return vol
+    return vol[:c0].at[grid.sub_parent].add(vol[c0:])
+
+
+def without_splits(grid: GridSpec) -> GridSpec:
+    """The grid with its split-cell tables dropped and the cut volumes folded onto the
+    Cartesian cells (what host geometry builds and Cartesian outputs work on)."""
+    if int(grid.n_sub) == 0:
+        return grid
+    volume = cartesian_volume(grid) if grid.volume.shape[0] > 0 else grid.volume
+    return dataclasses.replace(
+        grid,
+        volume=volume,
+        n_sub=0,
+        split_of=jnp.zeros(0, jnp.int32),
+        split_table=jnp.zeros((0, 1), jnp.int32),
+        sub_parent=jnp.zeros(0, jnp.int32),
+    )
+
+
 def neighbour_cell(cell: jnp.ndarray, axis: int, side: int, grid: GridSpec) -> tuple:
     """The cell across face ``(axis, side)`` of ``cell``: ``(i32[N] index, bool[N] exists)``.
 
@@ -129,10 +194,13 @@ def cell_volume(grid: GridSpec) -> jnp.ndarray:
 
 
 def _cell_multi_index(grid: GridSpec) -> jnp.ndarray:
-    """``i32[C, D]`` per-axis index of every cell, row-major."""
-    C = num_cells(grid)
-    axes = jnp.unravel_index(jnp.arange(C, dtype=jnp.int32), tuple(int(nd) for nd in grid.n))
-    return jnp.stack(axes, axis=-1).astype(jnp.int32)
+    """``i32[C, D]`` per-axis index of every cell, row-major; a sub-cell has its parent's."""
+    c0 = n_cartesian(grid)
+    axes = jnp.unravel_index(jnp.arange(c0, dtype=jnp.int32), tuple(int(nd) for nd in grid.n))
+    multi = jnp.stack(axes, axis=-1).astype(jnp.int32)
+    if int(grid.n_sub):
+        multi = jnp.concatenate((multi, multi[grid.sub_parent]))
+    return multi
 
 
 def cell_neighbourhood(grid: GridSpec, radius: int = 1) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -151,7 +219,14 @@ def cell_neighbourhood(grid: GridSpec, radius: int = 1) -> tuple[jnp.ndarray, jn
     strides = jnp.asarray(_row_major_strides(grid.n))
     index = jnp.sum(jnp.clip(target, 0, n - 1) * strides, axis=-1).astype(jnp.int32)
     own = jnp.arange(index.shape[0], dtype=jnp.int32)[:, None]
-    return jnp.where(exists, index, own), exists
+    index = jnp.where(exists, index, own)
+    if int(grid.n_sub):
+        # a sub-cell pools its parent's block with itself, not the parent, at the centre
+        centre = (offsets.shape[0] - 1) // 2
+        c0 = n_cartesian(grid)
+        is_sub = jnp.arange(index.shape[0]) >= c0
+        index = index.at[:, centre].set(jnp.where(is_sub, own[:, 0], index[:, centre]))
+    return index, exists
 
 
 def cell_bounds(grid: GridSpec) -> tuple[jnp.ndarray, jnp.ndarray]:

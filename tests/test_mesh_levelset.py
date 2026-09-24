@@ -372,6 +372,39 @@ def test_repeated_reinitialise_is_stable_when_the_band_exceeds_the_old_eight_ste
         assert not np.any((np.sign(phi) != np.sign(exact)) & (np.abs(exact) > 0.05))
 
 
+@pytest.mark.parametrize("offset", [-1e-13, 0.0, 1e-13])
+def test_grazing_reentry_on_a_concave_wall_is_found_from_the_surface(offset):
+    """A particle leaving a concave wall at grazing incidence re-enters after a chord
+    shorter than the search's sample spacing.  Starting on the surface (the state right
+    after a reflection, ``phi`` = round-off of either sign) the re-entry must be found:
+    with ``phi(start) <= 0`` read as "not outside" the first sample interval was never a
+    ``+ -> -`` bracket and the particle flew into the body (optc S4 gd iterate 6,
+    2026-09-23: a 0.4 degree grazing particle skimming a concave notch)."""
+    h, radius, centre = 0.125, 3.0, np.array([5.0, 5.0])
+    lo, m = L.grid_for_box(jnp.array([0.0, 0.0]), jnp.array([10.0, 10.0]), h, margin=3)
+    knots = np.asarray(lo) + h * np.stack(
+        np.meshgrid(*[np.arange(n) for n in m], indexing="ij"), -1
+    )
+    # flow inside the circle, body outside: a concave wall of radius 3
+    values = radius - np.linalg.norm(knots - centre, axis=-1)
+    ls = L.from_values(values, lo, h, n_sample=8)
+    theta = 0.005  # chord 2 R sin(theta) = 0.03 < sample spacing reach / n_sample = 0.0625
+    alpha = 0.3
+    # on the spline's own zero set (it differs from the circle by the interpolation error),
+    # then pushed by `offset` along the normal: phi(start) = round-off of either sign
+    guess = centre + radius * np.array([np.cos(alpha), np.sin(alpha)])
+    on = np.asarray(L.project(ls, jnp.asarray(guess[None]), 20))[0]
+    x0 = on - offset * np.asarray(L.normal(ls, jnp.asarray(on[None])))[0]
+    tangent = np.array([-np.sin(alpha), np.cos(alpha)])
+    inward = -np.array([np.cos(alpha), np.sin(alpha)])
+    speed = 500.0
+    v = speed * (np.cos(theta) * tangent + np.sin(theta) * inward)
+    t = float(L.hit_body(jnp.asarray(x0[None]), jnp.asarray(np.r_[v, 0.0][None]), ls)[0])
+    chord = 2.0 * radius * np.sin(theta)
+    assert np.isfinite(t)
+    np.testing.assert_allclose(t * speed, chord, rtol=1e-3, atol=1e-6)
+
+
 def _volume_of_coef(coef, ls):
     return L.body_volume(LevelSet(coef, ls.lo, ls.h), [0.0, 0.0], [10.0, 10.0], 4)
 

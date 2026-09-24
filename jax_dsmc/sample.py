@@ -34,7 +34,7 @@ import jax.numpy as jnp
 from jax.tree_util import register_dataclass
 
 from jax_dsmc.constants import K_BOLTZ
-from jax_dsmc.grid import cell_of, cell_volume, num_cells
+from jax_dsmc.grid import cell_volume, collision_cell, num_cells
 from jax_dsmc.safe import safe_div, safe_recip_count
 from jax_dsmc.state import CellTable, GridSpec, ParticleState, SimParams, SpeciesParams
 
@@ -121,7 +121,7 @@ def moments(
     ``compute_thermal_grid.cpp`` / ``compute_sonine_grid.cpp`` (``P``, ``q``).
     """
     C = num_cells(grid)
-    c = cell_of(state.x, grid)  # i32[N], frozen decision
+    c = collision_cell(state.x, grid)  # i32[N], frozen decision
     w = state.alive.astype(jnp.float64)  # f64[N]
 
     cnt = jax.ops.segment_sum(w, c, num_segments=C)  # f64[C]

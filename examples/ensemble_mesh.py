@@ -48,7 +48,7 @@ from examples.ensemble_inlet_shock import device_backward
 from examples.gradient_bench import RESULTS
 from jax_dsmc import ensemble_backward, initialize, sample, shape, simulate, sort
 from jax_dsmc.constants import K_BOLTZ
-from jax_dsmc.grid import num_cells
+from jax_dsmc.grid import n_cartesian, num_cells
 from jax_dsmc.mesh import cut
 from jax_dsmc.mesh import levelset as levelset_mod
 from jax_dsmc.mesh.types import AnalyticBody
@@ -199,7 +199,10 @@ def build(cfg, parameter, value, steps, body=None):
         body, dataclasses.replace(grid, volume=jnp.zeros(0)), radius=cfg["radius_cells"]
     )
     grid = cut.with_volume(grid, mesh)
-    params = dataclasses.replace(params, fnum=params.fnum * cfg["fnum_scale"])
+    # uniform weights on every collision cell, split cells' sub-cells included
+    params = dataclasses.replace(
+        params, fnum=jnp.full((num_cells(grid),), float(params.fnum[0]) * cfg["fnum_scale"])
+    )
     n = int(static.N / cfg["fnum_scale"]) + 256
     static = dataclasses.replace(static, N=n, n_steps=steps)
     capacity = int(capacity / cfg["fnum_scale"]) + 64
@@ -238,11 +241,14 @@ def _snapshot(state, grid, params, sp):
 
 def _frame(step, state, grid, params, sp):
     m = _snapshot(state, grid, params, sp)
+    # the Cartesian cells (a split cell shows its largest region): every iterate's frames
+    # keep one shape whatever sub-cells its shape needs
+    c0 = n_cartesian(grid)
     return {
         "step": step,
-        "nrho": np.asarray(m.nrho, dtype=np.float32),
-        "u": np.asarray(m.u, dtype=np.float32),
-        "temp": np.asarray(m.temp, dtype=np.float32),
+        "nrho": np.asarray(m.nrho[:c0], dtype=np.float32),
+        "u": np.asarray(m.u[:c0], dtype=np.float32),
+        "temp": np.asarray(m.temp[:c0], dtype=np.float32),
     }
 
 

@@ -149,13 +149,15 @@ def _to_vtk_cell_order(field: np.ndarray, n: tuple[int, ...]) -> np.ndarray:
 def _field_items(
     fields: dict[str, Any], C: int, n: tuple[int, ...]
 ) -> list[tuple[str, np.ndarray]]:
-    """Validate, flatten and reorder every per-cell field."""
+    """Validate, flatten and reorder every per-cell field.  A split-cell grid's sub-cells
+    follow its ``C = prod(n)`` Cartesian cells (``GridSpec.n_sub``); the rectilinear
+    grid shows the Cartesian cells, i.e. each split cell's largest flow region."""
     items = []
     for name, raw in fields.items():
         arr = np.asarray(raw)
-        if arr.shape[0] != C:
+        if arr.shape[0] < C:
             raise ValueError(f"field {name!r} has leading dim {arr.shape[0]}, expected C={C}")
-        arr = arr.reshape(C, -1)
+        arr = arr[:C].reshape(C, -1)
         items.append((name, _to_vtk_cell_order(arr, n)))
     return items
 

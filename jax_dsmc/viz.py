@@ -451,9 +451,12 @@ def field_to_grid(field: Any, n: tuple[int, ...]) -> np.ndarray:
 
     Matches ``grid.py``'s row-major stride convention exactly (last axis fastest),
     so ``out[i, j, k]`` is the cell at index ``(i, j, k)``.  Any other reshape
-    silently transposes the picture.
+    silently transposes the picture.  A split-cell grid's sub-cells follow the
+    ``prod(n)`` Cartesian cells and are not drawn (each split cell shows its largest
+    flow region).
     """
-    return np.asarray(field).reshape(tuple(int(x) for x in n))
+    shape = tuple(int(x) for x in n)
+    return np.asarray(field)[: int(np.prod(shape))].reshape(shape)
 
 
 def masked_field(field: Any, n: tuple[int, ...], mask: np.ndarray) -> np.ndarray:

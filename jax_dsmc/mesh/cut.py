@@ -63,7 +63,7 @@ import numpy as np
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 
-from jax_dsmc.grid import cell_bounds, cell_volume
+from jax_dsmc.grid import cell_bounds, cell_volume, without_splits
 from jax_dsmc.mesh import levelset as levelset_mod
 from jax_dsmc.mesh import surface as surface_mod
 from jax_dsmc.mesh.types import CUT, INSIDE, OUTSIDE, AnalyticBody, LevelSet, Mesh, Surface
@@ -717,7 +717,14 @@ def _n_resolved(labels: np.ndarray, flow: np.ndarray, min_samples: int) -> int:
 
 
 def _cell_components(body, cell, x, flow, a, b, csurfs, min_samples, k_near=32) -> int:
-    """Number of resolved connected flow components among the samples ``x`` of one cell.
+    """Number of resolved connected flow components among the samples ``x`` of one cell
+    (:func:`_cell_labels`)."""
+    labels = _cell_labels(body, cell, x, flow, a, b, csurfs, k_near)
+    return _n_resolved(labels, flow, min_samples)
+
+
+def _cell_labels(body, cell, x, flow, a, b, csurfs, k_near=32) -> np.ndarray:
+    """Connected-component label of every sample ``x`` of one cell (``i64[S]``).
 
     Local edges ``(a, b)`` survive when both ends are in the flow and the segment crosses no
     element of the cell; then, up to four times, every sample outside the largest component
@@ -748,7 +755,7 @@ def _cell_components(body, cell, x, flow, a, b, csurfs, min_samples, k_near=32) 
         a = np.concatenate([a, aa[new]])
         b = np.concatenate([b, bb[new]])
         labels = _components(n, a, b)
-    return _n_resolved(labels, flow, min_samples)
+    return labels
 
 
 def split_check(
@@ -794,6 +801,83 @@ def split_check(
     return split
 
 
+def split_regions(
+    body, grid, cell_type, csurfs, outside_corner, sub=None, seed=0, min_samples=None
+):
+    """The flow regions of every split cell (SPARTA ``Cut2d::split`` / ``Cut3d::split``):
+    a list of ``(cell, region i32[sub^D], share f64[R])`` -- for each stratum of the
+    cell's ``sub^D`` sub-grid (last axis fastest) the region its sample belongs to,
+    regions numbered by decreasing size, and each region's share of the cell's flow
+    samples.  Strata in the body or in unresolved slivers (fewer than ``min_samples``
+    samples, as :func:`split_check`) take the region of the nearest resolved flow sample,
+    so every point of the cell maps to a region.  The components are those of
+    :func:`split_check` (the same samples, edges and re-attachment)."""
+    from scipy.spatial import cKDTree  # noqa: PLC0415 -- host-only dependency
+
+    lo, _hi = cell_boxes(grid)
+    D = lo.shape[1]
+    sub = _SPLIT_SUB[D] if sub is None else int(sub)
+    if min_samples is None:
+        min_samples = max(4, sub**D // 64)
+    csurfs = np.asarray(csurfs)
+    cut, x, mi, flow = _cut_samples_outside(
+        body, grid, cell_type, csurfs, outside_corner, sub, seed
+    )
+    a, b = _local_edges(mi, sub, _SPLIT_WINDOW[D])
+    out = []
+    for i in range(cut.size):
+        labels = _cell_labels(body, cut[i], x[i], flow[i], a, b, csurfs)
+        ids, counts = np.unique(labels[flow[i]], return_counts=True)
+        keep = counts >= min_samples
+        if keep.sum() <= 1:
+            continue
+        ids, counts = ids[keep], counts[keep]
+        order = np.argsort(-counts, kind="stable")
+        region_of = {int(ids[j]): r for r, j in enumerate(order)}
+        region = np.array([region_of.get(int(lab), -1) for lab in labels])
+        region = np.where(flow[i], region, -1)
+        known = region >= 0
+        # body and sliver strata: the region of the nearest resolved flow sample
+        _d, near = cKDTree(x[i][known]).query(x[i][~known])
+        region[~known] = region[known][near]
+        share = counts[order] / counts.sum()
+        out.append((int(cut[i]), region.astype(np.int32), share))
+    return out
+
+
+_SUB_CELL_BLOCK = 4
+"""Sub-cell slots are allocated in blocks of this many (unused ones have zero volume), so
+an optimiser whose shape gains or loses a split recompiles rarely."""
+
+
+def split_tables(regions, volume: np.ndarray, n_cart: int):
+    """``(n_sub, split_of, split_table, sub_parent, volume)`` of the sub-cells of
+    ``regions`` (:func:`split_regions`) over ``n_cart`` Cartesian cells: the largest region
+    keeps its cell's index, every other region gets the next sub-cell ``n_cart + j``;
+    ``volume`` (``f64[n_cart]``, the cut volumes) is split by the regions' shares and
+    extended with the sub-cells' (zero for unused slots)."""
+    extra = sum(len(share) - 1 for _cell, _region, share in regions)
+    n_sub = -(-extra // _SUB_CELL_BLOCK) * _SUB_CELL_BLOCK
+    split_of = np.full(n_cart, -1, np.int32)
+    n_strata = regions[0][1].size if regions else 1
+    table = np.zeros((len(regions), n_strata), np.int32)
+    sub_parent = np.zeros(n_sub, np.int32)
+    vol = np.concatenate((np.asarray(volume, np.float64), np.zeros(n_sub)))
+    j = 0
+    for row, (cell, region, share) in enumerate(regions):
+        split_of[cell] = row
+        cells = [cell]
+        for _r in range(1, len(share)):
+            cells.append(n_cart + j)
+            sub_parent[j] = cell
+            j += 1
+        cells = np.asarray(cells, np.int32)
+        table[row] = cells[region]
+        full = vol[cell]
+        vol[cells] = full * share
+    return n_sub, split_of, table, sub_parent, vol
+
+
 def flow_mask(mesh: Mesh, grid: GridSpec, sub: int = 8) -> np.ndarray:
     """``bool[C, sub^D]``: which sub-cells (centres) of every cell lie in the flow.
 
@@ -826,8 +910,16 @@ def flow_mask(mesh: Mesh, grid: GridSpec, sub: int = 8) -> np.ndarray:
 
 
 def with_volume(grid: GridSpec, mesh: Mesh) -> GridSpec:
-    """The grid carrying the mesh's per-cell flow volumes (``grid.cell_volume`` reads them)."""
-    return dataclasses.replace(grid, volume=mesh.volume)
+    """The grid carrying the mesh's per-cell flow volumes (``grid.cell_volume`` reads them)
+    and its split cells' sub-cells (``grid.collision_cell`` reads them)."""
+    return dataclasses.replace(
+        grid,
+        volume=mesh.volume,
+        n_sub=mesh.n_sub,
+        split_of=mesh.split_of,
+        split_table=mesh.split_table,
+        sub_parent=mesh.sub_parent,
+    )
 
 
 def exact_flow_volume(body, grid: GridSpec) -> float:
@@ -865,8 +957,11 @@ def build_mesh(
 ) -> Mesh:
     """Assemble the :class:`Mesh` of one body on one grid (all tables computed here).
 
-    A surface is checked to be watertight and inside the box first; split cells raise.
+    A surface is checked to be watertight and inside the box first.  A cut cell whose flow
+    is disconnected becomes a split cell: its regions get sub-cells
+    (:func:`split_regions`, :func:`split_tables`), SPARTA's ``nsplit > 1``.
     """
+    grid = without_splits(grid)
     lo = np.asarray(grid.lo, dtype=np.float64)
     D = lo.size
     if D not in (2, 3):
@@ -894,10 +989,14 @@ def build_mesh(
     cell_type = classify(body, grid, csurfs)
     oc = outside_corner(body, grid, cell_type, csurfs)
     frac = volume_fraction(body, grid, cell_type, csurfs, oc, sub=sub, seed=seed)
-    split_check(body, grid, cell_type, csurfs, oc, seed=seed)
     # a rebuild must not see old cut volumes
     uniform = dataclasses.replace(grid, volume=jnp.zeros(0, jnp.float64))
     volume = frac * np.asarray(cell_volume(uniform), dtype=np.float64)
+    regions = split_regions(body, grid, cell_type, csurfs, oc, seed=seed)
+    n_sub, split_of, table, sub_parent, volume = split_tables(regions, volume, volume.size)
+    if not regions:
+        split_of = np.zeros(0, np.int32)
+        table = np.zeros((0, 1), np.int32)
     return Mesh(
         body=body,
         cell_type=jnp.asarray(cell_type),
@@ -909,4 +1008,8 @@ def build_mesh(
         areas=jnp.asarray(areas),
         radius=int(radius),
         kind=kind,
+        n_sub=int(n_sub),
+        split_of=jnp.asarray(split_of),
+        split_table=jnp.asarray(table),
+        sub_parent=jnp.asarray(sub_parent),
     )

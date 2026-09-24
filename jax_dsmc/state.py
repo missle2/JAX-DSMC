@@ -322,6 +322,21 @@ class GridSpec:
     its (static) length is ``C``, so the NTC attempt count, the moment normalisation and
     the initial fill see the cut volumes without any other change.  An empty array
     rather than ``None`` keeps the invariant that every traced leaf is an f64 array."""
+    n_sub: int = static_field(default=0)
+    """Extra **sub-cells** of split cells (SPARTA ``nsplit > 1``): a cut cell whose flow
+    is disconnected keeps its largest region at its own index and gives every other
+    region a collision cell ``prod(n) + j``.  ``C = prod(n) + n_sub`` is then the size of
+    every per-cell array; ``0`` (no split cells) leaves every shape unchanged.  Set by
+    :func:`jax_dsmc.mesh.cut.with_volume`."""
+    split_of: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(0, jnp.int32))
+    """``i32[prod(n)]``: the row of ``split_table`` of each split cell, ``-1`` elsewhere
+    (empty without split cells)."""
+    split_table: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros((0, 1), jnp.int32))
+    """``i32[S, sub^D]``: the collision cell of every stratum of a ``sub^D`` sub-grid of
+    each split cell (last axis fastest) -- the region raster
+    :func:`jax_dsmc.grid.collision_cell` reads."""
+    sub_parent: jax.Array = dataclasses.field(default_factory=lambda: jnp.zeros(0, jnp.int32))
+    """``i32[n_sub]``: the Cartesian cell each sub-cell belongs to."""
 
 
 @register_dataclass

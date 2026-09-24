@@ -250,16 +250,55 @@ def _segment_meets_box(a, b, lo, hi):
     return t0 <= t1
 
 
-def test_split_cells_are_refused():
+def _thin_plate():
     # a closed thin plate (thickness 0.1 < h) inside the cell row y in [4.5, 5]: every cell
     # it spans has flow below and above -> split (12 cells, x in [2, 8]); the cells whose
     # face carries the plate tips (x = 2 and 8) are touched but connected
     pts = np.array([[2.0, 4.7], [8.0, 4.7], [8.0, 4.8], [2.0, 4.8]])  # counter-clockwise
-    plate = S.make_surface(pts, np.array([[1, 0], [2, 1], [3, 2], [0, 3]]))
+    return S.make_surface(pts, np.array([[1, 0], [2, 1], [3, 2], [0, 3]]))
+
+
+def test_split_check_finds_the_split_cells():
+    plate = _thin_plate()
     assert S.body_volume(plate) == pytest.approx(0.6)
+    m = cut.build_mesh(plate, GRID2)  # builds: split cells get sub-cells
     with pytest.raises(cut.SplitCellError) as info:
-        cut.build_mesh(plate, GRID2)
+        cut.split_check(plate, GRID2, m.cell_type, m.csurfs, m.outside_corner)
     assert len(info.value.cells) == 12
+
+
+def test_split_cells_get_sub_cells():
+    """SPARTA's split cells: each of the 12 cells cut by the plate keeps its larger flow
+    region (here the regions are equal, 0.1 each) and gives the other a sub-cell; the
+    volumes add up, and positions below / above the plate in one cell fall in different
+    collision cells."""
+    from jax_dsmc.grid import collision_cell, num_cells  # noqa: PLC0415
+
+    m = cut.build_mesh(_thin_plate(), GRID2)
+    assert m.n_sub == 12
+    grid = cut.with_volume(GRID2, m)
+    assert num_cells(grid) == 400 + 12
+    vol = np.asarray(m.volume)
+    assert vol.size == 412
+    assert vol.sum() == pytest.approx(100.0 - 0.6, abs=0.01)
+    split = np.nonzero(np.asarray(m.split_of) >= 0)[0]
+    assert split.size == 12
+    parent = np.asarray(m.sub_parent)
+    np.testing.assert_array_equal(np.sort(parent), np.sort(split))
+    # each split cell: two regions of ~0.1 (0.2 x 0.5 below, above the plate)
+    for j, cell in enumerate(parent):
+        np.testing.assert_allclose([vol[cell], vol[400 + j]], [0.1, 0.1], atol=0.01)
+    # the cells 4.5 <= y < 5, x in [3, 3.5]: points below and above the plate
+    below = jnp.array([[3.2, 4.6], [3.4, 4.55], [3.1, 4.69]])
+    above = jnp.array([[3.2, 4.9], [3.4, 4.95], [3.1, 4.81]])
+    cb, ca = np.asarray(collision_cell(below, grid)), np.asarray(collision_cell(above, grid))
+    assert len(set(cb)) == 1 and len(set(ca)) == 1 and cb[0] != ca[0]
+    assert {int(cb[0]), int(ca[0])} & set(range(400, 412))
+    # outside the split cells the collision cell is the Cartesian one
+    far = jnp.array([[1.2, 1.3], [9.7, 9.9], [5.0, 2.0]])
+    np.testing.assert_array_equal(
+        np.asarray(collision_cell(far, grid)), np.asarray(collision_cell(far, GRID2))
+    )
 
 
 def test_axis_aligned_square_on_grid_lines():

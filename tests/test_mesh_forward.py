@@ -228,3 +228,60 @@ def test_field_frames_leave_the_mesh_forward_bitwise_unchanged():
     assert int(diag_a.surface_hits.sum()) == int(diag_b.surface_hits.sum())
     with pytest.raises(ValueError, match="must divide"):
         EM.forward(cfg, "radius", value, key, False, frames_every=4)
+
+
+def test_split_cells_run_with_their_own_density_and_collision_cells():
+    """A thin plate (0.1 thick) inside a cell row: the 12 cells it spans are split cells.
+    A collisional run in a closed box conserves particles, reports a density for every
+    region (both sides of the plate at the freestream value) and never puts particles
+    from opposite sides of the plate into one collision cell."""
+    from jax_dsmc.grid import collision_cell  # noqa: PLC0415
+
+    grid = _grid2()
+    pts = np.array([[2.0, 4.7], [8.0, 4.7], [8.0, 4.8], [2.0, 4.8]])
+    plate = S.make_surface(pts, np.array([[1, 0], [2, 1], [3, 2], [0, 3]]))
+    mesh = cut.build_mesh(plate, grid)
+    assert mesh.n_sub == 12
+    grid = cut.with_volume(grid, mesh)
+    sp = _sp()
+    C = num_cells(grid)
+    assert C == 412
+    params = SimParams(dt=jnp.float64(1e-4), fnum=jnp.full((C,), 2e-3), epsilon=jnp.float64(0.0))
+    static = SimStatic(N=60000, D=2, S=1, G=1, A_max=8, K_bounce=4, n_steps=10)
+    faces = Faces.uniform(BC.SPECULAR, 2)
+    wall = WallParams.uniform(2, T_WALL, acc=0.0, n_models=1)
+    flow = FlowParams(nrho=jnp.float64(1.0), temp=jnp.float64(273.15), vstream=jnp.zeros(3))
+    key = jax.random.PRNGKey(3)
+    state = initialize.initial_state(key, flow, grid, sp, static)
+    x = np.asarray(state.x)
+    in_plate = (x[:, 0] > 2.0) & (x[:, 0] < 8.0) & (x[:, 1] > 4.7) & (x[:, 1] < 4.8)
+    state = state.__class__(
+        x=state.x,
+        v=state.v,
+        species=state.species,
+        alive=state.alive & ~jnp.asarray(in_plate),
+        logh_acc=state.logh_acc,
+    )
+    cstate = initialize.initial_collide_state(flow, grid, sp, static)
+    (state2, _), (out, diag) = simulate.run(
+        state, cstate, grid, sp, params, static, key, faces=faces, wall=wall, mesh=mesh
+    )
+    assert int(diag.inside_body.sum()) == 0 and int(diag.stencil_overrun.sum()) == 0
+    assert int(diag.attempts_clipped.sum()) == 0
+    assert int(state2.alive.sum()) == int(state.alive.sum())
+    nrho = np.asarray(out.nrho).mean(axis=0)
+    assert nrho.shape == (412,)
+    split = np.nonzero(np.asarray(mesh.split_of) >= 0)[0]
+    free = np.asarray(mesh.cell_type) == OUTSIDE
+    ref = nrho[:400][free].mean()
+    # every region of every split cell: ~ the freestream density (~40 particles each)
+    np.testing.assert_allclose(nrho[split].mean(), ref, rtol=0.1)
+    np.testing.assert_allclose(nrho[400:].mean(), ref, rtol=0.1)
+    # collision cells never mix the two sides of the plate
+    xs = np.asarray(state2.x)[np.asarray(state2.alive)]
+    cc = np.asarray(collision_cell(jnp.asarray(xs), grid))
+    span = (xs[:, 0] > 2.0) & (xs[:, 0] < 8.0)  # the split cells; beyond it no plate
+    below = cc[span & (xs[:, 1] < 4.7) & (xs[:, 1] >= 4.5)]
+    above = cc[span & (xs[:, 1] > 4.8) & (xs[:, 1] < 5.0)]
+    assert below.size > 100 and above.size > 100
+    assert not (set(below) & set(above))

@@ -21,7 +21,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from jax_dsmc.grid import cell_of, num_cells
+from jax_dsmc.grid import collision_cell, num_cells
 from jax_dsmc.state import CellTable, GridSpec, ParticleState
 
 jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
@@ -43,10 +43,11 @@ def build_table(state: ParticleState, grid: GridSpec) -> CellTable:
     ``cell`` is returned rather than discarded because it is computed here
     anyway and is needed by the **count score** of section 8.1 — a per-cell term
     applied to every particle in that cell.  Returning it avoids recomputing
-    ``cell_of`` inside ``collide``.
+    ``collision_cell`` inside ``collide``.
     """
     C = num_cells(grid)
-    c = cell_of(state.x, grid)  # i32[N]
+    # the collision cell: a split cell's regions are separate cells (SPARTA sub-cells)
+    c = collision_cell(state.x, grid)  # i32[N]
     c = jnp.where(state.alive, c, C).astype(jnp.int32)  # dead -> sentinel cell C
     order = jnp.argsort(c).astype(jnp.int32)  # i32[N]  FROZEN (int)
     counts = jnp.bincount(c, length=C + 1).astype(jnp.int32)  # i32[C+1]
