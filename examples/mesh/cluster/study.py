@@ -89,7 +89,7 @@ def jobs(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, str]:
             for opt in OPTIMIZERS:
                 out[f"opt_S{s}_{opt}"] = (
                     f"python3 -m examples.mesh.optimize --tag circle_{label}_S{s}_{opt} "
-                    f"--optimizer {opt} --iterations 80 --seeds-per-iterate {s} "
+                    f"--optimizer {opt} --iterations 250 --seeds-per-iterate {s} "
                     f"--workers {min(s, gpus_per_node)} {settings} --step 0.05 --smooth 2 "
                     f"--band 1.0 {PULLBACK}"
                 )

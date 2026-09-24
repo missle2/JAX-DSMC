@@ -23,3 +23,21 @@ iterate 19: J = 3.3835e-20 ± 9.7e-23  area 28.2769 -> 28.2769 (shift -0.0048)  
 iterate 20: J = 3.3913e-20 ± 9.8e-23  area 28.2769 -> 28.2769 (shift -0.0030)  |g| 7.75e-21  predicted dJ -1.4e-21  hits 45118  stuck 0  1385s
 iterate 21: J = 3.371e-20 ± 7.5e-23  area 28.2769 -> 28.2769 (shift -0.0037)  |g| 6.22e-21  predicted dJ -1.24e-21  hits 45199  stuck 0  1135s
 iterate 22: J = 3.3696e-20 ± 7.1e-23  area 28.2769 -> 28.2769 (shift -0.0035)  |g| 6.74e-21  predicted dJ -1.23e-21  hits 45391  stuck 1  1137s
+iterate 23: J = 3.3542e-20 ± 1e-22  area 28.2769 -> 28.2769 (shift -0.0042)  |g| 6.12e-21  predicted dJ -1.21e-21  hits 45381  stuck 0  1125s
+iterate 24: J = 3.3612e-20 ± 9.1e-23  area 28.2769 -> 28.2769 (shift -0.0031)  |g| 7.01e-21  predicted dJ -1.29e-21  hits 45598  stuck 1  1133s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 470, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 466, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 311, in run
+    cut.build_mesh(
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/mesh/cut.py", line 990, in build_mesh
+    oc = outside_corner(body, grid, cell_type, csurfs)
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/mesh/cut.py", line 603, in outside_corner
+    raise ValueError(
+ValueError: 1 cut cell(s) contain flow but no corner that is in the flow and off every element of the cell (first: [90]); the point-in-flow test needs such a corner -- refine the grid or move the surface

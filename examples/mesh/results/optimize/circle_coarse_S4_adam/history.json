@@ -6,7 +6,7 @@
   "steps": 300,
   "window": 200,
   "radius_cells": 1,
-  "tracker": "stencil",
+  "tracker": "lane",
   "body": "levelset",
   "levelset_h": 0.0625,
   "levelset_samples": 16,
@@ -421,7 +421,58 @@
    "area_shift": -0.019326617710476057,
    "predicted_decrease": -9.629971384369053e-22,
    "seconds": 1144.356499671936
+  },
+  {
+   "iterate": 23,
+   "optimizer": "adam",
+   "objective": 2.6228685281648138e-20,
+   "objective_se": 2.873970429491276e-23,
+   "gradient_seed_sd": 3.917770719563842e-24,
+   "hits": 67560.25,
+   "stuck": 0.0,
+   "area": 28.276857191019335,
+   "area_after_step": 28.276857191016973,
+   "grad_norm": 4.662191816862008e-21,
+   "direction_max": 1.0354295380493026,
+   "eta": 0.048289138142801585,
+   "area_shift": -0.019503934337308237,
+   "predicted_decrease": -9.800031874956756e-22,
+   "seconds": 1135.1462650299072
+  },
+  {
+   "iterate": 24,
+   "optimizer": "adam",
+   "objective": 2.6062034021878168e-20,
+   "objective_se": 4.4579047184281647e-23,
+   "gradient_seed_sd": 3.977859361983575e-24,
+   "hits": 68885.75,
+   "stuck": 0.0,
+   "area": 28.276857191016973,
+   "area_after_step": 28.27685719101664,
+   "grad_norm": 4.723982441164709e-21,
+   "direction_max": 1.0586000749145175,
+   "eta": 0.04723219012055854,
+   "area_shift": -0.019480813815107467,
+   "predicted_decrease": -9.505665911519039e-22,
+   "seconds": 1148.0976519584656
+  },
+  {
+   "iterate": 25,
+   "optimizer": "adam",
+   "objective": 2.5888235812635482e-20,
+   "objective_se": 5.316339950603144e-23,
+   "gradient_seed_sd": 3.970271433611718e-24,
+   "hits": 70282.75,
+   "stuck": 0.0,
+   "area": 28.27685719101664,
+   "area_after_step": 28.276857191010198,
+   "grad_norm": 4.470076345229372e-21,
+   "direction_max": 1.071866612654442,
+   "eta": 0.046647595334811914,
+   "area_shift": -0.01904964251502861,
+   "predicted_decrease": -9.237346132819013e-22,
+   "seconds": 1470.212772846222
   }
  ],
- "elapsed": 19825.928193330765
+ "elapsed": 1470.2796835899353
 }

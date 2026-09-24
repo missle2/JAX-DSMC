@@ -1,0 +1,20 @@
+[Thu Sep 24 06:03:43 MDT 2026] optc_opt_S1_adam on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+    MIG 1g.24gb     Device  0: (UUID: MIG-c880ecb9-e9b3-5275-a124-fb8b263cda42)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_coarse_S1_adam --optimizer adam --iterations 80 --seeds-per-iterate 1 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
+iterate 56: J = 2.4791e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0168)  |g| 8.39e-21  predicted dJ -1.22e-21  hits 84416  stuck 0  634s
+iterate 57: J = 2.4701e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0167)  |g| 8.96e-21  predicted dJ -8.26e-22  hits 85140  stuck 0  287s
+iterate 58: J = 2.4719e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0166)  |g| 8.09e-21  predicted dJ -7.33e-22  hits 85978  stuck 0  288s
+iterate 59: J = 2.4796e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0150)  |g| 3.26e-20  predicted dJ -2.36e-21  hits 86514  stuck 0  606s
+iterate 60: J = 2.4991e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0158)  |g| 1.06e-20  predicted dJ -1.56e-21  hits 87227  stuck 0  610s
+iterate 61: J = 2.5169e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0154)  |g| 2.57e-20  predicted dJ -2.7e-21  hits 85969  stuck 0  291s
+iterate 62: J = 2.5216e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0164)  |g| 9.9e-21  predicted dJ -1.01e-21  hits 86025  stuck 0  284s
+iterate 63: J = 2.5386e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0159)  |g| 1e-20  predicted dJ -8.27e-22  hits 84367  stuck 0  290s
+iterate 64: J = 2.5404e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0156)  |g| 9.14e-21  predicted dJ -9.75e-22  hits 84018  stuck 0  283s
+iterate 65: J = 2.5318e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0166)  |g| 9.48e-21  predicted dJ -1.08e-21  hits 84359  stuck 0  613s
+iterate 66: J = 2.5177e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0166)  |g| 1.21e-20  predicted dJ -1.26e-21  hits 84901  stuck 0  284s
+iterate 67: J = 2.513e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0161)  |g| 9e-21  predicted dJ -8.2e-22  hits 85014  stuck 0  284s
