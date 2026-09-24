@@ -42,7 +42,13 @@ from jax_dsmc.move import move_with_decisions
 from jax_dsmc.rng import STAGE_INFLOW, STAGE_MOVE, key_for
 from jax_dsmc.state import CollideState, ParticleState, lane_capacity
 from jax_dsmc.validation import require_valid, validate_inputs
-from jax_dsmc.wall_adjoint import SplitEvents, WallEvents, lane_slots, no_wall_events
+from jax_dsmc.wall_adjoint import (
+    SplitEvents,
+    WallEvents,
+    compact_record,
+    lane_slots,
+    no_wall_events,
+)
 
 
 @jax.tree_util.register_dataclass
@@ -114,9 +120,18 @@ def _empty_split(static):
     )
 
 
+def _record_capacity(static):
+    """Later-pass events a lane record stores per step (:func:`compact_record`): a quarter
+    of the lane.  A particle rarely has a recorded event (an element hit or a diffuse face)
+    after its first; measured on the roughest optimised shape, the deepest recorded pass in
+    20 steady moves was 1 -- the list replaces ``K - 1`` mostly empty rows over the lane."""
+    return max(64, (lane_capacity(static.N, static.lane_size) + _born_lane(static)) // 4)
+
+
 def _event_record(moved, source, wall_events, captured, state, static, diffuse, mesh=None):
     """Assemble one step's :class:`EventRecord`; entrants' birth-step hits are theirs.
-    Also returns the entrants lost to a full lane (``tracker="lane"``; else 0)."""
+    Also returns ``(lost, overflow)``: the entrants lost to a full lane and the later-pass
+    events a lane record had no room for (``tracker="lane"``; else 0)."""
     lane = mesh is not None and static.tracker == "lane"
     k_events = static.K_walk if static.tracker == "walk" else static.K_bounce
     lost = jnp.int32(0)
@@ -157,7 +172,12 @@ def _event_record(moved, source, wall_events, captured, state, static, diffuse, 
         walls=walls,
         sigma=captured[1],
     )
-    return record, lost
+    overflow = jnp.int32(0)
+    if lane:
+        # store the later passes as a list of the recorded events, not K - 1 lane rows
+        walls, overflow = compact_record(walls, _record_capacity(static))
+        record = dataclasses.replace(record, walls=walls)
+    return record, (lost, overflow)
 
 
 def _tracking_diagnostics(counts, tracker):
@@ -326,7 +346,7 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
     )
     record = None
     if capture:
-        record, born_lost = _event_record(
+        record, (born_lost, record_overflow) = _event_record(
             moved,
             source_details if res is not None else None,
             wall_events,
@@ -340,6 +360,7 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
         )
         if "lane_overflow" in tracking:
             tracking["lane_overflow"] = tracking["lane_overflow"] + born_lost
+            tracking["record_overflow"] = record_overflow
     if res is not None:
         diag = dataclasses.replace(
             diag,

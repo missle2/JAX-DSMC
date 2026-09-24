@@ -302,6 +302,7 @@ def ensemble_gradient(  # noqa: PLR0915 -- one seed, kept whole
         phi_step=phi_step,
         hit_reward=hit_reward,
         return_device=True,
+        host_adjoint=False,
     )
     # the along-flight identity's value: the timing rewards carried backward
     _, dev_t = device_backward(
@@ -318,6 +319,7 @@ def ensemble_gradient(  # noqa: PLR0915 -- one seed, kept whole
         npc_max=npc_max,
         hit_reward=rep.timing_reward,
         return_device=True,
+        host_adjoint=False,
     )
     all_terms = shape.gradient_variants(
         dev_t.lam,

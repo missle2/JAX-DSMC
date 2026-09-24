@@ -629,6 +629,8 @@ def _step_walls(walls, k):
     whole record is what the lane avoids storing)."""
     if not hasattr(walls, "head"):
         return np.asarray(walls.face[k]), np.asarray(walls.v_out[k]), np.asarray(walls.diffuse[k])
+    if hasattr(walls, "pass_"):
+        return _step_record_walls(walls, k)
     head_f = np.asarray(walls.head.face[k])
     n = head_f.shape[1]
     slot = np.asarray(walls.slot[k])
@@ -646,6 +648,41 @@ def _step_walls(walls, k):
     face[1:, slot[use]] = tail_f[:, use]
     v_out[1:, slot[use]] = np.asarray(walls.tail.v_out[k])[:, use]
     diffuse[1:, slot[use]] = np.asarray(walls.tail.diffuse[k])[:, use]
+    return face, v_out, diffuse
+
+
+def _pad_rows(walls_k, rows):
+    """Dense step events ``(face, v_out, diffuse)`` padded with empty rows to ``rows``."""
+    face, v_out, diffuse = walls_k
+    extra = rows - face.shape[0]
+    if extra <= 0:
+        return walls_k
+    n = face.shape[1]
+    return (
+        np.concatenate((face, np.full((extra, n), -1, dtype=face.dtype))),
+        np.concatenate((v_out, np.zeros((extra, n, 3)))),
+        np.concatenate((diffuse, np.zeros((extra, n), dtype=bool))),
+    )
+
+
+def _step_record_walls(walls, k):
+    """:func:`_step_walls` of a compact lane record (``wall_adjoint.RecordEvents``): pass 0
+    from the head, every listed later-pass event at row ``pass_`` of its slot."""
+    head_f = np.asarray(walls.head.face[k])
+    n = head_f.shape[1]
+    slot = np.asarray(walls.slot[k])
+    pas = np.asarray(walls.pass_[k])
+    use = slot >= 0
+    rows = 1 + (int(pas[use].max()) if use.any() else 0)
+    face = np.full((rows, n), -1, dtype=head_f.dtype)
+    v_out = np.zeros((rows, n, 3))
+    diffuse = np.zeros((rows, n), dtype=bool)
+    face[0] = head_f[0]
+    v_out[0] = np.asarray(walls.head.v_out[k])[0]
+    diffuse[0] = np.asarray(walls.head.diffuse[k])[0]
+    face[pas[use], slot[use]] = np.asarray(walls.face[k])[use]
+    v_out[pas[use], slot[use]] = np.asarray(walls.v_out[k])[use]
+    diffuse[pas[use], slot[use]] = np.asarray(walls.diffuse[k])[use]
     return face, v_out, diffuse
 
 
@@ -690,11 +727,15 @@ def from_device(records, dev, normalization, hit_reward=None):
         born = born_face >= 0
         # to_go[j] = lam + sum of the rewards of hits j, j+1, ... of the step (row K = lam)
         walls_k = None if rec.walls is None else _step_walls(rec.walls, k)
+        r_k = None
+        if rewards is not None and walls_k is not None:
+            r_k = _step_rewards(rewards, k, lam.shape[0])
+            # a compact record has only the rows it uses, a replay's rewards all K: the
+            # common height (rows without events carry zero rewards / no events)
+            walls_k = _pad_rows(walls_k, r_k.shape[0])
         n_pass = 0 if walls_k is None else walls_k[0].shape[0]
         to_go = np.broadcast_to(lam, (n_pass + 1, lam.shape[0])).copy()
-        if rewards is not None and n_pass:
-            r_k = _step_rewards(rewards, k, lam.shape[0])
-            # the replay's lane has no entrants' segment: pad missing rows with zeros
+        if r_k is not None and n_pass:
             full = np.zeros((n_pass, lam.shape[0]))
             full[: r_k.shape[0]] = r_k[:n_pass]
             to_go[:-1] += np.cumsum(full[::-1], axis=0)[::-1]

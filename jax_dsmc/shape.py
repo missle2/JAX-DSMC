@@ -63,7 +63,7 @@ from jax_dsmc.mesh import surface as surface_mod
 from jax_dsmc.mesh.types import Mesh
 from jax_dsmc.rng import STAGE_MOVE, key_for
 from jax_dsmc.sampling import log_diffuse_density
-from jax_dsmc.wall_adjoint import SplitEvents, as_split, particle_sum
+from jax_dsmc.wall_adjoint import RecordEvents, SplitEvents, as_split, particle_sum
 
 jax.config.update("jax_enable_x64", True)
 
@@ -80,13 +80,18 @@ class EventArray(NamedTuple):
 
 class HitRewards(NamedTuple):
     """Per-hit rewards of a lane-tracked replay (stacked over the ``M`` steps): the
-    per-event ``values`` (:class:`EventArray`), the lane's ``slot`` (``i32[M, B]``) and each
-    slot's per-step ``total`` (``f64[M, N]``).  :func:`gradient` reads ``values``, the
-    device backward ``total``, :func:`jax_dsmc.ensemble_backward.from_device` all three."""
+    per-event ``values`` (:class:`EventArray`) and the lane's ``slot`` (``i32[M, B]``).
+    :func:`gradient` reads ``values``, :func:`jax_dsmc.ensemble_backward.from_device` both;
+    the device backward needs only each slot's per-step total, :meth:`totals` -- formed on
+    demand rather than stored next to the values (the replay's outputs stay alive through
+    both backwards and the shape VJP)."""
 
     values: object
     slot: jax.Array
-    total: jax.Array
+
+    def totals(self):
+        """``f64[M, N]``: each slot's summed rewards per step."""
+        return jax.vmap(particle_sum)(self.values.head, self.values.tail, self.slot)
 
 
 def _tail_of(values, slot):
@@ -151,11 +156,24 @@ class Replay(NamedTuple):
     ``timing_jump``), laid out as ``hit_reward``: the change of the objective per unit
     delay of the particle's trajectory, what the along-flight identity's second backward
     carries."""
-    hit_total: jax.Array = None
-    """``f64[M, N]`` each slot's summed hit rewards per step -- all the device backward's
-    move pull-back uses (pass it as ``hit_total[:, None]``)."""
-    timing_total: jax.Array = None
-    """``f64[M, N]`` as ``hit_total`` for the timing rewards."""
+
+    @property
+    def hit_total(self):
+        """``f64[M, N]`` each slot's summed hit rewards per step -- all the device backward's
+        move pull-back uses (formed on demand)."""
+        return _totals(self.hit_reward)
+
+    @property
+    def timing_total(self):
+        """``f64[M, N]`` as :attr:`hit_total` for the timing rewards."""
+        return _totals(self.timing_reward)
+
+
+def _totals(rewards):
+    """Per-slot per-step totals of a replay's rewards (dense ``M, K, N`` or lane)."""
+    if isinstance(rewards, HitRewards):
+        return rewards.totals()
+    return jnp.sum(rewards, axis=1)
 
 
 class ShapeTerms(NamedTuple):
@@ -433,15 +451,14 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
         events, tallies, rec_k, step, survivors, reward, timing_jump, setup, timing_band
     )
     slot = as_split(events).slot
-    totals = (particle_sum(r.head, r.tail, slot), particle_sum(tau.head, tau.tail, slot))
     if isinstance(events, SplitEvents):
-        r = HitRewards(r, slot, totals[0])
-        tau = HitRewards(tau, slot, totals[1])
+        r = HitRewards(r, slot)
+        tau = HitRewards(tau, slot)
     else:
         # dense trackers: the (K, N) layout the callers have always had
         r = jnp.concatenate((r.head, r.tail))
         tau = jnp.concatenate((tau.head, tau.tail))
-    return (rec_k.x, rec_k.v_post, rec_k.alive, err), (r, tallies, n_hits, tau, totals)
+    return (rec_k.x, rec_k.v_post, rec_k.alive, err), (r, tallies, n_hits, tau)
 
 
 def _mismatch(x_post, v_post, rec_k, survivors, grid):
@@ -766,8 +783,8 @@ def replay(
         setup=setup,
     )
     init = (state0.x, state0.v, state0.alive, jnp.float64(0.0))
-    (_, _, _, err), (r, tallies, hits, tau, totals) = lax.scan(body, init, (records, steps))
-    return Replay(r, tallies, err, hits, tau, *totals)
+    (_, _, _, err), (r, tallies, hits, tau) = lax.scan(body, init, (records, steps))
+    return Replay(r, tallies, err, hits, tau)
 
 
 @functools.partial(
@@ -876,7 +893,15 @@ def hit_ahead(records, mesh):
     dim = records.x.shape[-1]
     del mesh
     walls = records.walls
-    if isinstance(walls, SplitEvents):
+    if isinstance(walls, RecordEvents):
+        head = jnp.any(walls.head.face >= 2 * dim, axis=1)  # (M, N)
+        n = head.shape[1]
+        # the record's later-pass events folded onto their slots, step by step
+        body = (walls.face >= 2 * dim) & (walls.slot >= 0)  # (M, E)
+        target = jnp.where(body, walls.slot, n)
+        steps = jnp.arange(head.shape[0])[:, None]
+        hit = head.at[steps, target].set(True, mode="drop")
+    elif isinstance(walls, SplitEvents):
         head = jnp.any(walls.head.face >= 2 * dim, axis=1)  # (M, N)
         tail = jnp.any(walls.tail.face >= 2 * dim, axis=1).astype(jnp.float64)  # (M, B)
         # the lane's hits folded onto their slots, step by step

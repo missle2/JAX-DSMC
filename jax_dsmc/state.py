@@ -264,6 +264,9 @@ class Diagnostics:
     """``i32`` particles with a pass-0 event that did not fit the lane of
     ``tracker="lane"`` (``SimStatic.lane_size``) and were deleted.  Must be zero; raise
     ``lane_size``."""
+    record_overflow: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` later-pass events a lane-tracked step's record had no room for (the record's
+    list, ``simulate._record_capacity``).  Must be zero: the record would lose them."""
     surface_stuck: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
     """``i32`` particles the stencil tracker deleted because a hit was still unresolved
     after ``K_bounce`` passes -- SPARTA's stuck particle (``MAXSTUCK``, deleted and

@@ -125,6 +125,54 @@
     "peak_forward_captured": 45620.009447619064,
     "peak_shape_terms": 82969.66826666667
    }
+  },
+  "lane_32_compact": {
+   "rows": [
+    {
+     "fnum_scale": 16.0,
+     "tracker": "lane",
+     "K_bounce": 32,
+     "N_slots": 4006,
+     "alive_end": 2963,
+     "peak_forward": 36410624,
+     "peak_forward_captured": 223957504,
+     "records_bytes": 198867600,
+     "records_fields": null,
+     "peak_shape_terms": 525639168,
+     "seconds_shape_terms": 133.9263060092926
+    },
+    {
+     "fnum_scale": 8.0,
+     "tracker": "lane",
+     "K_bounce": 32,
+     "N_slots": 7756,
+     "alive_end": 5920,
+     "peak_forward": 36410112,
+     "peak_forward_captured": 403752704,
+     "records_bytes": 336117600,
+     "records_fields": null,
+     "peak_shape_terms": 766633216,
+     "seconds_shape_terms": 220.61045694351196
+    },
+    {
+     "fnum_scale": 4.0,
+     "tracker": "lane",
+     "K_bounce": 32,
+     "N_slots": 15256,
+     "alive_end": 11912,
+     "peak_forward": 36410368,
+     "peak_forward_captured": 743359488,
+     "records_bytes": 611372400,
+     "records_fields": null,
+     "peak_shape_terms": 1243042816,
+     "seconds_shape_terms": 212.89288973808289
+    }
+   ],
+   "per_slot_bytes": {
+    "records_bytes": 36671.88571428572,
+    "peak_forward_captured": 46042.18514285715,
+    "peak_shape_terms": 63733.79413333334
+   }
   }
  },
  "gradient": {

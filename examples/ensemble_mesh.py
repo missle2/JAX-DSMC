@@ -329,9 +329,43 @@ def objective_value(cfg, tallies, dim, scale):
 
 def _check(diag):
     require_valid(diag)
-    for name in ("stencil_overrun", "inside_body", "wall_recrossed", "walk_exhausted"):
+    for name in (
+        "stencil_overrun",
+        "inside_body",
+        "wall_recrossed",
+        "walk_exhausted",
+        "lane_overflow",
+        "record_overflow",
+    ):
         if int(getattr(diag, name).sum()):
             raise RuntimeError(f"{name} fired")
+
+
+def _backwards(rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hits, timing):
+    """The two value-form device backwards of :func:`shape_terms`: the objective's hit
+    rewards (``lam``) and the timing rewards (``lam_timing``, the along-flight identity's
+    value); the host bookkeeping is skipped (only the device's ``lam`` is used)."""
+    n = rec.x.shape[1]
+    out = []
+    for rewards in (hits, timing):
+        _, dev = device_backward(
+            rec,
+            state0,
+            final,
+            jnp.zeros(n),
+            1.0,
+            grid,
+            v_scale,
+            sp,
+            jax.random.fold_in(key, 12345),
+            neighbors,
+            npc_max=npc_max,
+            hit_reward=rewards,
+            return_device=True,
+            host_adjoint=False,
+        )
+        out.append(dev)
+    return tuple(out)
 
 
 def shape_terms(
@@ -393,6 +427,11 @@ def shape_terms(
         raise RuntimeError(f"replay error {float(rep.replay_error):g}")
     hit_reward = rep.hit_reward
     value = float(jnp.sum(rep.hit_total))
+    # the timing rewards enter only the second backward, which needs each slot's per-step
+    # total: keep that and let the per-event form go (the replay's outputs otherwise stay
+    # alive through both backwards and the shape VJP -- the chain's memory peak)
+    timing_total = rep.timing_total[:, None]
+    del rep
     check = objective_value(cfg, tallies, dim, scale_r)
     newborn_share = (check - value) / max(abs(check), 1e-300)
     n_surf = 2 * dim + mesh.n_elements
@@ -410,39 +449,11 @@ def shape_terms(
         4 * int(np.asarray(rec.alive).sum(axis=1).max()) // num_cells(grid),
         int(ensemble_backward.max_occupancy(rec, grid)) + 8,
     )
-    n = static.N
     t0 = time.time()
-    _, dev = device_backward(
-        rec,
-        state0,
-        final,
-        jnp.zeros(n),
-        1.0,
-        grid,
-        v_scale,
-        sp,
-        jax.random.fold_in(key, 12345),
-        neighbors,
-        npc_max=npc_max,
-        hit_reward=hit_reward,
-        return_device=True,
+    dev, dev_t = _backwards(
+        rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hit_reward, timing_total
     )
-    # the along-flight identity's value: the timing rewards carried backward
-    _, dev_t = device_backward(
-        rec,
-        state0,
-        final,
-        jnp.zeros(n),
-        1.0,
-        grid,
-        v_scale,
-        sp,
-        jax.random.fold_in(key, 12345),
-        neighbors,
-        npc_max=npc_max,
-        hit_reward=rep.timing_reward,
-        return_device=True,
-    )
+    del timing_total
     t_backward = time.time() - t0
     t0 = time.time()
     all_terms = shape.gradient_variants(

@@ -2111,7 +2111,16 @@ rewards as `shape.HitRewards(values, slot, total)` (the device backward reads `t
 host bookkeeping `ensemble_backward.from_device` expands the events per step).  Entrants
 use the same tracker; `inflow.inject` expands their split events over its entrants, and
 `simulate._event_record` splits the record again (the entrants' later passes in an extra
-tail segment).  Measured on the roughest optimised shape (review 7.10,
+tail segment).  The **stored** record compacts once more: `wall_adjoint.RecordEvents` keeps
+pass 0 dense and the later passes as a list of the events actually recorded (`slot`,
+`pass_`, `face`, `v_out`, `diffuse`; capacity a quarter of the lane,
+`simulate._record_capacity`; a full list is counted, `Diagnostics.record_overflow`, an
+error) -- nothing downstream needs the empty rows, since the shape adjoint's replay
+recomputes its events; `shape.hit_ahead` and the host `ensemble_backward._step_walls` read
+the list.  The replay keeps only what its consumers read: `HitRewards(values, slot)` with
+the per-slot totals formed on demand (`totals()`), and `shape_terms` keeps the timing
+rewards as totals only and skips the host bookkeeping (`device_backward(host_adjoint=
+False)`).  Measured on the roughest optimised shape (review 7.10,
 `examples/mesh/tracker_bench.py`): the same results as the stencil to round-off, 2.1x
 faster at 32 passes than the stencil at 4, 27 % less adjoint memory per slot.
 

@@ -520,7 +520,7 @@ def _replay_chain(tracker):
         tally_cotangent=d_tally,
         k=16,
     )
-    return terms, rep, diag, tallies
+    return terms, rep, diag, tallies, rec
 
 
 @pytest.mark.parametrize("tracker", ["stencil", "lane", "walk"])
@@ -528,7 +528,7 @@ def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker
     """A short run with the specular circle: the traced replay of every step matches the
     record to roundoff (the RNG contract), the hit rewards agree with the tallies, and the
     shape gradient is finite with a nonzero pathwise radius term."""
-    terms, rep, diag, tallies = _replay_chain(tracker)
+    terms, rep, diag, tallies, _rec = _replay_chain(tracker)
     assert float(rep.replay_error) < 1e-12
     np.testing.assert_array_equal(np.asarray(rep.surface_hits), np.asarray(diag.surface_hits))
     np.testing.assert_allclose(
@@ -547,8 +547,19 @@ def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker
 def test_lane_and_stencil_shape_gradients_agree():
     """The lane tracker's split events through replay, backward and shape VJP give the
     dense stencil's shape gradient (the same events, folded per slot) to roundoff."""
-    ts, rs, ds, _ = _replay_chain("stencil")
-    tl, rl, dl, _ = _replay_chain("lane")
+    ts, rs, ds, _, rec_s = _replay_chain("stencil")
+    tl, rl, dl, _, rec_l = _replay_chain("lane")
+    # the lane's compact record: the same stratified-fit classes and, step by step, the
+    # same events as the stencil's dense record
+    np.testing.assert_array_equal(
+        np.asarray(shape.hit_ahead(rec_l, None)), np.asarray(shape.hit_ahead(rec_s, None))
+    )
+    for k in range(rec_s.x.shape[0]):
+        dense = ensemble_backward._step_walls(rec_s.walls, k)
+        compact = ensemble_backward._step_walls(rec_l.walls, k)
+        rows = compact[0].shape[0]
+        np.testing.assert_array_equal(compact[0], dense[0][:rows])
+        assert (dense[0][rows:] < 0).all()
     np.testing.assert_array_equal(np.asarray(ds.surface_hits), np.asarray(dl.surface_hits))
     np.testing.assert_allclose(np.asarray(rl.hit_total), np.asarray(rs.hit_total), rtol=1e-12)
     for part in ("pathwise", "pathwise_x", "pathwise_v", "pathwise_tally"):

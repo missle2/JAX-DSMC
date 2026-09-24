@@ -171,6 +171,7 @@ def device_backward(
     hit_reward=None,
     return_device=False,
     normals=None,
+    host_adjoint=True,
 ):
     """The device backward under the pull-back selected by ``ensemble_backward.configure``,
     returned as the host :class:`ensemble_backward.Adjoint` (births and wall hits read off
@@ -179,10 +180,12 @@ def device_backward(
     :func:`ensemble_device.backward`; ``return_device=True`` also returns the raw
     :class:`ensemble_device.Backward` (its ``lam`` feeds the shape adjoint); ``normals``
     (:func:`jax_dsmc.shape.local_normals`) switches the virtual pull-back's fits to the
-    one-sided form."""
+    one-sided form.  ``host_adjoint=False`` skips the host bookkeeping of births and
+    wall hits (:func:`ensemble_backward.from_device`) and returns ``(None, dev)`` -- the
+    shape adjoint reads only the device's ``lam``."""
     # a lane-tracked replay's rewards (`shape.HitRewards`): the device's move pull-back
     # needs each slot's per-step total only; the host bookkeeping gets the per-event form
-    dev_reward = hit_reward.total[:, None] if isinstance(hit_reward, HitRewards) else hit_reward
+    dev_reward = hit_reward.totals()[:, None] if isinstance(hit_reward, HitRewards) else hit_reward
     worst = ensemble_backward.max_occupancy(rec, grid)
     if worst > npc_max:
         raise ValueError(f"npc_max={npc_max} below the densest cell ({worst} particles)")
@@ -243,6 +246,8 @@ def device_backward(
             f"unstable backward: rms lambda grew {rms.max() / rms[-1]:.3g}x over the horizon; "
             "raise --partners (review section 5.12)"
         )
+    if not host_adjoint:
+        return None, dev
     adj = ensemble_backward.from_device(rec, dev, normalization, hit_reward=hit_reward)
     return (adj, dev) if return_device else adj
 

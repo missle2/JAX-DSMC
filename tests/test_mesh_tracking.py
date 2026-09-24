@@ -596,3 +596,46 @@ def test_advance_jits_with_mesh():
         )
         ref = _advance(x, v, alive, grid, _open(2), _wall(2), mesh, tracker, 1e-4)
         assert bool((out[0] == ref[0]).all()) and bool((out[1] == ref[1]).all())
+
+
+@pytest.mark.parametrize("kind", ["analytic", "polygon", "levelset", "sphere"])
+def test_compact_record_keeps_every_later_pass_event(kind):
+    """The stored form of a lane step (``RecordEvents``: pass 0 dense, the later passes as a
+    list) expands on the host to exactly the dense events; a list too short counts the
+    events it could not keep."""
+    from jax_dsmc.ensemble_backward import _step_walls  # noqa: PLC0415
+
+    dim, grid, body, outside = _lane_case(kind)
+    mesh = cut.build_mesh(body, grid, radius=4 * max(grid.n), sub=4)
+    x, v, alive = _outside_state(jax.random.PRNGKey(11), 2000, dim, grid, outside)
+    faces = Faces((BC.DIFFUSE,) * 2 + (BC.SPECULAR,) * (2 * dim - 2))
+    out = _advance(
+        x,
+        v,
+        alive,
+        grid,
+        faces,
+        _wall(dim, 1.0),
+        mesh,
+        "lane",
+        1.5e-3,
+        key=3,
+        return_events=True,
+        max_bounces=12,
+        lane_size=x.shape[0],
+    )
+    split = out[5]
+    dense = wall_adjoint.to_dense(split)
+    n_later = int(np.sum(np.asarray(dense.face)[1:] >= 0))
+    assert n_later >= 1
+    record, lost = wall_adjoint.compact_record(split, n_later + 3)
+    assert int(lost) == 0
+    stacked = jax.tree.map(lambda a: a[None], record)  # one captured step
+    face, v_out, diffuse = _step_walls(stacked, 0)
+    rows = face.shape[0]
+    np.testing.assert_array_equal(face, np.asarray(dense.face)[:rows])
+    assert (np.asarray(dense.face)[rows:] < 0).all()
+    np.testing.assert_array_equal(v_out, np.asarray(dense.v_out)[:rows])
+    np.testing.assert_array_equal(diffuse, np.asarray(dense.diffuse)[:rows])
+    _short, lost = wall_adjoint.compact_record(split, n_later - 1)
+    assert int(lost) == 1

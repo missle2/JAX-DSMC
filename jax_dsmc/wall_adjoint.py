@@ -101,6 +101,58 @@ class SplitEvents(NamedTuple):
     slot: jax.Array
 
 
+class RecordEvents(NamedTuple):
+    """The **stored** events of a lane-tracked step (``EventRecord.walls``): pass 0 dense
+    (``head``, ``WallEvents`` with one row over every slot) and the later passes as a flat
+    list of the events actually recorded -- ``slot`` / ``pass_`` (``i32[E]``, ``-1`` for
+    unused entries; ``pass_`` counts from 1), ``face``, ``v_out`` (``f64[E, 3]``),
+    ``diffuse``.  :class:`SplitEvents` keeps ``K - 1`` rows over the whole lane, almost all
+    empty (a particle rarely has a recorded event after its first); nothing downstream of
+    the forward needs the empty rows -- the shape adjoint's replay recomputes its events --
+    so the record keeps only the list (:func:`compact_record`)."""
+
+    head: WallEvents
+    slot: jax.Array
+    pass_: jax.Array
+    face: jax.Array
+    v_out: jax.Array
+    diffuse: jax.Array
+
+
+def _put_flat(values, target, capacity, fill, dtype):
+    """``values`` (``R, W, ...``) flattened and written to the list entries ``target``
+    (``capacity`` = dropped); unused entries hold ``fill``."""
+    rows, width = values.shape[:2]
+    flat = values.reshape((rows * width, *values.shape[2:]))
+    empty = jnp.full((capacity, *values.shape[2:]), fill, dtype)
+    return empty.at[target].set(flat.astype(dtype), mode="drop")
+
+
+def compact_record(events, capacity):
+    """:class:`RecordEvents` of split ``events`` with room for ``capacity`` later-pass
+    events (in pass order, then lane order), and the number that did not fit (the record
+    would lose them: an error, ``Diagnostics.record_overflow``)."""
+    tail = events.tail
+    rows, width = tail.face.shape
+    has = (tail.face >= 0).reshape(-1)
+    pos = jnp.cumsum(has.astype(jnp.int32)) - 1
+    fits = has & (pos < capacity)
+    target = jnp.where(fits, pos, capacity)
+
+    slot = jnp.broadcast_to(events.slot[None, :], (rows, width))
+    pass_ = jnp.broadcast_to(jnp.arange(1, rows + 1, dtype=jnp.int32)[:, None], (rows, width))
+    put = functools.partial(_put_flat, target=target, capacity=capacity)
+    record = RecordEvents(
+        events.head,
+        put(slot, fill=-1, dtype=jnp.int32),
+        put(pass_, fill=-1, dtype=jnp.int32),
+        put(tail.face, fill=-1, dtype=jnp.int32),
+        put(tail.v_out, fill=0.0, dtype=jnp.float64),
+        put(tail.diffuse, fill=False, dtype=bool),
+    )
+    return record, jnp.sum(has, dtype=jnp.int32) - jnp.sum(fits, dtype=jnp.int32)
+
+
 def as_split(events):
     """:class:`SplitEvents` view of ``events`` (a dense ``WallEvents`` or already split)."""
     if isinstance(events, SplitEvents):

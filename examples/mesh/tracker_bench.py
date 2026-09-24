@@ -18,7 +18,11 @@ concave windward notches) at seed 32:
   every step and are not used).
 * ``scratch/mesh/probe_memory.py`` -- allocator peaks of the captured forward and of the
   full ``shape_terms`` chain (replay, two backwards, shape VJP) at 4 k / 7.8 k / 15 k
-  slots: ``probe_memory.log`` (stencil, 4 passes) and ``probe_memory_lane.log`` (lane, 32).
+  slots: ``probe_memory.log`` (stencil, 4 passes), ``probe_memory_lane.log`` (lane, 32,
+  the record's later passes as ``K - 1`` lane rows) and ``probe_memory_lane_compact.log``
+  (lane, 32, the compact record -- the later passes as a list of the recorded events --
+  and the slim replay: per-slot totals formed on demand, the timing rewards kept as
+  totals only, no host bookkeeping in ``shape_terms``).
 * ``scratch/mesh/probe_lane_gradient.py`` -- one ``shape_terms`` seed at ``fnum x 4`` with
   the stencil at 4 passes and the lane at 4 and 32: objective, hits, replay error and the
   full coefficient gradient (``lane_gradient.npz``).
@@ -46,6 +50,17 @@ _RUN = re.compile(
 )
 _OCC = re.compile(r"lane occupancy per step mean (?P<mean>\d+) max (?P<max>\d+)")
 _SLOTS = re.compile(r"^slots (?P<slots>\d+)")
+MEMORY = (
+    # name, probe log, label, colour
+    ("stencil_4", "probe_memory.log", "stencil, 4 passes", "0.45"),
+    ("lane_32", "probe_memory_lane.log", "lane, 32 passes", "tab:blue"),
+    (
+        "lane_32_compact",
+        "probe_memory_lane_compact.log",
+        "lane, 32, compact record + slim replay",
+        "tab:green",
+    ),
+)
 
 
 def _forward_rows(path, keep):
@@ -92,7 +107,7 @@ def import_logs():
             if (m := _OCC.search(line)) and (s := _SLOTS.match(line)):
                 occupancy = {"slots": int(s["slots"]), "mean": int(m["mean"]), "max": int(m["max"])}
     memory = {}
-    for name, log in (("stencil_4", "probe_memory.log"), ("lane_32", "probe_memory_lane.log")):
+    for name, log, _label, _color in MEMORY:
         rows = _memory_rows(os.path.join(LOGS, log))
         memory[name] = {
             "rows": rows,
@@ -182,11 +197,7 @@ def _panel_forward(ax, a):
 
 def _panel_memory(ax, a):
     """(b) memory per slot: captured forward and the full adjoint chain."""
-    styles = {
-        "stencil_4": ("0.45", "stencil, 4 passes"),
-        "lane_32": ("tab:blue", "lane, 32 passes"),
-    }
-    for name, (color, label) in styles.items():
+    for name, _log, label, color in MEMORY:
         rows = a["memory"][name]["rows"]
         n = np.array([r["N_slots"] for r in rows])
         for key, marker, what in (
@@ -241,8 +252,10 @@ def table():
             f"{r['alive']} | {r['drag_sum']:.7e} |"
         )
     print()
-    print("| per particle slot | stencil, 4 passes | lane, 32 passes | change |")
-    print("|---|---|---|---|")
+    print(
+        "| per particle slot | stencil, 4 passes | lane, 32 passes | lane, compact record + slim replay | change |"
+    )
+    print("|---|---|---|---|---|")
     names = {
         "records_bytes": "event record (300 captured steps)",
         "peak_forward_captured": "peak, captured forward",
@@ -251,13 +264,15 @@ def table():
     for key, label in names.items():
         s4 = a["memory"]["stencil_4"]["per_slot_bytes"][key] / 1e3
         l32 = a["memory"]["lane_32"]["per_slot_bytes"][key] / 1e3
-        print(f"| {label} | {s4:.1f} kB | {l32:.1f} kB | {100 * (l32 / s4 - 1):+.0f} % |")
-    t4 = a["memory"]["stencil_4"]["rows"][-1]
-    t32 = a["memory"]["lane_32"]["rows"][-1]
+        lc = a["memory"]["lane_32_compact"]["per_slot_bytes"][key] / 1e3
+        print(
+            f"| {label} | {s4:.1f} kB | {l32:.1f} kB | {lc:.1f} kB | {100 * (lc / s4 - 1):+.0f} % |"
+        )
+    t = [a["memory"][k]["rows"][-1] for k in ("stencil_4", "lane_32", "lane_32_compact")]
     print(
-        f"| adjoint chain time at {t4['N_slots']} slots | {t4['seconds_shape_terms']:.0f} s | "
-        f"{t32['seconds_shape_terms']:.0f} s | "
-        f"{100 * (t32['seconds_shape_terms'] / t4['seconds_shape_terms'] - 1):+.0f} % |"
+        f"| adjoint chain time at {t[0]['N_slots']} slots | {t[0]['seconds_shape_terms']:.0f} s | "
+        f"{t[1]['seconds_shape_terms']:.0f} s | {t[2]['seconds_shape_terms']:.0f} s | "
+        f"{100 * (t[2]['seconds_shape_terms'] / t[0]['seconds_shape_terms'] - 1):+.0f} % |"
     )
     g = a["gradient"]
     print()

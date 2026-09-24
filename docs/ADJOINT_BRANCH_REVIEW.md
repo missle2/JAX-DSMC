@@ -1818,19 +1818,31 @@ up, and runs a pass only while one is needed.  Measured on the roughest optimise
 | lane | 4 | 62 | 1 | 48109 | 6.9993820e-19 |
 | lane | 32 | 55 | 0 | 48109 | 6.9993820e-19 |
 
-| per particle slot | stencil, 4 passes | lane, 32 passes | change |
-|---|---|---|---|
-| event record (300 captured steps) | 62.7 kB | 43.7 kB | -30 % |
-| peak, captured forward | 95.3 kB | 45.6 kB | -52 % |
-| peak, full adjoint chain | 115.9 kB | 83.0 kB | -28 % |
-| adjoint chain time at 15256 slots | 271 s | 225 s | -17 % |
+| per particle slot | stencil, 4 passes | lane, 32 passes | lane, compact record + slim replay | change |
+|---|---|---|---|---|
+| event record (300 captured steps) | 62.7 kB | 43.7 kB | 36.7 kB | -42 % |
+| peak, captured forward | 95.3 kB | 45.6 kB | 46.0 kB | -52 % |
+| peak, full adjoint chain | 115.9 kB | 83.0 kB | 63.7 kB | -45 % |
+| adjoint chain time at 15256 slots | 271 s | 225 s | 213 s | -21 % |
 
 The shape gradient (one `shape_terms` seed at `fnum × 4`) is the stencil's to 2.3e-15
 relative in every coefficient, with the same objective (3.393045e-20) and hits (10712);
 the lane holds 282 slots per step on average, 309 at most, of 60 256.  The first lane
 timings (95 s at 16 passes, 135 s at 32) exposed a hidden cost: the inflow's entrants were
 still tracked by the dense stencil, `K` passes every step; on the lane too, the pass
-budget costs nothing measurable.  At the fine circle (240 k slots) the adjoint chain's
-estimate drops from ≈ 28 GB to ≈ 20 GB.  Not done: the record's tail rows beyond the
-second pass are almost always empty (≈ a quarter of the record) and could be compacted
-once more.
+budget costs nothing measurable.  **Memory, second round (the last column).**  (i) The stored record keeps the later
+passes as a list of the events actually recorded (`wall_adjoint.RecordEvents`, PSEUDOCODE
+9.6.1) instead of `K − 1` lane rows that are almost all empty: the record −16 %.  (ii) A
+stage-by-stage probe of `shape_terms` (`scratch/mesh/probe_memory_stages.py`, 15 k slots)
+showed where the peak was: forward 743 MB, replay +292 MB kept alive through both
+backwards and the shape VJP, whose working set then peaked at 1484 MB.  The replay kept
+per-slot totals next to the per-event rewards they are the sum of, the timing rewards in
+per-event form although only the second backward reads them (as totals), and every device
+backward ran the host bookkeeping (`from_device`) whose result `shape_terms` discards.
+Totals are now formed on demand (`HitRewards.totals()`), the timing rewards kept as totals
+only, the host bookkeeping skipped (`device_backward(host_adjoint=False)`): replay +145 MB,
+peak 1243 MB.  The remaining ~300 MB spike in the shape VJP barely depends on the pass
+budget (8 passes: 300 MB, 32: 323 MB); it is the gradient step's fixed working set (the
+pooled fits gather nodes per query chunk), which does not grow with the particle count.
+At the fine circle (240 k slots) the chain's estimate is ≈ 15 GB (the stencil's: ≈ 28 GB),
+inside a 24 GB rtx slice -- to be confirmed on the slice.
