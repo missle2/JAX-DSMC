@@ -1,0 +1,40 @@
+[Wed Sep 23 23:41:27 MDT 2026] optc_opt_S2_adam on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+    MIG 1g.24gb     Device  0: (UUID: MIG-50d3ffc6-0d48-5b37-9abb-b1b2e2465b29)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_coarse_S2_adam --optimizer adam --iterations 80 --seeds-per-iterate 2 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
+iterate 21: J = 2.7234e-20 ± 8.1e-23  area 28.2769 -> 28.2769 (shift -0.0190)  |g| 5.69e-21  predicted dJ -1.02e-21  hits 64963  stuck 1  849s
+iterate 22: J = 2.6994e-20 ± 5.1e-23  area 28.2769 -> 28.2769 (shift -0.0189)  |g| 5.8e-21  predicted dJ -9.23e-22  hits 65902  stuck 1  584s
+iterate 23: J = 2.6787e-20 ± 5.8e-23  area 28.2769 -> 28.2769 (shift -0.0187)  |g| 5.95e-21  predicted dJ -1.05e-21  hits 66882  stuck 0  837s
+iterate 24: J = 2.6605e-20 ± 9.5e-23  area 28.2769 -> 28.2769 (shift -0.0186)  |g| 5.32e-21  predicted dJ -1e-21  hits 67664  stuck 0  583s
+iterate 25: J = 2.6559e-20 ± 1.1e-22  area 28.2769 -> 28.2769 (shift -0.0193)  |g| 5.39e-21  predicted dJ -1.09e-21  hits 68304  stuck 0  586s
+iterate 26: J = 2.6485e-20 ± 9.1e-23  area 28.2769 -> 28.2769 (shift -0.0196)  |g| 5.28e-21  predicted dJ -1.02e-21  hits 68860  stuck 0  580s
+iterate 27: J = 2.6375e-20 ± 5e-23  area 28.2769 -> 28.2769 (shift -0.0201)  |g| 5.88e-21  predicted dJ -1.18e-21  hits 69497  stuck 1  590s
+iterate 28: J = 2.621e-20 ± 1.3e-23  area 28.2769 -> 28.2769 (shift -0.0194)  |g| 5.38e-21  predicted dJ -9.54e-22  hits 70084  stuck 1  582s
+iterate 29: J = 2.6083e-20 ± 3.5e-23  area 28.2769 -> 28.2769 (shift -0.0193)  |g| 5.48e-21  predicted dJ -1.09e-21  hits 71058  stuck 2  847s
+iterate 30: J = 2.5903e-20 ± 1.2e-22  area 28.2769 -> 28.2769 (shift -0.0195)  |g| 5.87e-21  predicted dJ -1.19e-21  hits 71596  stuck 1  584s
+iterate 31: J = 2.5748e-20 ± 1.5e-22  area 28.2769 -> 28.2769 (shift -0.0194)  |g| 6.46e-21  predicted dJ -9.28e-22  hits 72490  stuck 0  591s
+iterate 32: J = 2.5581e-20 ± 1.7e-22  area 28.2769 -> 28.2769 (shift -0.0195)  |g| 5.55e-21  predicted dJ -1.12e-21  hits 73546  stuck 2  586s
+iterate 33: J = 2.5508e-20 ± 1.5e-22  area 28.2769 -> 28.2769 (shift -0.0197)  |g| 5.79e-21  predicted dJ -1.11e-21  hits 74468  stuck 0  594s
+iterate 34: J = 2.5385e-20 ± 1.4e-22  area 28.2769 -> 28.2769 (shift -0.0197)  |g| 6.56e-21  predicted dJ -1.25e-21  hits 75701  stuck 1  588s
+iterate 35: J = 2.5409e-20 ± 1.1e-22  area 28.2769 -> 28.2769 (shift -0.0206)  |g| 5.81e-21  predicted dJ -1.53e-21  hits 76206  stuck 1  591s
+iterate 36: J = 2.5329e-20 ± 7.7e-23  area 28.2769 -> 28.2769 (shift -0.0191)  |g| 6.26e-21  predicted dJ -8.36e-22  hits 74831  stuck 3  586s
+iterate 37: J = 2.5182e-20 ± 1.4e-22  area 28.2769 -> 28.2769 (shift -0.0189)  |g| 5.85e-21  predicted dJ -1.1e-21  hits 75762  stuck 0  593s
+iterate 38: J = 2.5042e-20 ± 1.5e-22  area 28.2769 -> 28.2769 (shift -0.0188)  |g| 5.57e-21  predicted dJ -1.03e-21  hits 76562  stuck 1  596s
+iterate 39: J = 2.4895e-20 ± 7e-23  area 28.2769 -> 28.2769 (shift -0.0169)  |g| 1.12e-19  predicted dJ -6.64e-21  hits 77932  stuck 5  854s
+iterate 40: J = 2.4673e-20 ± 1.3e-22  area 28.2769 -> 28.2769 (shift -0.0165)  |g| 5.64e-21  predicted dJ -8.08e-22  hits 78907  stuck 2  590s
+iterate 41: J = 2.465e-20 ± 1.4e-22  area 28.2769 -> 28.2769 (shift -0.0158)  |g| 6.64e-21  predicted dJ -9.11e-22  hits 80158  stuck 3  595s
+iterate 42: J = 2.444e-20 ± 2.4e-22  area 28.2769 -> 28.2769 (shift -0.0165)  |g| 6.23e-21  predicted dJ -1.02e-21  hits 82240  stuck 5  850s
+iterate 43: J = 2.4385e-20 ± 2.6e-22  area 28.2769 -> 28.2769 (shift -0.0174)  |g| 6.59e-21  predicted dJ -9.79e-22  hits 83328  stuck 3  856s
+iterate 44: J = 2.4331e-20 ± 8.1e-23  area 28.2769 -> 28.2769 (shift -0.0183)  |g| 6.96e-21  predicted dJ -1.36e-21  hits 84958  stuck 4  597s
+iterate 45: J = 2.424e-20 ± 2.4e-22  area 28.2769 -> 28.2769 (shift -0.0190)  |g| 6.74e-21  predicted dJ -9.91e-22  hits 86662  stuck 3  590s
+iterate 46: J = 2.423e-20 ± 2.6e-22  area 28.2769 -> 28.2769 (shift -0.0190)  |g| 6.43e-21  predicted dJ -8.42e-22  hits 87976  stuck 5  599s
+iterate 47: J = 2.4247e-20 ± 2e-22  area 28.2769 -> 28.2769 (shift -0.0190)  |g| 6.51e-21  predicted dJ -1.06e-21  hits 89572  stuck 1  589s
+iterate 48: J = 2.4142e-20 ± 2.3e-22  area 28.2769 -> 28.2769 (shift -0.0188)  |g| 7.08e-21  predicted dJ -1.03e-21  hits 90215  stuck 1  594s
+iterate 49: J = 2.4232e-20 ± 2.9e-22  area 28.2769 -> 28.2769 (shift -0.0183)  |g| 6.02e-21  predicted dJ -8.54e-22  hits 90732  stuck 4  596s
+iterate 50: J = 2.4228e-20 ± 2.4e-22  area 28.2769 -> 28.2769 (shift -0.0172)  |g| 6.45e-21  predicted dJ -9.25e-22  hits 91594  stuck 3  582s
+iterate 51: J = 2.4158e-20 ± 2.2e-22  area 28.2769 -> 28.2769 (shift -0.0168)  |g| 6.48e-21  predicted dJ -1e-21  hits 93182  stuck 3  579s
+iterate 52: J = 2.422e-20 ± 2.7e-22  area 28.2769 -> 28.2769 (shift -0.0161)  |g| 6.54e-21  predicted dJ -1e-21  hits 94393  stuck 4  589s

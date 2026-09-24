@@ -10,3 +10,32 @@ iterate 4: J = 3.612e-20 ± 1.4e-22  area 28.2769 -> 28.2769 (shift -0.0026)  |g
 iterate 5: J = 3.5792e-20 ± 1.9e-22  area 28.2769 -> 28.2769 (shift -0.0038)  |g| 5.01e-21  predicted dJ -8.04e-22  hits 41846  stuck 0  577s
 iterate 6: J = 3.5855e-20 ± 1.9e-22  area 28.2769 -> 28.2769 (shift -0.0029)  |g| 6.46e-21  predicted dJ -1.04e-21  hits 41864  stuck 0  590s
 iterate 7: J = 3.5455e-20 ± 1.6e-22  area 28.2769 -> 28.2769 (shift -0.0035)  |g| 5.77e-21  predicted dJ -9.48e-22  hits 41845  stuck 0  584s
+iterate 8: J = 3.5399e-20 ± 1.7e-22  area 28.2769 -> 28.2769 (shift -0.0031)  |g| 6.77e-21  predicted dJ -1.23e-21  hits 42204  stuck 0  585s
+iterate 9: J = 3.5127e-20 ± 2.2e-22  area 28.2769 -> 28.2769 (shift -0.0035)  |g| 7.86e-21  predicted dJ -9.19e-22  hits 42418  stuck 0  583s
+iterate 10: J = 3.5087e-20 ± 1.9e-22  area 28.2769 -> 28.2769 (shift -0.0030)  |g| 6.63e-21  predicted dJ -9.46e-22  hits 42768  stuck 0  587s
+iterate 11: J = 3.4806e-20 ± 2e-22  area 28.2769 -> 28.2769 (shift -0.0044)  |g| 5.8e-21  predicted dJ -1.14e-21  hits 42735  stuck 1  581s
+iterate 12: J = 3.4956e-20 ± 2.4e-22  area 28.2769 -> 28.2769 (shift -0.0033)  |g| 7.68e-21  predicted dJ -1.39e-21  hits 43152  stuck 0  589s
+iterate 13: J = 3.4564e-20 ± 2.4e-22  area 28.2769 -> 28.2769 (shift -0.0042)  |g| 6.22e-21  predicted dJ -1.02e-21  hits 43382  stuck 1  598s
+iterate 14: J = 3.4665e-20 ± 2.2e-22  area 28.2769 -> 28.2769 (shift -0.0036)  |g| 6.68e-21  predicted dJ -1.14e-21  hits 43489  stuck 0  588s
+iterate 15: J = 3.4371e-20 ± 2.3e-22  area 28.2769 -> 28.2769 (shift -0.0046)  |g| 6.37e-21  predicted dJ -1.22e-21  hits 43703  stuck 0  593s
+iterate 16: J = 3.4631e-20 ± 1.7e-22  area 28.2769 -> 28.2769 (shift -0.0031)  |g| 7.71e-21  predicted dJ -1.52e-21  hits 44116  stuck 0  589s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 470, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 466, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 317, in run
+    avg = averaged_terms(cfg, ls, seeds)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 194, in averaged_terms
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 150, in seed_terms
+    all_terms, info, s = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 348, in shape_terms
+    _check(diag)
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 327, in _check
+    raise RuntimeError(f"{name} fired")
+RuntimeError: inside_body fired

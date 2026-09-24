@@ -7,3 +7,27 @@
 jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
 python3 -m examples.mesh.optimize --tag circle_coarse_S8_gd --optimizer gd --iterations 80 --seeds-per-iterate 8 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
 iterate 3: J = 3.6472e-20 ± 7.8e-23  area 28.2769 -> 28.2769 (shift -0.0032)  |g| 5.65e-21  predicted dJ -1.19e-21  hits 41578  stuck 0  2543s
+iterate 4: J = 3.6515e-20 ± 7.6e-23  area 28.2769 -> 28.2769 (shift -0.0023)  |g| 5.84e-21  predicted dJ -9.86e-22  hits 41741  stuck 0  2280s
+iterate 5: J = 3.6088e-20 ± 7.5e-23  area 28.2769 -> 28.2769 (shift -0.0040)  |g| 4.04e-21  predicted dJ -8.26e-22  hits 41670  stuck 0  2276s
+iterate 6: J = 3.6174e-20 ± 6.6e-23  area 28.2769 -> 28.2769 (shift -0.0024)  |g| 5.94e-21  predicted dJ -1.06e-21  hits 41858  stuck 0  2279s
+iterate 7: J = 3.5789e-20 ± 7.2e-23  area 28.2769 -> 28.2769 (shift -0.0033)  |g| 4.68e-21  predicted dJ -8.56e-22  hits 41816  stuck 0  2280s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 470, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 466, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 317, in run
+    avg = averaged_terms(cfg, ls, seeds)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 194, in averaged_terms
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 150, in seed_terms
+    all_terms, info, s = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 348, in shape_terms
+    _check(diag)
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 327, in _check
+    raise RuntimeError(f"{name} fired")
+RuntimeError: inside_body fired
