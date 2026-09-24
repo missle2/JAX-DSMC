@@ -260,6 +260,10 @@ class Diagnostics:
     inside_body: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
     """``i32`` particles found inside the body after the move and killed (the catch-all
     of SPARTA's tracking: a missed hit).  Must be zero."""
+    lane_overflow: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` particles with a pass-0 event that did not fit the lane of
+    ``tracker="lane"`` (``SimStatic.lane_size``) and were deleted.  Must be zero; raise
+    ``lane_size``."""
     surface_stuck: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
     """``i32`` particles the stencil tracker deleted because a hit was still unresolved
     after ``K_bounce`` passes -- SPARTA's stuck particle (``MAXSTUCK``, deleted and
@@ -465,17 +469,26 @@ class SimStatic:
     majorant_mode: str = "thermal"
     tracker: str = "stencil"
     """Embedded-surface tracker: ``"stencil"`` (per-cell candidate lists, ``K_bounce``
-    passes) or ``"walk"`` (SPARTA's cell walk, ``K_walk`` iterations).  Ignored without a
-    mesh."""
+    passes over every particle), ``"lane"`` (the stencil's pass 0 over every particle,
+    then passes 1 .. ``K_bounce - 1`` on a compacted lane of the particles that had an
+    event -- SPARTA's move loop, which keeps reflecting a particle until its time is
+    used up) or ``"walk"`` (SPARTA's cell walk, ``K_walk`` iterations).  Ignored
+    without a mesh."""
     K_walk: int = 8
     """Trip count of the cell walk: cell crossings plus surface hits per particle per step."""
+    lane_size: int = 0
+    """Lane capacity of ``tracker="lane"`` (particles with a pass-0 event per step);
+    ``0`` = :func:`lane_capacity`'s default ``max(256, N // 32)``.  An overfull lane is
+    counted (``Diagnostics.lane_overflow``, an error), never silently truncated."""
 
     def __post_init__(self) -> None:
         """Reject values that would produce a wrong shape rather than an error."""
         if not isinstance(self.checkpoint_block_size, int) or self.checkpoint_block_size < 0:
             raise ValueError("checkpoint_block_size must be a nonnegative integer")
-        if self.tracker not in ("stencil", "walk"):
-            raise ValueError("tracker must be stencil or walk")
+        if self.tracker not in ("stencil", "lane", "walk"):
+            raise ValueError("tracker must be stencil, lane or walk")
+        if not isinstance(self.lane_size, int) or self.lane_size < 0:
+            raise ValueError(f"lane_size must be a nonnegative Python int; got {self.lane_size!r}")
         if not isinstance(self.K_walk, int) or isinstance(self.K_walk, bool) or self.K_walk < 1:
             raise ValueError(f"K_walk must be a positive Python int; got {self.K_walk!r}")
         if self.count_scheme not in ("stochastic", "remainder"):
@@ -560,3 +573,12 @@ def traced_fields(cls) -> tuple[str, ...]:
 def static_fields(cls) -> tuple[str, ...]:
     """Names of the STATIC (pytree metadata) fields of a container in this module."""
     return _field_names(cls, static=True)
+
+
+def lane_capacity(n: int, lane_size: int = 0) -> int:
+    """Lane size of ``tracker="lane"`` for ``n`` particle slots: ``lane_size`` if set,
+    else ``max(256, n // 32)`` (never more than ``n``).  Measured 2026-09-24 on the roughest
+    optc shape: 282 slots per step with a pass-0 event on average, 309 at most, of 60 256
+    (0.5 %); the default leaves ~6x headroom, and an overflow is counted, not dropped."""
+    size = lane_size if lane_size > 0 else max(256, n // 32)
+    return min(size, n)

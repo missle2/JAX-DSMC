@@ -731,6 +731,38 @@ analytic path.
 
 ---
 
+### 4.5 Split cells (SPARTA sub-cells, 2026-09-23)
+
+A cut cell whose flow is disconnected (a notch of an optimised shape cutting a pocket off,
+a plate thinner than a cell) is a **split cell**, as SPARTA's `nsplit > 1`
+(`cut2d.cpp:163-305`, `grid_surf.cpp:157-204`, `update.cpp:1753-1798`): its largest flow
+region keeps the cell's index, every other region is a sub-cell `prod(n) + j` with its own
+volume, particles and collisions.
+
+- `GridSpec` carries static `n_sub` and integer tables `split_of i32[prod(n)]` (row or −1),
+  `split_table i32[S, sub^D]` (the collision cell of every stratum of a `sub^D` sub-grid
+  of each split cell), `sub_parent i32[n_sub]`; `num_cells = prod(n) + n_sub`.  Without
+  split cells `n_sub = 0` and every shape and random stream is unchanged.  Sub-cell slots
+  come in blocks of 4 (unused ones have zero volume) so an optimiser recompiles rarely.
+- `grid.collision_cell(x, grid)` = `cell_of`, or inside a split cell the region of the
+  particle's stratum.  The per-cell **physics** uses it (the collision table, moments, the
+  adjoint's node tables and queries, the host `_cells`); the **geometry** keeps the
+  Cartesian `cell_of` (candidate lists, the stencil test, the cell walk, the inside test).
+- The regions come from the split detection itself (`cut.split_regions`): the stratified
+  samples, joined when the segment between them crosses no element, re-attached through
+  uncrossed segments, components below `min_samples` unresolved; body and sliver strata
+  take the region of the nearest resolved flow sample.  Region volume = the cell's cut
+  volume × the region's share of the flow samples.  Departure from SPARTA: a raster
+  lookup, not the segment test to `xsplit` -- consistent with our sub-sampled cut volumes;
+  a particle within ~h/sub of a surface may be counted in the neighbouring region's
+  collision cell (tracking is unaffected).
+- Pooled fits: a sub-cell pools its parent's block with itself at the centre.  Outputs
+  (`.vtr`, `viz.field_to_grid`, the optimiser's frames) show the Cartesian cells, i.e. each
+  split cell's largest region.
+- `outside_corner` (the polygon inside test's reference corner) is required only for
+  polygonal surfaces: a level set / analytic body keeps `−1` in a cut cell whose corners are
+  all in the body (a flow pocket entering through a face), since its inside test is exact.
+
 ## 5. `jax_dsmc/sampling.py` — reparameterised distribution draws
 
 Every sampler here is written as a **deterministic differentiable function of a
@@ -2047,6 +2079,41 @@ outside corner) that kills and counts a mis-tracked particle.  The fourth return
 `TrackerCounts` whenever a mesh is present; `simulate.run(mesh=..., emit_surface=True)`
 appends the per-step tallies to the output.  Newborn tracking in `inflow.inject` takes the
 same path (entrants' birth-step hits are recorded, not tallied).
+
+### 9.6.1 The lane tracker: SPARTA's move loop (2026-09-24)
+
+`tracker = "lane"` (the default of the mesh examples, `K_bounce = 32`) keeps reflecting a
+particle until its time step is used up, as SPARTA's `Update::move` does, instead of
+stopping after a fixed number of passes over every particle.
+
+```
+pass 0:   the stencil pass over all N slots (first_hit, _apply_events)       -- as 9.6
+lane:     slots with a pass-0 event (alive after it: an outflow ends the flight),
+          compacted by cumulative sum into B = lane_capacity(N) entries (N/32, >= 256;
+          overflow -> deleted + Diagnostics.lane_overflow, an error)
+passes 1 .. K-1 on the lane only:
+          the same _bounce body on the gathered (x, v, elapsed, exclude, ...);
+          diffuse draws = the dense pass's full-width draws gathered at each entry's slot
+          (so the result equals the stencil tracker's with the same K);
+          a pass runs only while some lane particle had an event in the previous one
+          (an untraced move: while_loop; the traced replay: fori_loop + lax.cond, which
+          reverse mode can differentiate)
+scatter back; the post-loop query over all N (exhausted test, conditional-time bound);
+still unresolved -> deleted + Diagnostics.surface_stuck (SPARTA MAXSTUCK)
+```
+
+Events are `SplitEvents(head: WallEvents(1, N), tail: WallEvents(K-1, B), slot i32[B])`;
+a dense record is the special case `tail = passes 1.., slot = arange(N)` (`as_split`), so
+every consumer reads one layout: per-event functions run on head and tail separately,
+`particle_sum` folds a per-event array onto the slots, the shape adjoint's reward-to-go
+(`shape._to_go`) takes the suffix sums across head -> tail, and a lane replay returns its
+rewards as `shape.HitRewards(values, slot, total)` (the device backward reads `total`, the
+host bookkeeping `ensemble_backward.from_device` expands the events per step).  Entrants
+use the same tracker; `inflow.inject` expands their split events over its entrants, and
+`simulate._event_record` splits the record again (the entrants' later passes in an extra
+tail segment).  Measured on the roughest optimised shape (review 7.10,
+`examples/mesh/tracker_bench.py`): the same results as the stencil to round-off, 2.1x
+faster at 32 passes than the stencil at 4, 27 % less adjoint memory per slot.
 
 ### 9.7 The mesh-aware adjoint: value-form rewards and the replayed wall map (2026-09-18)
 

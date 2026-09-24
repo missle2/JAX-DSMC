@@ -1786,3 +1786,51 @@ term for diffuse walls and its band-width bias — never swept (`silhouette_term
 is not built) — is the first suspect for a residual few per cent; and the precision
 question is the timing term's variance.  **Not closed at 4 seeds**: what decides it is
 8 more seeds (the artifact resumes) and a band sweep (0.025 / 0.1) at 2 seeds each.
+
+### 7.10 Tracking on optimised shapes: the failures of the cluster runs and SPARTA's remedies (2026-09-23/24)
+
+The first cluster optimisations (`optc`: the circle at `fnum × 1` on the 20 × 20 grid,
+level set `h_φ = 0.0625`, `n_sample = 16`, S ∈ {1, 2, 4, 8} CRN seeds × {GD, Adam}; rtx
+MIG slices) failed one after another as the shapes left the circle.  Each failure was a
+real defect, fixed at its root rather than by constraining the shape:
+
+| symptom | cause | fix | test |
+|---|---|---|---|
+| `build_mesh`: no clean flow corner (GD, iterate 2) | `levelset.reinitialise` projected band knots with 8 clipped steps of `h`, but the band is `3h + reach` = 11 h at `n_sample = 16`: stopped-short knots entered the surface cloud → rings of spurious zero crossings | projection steps `ceil(band/h) + 4`; unconverged knots left out of the cloud | `test_repeated_reinitialise_is_stable_when_the_band_exceeds_the_old_eight_steps` |
+| `wall_recrossed` (Adam, iterate 1) | Adam's elementwise normalisation discards the H1 smoothing (`k = 0` step = `sign(g)`): overhangs | the Adam step is smoothed again | (shape roughness 294 → 26, `scratch/mesh/probe_adam_smooth.py`) |
+| `wall_recrossed` (later iterates) | concave windward notches: 5–7 specular reflections in one step, more than the 4 passes | stage 1: an unresolved particle is deleted and counted (`surface_stuck`, SPARTA MAXSTUCK); stage 2: the lane tracker below | `test_stuck_particle_is_deleted_and_counted`, `test_lane_resolves_many_bounces` |
+| `inside_body` (S4 GD iterate 6, S1 Adam 13) | after a reflection the level-set hit search starts on the surface with φ = ±round-off; φ ≤ 0 made the first sample interval never a `+ → −` bracket, so a grazing re-entry on a concave wall closer than one sample spacing (0.4° incidence, 0.015 chords vs 0.031 spacing in the post-loop query) was missed | a leaving start on the surface counts as φ = +0 | `test_grazing_reentry_on_a_concave_wall_is_found_from_the_surface` |
+| `SplitCellError` (S1 GD iterate 16) | a notch cut a pocket (2 % of cell 91) off the cell's flow | SPARTA split cells (PSEUDOCODE 4.5) | `test_split_cells_get_sub_cells`, `test_split_cells_run_with_their_own_density_and_collision_cells` |
+| `build_mesh`: no clean flow corner (Adam S1 iterate 56, S8 iterate 9) | a flow pocket entering a cut cell through a face with all four corners in the body; the corner is the reference of the *polygon* inside test only | required for polygons only; a level set / analytic body keeps −1 | `test_flow_pocket_through_a_face_with_every_corner_in_the_body` |
+
+**The lane tracker (PSEUDOCODE 9.6.1).**  The fixed pass count was the one non-SPARTA
+piece of the tracker, and every pass searched all N particles although a particle
+without an event in pass 0 has none later.  The lane tracker searches everyone once,
+keeps reflecting the ≈ 0.5 % with an event on a compacted lane until their time is used
+up, and runs a pass only while one is needed.  Measured on the roughest optimised shape
+(`circle_coarse_S1_gd` coef_8), seed 32, RTX 3050 Ti laptop, float64
+(`examples/mesh/tracker_bench.py`, `results/tracker_bench.json`, figure
+`figures/tracker_lane.png`):
+
+| tracker | passes | forward (s) | stuck | alive | drag tally |
+|---|---|---|---|---|---|
+| stencil | 4 | 115 | 1 | 48109 | 6.9993820e-19 |
+| lane | 4 | 62 | 1 | 48109 | 6.9993820e-19 |
+| lane | 32 | 55 | 0 | 48109 | 6.9993820e-19 |
+
+| per particle slot | stencil, 4 passes | lane, 32 passes | change |
+|---|---|---|---|
+| event record (300 captured steps) | 62.7 kB | 43.7 kB | -30 % |
+| peak, captured forward | 95.3 kB | 45.6 kB | -52 % |
+| peak, full adjoint chain | 115.9 kB | 83.0 kB | -28 % |
+| adjoint chain time at 15256 slots | 271 s | 225 s | -17 % |
+
+The shape gradient (one `shape_terms` seed at `fnum × 4`) is the stencil's to 2.3e-15
+relative in every coefficient, with the same objective (3.393045e-20) and hits (10712);
+the lane holds 282 slots per step on average, 309 at most, of 60 256.  The first lane
+timings (95 s at 16 passes, 135 s at 32) exposed a hidden cost: the inflow's entrants were
+still tracked by the dense stencil, `K` passes every step; on the lane too, the pass
+budget costs nothing measurable.  At the fine circle (240 k slots) the adjoint chain's
+estimate drops from ≈ 28 GB to ≈ 20 GB.  Not done: the record's tail rows beyond the
+second pass are almost always empty (≈ a quarter of the record) and could be compacted
+once more.

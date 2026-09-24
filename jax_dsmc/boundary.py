@@ -551,6 +551,7 @@ def apply_faces(
     max_walk=8,
     return_tallies=False,
     trace=False,
+    lane_size=0,
 ):
     """Advance one step under per-face rules, closed form.
 
@@ -606,6 +607,7 @@ def apply_faces(
             max_walk=max_walk,
             return_tallies=return_tallies,
             trace=trace,
+            lane_size=lane_size,
         )
         if score_spread == "cell":
             result = (

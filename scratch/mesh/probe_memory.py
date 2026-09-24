@@ -10,15 +10,19 @@ from examples import ensemble_mesh as EM
 from jax_dsmc import ensemble_backward
 
 fs = float(sys.argv[1])
+tracker = sys.argv[2] if len(sys.argv) > 2 else "stencil"
+import forward as F
+F.K_BOUNCE = int(sys.argv[3]) if len(sys.argv) > 3 else 4
 ensemble_backward.configure("virtual", 1, 2, "staged")
 cfg = O.default_config()
-cfg.update(fnum_scale=fs, grid_scale=1, levelset_h=0.0625, levelset_samples=16, grazing=0.05)
+cfg.update(fnum_scale=fs, grid_scale=1, levelset_h=0.0625, levelset_samples=16, grazing=0.05,
+           tracker=tracker)
 _, ls = O.initial_levelset(cfg)
 dev = jax.devices()[0]
 peak = lambda: dev.memory_stats()["peak_bytes_in_use"]
 live = lambda: dev.memory_stats()["bytes_in_use"]
 key = jax.random.key(32)
-out = {"fnum_scale": fs}
+out = {"fnum_scale": fs, "tracker": tracker, "K_bounce": F.K_BOUNCE}
 s0, final, diag, rec, tallies, s = EM.forward(cfg, "radius", None, key, False, body=ls)
 jax.block_until_ready(final)
 out["N_slots"] = int(s["static"].N)

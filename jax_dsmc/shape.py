@@ -63,13 +63,83 @@ from jax_dsmc.mesh import surface as surface_mod
 from jax_dsmc.mesh.types import Mesh
 from jax_dsmc.rng import STAGE_MOVE, key_for
 from jax_dsmc.sampling import log_diffuse_density
+from jax_dsmc.wall_adjoint import SplitEvents, as_split, particle_sum
 
 jax.config.update("jax_enable_x64", True)
 
 
+class EventArray(NamedTuple):
+    """A per-event quantity of a lane-tracked step, aligned with
+    :class:`jax_dsmc.wall_adjoint.SplitEvents`: ``head`` ``f64[1, N]`` (pass 0, every
+    slot), ``tail`` ``f64[K - 1, B]`` (the lane's later passes, entry ``j`` belonging to
+    the events' ``slot[j]``).  Stacked over steps the leading axis is ``M``."""
+
+    head: jax.Array
+    tail: jax.Array
+
+
+class HitRewards(NamedTuple):
+    """Per-hit rewards of a lane-tracked replay (stacked over the ``M`` steps): the
+    per-event ``values`` (:class:`EventArray`), the lane's ``slot`` (``i32[M, B]``) and each
+    slot's per-step ``total`` (``f64[M, N]``).  :func:`gradient` reads ``values``, the
+    device backward ``total``, :func:`jax_dsmc.ensemble_backward.from_device` all three."""
+
+    values: object
+    slot: jax.Array
+    total: jax.Array
+
+
+def _tail_of(values, slot):
+    """Per-slot ``values`` (``N, ...``) at the lane's entries (zero / False where unused)."""
+    got = values[jnp.maximum(slot, 0)]
+    valid = (slot >= 0).reshape(slot.shape + (1,) * (got.ndim - 1))
+    return jnp.where(valid, got, jnp.zeros_like(got))
+
+
+def _as_event_array(values, events):
+    """``values`` (a dense ``K, N`` array or already an :class:`EventArray`) split like
+    ``events``; ``None`` -> zeros."""
+    split = as_split(events)
+    if values is None:
+        return EventArray(jnp.zeros(split.head.face.shape), jnp.zeros(split.tail.face.shape))
+    if isinstance(values, HitRewards):
+        return values.values
+    if isinstance(values, EventArray):
+        return values
+    return EventArray(values[:1], values[1:])
+
+
+def _per_part(fn, events, *args):
+    """``fn(part_events, *args)`` on the head and the tail of split ``events``."""
+    split = as_split(events)
+    return EventArray(fn(split.head, *args), fn(split.tail, *args))
+
+
+def _masked(values, survivors, slot):
+    """An :class:`EventArray` with the non-survivors' events zeroed."""
+    return EventArray(
+        jnp.where(survivors[None, :], values.head, 0.0),
+        jnp.where(_tail_of(survivors, slot)[None, :], values.tail, 0.0),
+    )
+
+
+def _cotangent_field(events, field, values):
+    """``zeros``-structured cotangent for ``events`` with ``field`` set from the
+    :class:`EventArray` ``values`` (dense events: head and tail rows stacked back)."""
+    zeros = _zero_cotangent(events)
+    if isinstance(events, SplitEvents):
+        return zeros._replace(
+            head=zeros.head._replace(**{field: values.head}),
+            tail=zeros.tail._replace(**{field: values.tail}),
+        )
+    return zeros._replace(**{field: jnp.concatenate((values.head, values.tail))})
+
+
 class Replay(NamedTuple):
-    hit_reward: jax.Array
-    """``f64[M, K, N]`` per-hit rewards of the objective (zeros without ``reward``)."""
+    hit_reward: object
+    """Per-hit rewards of the objective (zeros without ``reward``): ``f64[M, K, N]`` for
+    the dense trackers, :class:`HitRewards` for ``tracker="lane"`` -- either is what
+    :func:`gradient` and the device backward take."""
     tallies: object
     """Per-step :class:`SurfaceTallies` of the replayed moves."""
     replay_error: jax.Array
@@ -77,9 +147,15 @@ class Replay(NamedTuple):
     surface_hits: jax.Array
     """``i32[M]``."""
     timing_reward: jax.Array
-    """``f64[M, K, N]`` the hit-timing band term per hit (``timing_cotangent`` of the
-    objective's ``timing_jump``): the change of the objective per unit delay of the
-    particle's trajectory, what the along-flight identity's second backward carries."""
+    """The hit-timing band term per hit (``timing_cotangent`` of the objective's
+    ``timing_jump``), laid out as ``hit_reward``: the change of the objective per unit
+    delay of the particle's trajectory, what the along-flight identity's second backward
+    carries."""
+    hit_total: jax.Array = None
+    """``f64[M, N]`` each slot's summed hit rewards per step -- all the device backward's
+    move pull-back uses (pass it as ``hit_total[:, None]``)."""
+    timing_total: jax.Array = None
+    """``f64[M, N]`` as ``hit_total`` for the timing rewards."""
 
 
 class ShapeTerms(NamedTuple):
@@ -159,6 +235,7 @@ def wall_map(
     max_bounces=4,
     tracker="stencil",
     max_walk=8,
+    lane_size=0,
 ):
     """The step's move as a function of the geometry: ``(x_post, v_post, alive_post,
     logp, tallies, events)`` of :func:`jax_dsmc.boundary.apply_faces` with the traced
@@ -183,6 +260,7 @@ def wall_map(
         max_walk=max_walk,
         return_tallies=True,
         trace=True,
+        lane_size=lane_size,
     )
     return x_post, v_post, alive_post, logp, tallies, events
 
@@ -271,21 +349,74 @@ def timing_cotangent(events, jump, dt, band):
 
 def _last_normal(events):
     """Normal of each slot's last recorded hit of the step (``f64[N, 3]``; zero rows for
-    slots without one)."""
-    hit = (events.face >= 0)[..., None]
-    out = jnp.zeros(events.normal.shape[1:])
-    for k in range(events.face.shape[0]):
-        out = jnp.where(hit[k], events.normal[k], out)
+    slots without one); dense or split events."""
+    split = as_split(events)
+    head = split.head
+    n = head.face.shape[1]
+    out = jnp.where((head.face[0] >= 0)[:, None], head.normal[0], 0.0)
+    put = jnp.where(split.slot >= 0, split.slot, n)
+    tail = split.tail
+    for k in range(tail.face.shape[0]):
+        hit = tail.face[k] >= 0
+        cur = out[jnp.maximum(split.slot, 0)]
+        out = out.at[put].set(jnp.where(hit[:, None], tail.normal[k], cur), mode="drop")
     return out
 
 
-def _to_go(lam, rewards):
-    """``(K + 1, N)``: row ``j`` is ``lam`` plus the rewards of the hits of passes ``j, j+1,
-    ...`` -- the reward-to-go from pass ``j``'s draw onward (the hit's own reward is a
-    function of it); row 0 is the value at the pre-move state, row ``K`` the post-move
-    value."""
-    suffix = jnp.cumsum(rewards[::-1], axis=0)[::-1]
-    return jnp.concatenate((lam[None] + suffix, lam[None]))
+class ToGo(NamedTuple):
+    """Reward-to-go of every event (:func:`_to_go`): ``pre`` / ``post`` are
+    :class:`EventArray` -- ``lam`` plus the rewards of this event and every later one of
+    the slot's step (``pre``, the value from this event's draw onward), or of the later
+    ones only (``post``); ``start`` ``f64[N]`` is the value at the pre-move state."""
+
+    pre: EventArray
+    post: EventArray
+    start: jax.Array
+
+
+def _to_go(lam, rewards, slot):
+    """:class:`ToGo` of the per-event ``rewards`` (an :class:`EventArray`) for the
+    post-move values ``lam`` (``f64[N]``) -- the suffix sums of each slot's rewards in
+    pass order, pass 0 in the head, the later passes in the lane's tail."""
+    n = lam.shape[0]
+    suffix = jnp.cumsum(rewards.tail[::-1], axis=0)[::-1]
+    tail_total = jnp.sum(rewards.tail, axis=0)
+    later = jnp.zeros(n).at[jnp.where(slot >= 0, slot, n)].add(tail_total, mode="drop")
+    head_post = lam + later
+    head_pre = head_post + rewards.head[0]
+    tail_pre = _tail_of(lam, slot)[None, :] + suffix
+    return ToGo(
+        EventArray(head_pre[None], tail_pre),
+        EventArray(head_post[None], tail_pre - rewards.tail),
+        head_pre,
+    )
+
+
+def _step_rewards(events, tallies, rec_k, step, survivors, reward, timing_jump, setup, band):
+    """Per-event hit rewards and timing rewards of one replayed step (:class:`EventArray`,
+    non-survivors zeroed) and its survivors' body hits."""
+    split = as_split(events)
+    dim = rec_k.x.shape[1]
+    r = _as_event_array(None, events)
+    if reward is not None:
+        r = _masked(_per_part(reward, events, tallies, rec_k, step), survivors, split.slot)
+    tau = _as_event_array(None, events)
+    if timing_jump is not None:
+        jump = _masked(_per_part(timing_jump, events, rec_k, step), survivors, split.slot)
+        tau = EventArray(
+            timing_cotangent(split.head, jump.head, setup["map"]["dt"], band),
+            timing_cotangent(split.tail, jump.tail, setup["map"]["dt"], band),
+        )
+    body = _masked(
+        EventArray(
+            (split.head.face >= 2 * dim).astype(jnp.float64),
+            (split.tail.face >= 2 * dim).astype(jnp.float64),
+        ),
+        survivors,
+        split.slot,
+    )
+    n_hits = (jnp.sum(body.head) + jnp.sum(body.tail)).astype(jnp.int32)
+    return r, tau, n_hits
 
 
 def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
@@ -298,17 +429,19 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
     )
     survivors = alive & rec_k.alive & (rec_k.born_face < 0)
     err = jnp.maximum(err, _mismatch(x_post, v_post, rec_k, survivors, setup["map"]["grid"]))
-    r_k = (
-        jnp.zeros(events.face.shape)
-        if reward is None
-        else jnp.where(survivors[None, :], reward(events, tallies, rec_k, step), 0.0)
+    r, tau, n_hits = _step_rewards(
+        events, tallies, rec_k, step, survivors, reward, timing_jump, setup, timing_band
     )
-    tau_k = jnp.zeros(events.face.shape)
-    if timing_jump is not None:
-        jump = jnp.where(survivors[None, :], timing_jump(events, rec_k, step), 0.0)
-        tau_k = timing_cotangent(events, jump, setup["map"]["dt"], timing_band)
-    n_hits = jnp.sum((events.face >= 2 * x.shape[1]) & survivors[None, :], dtype=jnp.int32)
-    return (rec_k.x, rec_k.v_post, rec_k.alive, err), (r_k, tallies, n_hits, tau_k)
+    slot = as_split(events).slot
+    totals = (particle_sum(r.head, r.tail, slot), particle_sum(tau.head, tau.tail, slot))
+    if isinstance(events, SplitEvents):
+        r = HitRewards(r, slot, totals[0])
+        tau = HitRewards(tau, slot, totals[1])
+    else:
+        # dense trackers: the (K, N) layout the callers have always had
+        r = jnp.concatenate((r.head, r.tail))
+        tau = jnp.concatenate((tau.head, tau.tail))
+    return (rec_k.x, rec_k.v_post, rec_k.alive, err), (r, tallies, n_hits, tau, totals)
 
 
 def _mismatch(x_post, v_post, rec_k, survivors, grid):
@@ -400,8 +533,14 @@ def silhouette_cotangent(
     length = speed * dt
     x_star = jax.lax.stop_gradient(x + s_min[:, None] * vhat)
     n_star = levelset_mod.normal(frozen, x_star)
-    hit_first = events.face[0] >= 2 * dim
-    hit_later = jnp.any(events.face[1:] >= 2 * dim, axis=0)
+    split = as_split(events)
+    hit_first = split.head.face[0] >= 2 * dim
+    hit_later = (
+        particle_sum(
+            jnp.zeros((1, n)), (split.tail.face >= 2 * dim).astype(jnp.float64), split.slot
+        )
+        > 0
+    )
     # one passing per trajectory: a miss counts in the step whose move contains the
     # closest-approach point (strictly inside: a particle that starts at its closest
     # approach is one that just left the surface, and one still approaching at the end
@@ -426,19 +565,18 @@ def silhouette_cotangent(
     )
     r_alt = jnp.zeros(n)
     if reward is not None:
-        k_b = events.face.shape[0]
-        virtual = events._replace(
-            face=jnp.zeros_like(events.face).at[0].set(2 * dim),
-            v_out=jnp.zeros_like(events.v_out).at[0].set(v_hit),
-            diffuse=jnp.zeros_like(events.diffuse),
-            x_hit=jnp.zeros_like(events.x_hit).at[0].set(x_star),
-            v_in=jnp.zeros_like(events.v_in).at[0].set(v),
-            normal=jnp.zeros_like(events.normal).at[0].set(side),
-            time=jnp.zeros_like(events.time).at[0].set(t_star),
+        head = split.head
+        virtual = head._replace(
+            face=jnp.full_like(head.face, 2 * dim),
+            v_out=v_hit[None],
+            diffuse=jnp.zeros_like(head.diffuse),
+            x_hit=x_star[None],
+            v_in=v[None],
+            normal=side[None],
+            time=t_star[None],
         )
-        del k_b
         r_alt = reward(virtual, None, rec_k, step)[0]
-    v_actual = to_go[0]
+    v_actual = to_go.start
     v_virtual = lam_alt + jnp.where(hit_first, 0.0, r_alt)
     diff = jnp.where(hit_first, v_actual - v_virtual, v_virtual - v_actual)  # V_hit - V_miss
     c = jnp.where(in_band, -diff / (2.0 * band), 0.0)
@@ -479,7 +617,9 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         gx = along_flight(gx, rec_k.v, lam_timing_k)
     gx = jnp.where(survivors[:, None], gx, 0.0)
     gv = jnp.where(survivors[:, None], gv, 0.0)
-    to_go = _to_go(jnp.where(survivors, lam_k, 0.0), jnp.where(survivors[None], r_k, 0.0))
+    split = as_split(events)
+    rewards = _masked(_as_event_array(r_k, events), survivors, split.slot)
+    to_go = _to_go(jnp.where(survivors, lam_k, 0.0), rewards, split.slot)
     # --- pathwise: post-move state and the objective's tally weights ---
     zeros = _zero_cotangent(primal)
     cot_tally = zeros[4]
@@ -498,25 +638,33 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     # with a tally cotangent the hit's own reward is pathwise through the traced sample
     # (`wall_adjoint._element_events`), so the normal score carries the value-to-go
     # AFTER the hit; without one the reward's whole dependence is in the score
-    score_weight = to_go[:-1] if tally_cotangent is None else to_go[1:]
-    cot_events = zeros[5]._replace(
-        normal=normal_score(
-            events,
-            score_weight,
-            setup["map"]["wall"],
-            setup["map"]["mesh"],
-            setup["map"]["mass"],
-            dim,
-        )
+    score_weight = to_go.pre if tally_cotangent is None else to_go.post
+    scored = functools.partial(
+        normal_score,
+        wall=setup["map"]["wall"],
+        mesh=setup["map"]["mesh"],
+        mass=setup["map"]["mass"],
+        dim=dim,
     )
-    (d_score,) = vjp((zeros[0], zeros[1], zeros[2], to_go[0], zeros[4], cot_events))
+    cot_events = _cotangent_field(
+        events,
+        "normal",
+        EventArray(scored(split.head, score_weight.head), scored(split.tail, score_weight.tail)),
+    )
+    (d_score,) = vjp((zeros[0], zeros[1], zeros[2], to_go.start, zeros[4], cot_events))
     g_x = jax.tree.map(jnp.add, g_x, d_x)
     g_v = jax.tree.map(jnp.add, g_v, d_v)
     g_score = jax.tree.map(jnp.add, g_score, d_score)
     if timing_jump is not None:
-        jump = jnp.where(survivors[None, :], timing_jump(events, rec_k, step), 0.0)
-        cot_time = zeros[5]._replace(
-            time=timing_cotangent(events, jump, setup["map"]["dt"], timing_band)
+        jump = _masked(_per_part(timing_jump, events, rec_k, step), survivors, split.slot)
+        dt_ = setup["map"]["dt"]
+        cot_time = _cotangent_field(
+            events,
+            "time",
+            EventArray(
+                timing_cotangent(split.head, jump.head, dt_, timing_band),
+                timing_cotangent(split.tail, jump.tail, dt_, timing_band),
+            ),
         )
         (d_time,) = vjp((zeros[0], zeros[1], zeros[2], zeros[3], zeros[4], cot_time))
         g_time = jax.tree.map(jnp.add, g_time, d_time)
@@ -541,7 +689,9 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         _phi, vjp_phi = jax.vjp(functools.partial(_phi_at, ls=mesh_g.body, x_star=x_star), geom)
         (d_sil,) = vjp_phi(c_sil)
         g_sil = jax.tree.map(jnp.add, g_sil, d_sil)
-    n_hits = jnp.sum((events.face >= 2 * dim) & survivors[None, :], dtype=jnp.int32)
+    hit_tail = (split.tail.face >= 2 * dim) & _tail_of(survivors, split.slot)[None, :]
+    n_hits = jnp.sum((split.head.face >= 2 * dim) & survivors[None, :], dtype=jnp.int32)
+    n_hits = n_hits + jnp.sum(hit_tail, dtype=jnp.int32)
     return (
         rec_k.x,
         rec_k.v_post,
@@ -571,6 +721,7 @@ def _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, stat
             "max_bounces": static.K_bounce,
             "tracker": static.tracker,
             "max_walk": static.K_walk,
+            "lane_size": static.lane_size,
         },
     }
 
@@ -615,8 +766,8 @@ def replay(
         setup=setup,
     )
     init = (state0.x, state0.v, state0.alive, jnp.float64(0.0))
-    (_, _, _, err), (r, tallies, hits, tau) = lax.scan(body, init, (records, steps))
-    return Replay(r, tallies, err, hits, tau)
+    (_, _, _, err), (r, tallies, hits, tau, totals) = lax.scan(body, init, (records, steps))
+    return Replay(r, tallies, err, hits, tau, *totals)
 
 
 @functools.partial(
@@ -705,8 +856,6 @@ def gradient(
         reward=reward,
     )
     m = lam.shape[0]
-    if hit_reward is None:
-        hit_reward = jnp.zeros((m, records.walls.face.shape[1], lam.shape[1]))
     if tally_weight is None:
         tally_weight = jnp.ones(m)
     klass = hit_ahead(records, mesh) if value_class == "hit_ahead" else None
@@ -726,7 +875,17 @@ def hit_ahead(records, mesh):
     window edges give it)."""
     dim = records.x.shape[-1]
     del mesh
-    hit = jnp.any(records.walls.face >= 2 * dim, axis=1)  # (M, N)
+    walls = records.walls
+    if isinstance(walls, SplitEvents):
+        head = jnp.any(walls.head.face >= 2 * dim, axis=1)  # (M, N)
+        tail = jnp.any(walls.tail.face >= 2 * dim, axis=1).astype(jnp.float64)  # (M, B)
+        # the lane's hits folded onto their slots, step by step
+        folded = jax.vmap(particle_sum)(
+            jnp.zeros_like(head, jnp.float64)[:, None], tail[:, None], walls.slot
+        )
+        hit = head | (folded > 0)
+    else:
+        hit = jnp.any(walls.face >= 2 * dim, axis=1)  # (M, N)
     later = jnp.flip(jnp.cumsum(jnp.flip(hit, 0), axis=0), 0) - hit.astype(jnp.int32)
     return later > 0
 

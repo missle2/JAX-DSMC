@@ -601,7 +601,7 @@ def backward(  # noqa: PLR0915 -- the sweep reads best as one unit
         #        value passes through unchanged; the wall parameters' scores need lam there ---
         walls = rec.walls
         if walls is not None:
-            face = np.asarray(walls.face[k])  # (K_bounce, N)
+            face, v_out, diffuse = _step_walls(walls, k)  # (K_bounce, N), dense or lane
             for bounce in range(face.shape[0]):
                 hit = (face[bounce] >= 0) & alive
                 if hit.any():
@@ -610,8 +610,8 @@ def backward(  # noqa: PLR0915 -- the sweep reads best as one unit
                             k,
                             np.flatnonzero(hit),
                             face[bounce][hit],
-                            np.asarray(walls.v_out[k][bounce])[hit],
-                            np.asarray(walls.diffuse[k][bounce])[hit],
+                            v_out[bounce][hit],
+                            diffuse[bounce][hit],
                             lam[hit],
                         )
                     )
@@ -619,6 +619,50 @@ def backward(  # noqa: PLR0915 -- the sweep reads best as one unit
         mu = np.where(alive & ~born, lam, 0.0)
     alive0 = np.asarray(initial_state.alive)
     return Adjoint(np.where(alive0, mu, 0.0), births, normalization, hits, pair_records)
+
+
+def _step_walls(walls, k):
+    """Step ``k`` of a record's wall events as dense numpy rows ``(face, v_out, diffuse)``
+    over every slot: a dense record as stored; a lane record (``SplitEvents``: pass 0 in
+    ``head``, the later passes of the lane entries in ``tail`` with their ``slot``) with
+    the tail rows scattered to their slots (one step at a time -- the dense form of a
+    whole record is what the lane avoids storing)."""
+    if not hasattr(walls, "head"):
+        return np.asarray(walls.face[k]), np.asarray(walls.v_out[k]), np.asarray(walls.diffuse[k])
+    head_f = np.asarray(walls.head.face[k])
+    n = head_f.shape[1]
+    slot = np.asarray(walls.slot[k])
+    use = slot >= 0
+    tail_f = np.asarray(walls.tail.face[k])
+    rows = 1 + tail_f.shape[0]
+    face = np.full((rows, n), -1, dtype=head_f.dtype)
+    v_out = np.zeros((rows, n, 3))
+    diffuse = np.zeros((rows, n), dtype=bool)
+    face[0], v_out[0], diffuse[0] = (
+        head_f[0],
+        np.asarray(walls.head.v_out[k])[0],
+        np.asarray(walls.head.diffuse[k])[0],
+    )
+    face[1:, slot[use]] = tail_f[:, use]
+    v_out[1:, slot[use]] = np.asarray(walls.tail.v_out[k])[:, use]
+    diffuse[1:, slot[use]] = np.asarray(walls.tail.diffuse[k])[:, use]
+    return face, v_out, diffuse
+
+
+def _step_rewards(rewards, k, n):
+    """Step ``k`` of the backward's hit rewards as dense rows over every slot: a dense
+    ``f64[M, K, N]`` array as stored, or a lane replay's ``shape.HitRewards`` (per-event
+    values with their lane slots) scattered like :func:`_step_walls`."""
+    if not hasattr(rewards, "values"):
+        return np.asarray(rewards[k])
+    head = np.asarray(rewards.values.head[k])
+    tail = np.asarray(rewards.values.tail[k])
+    slot = np.asarray(rewards.slot[k])
+    use = slot >= 0
+    out = np.zeros((1 + tail.shape[0], n))
+    out[0] = head[0]
+    out[1:, slot[use]] = tail[:, use]
+    return out
 
 
 def from_device(records, dev, normalization, hit_reward=None):
@@ -635,7 +679,9 @@ def from_device(records, dev, normalization, hit_reward=None):
     """
     rec = records
     lam_all = np.asarray(dev.lam)
-    rewards = None if hit_reward is None else np.asarray(hit_reward)
+    rewards = None if hit_reward is None else hit_reward
+    if rewards is not None and not hasattr(rewards, "values"):
+        rewards = np.asarray(rewards)
     births, hits = [], []
     for k in range(lam_all.shape[0]):
         lam = lam_all[k]
@@ -643,10 +689,15 @@ def from_device(records, dev, normalization, hit_reward=None):
         born_face = np.asarray(rec.born_face[k])
         born = born_face >= 0
         # to_go[j] = lam + sum of the rewards of hits j, j+1, ... of the step (row K = lam)
-        n_pass = 0 if rec.walls is None else int(rec.walls.face.shape[1])
+        walls_k = None if rec.walls is None else _step_walls(rec.walls, k)
+        n_pass = 0 if walls_k is None else walls_k[0].shape[0]
         to_go = np.broadcast_to(lam, (n_pass + 1, lam.shape[0])).copy()
         if rewards is not None and n_pass:
-            to_go[:-1] += np.cumsum(rewards[k][::-1], axis=0)[::-1]
+            r_k = _step_rewards(rewards, k, lam.shape[0])
+            # the replay's lane has no entrants' segment: pad missing rows with zeros
+            full = np.zeros((n_pass, lam.shape[0]))
+            full[: r_k.shape[0]] = r_k[:n_pass]
+            to_go[:-1] += np.cumsum(full[::-1], axis=0)[::-1]
         if born.any():
             births.append(
                 Births(
@@ -657,8 +708,8 @@ def from_device(records, dev, normalization, hit_reward=None):
                     to_go[0][born],
                 )
             )
-        if rec.walls is not None:
-            face = np.asarray(rec.walls.face[k])
+        if walls_k is not None:
+            face, v_out, diffuse = walls_k
             for bounce in range(face.shape[0]):
                 hit = (face[bounce] >= 0) & alive
                 if hit.any():
@@ -667,8 +718,8 @@ def from_device(records, dev, normalization, hit_reward=None):
                             k,
                             np.flatnonzero(hit),
                             face[bounce][hit],
-                            np.asarray(rec.walls.v_out[k][bounce])[hit],
-                            np.asarray(rec.walls.diffuse[k][bounce])[hit],
+                            v_out[bounce][hit],
+                            diffuse[bounce][hit],
                             to_go[bounce][hit],
                         )
                     )

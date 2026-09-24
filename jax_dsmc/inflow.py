@@ -35,7 +35,7 @@ from jax_dsmc.geometry import surface_measure  # noqa: E402
 from jax_dsmc.rng import indexed_normal, indexed_uniform  # noqa: E402
 from jax_dsmc.safe import safe_log  # noqa: E402
 from jax_dsmc.state import ParticleState  # noqa: E402
-from jax_dsmc.wall_adjoint import WallEvents, advance, no_wall_events  # noqa: E402
+from jax_dsmc.wall_adjoint import WallEvents, advance, no_wall_events, to_dense  # noqa: E402
 
 ACCUMULATOR_FIELDS = ("logh_acc",)
 """Per-particle state that is a *history* and so must be reset on slot reuse.
@@ -425,9 +425,16 @@ def inject(  # noqa: PLR0915 -- source accounting remains one replayable event
                     max_walk=max_walk,
                 )
                 if mesh is not None:
-                    # `TrackerCounts`: an entrant the tracker lost (or found in the body)
-                    # is an invalid source step, like an unresolved travel
-                    exhausted = exhausted.exhausted + exhausted.inside_body
+                    # `TrackerCounts`: an entrant the tracker lost (or found in the body,
+                    # or that overflowed the lane) is an invalid source step, like an
+                    # unresolved travel
+                    exhausted = (
+                        exhausted.exhausted
+                        + exhausted.inside_body
+                        + jnp.asarray(exhausted.lane_overflow, jnp.int32)
+                    )
+                # the lane tracker's split events, dense over the entrants (K x capacity)
+                hits = to_dense(hits)
                 # Absorption is physical; unresolved travel is an invalid source step.
                 shortfall = shortfall + exhausted
                 escaped = jnp.sum(wanted_birth & ~surviving, dtype=jnp.int32)

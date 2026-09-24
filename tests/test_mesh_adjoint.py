@@ -431,11 +431,9 @@ def _drag_reward(events, tallies, rec_k, step, mass, dim):
     return jnp.where(events.face >= 2 * dim, r, 0.0)
 
 
-@pytest.mark.parametrize("tracker", ["stencil", "walk"])
-def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker):
-    """A short run with the specular circle: the traced replay of every step matches the
-    record to roundoff (the RNG contract), the hit rewards agree with the tallies, and the
-    shape gradient is finite with a nonzero pathwise radius term."""
+def _replay_chain(tracker):
+    """Forward -> traced replay -> value-form backward -> shape VJP on a short specular
+    circle run: ``(terms, replay, diag, tallies)``."""
     grid, mesh = _circle_setup("analytic")
     grid = cut.with_volume(grid, mesh)
     sp = _sp()
@@ -477,15 +475,8 @@ def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker
     assert int(diag.surface_hits.sum()) > 50
     steps = jnp.arange(static.n_steps, dtype=jnp.int32)
     reward = functools.partial(_drag_reward, mass=MASS, dim=2)
-    r, tal, err, hits, _ = shape.replay(
+    rep = shape.replay(
         rec, steps, state, key, grid, faces, wall, MASS, params.dt, mesh, 0.0, 0.0, static, reward
-    )
-    assert float(err) < 1e-12
-    np.testing.assert_array_equal(np.asarray(hits), np.asarray(diag.surface_hits))
-    np.testing.assert_allclose(
-        np.asarray(r).sum(axis=(1, 2)),
-        np.asarray(tallies.momentum[:, 4:, 0]).sum(axis=1),
-        rtol=1e-12,
     )
     # a backward with the drag as hit reward, then the shape terms
     scale = jnp.array([0.5, 0.5, 300.0, 300.0, 300.0])
@@ -502,7 +493,7 @@ def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker
         k=16,
         substeps=1,
         partners=1,
-        hit_reward=r,
+        hit_reward=rep.hit_total[:, None],
     )
     assert np.isfinite(np.asarray(dev.lam)).all()
     d_tally = tallies.__class__(
@@ -525,9 +516,25 @@ def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker
         static,
         scale,
         64,
-        hit_reward=r,
+        hit_reward=rep.hit_reward,
         tally_cotangent=d_tally,
         k=16,
+    )
+    return terms, rep, diag, tallies
+
+
+@pytest.mark.parametrize("tracker", ["stencil", "lane", "walk"])
+def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker):
+    """A short run with the specular circle: the traced replay of every step matches the
+    record to roundoff (the RNG contract), the hit rewards agree with the tallies, and the
+    shape gradient is finite with a nonzero pathwise radius term."""
+    terms, rep, diag, tallies = _replay_chain(tracker)
+    assert float(rep.replay_error) < 1e-12
+    np.testing.assert_array_equal(np.asarray(rep.surface_hits), np.asarray(diag.surface_hits))
+    np.testing.assert_allclose(
+        np.asarray(rep.hit_total).sum(axis=1),
+        np.asarray(tallies.momentum[:, 4:, 0]).sum(axis=1),
+        rtol=1e-12,
     )
     assert float(terms.replay_error) < 1e-12
     np.testing.assert_array_equal(np.asarray(terms.surface_hits), np.asarray(diag.surface_hits))
@@ -535,6 +542,21 @@ def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker
     assert np.isfinite(np.asarray(terms.pathwise.centre)).all()
     # specular body, epsilon 0: nothing is scored
     assert float(terms.score.radius) == 0.0 and np.all(np.asarray(terms.score.centre) == 0.0)
+
+
+def test_lane_and_stencil_shape_gradients_agree():
+    """The lane tracker's split events through replay, backward and shape VJP give the
+    dense stencil's shape gradient (the same events, folded per slot) to roundoff."""
+    ts, rs, ds, _ = _replay_chain("stencil")
+    tl, rl, dl, _ = _replay_chain("lane")
+    np.testing.assert_array_equal(np.asarray(ds.surface_hits), np.asarray(dl.surface_hits))
+    np.testing.assert_allclose(np.asarray(rl.hit_total), np.asarray(rs.hit_total), rtol=1e-12)
+    for part in ("pathwise", "pathwise_x", "pathwise_v", "pathwise_tally"):
+        a, b = getattr(ts, part), getattr(tl, part)
+        np.testing.assert_allclose(float(b.radius), float(a.radius), rtol=1e-9)
+        np.testing.assert_allclose(
+            np.asarray(b.centre), np.asarray(a.centre), rtol=1e-9, atol=1e-30
+        )
 
 
 def test_timing_cotangent_selects_the_band_with_the_lost_jump():
@@ -759,7 +781,9 @@ def test_silhouette_term_counts_the_hit_set_change(acc):
     geom = shape.geometry(mesh)
     x1, v1, _a, _lp, _tal, events = shape.wall_map(geom, x, v, alive, key, **setup)
     r_k = reward(events, None, None, 0)
-    to_go = shape._to_go(jnp.zeros(n), r_k)
+    to_go = shape._to_go(
+        jnp.zeros(n), shape._as_event_array(r_k, events), shape.as_split(events).slot
+    )
     rec = _Rec(x1, v1, alive)
     fit = {
         "npc_max": 512,

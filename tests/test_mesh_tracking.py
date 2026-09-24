@@ -303,6 +303,87 @@ def test_trackers_agree(dim):
         assert [f for f in fs[:, i] if f >= 0] == [f for f in fw[:, i] if f >= 0]
 
 
+def _lane_case(kind):
+    """(dim, grid, body for build_mesh, body for the outside test) of a lane-gate case."""
+    from jax_dsmc.mesh import levelset as L  # noqa: PLC0415 -- only this case needs it
+
+    if kind == "sphere":
+        return 3, _grid(3), S.sphere(1.0, 2), _body(3)
+    grid = _grid(2)
+    if kind == "polygon":
+        return 2, grid, _polygon(), _body(2)
+    if kind == "levelset":
+        lo, m = L.grid_for_box(grid.lo, grid.hi, 0.125, margin=3)
+        body = L.from_analytic(jnp.array([5.0, 5.0]), 3.0, lo, 0.125, m, n_sample=16)
+        return 2, grid, body, _body(2)
+    return 2, grid, _body(2), _body(2)
+
+
+@pytest.mark.parametrize("kind", ["analytic", "polygon", "levelset", "sphere"])
+@pytest.mark.parametrize("acc", [0.0, 1.0])
+def test_lane_tracker_equals_the_stencil(kind, acc):
+    """The lane tracker (pass 0 over all, later passes on the compacted lane, the dense
+    pass's draws gathered per slot) reproduces the dense stencil tracker: the same
+    discrete outcome (alive, event faces, diffuse branches, hit counts) exactly and the
+    floats to the last bit or two (XLA compiles the lane-sized batch with a different
+    fusion, 1 ulp on ~0.03 % of diffuse re-emissions); the split events expand to the
+    dense ones.  A diffuse box face and a closed box give
+    multi-event steps; dt is large so particles meet several surfaces per step."""
+    dim, grid, body, outside = _lane_case(kind)
+    mesh = cut.build_mesh(body, grid, radius=4 * max(grid.n), sub=4)
+    x, v, alive = _outside_state(jax.random.PRNGKey(11), 2000, dim, grid, outside)
+    faces = Faces((BC.DIFFUSE,) + (BC.SPECULAR,) * (2 * dim - 1))
+    wall = _wall(dim, acc)
+    dt = 1.5e-3
+    common = {"return_events": True, "return_tallies": True, "max_bounces": 12}
+    ref = _advance(x, v, alive, grid, faces, wall, mesh, "stencil", dt, key=3, **common)
+    got = _advance(
+        x, v, alive, grid, faces, wall, mesh, "lane", dt, key=3, lane_size=x.shape[0], **common
+    )
+    xs, vs, als, cs, ls, es, ts = ref
+    xl, vl, all_, cl, ll, el, tl = got
+    assert int(cs.surface_hits) > 10 and int(cs.exhausted) == 0
+    assert int(cl.lane_overflow) == 0
+    np.testing.assert_array_equal(np.asarray(als), np.asarray(all_))
+    for a, b in ((xs, xl), (vs, vl), (ls, ll)):
+        np.testing.assert_allclose(np.asarray(b), np.asarray(a), rtol=1e-14, atol=1e-12)
+    assert int(cs.surface_hits) == int(cl.surface_hits)
+    assert int(cs.stencil_overrun) == int(cl.stencil_overrun)
+    # tallies: the same events summed in another order
+    for a, b in zip(ts, tl, strict=True):
+        np.testing.assert_allclose(np.asarray(b), np.asarray(a), rtol=1e-12, atol=1e-30)
+    dense = wall_adjoint.to_dense(el)
+    for name in ("face", "diffuse"):
+        np.testing.assert_array_equal(
+            np.asarray(getattr(dense, name)), np.asarray(getattr(es, name))
+        )
+    np.testing.assert_allclose(np.asarray(dense.v_out), np.asarray(es.v_out), rtol=1e-14)
+    # some slots really needed the later passes
+    assert int(np.sum(np.asarray(es.face)[1:] >= 0)) > 0
+
+
+def test_lane_overflow_is_counted_and_deleted():
+    dim, grid, body, outside = _lane_case("analytic")
+    mesh = cut.build_mesh(body, grid, radius=4 * max(grid.n), sub=4)
+    x, v, alive = _outside_state(jax.random.PRNGKey(11), 2000, dim, grid, outside)
+    out = _advance(x, v, alive, grid, _closed(2), _wall(2), mesh, "lane", 1.5e-3, lane_size=8)
+    n_event = int(out[3].lane_overflow)
+    assert n_event > 0
+    assert int(np.sum(np.asarray(out[2]))) <= int(np.sum(np.asarray(alive))) - n_event
+
+
+def test_lane_resolves_many_bounces():
+    # the trapped particle of test_stuck_particle_is_deleted_and_counted: ~10 reflections
+    grid = _grid(2)
+    mesh = cut.build_mesh(_body(2), grid, radius=1)
+    x = jnp.array([[5.0, 9.0], [1.0, 1.0]])
+    v = jnp.array([[0.0, 1.0e5, 0.0], [10.0, 0.0, 0.0]])
+    ref = _advance(x, v, jnp.ones(2, bool), grid, _closed(2), _wall(2), mesh, "stencil", 1e-4)
+    out = _advance(x, v, jnp.ones(2, bool), grid, _closed(2), _wall(2), mesh, "lane", 1e-4)
+    assert int(out[3].exhausted) == 0 and bool(out[2][0])
+    np.testing.assert_array_equal(np.asarray(out[0]), np.asarray(ref[0]))
+
+
 # --- box-only invariance ------------------------------------------------------------
 
 

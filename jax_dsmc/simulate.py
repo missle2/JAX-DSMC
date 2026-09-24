@@ -40,9 +40,9 @@ from jax_dsmc.boundary import BC
 from jax_dsmc.collide.ntc import collide, decision_weights
 from jax_dsmc.move import move_with_decisions
 from jax_dsmc.rng import STAGE_INFLOW, STAGE_MOVE, key_for
-from jax_dsmc.state import CollideState, ParticleState
+from jax_dsmc.state import CollideState, ParticleState, lane_capacity
 from jax_dsmc.validation import require_valid, validate_inputs
-from jax_dsmc.wall_adjoint import WallEvents, no_wall_events
+from jax_dsmc.wall_adjoint import SplitEvents, WallEvents, lane_slots, no_wall_events
 
 
 @jax.tree_util.register_dataclass
@@ -73,18 +73,80 @@ class EventRecord:
 jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
 
 
-def _event_record(moved, source, wall_events, captured, state, static, diffuse):
-    """Assemble one step's :class:`EventRecord`; entrants' birth-step hits are theirs."""
+def _merge_born_split(walls, born_walls, born, size):
+    """Entrants' dense birth-step events (``K_bounce`` rows over every slot) into a lane
+    record: pass 0 into the head row, the later passes of the entrants that have any
+    compacted into ``size`` extra tail entries (appended to the movers' lane).  Returns
+    ``(SplitEvents, lost)`` with ``lost`` the entrants whose later events did not fit."""
+    head = WallEvents(
+        jnp.where(born[None, :], born_walls.face[:1], walls.head.face),
+        jnp.where(born[None, :, None], born_walls.v_out[:1], walls.head.v_out),
+        jnp.where(born[None, :], born_walls.diffuse[:1], walls.head.diffuse),
+    )
+    later = born & jnp.any(born_walls.face[1:] >= 0, axis=0)
+    slot, lost = lane_slots(later, size)
+    take = jnp.maximum(slot, 0)
+    valid = (slot >= 0)[None, :]
+    tail = WallEvents(
+        jnp.concatenate((walls.tail.face, jnp.where(valid, born_walls.face[1:, take], -1)), axis=1),
+        jnp.concatenate(
+            (walls.tail.v_out, jnp.where(valid[..., None], born_walls.v_out[1:, take], 0.0)),
+            axis=1,
+        ),
+        jnp.concatenate((walls.tail.diffuse, valid & born_walls.diffuse[1:, take]), axis=1),
+    )
+    return SplitEvents(head, tail, jnp.concatenate((walls.slot, slot))), jnp.sum(
+        lost, dtype=jnp.int32
+    )
+
+
+def _born_lane(static):
+    """Tail entries reserved for entrants with more than one recorded birth-step event."""
+    return max(64, lane_capacity(static.N, static.lane_size) // 4)
+
+
+def _empty_split(static):
+    """The empty lane record of a step without events (the shapes of a real one)."""
+    n, k = static.N, static.K_bounce
+    size = lane_capacity(n, static.lane_size) + _born_lane(static)
+    return SplitEvents(
+        no_wall_events(n, 1), no_wall_events(size, k - 1), jnp.full((size,), -1, jnp.int32)
+    )
+
+
+def _event_record(moved, source, wall_events, captured, state, static, diffuse, mesh=None):
+    """Assemble one step's :class:`EventRecord`; entrants' birth-step hits are theirs.
+    Also returns the entrants lost to a full lane (``tracker="lane"``; else 0)."""
+    lane = mesh is not None and static.tracker == "lane"
     k_events = static.K_walk if static.tracker == "walk" else static.K_bounce
-    walls = wall_events[0] if diffuse else no_wall_events(static.N, k_events)
+    lost = jnp.int32(0)
+    if lane:
+        walls = wall_events[0] if diffuse else _empty_split(static)
+    else:
+        walls = wall_events[0] if diffuse else no_wall_events(static.N, k_events)
     if diffuse and source is not None:
         born = source.born_face >= 0
-        walls = WallEvents(
-            jnp.where(born[None, :], source.born_walls.face, walls.face),
-            jnp.where(born[None, :, None], source.born_walls.v_out, walls.v_out),
-            jnp.where(born[None, :], source.born_walls.diffuse, walls.diffuse),
+        if lane:
+            walls, lost = _merge_born_split(walls, source.born_walls, born, _born_lane(static))
+        else:
+            walls = WallEvents(
+                jnp.where(born[None, :], source.born_walls.face, walls.face),
+                jnp.where(born[None, :, None], source.born_walls.v_out, walls.v_out),
+                jnp.where(born[None, :], source.born_walls.diffuse, walls.diffuse),
+            )
+    elif lane and diffuse:
+        # no sources: pad the tail to the record's fixed width
+        pad = _born_lane(static)
+        walls = SplitEvents(
+            walls.head,
+            jax.tree.map(
+                lambda a, b: jnp.concatenate((a, b), axis=1),
+                walls.tail,
+                no_wall_events(pad, static.K_bounce - 1),
+            ),
+            jnp.concatenate((walls.slot, jnp.full((pad,), -1, jnp.int32))),
         )
-    return EventRecord(
+    record = EventRecord(
         x=moved.x,
         v=moved.v,
         alive=moved.alive,
@@ -95,6 +157,7 @@ def _event_record(moved, source, wall_events, captured, state, static, diffuse):
         walls=walls,
         sigma=captured[1],
     )
+    return record, lost
 
 
 def _tracking_diagnostics(counts, tracker):
@@ -108,6 +171,7 @@ def _tracking_diagnostics(counts, tracker):
     if tracker == "walk":
         tracking["walk_exhausted"] = counts.exhausted
         return counts.exhausted, tracking
+    tracking["lane_overflow"] = jnp.asarray(counts.lane_overflow, jnp.int32)
     # stencil: the stuck particles were deleted (SPARTA MAXSTUCK), a rate, not a failure
     tracking["surface_stuck"] = counts.exhausted
     return jnp.zeros_like(counts.exhausted), tracking
@@ -193,6 +257,7 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
                 tracker=static.tracker,
                 max_walk=static.K_walk,
                 return_tallies=emit_surface,
+                lane_size=static.lane_size,
             )
             # `advance` appends the events, then the tallies
             if emit_surface:
@@ -233,6 +298,8 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
                     epsilon=params.epsilon,
                     acc_delta=acc_delta,
                     mesh=mesh,
+                    # newborns take the same tracker; `inject` expands a lane's split
+                    # events over its entrants and `_event_record` splits them again
                     tracker=static.tracker,
                     max_walk=static.K_walk,
                 )
@@ -259,7 +326,7 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
     )
     record = None
     if capture:
-        record = _event_record(
+        record, born_lost = _event_record(
             moved,
             source_details if res is not None else None,
             wall_events,
@@ -269,7 +336,10 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
             faces is not None
             and not collide_only
             and (BC.DIFFUSE in faces.bcs or mesh is not None),
+            mesh,
         )
+        if "lane_overflow" in tracking:
+            tracking["lane_overflow"] = tracking["lane_overflow"] + born_lost
     if res is not None:
         diag = dataclasses.replace(
             diag,

@@ -405,6 +405,39 @@ def test_grazing_reentry_on_a_concave_wall_is_found_from_the_surface(offset):
     np.testing.assert_allclose(t * speed, chord, rtol=1e-3, atol=1e-6)
 
 
+def test_flow_pocket_through_a_face_with_every_corner_in_the_body():
+    """A cut cell whose flow is a pocket entering through the middle of a face while all
+    its corners lie in the body (optc Adam S1 iterate 56 / S8 iterate 9, 2026-09-24):
+    valid for a level set (its inside test is phi < 0, exact) -- the mesh builds and the
+    cell's flow volume is the pocket's.  Only the polygon inside test needs a flow corner.
+    """
+    h = 0.0625
+    grid = GridSpec(lo=jnp.array([0.0, 0.0]), hi=jnp.array([10.0, 10.0]), n=(20, 20))
+    lo, m = L.grid_for_box(grid.lo, grid.hi, h, margin=3)
+    knots = np.asarray(lo) + h * np.stack(
+        np.meshgrid(*[np.arange(n) for n in m], indexing="ij"), -1
+    )
+    # body = the box [3, 7.1]^2 (flow outside), plus a flow disk of radius 0.25 at
+    # (5.25, 7.1) cutting into the top of the box: in cell [5, 5.5] x [6.5, 7] the flow
+    # reaches down to y = 6.85 from its top face while its corners (distance 0.27 from
+    # the disk centre, 0.1 below the box top) are all in the body
+    q = np.abs(knots - 5.05) - 2.05
+    sdf_box = np.linalg.norm(np.maximum(q, 0.0), axis=-1) + np.minimum(q.max(axis=-1), 0.0)
+    disk = 0.25 - np.linalg.norm(knots - np.array([5.25, 7.1]), axis=-1)
+    ls = L.from_values(np.maximum(sdf_box, disk), lo, h, n_sample=16)
+    cell = 10 * 20 + 13  # x index 10 (5.0-5.5), y index 13 (6.5-7.0)
+    lo_c, hi_c = cut.cell_boxes(grid)
+    corners = cut.corners(lo_c[cell : cell + 1], hi_c[cell : cell + 1])[0]
+    assert (np.asarray(L.value(ls, jnp.asarray(corners))) < 0.0).all()
+    mesh = cut.build_mesh(ls, grid, radius=1)
+    assert int(mesh.cell_type[cell]) == CUT and int(mesh.outside_corner[cell]) == -1
+    # the pocket: the disk segment below y = 7 inside the cell (~0.042; the spline's
+    # rounding of the box corner-free edge is small)
+    theta = 2.0 * np.arccos(0.1 / 0.25)
+    segment = 0.5 * 0.25**2 * (theta - np.sin(theta))
+    np.testing.assert_allclose(float(mesh.volume[cell]), segment, rtol=0.1)
+
+
 def _volume_of_coef(coef, ls):
     return L.body_volume(LevelSet(coef, ls.lo, ls.h), [0.0, 0.0], [10.0, 10.0], 4)
 

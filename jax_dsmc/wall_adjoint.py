@@ -18,6 +18,7 @@ from jax_dsmc.geometry import first_hit
 from jax_dsmc.grid import cell_of
 from jax_dsmc.mesh import geometry as mesh_geometry
 from jax_dsmc.safe import safe_log
+from jax_dsmc.state import lane_capacity
 from jax_dsmc.surface import SurfaceTallies, zero
 
 
@@ -86,6 +87,75 @@ class WallEvents(NamedTuple):
     term of the shape adjoint puts its cotangent here."""
 
 
+class SplitEvents(NamedTuple):
+    """The events of a lane-tracked step: ``head`` (``WallEvents`` with one row, every
+    slot) is pass 0; ``tail`` (``WallEvents`` with ``K - 1`` rows over the ``B`` lane
+    entries) holds passes ``1 .. K - 1`` of the particles that had a pass-0 event, entry
+    ``j`` belonging to slot ``slot[j]`` (``-1`` = unused entry).  A dense record (the
+    stencil / walk trackers) is the special case ``tail = passes 1..``, ``slot =
+    arange(N)`` (:func:`as_split`).  Per-event arrays of a consumer have the shapes of
+    ``head.face`` and ``tail.face``; :func:`particle_sum` folds them per slot."""
+
+    head: WallEvents
+    tail: WallEvents
+    slot: jax.Array
+
+
+def as_split(events):
+    """:class:`SplitEvents` view of ``events`` (a dense ``WallEvents`` or already split)."""
+    if isinstance(events, SplitEvents):
+        return events
+    n = events.face.shape[1]
+    head = jax.tree.map(lambda a: a[:1], events)
+    tail = jax.tree.map(lambda a: a[1:], events)
+    return SplitEvents(head, tail, jnp.arange(n, dtype=jnp.int32))
+
+
+def _drop_slot(slot, n):
+    """Lane slot ids with unused entries (``-1``) sent out of range for ``mode="drop"``."""
+    return jnp.where(slot >= 0, slot, n)
+
+
+def particle_sum(head_values, tail_values, slot):
+    """Per-slot total of a per-event quantity: ``head_values`` (``1, N``) summed over its
+    row plus ``tail_values`` (``K, B``) summed over passes and scattered to ``slot``."""
+    n = head_values.shape[1]
+    total = jnp.sum(head_values, axis=0)
+    return total.at[_drop_slot(slot, n)].add(jnp.sum(tail_values, axis=0), mode="drop")
+
+
+def to_dense(events):
+    """Dense ``WallEvents`` (``1 + K`` rows over every slot) of split ``events`` -- for
+    tests and small cases; the tail rows are scattered to their slots, unused lane entries
+    dropped, and slots outside the lane keep the empty-event values."""
+    if not isinstance(events, SplitEvents):
+        return events
+    n = events.head.face.shape[1]
+    idx = _drop_slot(events.slot, n)
+
+    def spread(h, t):
+        empty = jnp.full((t.shape[0], n, *t.shape[2:]), -1 if h.dtype == jnp.int32 else 0, h.dtype)
+        full = empty.at[:, idx].set(t, mode="drop")
+        return jnp.concatenate((h, full))
+
+    return jax.tree.map(spread, events.head, events.tail)
+
+
+def lane_slots(active, size):
+    """Compact the ``active`` slots into a lane of ``size`` entries (cumulative-sum
+    compaction, out-of-range writes dropped): ``(slot i32[size], overflow bool[N])`` --
+    ``slot[j]`` the ``j``-th active slot in slot order or ``-1``, ``overflow`` the active
+    slots that did not fit."""
+    n = active.shape[0]
+    pos = jnp.cumsum(active.astype(jnp.int32)) - 1
+    fits = active & (pos < size)
+    target = jnp.where(fits, pos, size)
+    slot = (
+        jnp.full((size,), -1, jnp.int32).at[target].set(jnp.arange(n, dtype=jnp.int32), mode="drop")
+    )
+    return slot, active & ~fits
+
+
 class TrackerCounts(NamedTuple):
     """Per-step tracking diagnostics of the mesh path (all ``i32`` scalars).
 
@@ -93,13 +163,16 @@ class TrackerCounts(NamedTuple):
     deleted, SPARTA's stuck particle)
     or ``max_walk`` iterations (walk); ``surface_hits``: element / body hits resolved;
     ``stencil_overrun``: particles whose remaining move exceeded the stencil dilation;
-    ``inside_body``: particles found inside the body after the move and killed.
+    ``inside_body``: particles found inside the body after the move and killed;
+    ``lane_overflow``: particles with a pass-0 event that did not fit the lane
+    (``tracker="lane"``) and were deleted.
     """
 
     exhausted: jax.Array
     surface_hits: jax.Array
     stencil_overrun: jax.Array
     inside_body: jax.Array
+    lane_overflow: jax.Array | int = 0
 
 
 def no_wall_events(n, bounces, trace_dim=None):
@@ -236,8 +309,14 @@ def _element_events(x_at, v, logp, tally, events, exclude, hit, surface, draws, 
     return v_new, logp, tally, events, exclude
 
 
-def _apply_events(operands, grid, faces, wall, mass, acc_delta, tallies, mesh=None):
-    """Resolve the events of one pass for the particles flagged ``hit``."""
+def _apply_events(
+    operands, grid, faces, wall, mass, acc_delta, tallies, mesh=None, draw_slot=None, draw_n=0
+):
+    """Resolve the events of one pass for the particles flagged ``hit``.
+
+    ``draw_slot`` (lane passes): the diffuse draws are the pass's draws over all
+    ``draw_n`` slots gathered at each lane entry's slot, so a particle meets exactly the
+    randomness the dense tracker would give it in that pass."""
     from jax_dsmc.boundary import (  # noqa: PLC0415 -- break the boundary dispatch import cycle
         BC,
         diffuse_from_draws,
@@ -247,8 +326,11 @@ def _apply_events(operands, grid, faces, wall, mass, acc_delta, tallies, mesh=No
     dim = x.shape[1]
     n = x.shape[0]
     k_draw, k_acc = jax.random.split(pass_key)
-    z, r = sampling.standard_diffuse_draws(k_draw, n)
-    u_acc = jax.random.uniform(k_acc, (n,), dtype=jnp.float64)
+    n_draw = n if draw_slot is None else draw_n
+    z, r = sampling.standard_diffuse_draws(k_draw, n_draw)
+    u_acc = jax.random.uniform(k_acc, (n_draw,), dtype=jnp.float64)
+    if draw_slot is not None:
+        z, r, u_acc = z[draw_slot], r[draw_slot], u_acc[draw_slot]
     draws = (z, r, u_acc)
     x_at = x + used[:, None] * v[:, :dim]
     if events.time is not None:
@@ -311,7 +393,22 @@ def _skip_events(operands):
     return x, v, alive, logp, tally, events, exclude
 
 
-def _bounce(k, carry, grid, faces, wall, mass, key, acc_delta, tallies, mesh=None):
+def _bounce(
+    k,
+    carry,
+    grid,
+    faces,
+    wall,
+    mass,
+    key,
+    acc_delta,
+    tallies,
+    mesh=None,
+    row_shift=0,
+    draw_slot=None,
+    draw_n=0,
+    with_hit=False,
+):
     """One chronological event pass over every particle.  ``fori_loop`` body.
 
     Module-level and bound with ``functools.partial`` (decision 14).  Two cost
@@ -325,6 +422,10 @@ def _bounce(k, carry, grid, faces, wall, mass, key, acc_delta, tallies, mesh=Non
       after the first) skips the draws, the face loop and the tallies through a
       ``lax.cond``; only the ``first_hit`` query is paid.  Draws happen inside the
       taken branch, so a skipped pass consumes no random numbers.
+
+    Lane passes (``tracker="lane"``) run this body on the compacted lane: ``k`` is the
+    pass number (it keys the draws), the event row is ``k - row_shift``, and
+    ``draw_slot`` / ``draw_n`` gather the pass's full-width draws at the lane's slots.
     """
     x, v, alive, elapsed, logp, had_hit, tally, events, budget, exclude, overrun, n_surf = carry
     distance, surface = _next_surface(x, v, grid, mesh, exclude, budget - elapsed)
@@ -346,7 +447,7 @@ def _bounce(k, carry, grid, faces, wall, mass, key, acc_delta, tallies, mesh=Non
         surface,
         used,
         jax.random.fold_in(key, 1 + k),
-        k,
+        k - row_shift,
         exclude,
         elapsed + used,
     )
@@ -361,13 +462,49 @@ def _bounce(k, carry, grid, faces, wall, mass, key, acc_delta, tallies, mesh=Non
             acc_delta=acc_delta,
             tallies=tallies,
             mesh=mesh,
+            draw_slot=draw_slot,
+            draw_n=draw_n,
         ),
         _skip_events,
         operands,
     )
     elapsed = elapsed + used
     had_hit = had_hit | hit
-    return x, v, alive, elapsed, logp, had_hit, tally, events, budget, exclude, overrun, n_surf
+    carry = (x, v, alive, elapsed, logp, had_hit, tally, events, budget, exclude, overrun, n_surf)
+    return (carry, hit & alive) if with_hit else carry
+
+
+def _lane_pass(k, state, body):
+    """One lane pass, skipped outright (``lax.cond``, so the hit search is not paid) when
+    no lane particle had an event in the previous pass: one without an event in pass
+    ``k - 1`` has none in pass ``k``, so the skip is exact.  ``state = (carry, pending)``;
+    reverse-mode differentiable, unlike a ``while_loop``, so the shape adjoint's replay
+    runs it too."""
+    carry, pending = state
+    return jax.lax.cond(
+        jnp.any(pending),
+        functools.partial(body, k, with_hit=True),
+        functools.partial(_lane_idle, pending=pending),
+        carry,
+    )
+
+
+def _lane_more(state, max_bounces):
+    """``while_loop`` condition of the untraced lane: passes left and a particle pending."""
+    k, _carry, pending = state
+    return (k < max_bounces) & jnp.any(pending)
+
+
+def _lane_step(state, body):
+    """``while_loop`` body of the untraced lane: one pass, the particles it resolved."""
+    k, carry, _pending = state
+    carry, hit = body(k, carry, with_hit=True)
+    return k + 1, carry, hit
+
+
+def _lane_idle(carry, pending):
+    """The skipped lane pass: the carry unchanged, no particle pending."""
+    return carry, jnp.zeros_like(pending)
 
 
 def _next_surface(x, v, grid, mesh, exclude, remaining):
@@ -378,7 +515,80 @@ def _next_surface(x, v, grid, mesh, exclude, remaining):
     return mesh_geometry.first_hit(x, v, grid, mesh, exclude, remaining)
 
 
-def _advance_impl(
+def _lane_passes(
+    init, grid, faces, wall, mass, key, acc_delta, tallies, mesh, max_bounces, size, trace_dim
+):
+    """Pass 0 of the stencil tracker over every slot, then passes ``1 .. max_bounces - 1``
+    on the lane of slots with a pass-0 event (:func:`lane_slots`), scattered back.
+    Returns the tracker carry with :class:`SplitEvents` in the events place, and the
+    ``bool[N]`` slots that overflowed the lane (deleted)."""
+    body = functools.partial(
+        _bounce,
+        grid=grid,
+        faces=faces,
+        wall=wall,
+        mass=mass,
+        key=key,
+        acc_delta=acc_delta,
+        tallies=tallies,
+        mesh=mesh,
+    )
+    carry = body(0, init)
+    x, v, alive, elapsed, logp, had_hit, tally, head, budget, exclude, overrun, n_surf = carry
+    n = x.shape[0]
+    # an outflow ends the flight; every other pass-0 event may be followed by more
+    slot, lost = lane_slots(alive & had_hit, size)
+    alive = alive & ~lost
+    valid = slot >= 0
+    take = jnp.maximum(slot, 0)
+    lane = (
+        x[take],
+        v[take],
+        alive[take] & valid,
+        elapsed[take],
+        logp[take],
+        had_hit[take] & valid,
+        tally,
+        no_wall_events(size, max_bounces - 1, trace_dim),
+        budget[take],
+        exclude[take],
+        jnp.zeros(size, bool),
+        n_surf,
+    )
+    pass_body = functools.partial(body, row_shift=1, draw_slot=take, draw_n=n)
+    if trace_dim is None:
+        # an untraced move (the forward) stops after the last pass any lane particle needs;
+        # the traced replay (differentiated) keeps the fixed trip count with skipped passes
+        state = (jnp.int32(1), lane, lane[2])
+        state = jax.lax.while_loop(
+            functools.partial(_lane_more, max_bounces=max_bounces),
+            functools.partial(_lane_step, body=pass_body),
+            state,
+        )
+        lane = state[1]
+    else:
+        lane_body = functools.partial(_lane_pass, body=pass_body)
+        lane, _ = jax.lax.fori_loop(1, max_bounces, lane_body, (lane, lane[2]))
+    lx, lv, la, le, llp, lh, tally, tail, _, lex, lover, n_surf = lane
+    put = _drop_slot(slot, n)
+    carry = (
+        x.at[put].set(lx, mode="drop"),
+        v.at[put].set(lv, mode="drop"),
+        alive.at[put].set(la, mode="drop"),
+        elapsed.at[put].set(le, mode="drop"),
+        logp.at[put].set(llp, mode="drop"),
+        had_hit.at[put].set(lh, mode="drop"),
+        tally,
+        SplitEvents(head, tail, slot),
+        budget,
+        exclude.at[put].set(lex, mode="drop"),
+        overrun.at[put].max(lover, mode="drop"),
+        n_surf,
+    )
+    return carry, lost
+
+
+def _advance_impl(  # noqa: PLR0915 -- the three trackers' dispatch and one shared epilogue
     x,
     v,
     alive,
@@ -397,6 +607,7 @@ def _advance_impl(
     tracker="stencil",
     max_walk=8,
     trace=False,
+    lane_size=0,
 ):
     """Chronological first-event tracking and the P3 wall gradient; returns the
     ``apply_faces`` tuple.
@@ -419,6 +630,15 @@ def _advance_impl(
     ``trace=True`` (with ``return_events``) also fills the hit point, incident velocity
     and normal of every recorded hit (:class:`WallEvents`); the shape adjoint's replay
     uses it, a forward record never does.
+
+    ``tracker="lane"`` (mesh only) is SPARTA's move loop: pass 0 over every particle as
+    the stencil does; the particles with a pass-0 event are compacted into a lane of
+    ``lane_capacity(N, lane_size)`` entries and passes ``1 .. max_bounces - 1`` run on the
+    lane alone (one hit search over the lane per pass instead of over all ``N``); a
+    particle still unresolved after them is deleted (``exhausted``, SPARTA MAXSTUCK) and
+    an overfull lane deletes and counts the rest (``lane_overflow``).  Each lane pass uses
+    the draws the dense pass would give that slot, so the result equals the stencil
+    tracker's with the same ``max_bounces``; the events are :class:`SplitEvents`.
     """
     n = x.shape[0]
     dim = x.shape[1]
@@ -436,7 +656,9 @@ def _advance_impl(
         jnp.zeros(n, bool),
         zero(n_surfaces),
         no_wall_events(
-            n, max_bounces if tracker == "stencil" else max_walk, dim if trace else None
+            n,
+            {"stencil": max_bounces, "lane": 1}.get(tracker, max_walk),
+            dim if trace else None,
         ),
         budget,
         jnp.full((n,), -1, jnp.int32),
@@ -464,6 +686,26 @@ def _advance_impl(
             # `max_bounces` passes is deleted and counted (`surface_stuck`), not left with
             # an unresolved hit
             alive = alive & ~exhausted
+    elif tracker == "lane":
+        carry, lost = _lane_passes(
+            init,
+            grid,
+            faces,
+            wall,
+            mass,
+            key,
+            acc_delta,
+            return_tallies,
+            mesh,
+            max_bounces,
+            lane_capacity(n, lane_size),
+            dim if trace else None,
+        )
+        x, v, alive, elapsed, logp, had_hit, tally, events, _, exclude, overrun, n_surf = carry
+        distance, _ = _next_surface(x, v, grid, mesh, exclude, None)
+        # SPARTA MAXSTUCK, as for the stencil: the lane particles still unresolved
+        exhausted = alive & (elapsed + distance <= budget)
+        alive = alive & ~exhausted
     elif tracker == "walk":
         from jax_dsmc.mesh.walk import walk  # noqa: PLC0415 -- walk imports this module
 
@@ -478,7 +720,7 @@ def _advance_impl(
         # for it whenever a near-miss within the regularisation is at stake
         distance, _ = _next_surface(x, v, grid, mesh, exclude, None)
     else:
-        raise ValueError(f"tracker must be 'stencil' or 'walk', got {tracker!r}")
+        raise ValueError(f"tracker must be 'stencil', 'lane' or 'walk', got {tracker!r}")
     lower = jnp.where(had_hit, elapsed, -jnp.inf)
     upper = jnp.where(alive, elapsed + distance, jnp.inf)
     time, interval_score = conditional_time(raw, z, lower, upper, dt, epsilon)
@@ -486,6 +728,7 @@ def _advance_impl(
     logp = logp + interval_score
     x = jnp.clip(x, grid.lo, grid.hi)
     counts = jnp.sum(exhausted)
+    lane_lost = lost if (mesh is not None and tracker == "lane") else None
     if mesh is not None:
         # SPARTA's catch-all: a particle inside the body after the move was mis-tracked
         inside = alive & mesh_geometry.inside_polygon(x, cell_of(x, grid), mesh, grid)
@@ -495,6 +738,7 @@ def _advance_impl(
             n_surf,
             jnp.sum(overrun, dtype=jnp.int32),
             jnp.sum(inside, dtype=jnp.int32),
+            jnp.int32(0) if lane_lost is None else jnp.sum(lane_lost, dtype=jnp.int32),
         )
     result = (
         x,
@@ -519,6 +763,7 @@ _advance_jitted = jax.jit(
         "tracker",
         "max_walk",
         "trace",
+        "lane_size",
     ),
 )
 
@@ -543,6 +788,7 @@ def advance(
     tracker="stencil",
     max_walk=8,
     trace=False,
+    lane_size=0,
 ):
     # Eager calls need a stable compilation boundary; an enclosing jit/grad already
     # supplies tracing. Bypass the extra boundary there to keep its AD graph small.
@@ -568,4 +814,5 @@ def advance(
         tracker=tracker,
         max_walk=max_walk,
         trace=trace,
+        lane_size=lane_size,
     )

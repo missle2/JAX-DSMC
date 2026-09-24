@@ -270,7 +270,7 @@ def ensemble_gradient(  # noqa: PLR0915 -- one seed, kept whole
             raise RuntimeError(f"step rewards {value} != objective {check}")
     else:
         hit_reward = rep.hit_reward
-        value = float(jnp.sum(hit_reward))
+        value = float(jnp.sum(rep.hit_total))
         check = objective_value(cfg, objective, rec, tallies)
         if abs(value - check) > 1e-9 * max(1.0, abs(value)):
             raise RuntimeError(f"hit rewards {value} != tallies {check}")

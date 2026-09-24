@@ -38,6 +38,7 @@ from examples.gradient_convergence import (
 )
 from jax_dsmc import ensemble_backward, ensemble_device, inflow, species_data
 from jax_dsmc.constants import K_BOLTZ
+from jax_dsmc.shape import HitRewards
 from jax_dsmc.validation import require_valid
 
 GAS = species_data.ARGON
@@ -179,6 +180,9 @@ def device_backward(
     :class:`ensemble_device.Backward` (its ``lam`` feeds the shape adjoint); ``normals``
     (:func:`jax_dsmc.shape.local_normals`) switches the virtual pull-back's fits to the
     one-sided form."""
+    # a lane-tracked replay's rewards (`shape.HitRewards`): the device's move pull-back
+    # needs each slot's per-step total only; the host bookkeeping gets the per-event form
+    dev_reward = hit_reward.total[:, None] if isinstance(hit_reward, HitRewards) else hit_reward
     worst = ensemble_backward.max_occupancy(rec, grid)
     if worst > npc_max:
         raise ValueError(f"npc_max={npc_max} below the densest cell ({worst} particles)")
@@ -198,7 +202,7 @@ def device_backward(
             npc_max,
             neighbors,
             phi_step=phi_step,
-            hit_reward=hit_reward,
+            hit_reward=dev_reward,
         )
     else:
         substeps, partners = ensemble_backward.VIRTUAL
@@ -219,7 +223,7 @@ def device_backward(
             partners,
             ensemble_backward.VIRTUAL_NODES,
             phi_step=phi_step,
-            hit_reward=hit_reward,
+            hit_reward=dev_reward,
             normals=normals,
         )
     # the virtual pull-back's quadrature noise feeds back through the fits; with too few

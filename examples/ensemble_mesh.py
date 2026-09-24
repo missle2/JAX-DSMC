@@ -68,7 +68,8 @@ def default_config():
         "steps": 300,
         "window": 200,
         "radius_cells": 1,
-        "tracker": "stencil",
+        # SPARTA's move loop: pass 0 over all, later passes on the particles with an event
+        "tracker": "lane",
         "body": "analytic",
         "levelset_h": 0.125,
         "levelset_samples": 8,
@@ -391,7 +392,7 @@ def shape_terms(
     if float(rep.replay_error) > REPLAY_TOL:
         raise RuntimeError(f"replay error {float(rep.replay_error):g}")
     hit_reward = rep.hit_reward
-    value = float(jnp.sum(hit_reward))
+    value = float(jnp.sum(rep.hit_total))
     check = objective_value(cfg, tallies, dim, scale_r)
     newborn_share = (check - value) / max(abs(check), 1e-300)
     n_surf = 2 * dim + mesh.n_elements

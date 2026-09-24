@@ -104,7 +104,7 @@ def objective_terms(objective, window, cfg, t, key, state0, out, rec, tallies):
     if objective == "shear-window":
         static = SimStatic(n, 1, 1, 1, cfg["attempts"], 8, m, majorant_mode=cfg["majorant"])
         grid = _grid(cfg)
-        r, _, err, _, _ = shape.replay(
+        rep = shape.replay(
             rec,
             jnp.arange(m, dtype=jnp.int32),
             state0,
@@ -120,6 +120,7 @@ def objective_terms(objective, window, cfg, t, key, state0, out, rec, tallies):
             static,
             functools.partial(_shear_reward, first=first, scale=scale),
         )
+        r, err = rep.hit_reward, rep.replay_error
         if float(err) > REPLAY_TOL:
             raise RuntimeError(f"the replayed wall map differs from the record by {float(err):g}")
         value = float(jnp.sum(r))

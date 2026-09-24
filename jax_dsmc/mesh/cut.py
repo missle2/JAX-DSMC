@@ -572,9 +572,11 @@ def outside_corner(body, grid: GridSpec, cell_type: np.ndarray, csurfs: np.ndarr
     = z hi) of a corner in the flow (ray parity) whose distance to every element of the cell
     is strictly positive (``> 1e-10 h``; the farthest such corner); ``0`` for ``OUTSIDE``
     cells; ``-1`` for ``INSIDE`` cells and for cut cells with no flow at all (a cell inside
-    the body that a grazing element only touches).  A cut cell that has flow but no clean
-    flow corner (a flow pocket reaching no corner, or every flow corner on the surface)
-    raises ``ValueError``: the tracker's point test needs the corner, so refine the grid.
+    the body that a grazing element only touches).  For a polygonal surface a cut cell that
+    has flow but no clean flow corner (a flow pocket reaching no corner, or every flow
+    corner on the surface) raises ``ValueError``: the tracker's point test needs the
+    corner, so refine the grid.  A level set or an analytic body keeps ``-1`` there: its
+    inside test (``phi < 0`` / ``|x - c| < r``) is exact and never reads the corner.
     """
     lo, hi = cell_boxes(grid)
     _C, D = lo.shape
@@ -593,6 +595,12 @@ def outside_corner(body, grid: GridSpec, cell_type: np.ndarray, csurfs: np.ndarr
     found = score[np.arange(cut.size), best] > 0
     out[cut] = np.where(found, best, -1)
     missing = cut[~found]
+    if missing.size and (_is_levelset(body) or _is_analytic(body)):
+        # the corner is the reference point of the POLYGON inside test only: a level set
+        # (phi < 0) and an analytic body (|x - c| < r) are tested exactly and never read
+        # it, and a flow pocket entering a cell through a face with every corner in the
+        # body is a valid shape (optc Adam S1 iterate 56 / S8 iterate 9, 2026-09-24)
+        return out
     if missing.size:
         # no clean flow corner: acceptable only if the cell holds no flow (probe the
         # centres of a coarse sub-grid with the global test)
