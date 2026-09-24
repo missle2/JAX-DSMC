@@ -18,3 +18,22 @@ iterate 64: J = 2.5404e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0156)  |g| 
 iterate 65: J = 2.5318e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0166)  |g| 9.48e-21  predicted dJ -1.08e-21  hits 84359  stuck 0  613s
 iterate 66: J = 2.5177e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0166)  |g| 1.21e-20  predicted dJ -1.26e-21  hits 84901  stuck 0  284s
 iterate 67: J = 2.513e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0161)  |g| 9e-21  predicted dJ -8.2e-22  hits 85014  stuck 0  284s
+iterate 68: J = 2.5154e-20 ± nan  area 28.2769 -> 28.2769 (shift -0.0153)  |g| 1.37e-20  predicted dJ -1e-21  hits 85725  stuck 0  290s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 470, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 466, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 317, in run
+    avg = averaged_terms(cfg, ls, seeds)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 194, in averaged_terms
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 150, in seed_terms
+    all_terms, info, s = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 479, in shape_terms
+    raise RuntimeError(f"replay error {float(t.replay_error):g}")
+RuntimeError: replay error 1.83767e-12

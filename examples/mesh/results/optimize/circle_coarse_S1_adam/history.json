@@ -1183,7 +1183,24 @@
    "area_shift": -0.016075833961394892,
    "predicted_decrease": -8.196120016700153e-22,
    "seconds": 283.69117188453674
+  },
+  {
+   "iterate": 68,
+   "optimizer": "adam",
+   "objective": 2.5154369889509455e-20,
+   "objective_se": NaN,
+   "gradient_seed_sd": NaN,
+   "hits": 85725.0,
+   "stuck": 0.0,
+   "area": 28.27685719101295,
+   "area_after_step": 28.276857191009036,
+   "grad_norm": 1.372734449273717e-20,
+   "direction_max": 1.6050176116444108,
+   "eta": 0.031152306141222223,
+   "area_shift": -0.015308038563716764,
+   "predicted_decrease": -1.0002833175489174e-21,
+   "seconds": 290.39871764183044
   }
  ],
- "elapsed": 4753.331964969635
+ "elapsed": 5043.7453763484955
 }
