@@ -57,7 +57,10 @@ from jax_dsmc.validation import require_valid
 
 PARAMETERS = ("radius", "centre_x", "mode2", "width")
 BODIES = ("analytic", "levelset")
-REPLAY_TOL = 1e-12
+# the replay's continuous error: round-off of one arithmetic compiled twice, amplified by
+# grazing reflections on concave walls to ~1e-12 on optimised shapes; a discrete divergence
+# (a flipped outcome) reports 1 (`shape._mismatch`), so 1e-9 separates the two widely
+REPLAY_TOL = 1e-9
 
 
 def default_config():

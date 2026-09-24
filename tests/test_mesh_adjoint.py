@@ -834,3 +834,32 @@ def test_silhouette_term_counts_the_hit_set_change(acc):
         assert abs(d_dr) < 0.05 * expected
     else:
         np.testing.assert_allclose(d_dr, expected, rtol=0.15)
+
+
+def test_replay_mismatch_separates_discrete_divergence_from_roundoff():
+    """``shape._mismatch``: a particle whose outcome differs (alive in the replay, dead in
+    the record, or the reverse) reports 1 however close the positions are; round-off
+    reports its size; a slot the inflow refilled (the record's newborn) is not a flip."""
+    grid = GridSpec(lo=jnp.array([0.0, 0.0]), hi=jnp.array([10.0, 10.0]), n=(4, 4))
+    x = jnp.array([[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]])
+    v = jnp.array([[100.0, 0.0, 0.0], [0.0, 100.0, 0.0], [50.0, 50.0, 0.0]])
+    alive = jnp.array([True, True, True])
+
+    class _Rec(NamedTuple):
+        x: jax.Array
+        v: jax.Array
+        alive: jax.Array
+        born_face: jax.Array
+
+    rec = _Rec(x, v, jnp.array([True, True, True]), jnp.array([-1, -1, -1]))
+    surv = alive & rec.alive
+    noise = x.at[0, 0].add(3e-12 * 10.0)
+    err = float(shape._mismatch(noise, v, alive, alive, rec, surv, grid))
+    np.testing.assert_allclose(err, 3e-12, rtol=1e-3)
+    # the replay loses particle 1 (an outflow the record does not have): discrete
+    flip = jnp.array([True, False, True])
+    assert float(shape._mismatch(x, v, alive, flip, rec, surv, grid)) == 1.0
+    # the record's slot 1 died and was refilled by the inflow: the replay's death is right
+    reborn = _Rec(x, v, jnp.array([True, True, True]), jnp.array([-1, 0, -1]))
+    surv2 = alive & reborn.alive & (reborn.born_face < 0)
+    assert float(shape._mismatch(x, v, alive, flip, reborn, surv2, grid)) == 0.0

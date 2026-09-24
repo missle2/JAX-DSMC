@@ -51,7 +51,10 @@ from jax_dsmc.validation import require_valid
 
 MASS = K_BOLTZ  # unit mass with k_B = 1, as the Couette benchmark
 OBJECTIVES = ("energy-window", "shear-window")
-REPLAY_TOL = 1e-12
+# the replay's continuous error: round-off of one arithmetic compiled twice, amplified by
+# grazing reflections on concave walls to ~1e-12 on optimised shapes; a discrete divergence
+# (a flipped outcome) reports 1 (`shape._mismatch`), so 1e-9 separates the two widely
+REPLAY_TOL = 1e-9
 
 
 def default_config():

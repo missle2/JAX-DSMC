@@ -442,11 +442,13 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
     x, v, alive, err = carry
     rec_k, step = xs
     key = key_for(setup["base_key"], step, STAGE_MOVE)
-    x_post, v_post, _alive_post, _logp, tallies, events = wall_map(
+    x_post, v_post, alive_post, _logp, tallies, events = wall_map(
         geom, x, v, alive, key, **setup["map"]
     )
     survivors = alive & rec_k.alive & (rec_k.born_face < 0)
-    err = jnp.maximum(err, _mismatch(x_post, v_post, rec_k, survivors, setup["map"]["grid"]))
+    err = jnp.maximum(
+        err, _mismatch(x_post, v_post, alive, alive_post, rec_k, survivors, setup["map"]["grid"])
+    )
     r, tau, n_hits = _step_rewards(
         events, tallies, rec_k, step, survivors, reward, timing_jump, setup, timing_band
     )
@@ -461,15 +463,29 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
     return (rec_k.x, rec_k.v_post, rec_k.alive, err), (r, tallies, n_hits, tau)
 
 
-def _mismatch(x_post, v_post, rec_k, survivors, grid):
-    """Largest relative replay error over survivors: positions per box extent, velocities
-    per the record's largest speed component."""
+def _mismatch(x_post, v_post, alive, alive_post, rec_k, survivors, grid):
+    """The replay's disagreement with the record: ``1`` if any particle's discrete outcome
+    differs (alive before the move, and alive after it in the replay but not in the record
+    or the reverse -- an outflow, a deletion, a missed hit; a slot the inflow refilled is
+    the record's newborn), else the largest relative error over survivors: positions per
+    box extent, velocities per the record's largest speed component.
+
+    The two parts are checked differently on purpose.  A discrete divergence (a different
+    draw, a hit / miss flip) moves a particle by a sizeable fraction of its step; the
+    continuous part is round-off of one arithmetic compiled twice, which grazing
+    reflections on a concave wall amplify: each changes the hit point by ``delta / theta``
+    along a curved wall, so four at 0.4 degrees turn one ulp into ~1e-12
+    (``scratch/mesh/probe_amplification.py``, 2026-09-24; the optc runs of optimised shapes
+    reported 1.8e-12 .. 7.6e-12).  Callers hold the continuous part to a tolerance far above
+    that and far below any discrete divergence (``REPLAY_TOL = 1e-9``)."""
+    expected = rec_k.alive & (rec_k.born_face < 0)
+    flipped = jnp.any(alive & (alive_post != expected))
     dx = jnp.max(
         jnp.where(survivors[:, None], jnp.abs(x_post - rec_k.x) / (grid.hi - grid.lo), 0.0)
     )
     v_scale = jnp.maximum(jnp.max(jnp.abs(jnp.where(survivors[:, None], rec_k.v, 0.0))), 1e-300)
     dv = jnp.max(jnp.where(survivors[:, None], jnp.abs(v_post - rec_k.v), 0.0)) / v_scale
-    return jnp.maximum(dx, dv)
+    return jnp.where(flipped, 1.0, jnp.maximum(dx, dv))
 
 
 def along_flight(gx, v, lam_timing):
@@ -613,10 +629,12 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     key = key_for(setup["base_key"], step, STAGE_MOVE)
     f = functools.partial(wall_map, x=x, v=v, alive=alive, key=key, **setup["map"])
     primal, vjp = jax.vjp(f, geom)
-    x_post, v_post, _alive_post, _logp, _tallies, events = primal
+    x_post, v_post, alive_post, _logp, _tallies, events = primal
     dim = x.shape[1]
     survivors = alive & rec_k.alive & (rec_k.born_face < 0)
-    err = jnp.maximum(err, _mismatch(x_post, v_post, rec_k, survivors, setup["map"]["grid"]))
+    err = jnp.maximum(
+        err, _mismatch(x_post, v_post, alive, alive_post, rec_k, survivors, setup["map"]["grid"])
+    )
     # value gradients at the post-move state (the record's), on survivors only, from the
     # one-sided fit over the nodes on the hit particle's side of its last surface, of the
     # particle's own class (a body hit ahead or not)
