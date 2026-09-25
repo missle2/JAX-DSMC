@@ -1,0 +1,89 @@
+{
+ "estimator": "ensemble adjoint + replayed wall-map VJP (jax_dsmc.shape)",
+ "config": {
+  "case": "circle",
+  "fnum_scale": 1.0,
+  "warmup": 700,
+  "steps": 300,
+  "window": 200,
+  "radius_cells": 1,
+  "tracker": "lane",
+  "body": "levelset",
+  "levelset_h": 0.0625,
+  "levelset_samples": 16,
+  "acc": 0.0,
+  "silhouette_band": 0.0,
+  "grazing": 0.05,
+  "grid_scale": 2,
+  "value_class": "hit_ahead",
+  "parameter": "mode2",
+  "seed_start": 56,
+  "timing_band": 0.2,
+  "variant": "along_pool"
+ },
+ "requested_seeds": 1,
+ "complete": true,
+ "fd_steps": [
+  0.1,
+  0.05
+ ],
+ "rows": [
+  {
+   "objective": 3.700132948769159e-20,
+   "hits": 166865,
+   "stuck": 0,
+   "newborn_hit_share": -3.2531431489304527e-16,
+   "alive_final": 189856,
+   "lambda_rms": [
+    9.135999612672808e-26,
+    2.0149462558690123e-25,
+    0.0
+   ],
+   "seconds_backward": 160.62801361083984,
+   "seconds_shape": 484.2816848754883,
+   "gradient": -2.4124503595650516e-20,
+   "gradient_with_timing": -2.4937762157215868e-20,
+   "pathwise": -2.4124503595650516e-20,
+   "pathwise_x": -1.0947694178709168e-21,
+   "pathwise_v": -6.974641388342068e-21,
+   "pathwise_tally": -1.605509278943753e-20,
+   "score": 0.0,
+   "silhouette": 0.0,
+   "timing": -8.132585615653528e-22,
+   "variants": {
+    "one": {
+     "pathwise": -2.3755240254220314e-20,
+     "pathwise_x": -1.5315633753954109e-21,
+     "pathwise_v": -6.168584089387373e-21,
+     "gradient": -2.3755240254220314e-20
+    },
+    "one_pool": {
+     "pathwise": -2.4374889112201007e-20,
+     "pathwise_x": -1.3451549344214094e-21,
+     "pathwise_v": -6.97464138834207e-21,
+     "gradient": -2.4374889112201007e-20
+    },
+    "along": {
+     "pathwise": -2.3199806742477264e-20,
+     "pathwise_x": -9.761298636523614e-22,
+     "pathwise_v": -6.168584089387373e-21,
+     "gradient": -2.3199806742477264e-20
+    },
+    "along_pool": {
+     "pathwise": -2.4124503595650516e-20,
+     "pathwise_x": -1.0947694178709168e-21,
+     "pathwise_v": -6.974641388342068e-21,
+     "gradient": -2.4124503595650516e-20
+    }
+   },
+   "analytic_F_over_r": 0.0,
+   "fd": [
+    -1.6421841676479945e-20,
+    -1.6251430364208116e-20
+   ],
+   "seed": 0,
+   "seconds": 915.0544738769531
+  }
+ ],
+ "elapsed": 915.5833299160004
+}

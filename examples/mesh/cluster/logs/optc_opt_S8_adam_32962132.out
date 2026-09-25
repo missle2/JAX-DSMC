@@ -1,0 +1,54 @@
+[Thu Sep 24 13:00:53 MDT 2026] optc_opt_S8_adam on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+    MIG 1g.24gb     Device  0: (UUID: MIG-7b741b3b-3592-515b-bd8c-c46d6cb5f7bb)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_coarse_S8_adam --optimizer adam --iterations 250 --seeds-per-iterate 8 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --step 0.05 --smooth 2 --band 1.0 --substeps 1 --partners 2
+iterate 13: J = 2.8442e-20 ± 5e-23  area 28.2769 -> 28.2769 (shift -0.0117)  |g| 4.26e-21  predicted dJ -9.75e-22  hits 46994  stuck 0  2408s
+iterate 14: J = 2.7972e-20 ± 3.9e-23  area 28.2769 -> 28.2769 (shift -0.0124)  |g| 4.38e-21  predicted dJ -9.44e-22  hits 47749  stuck 0  2051s
+iterate 15: J = 2.7535e-20 ± 5.4e-23  area 28.2769 -> 28.2769 (shift -0.0132)  |g| 4.14e-21  predicted dJ -9.25e-22  hits 48534  stuck 0  2060s
+iterate 16: J = 2.7088e-20 ± 3.7e-23  area 28.2769 -> 28.2769 (shift -0.0137)  |g| 4.45e-21  predicted dJ -9.34e-22  hits 49358  stuck 0  2394s
+iterate 17: J = 2.6641e-20 ± 4.3e-23  area 28.2769 -> 28.2769 (shift -0.0142)  |g| 4.43e-21  predicted dJ -9.19e-22  hits 50271  stuck 0  2049s
+iterate 18: J = 2.6247e-20 ± 3.9e-23  area 28.2769 -> 28.2769 (shift -0.0146)  |g| 4.45e-21  predicted dJ -8.82e-22  hits 51216  stuck 0  2052s
+iterate 19: J = 2.5825e-20 ± 3.8e-23  area 28.2769 -> 28.2769 (shift -0.0150)  |g| 4.35e-21  predicted dJ -8.96e-22  hits 52186  stuck 0  2072s
+iterate 20: J = 2.5413e-20 ± 4.7e-23  area 28.2769 -> 28.2769 (shift -0.0157)  |g| 4.15e-21  predicted dJ -8.86e-22  hits 53294  stuck 0  2074s
+iterate 21: J = 2.5045e-20 ± 4e-23  area 28.2769 -> 28.2769 (shift -0.0164)  |g| 4.15e-21  predicted dJ -9.1e-22  hits 54327  stuck 0  2080s
+iterate 22: J = 2.4794e-20 ± 5.3e-23  area 28.2769 -> 28.2769 (shift -0.0165)  |g| 3.93e-21  predicted dJ -8.73e-22  hits 55403  stuck 0  2087s
+iterate 23: J = 2.4536e-20 ± 4.8e-23  area 28.2769 -> 28.2769 (shift -0.0168)  |g| 4.05e-21  predicted dJ -8.35e-22  hits 56581  stuck 0  2073s
+iterate 24: J = 2.4276e-20 ± 4.3e-23  area 28.2769 -> 28.2769 (shift -0.0173)  |g| 4.01e-21  predicted dJ -7.8e-22  hits 57580  stuck 0  2071s
+iterate 25: J = 2.4056e-20 ± 4e-23  area 28.2769 -> 28.2769 (shift -0.0181)  |g| 3.95e-21  predicted dJ -7.91e-22  hits 58472  stuck 0  2082s
+iterate 26: J = 2.3787e-20 ± 4.2e-23  area 28.2769 -> 28.2769 (shift -0.0184)  |g| 3.69e-21  predicted dJ -8.2e-22  hits 59404  stuck 0  2073s
+iterate 27: J = 2.3524e-20 ± 5.2e-23  area 28.2769 -> 28.2769 (shift -0.0186)  |g| 3.83e-21  predicted dJ -8.05e-22  hits 60231  stuck 0  2075s
+iterate 28: J = 2.3307e-20 ± 6.1e-23  area 28.2769 -> 28.2769 (shift -0.0187)  |g| 3.76e-21  predicted dJ -8.55e-22  hits 61031  stuck 0  2060s
+iterate 29: J = 2.3106e-20 ± 5e-23  area 28.2769 -> 28.2769 (shift -0.0191)  |g| 3.6e-21  predicted dJ -7.79e-22  hits 61670  stuck 0  2083s
+iterate 30: J = 2.2962e-20 ± 5.5e-23  area 28.2769 -> 28.2769 (shift -0.0191)  |g| 3.69e-21  predicted dJ -7.94e-22  hits 62347  stuck 0  2083s
+iterate 31: J = 2.28e-20 ± 4.3e-23  area 28.2769 -> 28.2769 (shift -0.0191)  |g| 3.84e-21  predicted dJ -7.43e-22  hits 63138  stuck 0  2084s
+iterate 32: J = 2.2612e-20 ± 5.1e-23  area 28.2769 -> 28.2769 (shift -0.0192)  |g| 3.62e-21  predicted dJ -7.86e-22  hits 63969  stuck 0  2059s
+iterate 33: J = 2.2406e-20 ± 4.3e-23  area 28.2769 -> 28.2769 (shift -0.0192)  |g| 3.7e-21  predicted dJ -7.53e-22  hits 64752  stuck 0  2079s
+iterate 34: J = 2.225e-20 ± 3.4e-23  area 28.2769 -> 28.2769 (shift -0.0193)  |g| 3.98e-21  predicted dJ -7.67e-22  hits 65624  stuck 0  2073s
+iterate 35: J = 2.2112e-20 ± 3.4e-23  area 28.2769 -> 28.2769 (shift -0.0191)  |g| 3.59e-21  predicted dJ -7.59e-22  hits 66635  stuck 0  2112s
+iterate 36: J = 2.162e-20 ± 3e-23  area 28.2769 -> 28.2769 (shift -0.0191)  |g| 3.49e-21  predicted dJ -7.62e-22  hits 67355  stuck 0  2109s
+Traceback (most recent call last):
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/projects/aaja8389/.uv-python/cpython-3.10.18-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 470, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 466, in main
+    run(cfg, out, argv)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 317, in run
+    avg = averaged_terms(cfg, ls, seeds)
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 194, in averaged_terms
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize.py", line 150, in seed_terms
+    all_terms, info, s = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 389, in shape_terms
+    state0, final, diag, rec, tallies, s = forward(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 290, in forward
+    require_valid(aux[1])
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/validation.py", line 44, in require_valid
+    raise RuntimeError(f"Invalid DSMC trajectory: {failures}")
+RuntimeError: Invalid DSMC trajectory: {'inflow_shortfall': 168.0}

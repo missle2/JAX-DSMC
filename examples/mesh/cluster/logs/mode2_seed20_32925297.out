@@ -1,0 +1,6 @@
+[Thu Sep 24 17:43:18 MDT 2026] mode2_seed20 on c3gpu-c2-u9: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA A100-PCIE-40GB (UUID: GPU-63aa327f-f8b7-a2aa-2de8-87e1f00c40b3)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.ensemble_mesh --body levelset --parameter mode2 --fnum-scale 1 --grid-scale 2 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --substeps 1 --partners 2 --fd-steps 0.1 0.05 --seed-start 52 --seeds 1 --output examples/gradient_bench/results/ensemble_mesh_circle_levelset0.0625_gz0.05_grid2_mode2_f1_H700_M300_W200_virt1x2st_dev_seed20.json
+seed=0 J=3.7176e-20 ensemble=-2.3856e-20 (pathwise -2.386e-20 = x -8.76e-22 + v -6.75e-21 + tally -1.62e-20; score 0, silhouette 0, timing -2.912e-22) F/r=0 FD=[-1.6059924934174374e-20, -1.6404338088589757e-20] hits=167431 935s
+[Thu Sep 24 17:59:04 MDT 2026] done
