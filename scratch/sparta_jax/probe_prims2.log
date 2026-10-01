@@ -1,0 +1,26 @@
+jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/aakash/jax_dsmc/JAX-DSMC-sparta/scratch/sparta_jax/probe_prims2.py", line 44, in <module>
+    jax.block_until_ready(g(m))
+  File "/home/aakash/jax_dsmc/JAX-DSMC-sparta/scratch/sparta_jax/probe_prims2.py", line 43, in <lambda>
+    g = jax.jit(lambda m, f=f: jax.lax.fori_loop(0, 200, lambda i, c: (c[0] ^ (i < 0), c[1] + f(c[0]).sum()), (m, jnp.int32(0))))
+TypeError: scan body function carry input and carry output must have equal types, but they differ:
+
+The input carry component loop_carry[1][1] has type int32[] but the corresponding output carry component has type int64[], so the dtypes do not match.
+
+Revise the function so that all output types match the corresponding input types.
+2026-09-30 11:22:56.409358: W external/xla/xla/service/gpu/autotuning/dot_search_space.cc:200] All configs were filtered out because none of them sufficiently match the hints. Maybe the hints set does not contain a good representative set of valid configs?Working around this by using the full hints set instead.
+gpu cumsum_i32 73.7 us
+gpu cumsum2_16 90.3 us
+gpu cumsum2_32 96.8 us
+2026-09-30 11:22:59.998257: W external/xla/xla/service/gpu/autotuning/dot_search_space.cc:200] All configs were filtered out because none of them sufficiently match the hints. Maybe the hints set does not contain a good representative set of valid configs?Working around this by using the full hints set instead.
+gpu cumsum2_64 70.0 us
+2026-09-30 11:23:02.028793: W external/xla/xla/service/gpu/autotuning/dot_search_space.cc:200] All configs were filtered out because none of them sufficiently match the hints. Maybe the hints set does not contain a good representative set of valid configs?Working around this by using the full hints set instead.
+gpu cumsum3_32 213.2 us
+gpu topk4096 540.1 us
+gpu nonzero 121.0 us
+gpu sort8192 28.0 us
+gpu sort2048 27.7 us

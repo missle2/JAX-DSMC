@@ -1,0 +1,217 @@
+start Thu Oct  1 13:33:16 MDT 2026 load 0.99 1.92 2.16 1/337 714727
+rep 0: 7.518 s  moves 36936400  np 47592
+rep 1: 1.317 s  moves 36908727  np 47643
+rep 2: 1.299 s  moves 36919767  np 47427
+rep 3: 1.300 s  moves 36876461  np 47740
+rep 4: 1.295 s  moves 37002812  np 47709
+rep 5: 1.299 s  moves 36875995  np 47441
+{
+ "tag": "cpu_1",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "--xla_cpu_multi_thread_eigen=false",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 7.517840825006715,
+ "seconds": 1.2951767009944888,
+ "seconds_all": [
+  1.3172395650035469,
+  1.2989418060024036,
+  1.3001413989986759,
+  1.2951767009944888,
+  1.2989315110025927
+ ],
+ "moves": 37002812,
+ "moves_per_second": 28569701.702931926,
+ "final_particles": 47709,
+ "work_second_half": {
+  "np_mean": 45801.546,
+  "np_max": 47608.0,
+  "nlane_mean": 4808.048,
+  "nlane_max": 5056.0,
+  "nwalk_mean": 4.346,
+  "nwalk_max": 5.0,
+  "nscheck_mean": 8456.536,
+  "nscheck_max": 8970.0,
+  "nscoll_mean": 138.342,
+  "nscoll_max": 173.0
+ }
+}
+rep 0: 8.401 s  moves 36936400  np 47592
+rep 1: 1.523 s  moves 36908727  np 47643
+rep 2: 1.533 s  moves 36919767  np 47427
+rep 3: 1.534 s  moves 36876461  np 47740
+{
+ "tag": "cpu_1_tally",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "--xla_cpu_multi_thread_eigen=false",
+ "config": {
+  "tally": true
+ },
+ "sort": "partition",
+ "tally": true,
+ "seconds_first_incl_compile": 8.401155931001995,
+ "seconds": 1.5229940449935384,
+ "seconds_all": [
+  1.5229940449935384,
+  1.5333337320043938,
+  1.5342281089979224
+ ],
+ "moves": 36908727,
+ "moves_per_second": 24234321.284005146,
+ "final_particles": 47643,
+ "work_second_half": {
+  "np_mean": 45801.546,
+  "np_max": 47608.0,
+  "nlane_mean": 4808.048,
+  "nlane_max": 5056.0,
+  "nwalk_mean": 4.346,
+  "nwalk_max": 5.0,
+  "nscheck_mean": 8456.536,
+  "nscheck_max": 8970.0,
+  "nscoll_mean": 138.342,
+  "nscoll_max": 173.0
+ }
+}
+rep 0: 5.656 s  moves 36936400  np 47592
+rep 1: 1.941 s  moves 36908727  np 47643
+rep 2: 1.926 s  moves 36919767  np 47427
+rep 3: 1.950 s  moves 36876461  np 47740
+{
+ "tag": "cpu_all",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 5.655842731997836,
+ "seconds": 1.9264344389957841,
+ "seconds_all": [
+  1.9406854389962973,
+  1.9264344389957841,
+  1.950453475001268
+ ],
+ "moves": 36919767,
+ "moves_per_second": 19164818.82417219,
+ "final_particles": 47427,
+ "work_second_half": {
+  "np_mean": 45801.546,
+  "np_max": 47608.0,
+  "nlane_mean": 4808.048,
+  "nlane_max": 5056.0,
+  "nwalk_mean": 4.346,
+  "nwalk_max": 5.0,
+  "nscheck_mean": 8456.536,
+  "nscheck_max": 8970.0,
+  "nscoll_mean": 138.342,
+  "nscoll_max": 173.0
+ }
+}
+rep 0: 6.391 s  moves 36936400  np 47592
+rep 1: 1.443 s  moves 36908727  np 47643
+rep 2: 1.410 s  moves 36919767  np 47427
+rep 3: 1.435 s  moves 36876461  np 47740
+rep 4: 1.427 s  moves 37002812  np 47709
+rep 5: 1.418 s  moves 36875995  np 47441
+{
+ "tag": "gpu",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "--xla_gpu_enable_command_buffer= ",
+ "config": {
+  "sort": "full"
+ },
+ "sort": "full",
+ "tally": false,
+ "seconds_first_incl_compile": 6.391004080986022,
+ "seconds": 1.409536883002147,
+ "seconds_all": [
+  1.4431520940124756,
+  1.409536883002147,
+  1.434808605001308,
+  1.4269934250041842,
+  1.4177253110101447
+ ],
+ "moves": 36919767,
+ "moves_per_second": 26192834.997950006,
+ "final_particles": 47427,
+ "work_second_half": {
+  "np_mean": 45801.546,
+  "np_max": 47608.0,
+  "nlane_mean": 4808.048,
+  "nlane_max": 5056.0,
+  "nwalk_mean": 4.346,
+  "nwalk_max": 5.0,
+  "nscheck_mean": 8456.536,
+  "nscheck_max": 8970.0,
+  "nscoll_mean": 138.342,
+  "nscoll_max": 173.0
+ }
+}
+rep 0: 5.704 s  moves 36936400  np 47592
+rep 1: 0.825 s  moves 36908727  np 47643
+rep 2: 0.805 s  moves 36919767  np 47427
+rep 3: 0.856 s  moves 36876461  np 47740
+rep 4: 0.872 s  moves 37002812  np 47709
+rep 5: 0.836 s  moves 36875995  np 47441
+{
+ "tag": "gpu_cmdbuf",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "",
+ "config": {
+  "sort": "full"
+ },
+ "sort": "full",
+ "tally": false,
+ "seconds_first_incl_compile": 5.704247586996644,
+ "seconds": 0.8045146479998948,
+ "seconds_all": [
+  0.824778513997444,
+  0.8045146479998948,
+  0.8555171680054627,
+  0.8719538360019214,
+  0.8358817160042236
+ ],
+ "moves": 36919767,
+ "moves_per_second": 45890733.1169001,
+ "final_particles": 47427,
+ "work_second_half": {
+  "np_mean": 45801.546,
+  "np_max": 47608.0,
+  "nlane_mean": 4808.048,
+  "nlane_max": 5056.0,
+  "nwalk_mean": 4.346,
+  "nwalk_max": 5.0,
+  "nscheck_mean": 8456.536,
+  "nscheck_max": 8970.0,
+  "nscoll_mean": 138.342,
+  "nscoll_max": 173.0
+ }
+}
+wall 1.698 ops 1.571 435.06
+  move_walk 0.698 216.74
+  sort 0.437 45.0
+  move_dense 0.205 6.0
+  move_select 0.092 27.0
+  other 0.084 108.25
+  emit 0.051 22.06
+  collide 0.005 10.01
+    move_walk select_divide_fusion.6 0.104
+    sort sort.3 0.078
+    move_walk broadcast_reduce_fusion.5 0.069
+    move_walk wrapped_scatter.9 0.057
+    move_dense select_select_fusion.10 0.055
+    move_dense compare_select_fusion.1 0.05
+    move_dense compare_select_fusion 0.048
+    sort bitcast_gather_fusion.62 0.045
+    move_walk select_bitcast_fusion.80 0.043
+    sort sort.2 0.043
+    sort bitcast_subtract_fusion.8 0.042
+    move_select add_bitcast_fusion.9 0.04
+    sort wrapped_scatter.100 0.032
+    move_walk select_divide_fusion.5 0.03
+end Thu Oct  1 13:40:14 MDT 2026 load 1.17 1.43 1.82 1/334 718337

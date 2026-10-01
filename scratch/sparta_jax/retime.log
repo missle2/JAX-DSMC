@@ -1,0 +1,125 @@
+start Wed Sep 30 21:16:05 MDT 2026 load 0.98 1.49 1.61 2/615 469159
+load before jax 2.32 1.76 1.69 3/621 469586
+rep 0: 13.497 s  moves 36936400  np 47592
+rep 1: 2.752 s  moves 36908727  np 47643
+rep 2: 2.661 s  moves 36919767  np 47427
+rep 3: 2.762 s  moves 36876461  np 47740
+rep 4: 2.708 s  moves 37002812  np 47709
+rep 5: 2.857 s  moves 36875995  np 47441
+{
+ "tag": "cpu_1",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "--xla_cpu_multi_thread_eigen=false",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 13.497298720991239,
+ "seconds": 2.6608334699994884,
+ "seconds_all": [
+  2.7524394120118814,
+  2.6608334699994884,
+  2.762018421009998,
+  2.7082020249945344,
+  2.857449805000215
+ ],
+ "moves": 36919767,
+ "moves_per_second": 13875264.054013534,
+ "final_particles": 47427
+}
+rep 0: 14.478 s  moves 36936400  np 47592
+rep 1: 3.313 s  moves 36908727  np 47643
+rep 2: 3.361 s  moves 36919767  np 47427
+rep 3: 3.395 s  moves 36876461  np 47740
+{
+ "tag": "cpu_1_fullsort",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "--xla_cpu_multi_thread_eigen=false",
+ "config": {
+  "sort": "full"
+ },
+ "sort": "full",
+ "tally": false,
+ "seconds_first_incl_compile": 14.477977046990418,
+ "seconds": 3.3131407410110114,
+ "seconds_all": [
+  3.3131407410110114,
+  3.3606851200020174,
+  3.3945481950067915
+ ],
+ "moves": 36908727,
+ "moves_per_second": 11140102.36363736,
+ "final_particles": 47643
+}
+rep 0: 14.991 s  moves 36936400  np 47592
+rep 1: 3.007 s  moves 36908727  np 47643
+rep 2: 3.023 s  moves 36919767  np 47427
+rep 3: 2.876 s  moves 36876461  np 47740
+{
+ "tag": "cpu_1_tally",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "--xla_cpu_multi_thread_eigen=false",
+ "config": {
+  "tally": true
+ },
+ "sort": "partition",
+ "tally": true,
+ "seconds_first_incl_compile": 14.990703527990263,
+ "seconds": 2.876496267999755,
+ "seconds_all": [
+  3.0068400930031203,
+  3.0233752640051534,
+  2.876496267999755
+ ],
+ "moves": 36876461,
+ "moves_per_second": 12819923.11627193,
+ "final_particles": 47740
+}
+rep 0: 9.548 s  moves 36936400  np 47592
+rep 1: 3.263 s  moves 36908727  np 47643
+rep 2: 4.758 s  moves 36919767  np 47427
+rep 3: 12.476 s  moves 36876461  np 47740
+{
+ "tag": "cpu_all",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 9.547852449002676,
+ "seconds": 3.262963569010026,
+ "seconds_all": [
+  3.262963569010026,
+  4.7582413670024835,
+  12.476233100998797
+ ],
+ "moves": 36908727,
+ "moves_per_second": 11311412.530173607,
+ "final_particles": 47643
+}
+wall 3.385 ops 3.168 500.29
+  move_walk 1.193 286.98
+  sort 0.918 29.0
+  move_dense 0.521 12.0
+  other 0.404 138.25
+  emit 0.064 22.05
+  move_select 0.061 2.0
+  collide 0.007 10.01
+    sort bitcast_subtract_fusion.14 0.187
+    sort sort.1 0.186
+    sort select_bitcast_fusion.4 0.183
+    move_dense or_and_fusion 0.162
+    move_walk select_divide_fusion.12 0.118
+    move_walk broadcast_reduce_fusion.11 0.08
+    move_dense and_select_fusion 0.069
+    move_dense and_select_fusion.1 0.068
+    move_walk wrapped_scatter.6 0.06
+    sort wrapped_scatter.146 0.058
+    sort wrapped_scatter.143 0.058
+    sort bitcast_gather_fusion.109 0.055
+    move_walk select_bitcast_fusion.145 0.055
+    move_walk bitcast_gather_fusion.163 0.054
+end Wed Sep 30 21:18:43 MDT 2026 load 3.23 2.28 1.90 2/619 471872

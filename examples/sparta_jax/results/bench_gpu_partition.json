@@ -1,0 +1,19 @@
+{
+ "tag": "gpu_partition",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "--xla_gpu_enable_command_buffer= ",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 14.049791486992035,
+ "seconds": 1.6576874089951161,
+ "seconds_all": [
+  1.900314927988802,
+  1.9619315269956132,
+  1.6576874089951161
+ ],
+ "moves": 36876461,
+ "moves_per_second": 22245726.66710087,
+ "final_particles": 47740
+}

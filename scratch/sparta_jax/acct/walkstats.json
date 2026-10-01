@@ -1,0 +1,26 @@
+{
+ "alive": 47772.05,
+ "near": 4676.55,
+ "in_cut_cells": 3876.3,
+ "active_per_stage": [
+  4676.55,
+  1272.3,
+  52.4,
+  9.15,
+  0.35
+ ],
+ "active_in_cut_per_stage": [
+  3876.3,
+  480.0,
+  32.425,
+  5.525,
+  0.225
+ ],
+ "stages_mean": 4.325,
+ "stages_max": 5,
+ "line_tests_useful": 8729.15,
+ "K": 3,
+ "lane": 5120,
+ "lane2": 768,
+ "fixed_stages": 4
+}

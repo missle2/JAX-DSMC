@@ -1,0 +1,191 @@
+{
+ "platform": "gpu",
+ "tag": "gpu",
+ "sort": "full",
+ "alive": 47576,
+ "wall_ms_per_step": 2.0370059499691706,
+ "op_ms_per_step": 0.6037531600000082,
+ "ops_per_step": 167.67,
+ "stages": {
+  "move_walk": {
+   "ms_per_step": 0.3261617700000051,
+   "ops_per_step": 87.94
+  },
+  "other": {
+   "ms_per_step": 0.08089705000000053,
+   "ops_per_step": 47.73
+  },
+  "move_dense": {
+   "ms_per_step": 0.07546841999999997,
+   "ops_per_step": 5.0
+  },
+  "sort": {
+   "ms_per_step": 0.06844587000000009,
+   "ops_per_step": 10.0
+  },
+  "emit": {
+   "ms_per_step": 0.04117990000000001,
+   "ops_per_step": 13.0
+  },
+  "collide": {
+   "ms_per_step": 0.006478919999999997,
+   "ops_per_step": 3.0
+  },
+  "move_select": {
+   "ms_per_step": 0.005121230000000003,
+   "ops_per_step": 1.0
+  }
+ },
+ "top_ops": [
+  [
+   "move_walk",
+   "input_compare_reduce_select_fusion.1",
+   0.08469585000000002
+  ],
+  [
+   "sort",
+   "custom-call.1",
+   0.04619452000000007
+  ],
+  [
+   "move_dense",
+   "loop_add_and_or_fusion",
+   0.04178622000000001
+  ],
+  [
+   "move_dense",
+   "input_reduce_select_fusion",
+   0.02985221000000001
+  ],
+  [
+   "move_walk",
+   "loop_reduce_fusion.7",
+   0.018985150000000017
+  ],
+  [
+   "sort",
+   "input_scatter_fusion.84",
+   0.017175269999999996
+  ],
+  [
+   "move_walk",
+   "loop_add_clamp_compare_gather_select_fusion.1",
+   0.009277669999999997
+  ],
+  [
+   "move_walk",
+   "input_and_gather_reduce_slice_fusion.9",
+   0.007810469999999991
+  ],
+  [
+   "move_walk",
+   "input_and_gather_reduce_slice_fusion.8",
+   0.007365360000000002
+  ],
+  [
+   "move_walk",
+   "input_and_gather_reduce_slice_fusion.6",
+   0.00674718
+  ],
+  [
+   "other",
+   "Memset 3",
+   0.006724050000000029
+  ],
+  [
+   "emit",
+   "loop_compare_fusion.9",
+   0.006699119999999994
+  ],
+  [
+   "emit",
+   "input_scatter_fusion.140",
+   0.006534670000000006
+  ],
+  [
+   "emit",
+   "input_scatter_fusion.85",
+   0.006518110000000002
+  ],
+  [
+   "move_walk",
+   "input_and_gather_reduce_slice_fusion.7",
+   0.006108739999999989
+  ],
+  [
+   "other",
+   "loop_reduce_window_fusion.6",
+   0.006016659999999993
+  ],
+  [
+   "other",
+   "copy.397",
+   0.0055606100000000006
+  ],
+  [
+   "move_walk",
+   "loop_clamp_gather_select_fusion.6",
+   0.005459840000000003
+  ],
+  [
+   "move_walk",
+   "loop_clamp_gather_select_fusion.8",
+   0.005316429999999997
+  ],
+  [
+   "move_walk",
+   "loop_clamp_gather_select_fusion.9",
+   0.005288950000000001
+  ],
+  [
+   "move_walk",
+   "loop_clamp_gather_select_fusion.7",
+   0.0052294099999999994
+  ],
+  [
+   "move_select",
+   "loop_add_and_fusion",
+   0.005121230000000003
+  ],
+  [
+   "move_walk",
+   "loop_and_divide_fusion.9",
+   0.004689230000000002
+  ],
+  [
+   "move_walk",
+   "loop_and_divide_fusion.8",
+   0.004488980000000001
+  ],
+  [
+   "move_walk",
+   "loop_and_divide_fusion.7",
+   0.0043247500000000005
+  ],
+  [
+   "move_walk",
+   "loop_and_divide_fusion.6",
+   0.004064619999999995
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.139",
+   0.0037926400000000003
+  ],
+  [
+   "other",
+   "loop_reduce_window_fusion.10",
+   0.0037859400000000007
+  ],
+  [
+   "collide",
+   "loop_convert_select_subtract_fusion",
+   0.0037506600000000007
+  ],
+  [
+   "other",
+   "loop_reduce_window_fusion.9",
+   0.003711949999999994
+  ]
+ ]
+}

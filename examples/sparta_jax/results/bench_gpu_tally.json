@@ -1,0 +1,22 @@
+{
+ "tag": "gpu_tally",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "--xla_gpu_enable_command_buffer= ",
+ "config": {
+  "sort": "full",
+  "tally": true
+ },
+ "sort": "full",
+ "tally": true,
+ "seconds_first_incl_compile": 12.760485150996828,
+ "seconds": 1.5690172290051123,
+ "seconds_all": [
+  1.7422018790093716,
+  1.5690172290051123,
+  1.6968396640004357
+ ],
+ "moves": 36919767,
+ "moves_per_second": 23530504.5205974,
+ "final_particles": 47427
+}

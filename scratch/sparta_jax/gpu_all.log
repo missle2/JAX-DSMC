@@ -1,0 +1,412 @@
+rep 0: 8.934 s  moves 36936400  np 47592
+rep 1: 2.313 s  moves 36908727  np 47643
+rep 2: 2.302 s  moves 36919767  np 47427
+rep 3: 2.135 s  moves 36876461  np 47740
+{
+ "tag": "gpu",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "--xla_gpu_enable_command_buffer= --xla_gpu_enable_command_buffer= ",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 8.933792762996745,
+ "seconds": 2.134898019998218,
+ "seconds_all": [
+  2.3126594749919605,
+  2.302177726989612,
+  2.134898019998218
+ ],
+ "moves": 36876461,
+ "moves_per_second": 17273172.139637277,
+ "final_particles": 47740
+}
+rep 0: 6.885 s  moves 36936400  np 47592
+rep 1: 2.019 s  moves 36908727  np 47643
+rep 2: 2.036 s  moves 36919767  np 47427
+rep 3: 2.133 s  moves 36876461  np 47740
+{
+ "tag": "gpu_fullsort",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "--xla_gpu_enable_command_buffer= --xla_gpu_enable_command_buffer= ",
+ "config": {
+  "sort": "full"
+ },
+ "sort": "full",
+ "tally": false,
+ "seconds_first_incl_compile": 6.884817793004913,
+ "seconds": 2.018623687006766,
+ "seconds_all": [
+  2.018623687006766,
+  2.0361993910046294,
+  2.1332583830080694
+ ],
+ "moves": 36908727,
+ "moves_per_second": 18284104.7777105,
+ "final_particles": 47643
+}
+rep 0: 7.673 s  moves 36936400  np 47592
+rep 1: 2.789 s  moves 36908727  np 47643
+rep 2: 2.851 s  moves 36919767  np 47427
+{
+ "tag": "gpu_tally",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "--xla_gpu_enable_command_buffer= --xla_gpu_enable_command_buffer= ",
+ "config": {
+  "tally": true
+ },
+ "sort": "partition",
+ "tally": true,
+ "seconds_first_incl_compile": 7.672880609999993,
+ "seconds": 2.7887703879969195,
+ "seconds_all": [
+  2.7887703879969195,
+  2.8510889620083617
+ ],
+ "moves": 36908727,
+ "moves_per_second": 13234767.25041903,
+ "final_particles": 47643
+}
+2026-09-30 16:35:20.700499: E external/xla/xla/python/profiler/internal/python_hooks.cc:412] Can't import tensorflow.python.profiler.trace
+2026-09-30 16:35:21.080482: E external/xla/xla/python/profiler/internal/python_hooks.cc:412] Can't import tensorflow.python.profiler.trace
+{
+ "platform": "gpu",
+ "tag": "gpu",
+ "sort": "partition",
+ "alive": 47576,
+ "wall_ms_per_step": 3.608016459911596,
+ "op_ms_per_step": 0.6971051400000109,
+ "ops_per_step": 209.35,
+ "stages": {
+  "move_walk": {
+   "ms_per_step": 0.3974462200000123,
+   "ops_per_step": 102.53
+  },
+  "other": {
+   "ms_per_step": 0.08947656000000012,
+   "ops_per_step": 63.82
+  },
+  "sort": {
+   "ms_per_step": 0.08219740999999943,
+   "ops_per_step": 21.0
+  },
+  "move_dense": {
+   "ms_per_step": 0.0810335999999999,
+   "ops_per_step": 6.0
+  },
+  "emit": {
+   "ms_per_step": 0.04090235000000017,
+   "ops_per_step": 13.0
+  },
+  "collide": {
+   "ms_per_step": 0.006049000000000009,
+   "ops_per_step": 3.0
+  }
+ },
+ "top_ops": [
+  [
+   "move_walk",
+   "input_reduce_select_fusion",
+   0.08672752999999997
+  ],
+  [
+   "move_dense",
+   "loop_add_and_or_fusion",
+   0.041454839999999986
+  ],
+  [
+   "move_walk",
+   "input_and_gather_reduce_slice_fusion",
+   0.03863704000000006
+  ],
+  [
+   "sort",
+   "sort.2.0",
+   0.03796803999999992
+  ],
+  [
+   "move_dense",
+   "input_reduce_select_fusion.1",
+   0.03026201
+  ],
+  [
+   "move_walk",
+   "loop_reduce_fusion.1",
+   0.027997639999999997
+  ],
+  [
+   "move_walk",
+   "loop_and_divide_fusion",
+   0.027142290000000017
+  ],
+  [
+   "move_walk",
+   "input_and_multiply_reduce_select_fusion",
+   0.023987870000000005
+  ],
+  [
+   "move_walk",
+   "loop_clamp_gather_select_fusion",
+   0.01896797000000003
+  ],
+  [
+   "move_walk",
+   "loop_add_clamp_gather_or_select_fusion",
+   0.010923000000000006
+  ],
+  [
+   "move_walk",
+   "input_reduce_fusion",
+   0.009351730000000013
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.20",
+   0.009107690000000012
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.21",
+   0.008790150000000019
+  ],
+  [
+   "move_walk",
+   "loop_reduce_fusion",
+   0.008127909999999959
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.25",
+   0.008006489999999998
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.24",
+   0.0079781
+  ],
+  [
+   "other",
+   "loop_pad_fusion",
+   0.0078100900000000455
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.22",
+   0.007508389999999981
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.19",
+   0.007499189999999974
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.23",
+   0.0073982299999999935
+  ],
+  [
+   "sort",
+   "loop_compare_gather_fusion",
+   0.006753139999999997
+  ],
+  [
+   "emit",
+   "loop_compare_fusion.2",
+   0.006641489999999998
+  ],
+  [
+   "move_walk",
+   "input_slice_fusion",
+   0.0066379999999999955
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.16",
+   0.0065602899999999825
+  ],
+  [
+   "emit",
+   "input_scatter_fusion.34",
+   0.006447599999999999
+  ],
+  [
+   "emit",
+   "input_scatter_fusion.33",
+   0.006416619999999997
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.15",
+   0.006403439999999986
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.17",
+   0.006070150000000004
+  ],
+  [
+   "move_walk",
+   "input_scatter_fusion.18",
+   0.006020329999999997
+  ],
+  [
+   "move_walk",
+   "input_reduce_fusion.2",
+   0.00600826000000002
+  ]
+ ]
+}
+seed 1001: 8.4 s, np 47911
+seed 1002: 3.0 s, np 47573
+seed 1003: 3.1 s, np 47534
+seed 1004: 3.0 s, np 47639
+seed 1005: 2.9 s, np 47457
+seed 1006: 2.9 s, np 47734
+seed 1007: 3.0 s, np 47378
+seed 1008: 2.9 s, np 47587
+{
+ "totals": {
+  "moves": {
+   "jax": [
+    36928692.375,
+    23212.57095530158
+   ],
+   "sparta": [
+    36931120.875,
+    16863.893274471582
+   ],
+   "rel_diff": -6.575754925552957e-05,
+   "z": -0.08464116698145156
+  },
+  "nscheck": {
+   "jax": [
+    6893324.875,
+    6707.665592007134
+   ],
+   "sparta": [
+    6875881.125,
+    7919.035818920082
+   ],
+   "rel_diff": 0.0025369475828451726,
+   "z": 1.6808313006826705
+  },
+  "nscoll": {
+   "jax": [
+    116999.625,
+    124.15772478988168
+   ],
+   "sparta": [
+    116855.625,
+    98.27674799477529
+   ],
+   "rel_diff": 0.001232289844840695,
+   "z": 0.9094008576851068
+  },
+  "nexit": {
+   "jax": [
+    105765.5,
+    43.66389485931957
+   ],
+   "sparta": [
+    105745.875,
+    48.5101011204294
+   ],
+   "rel_diff": 0.00018558643540478315,
+   "z": 0.3006884962150618
+  },
+  "nbound": {
+   "jax": [
+    111477.125,
+    150.61225494389794
+   ],
+   "sparta": [
+    111325.0,
+    74.80904261613603
+   ],
+   "rel_diff": 0.0013664944980911198,
+   "z": 0.9046018632597868
+  }
+ },
+ "force_fx": {
+  "jax": [
+   3.697387745720206e-20,
+   4.844331619029577e-23
+  ],
+  "sparta": [
+   3.70563857559875e-20,
+   1.1255956635483828e-22
+  ],
+  "z": -0.6733092197718755
+ },
+ "force_fy": {
+  "jax": [
+   1.1749982676790395e-23,
+   8.89552127107908e-23
+  ],
+  "sparta": [
+   1.9029816287500006e-23,
+   1.2163075186842749e-22
+  ],
+  "z": -0.048310430426131264
+ },
+ "surf_n": {
+  "rms_z": 1.049048975356848,
+  "max_abs_z": 3.3404490485800094
+ },
+ "surf_fx": {
+  "rms_z": 0.9132485688033661,
+  "max_abs_z": 2.3455167508244865
+ },
+ "surf_fy": {
+  "rms_z": 0.9227315098106076,
+  "max_abs_z": 2.345449388953157
+ },
+ "grid_nrho": {
+  "cells": 310,
+  "rms_z": 0.8996709528440783,
+  "max_abs_z": 2.702133860315556,
+  "frac_abs_z_gt_3": 0.0,
+  "mean_rel_diff": -0.00020541257037592567
+ },
+ "grid_u": {
+  "cells": 310,
+  "rms_z": 1.0207664131956726,
+  "max_abs_z": 2.8490745611655544,
+  "frac_abs_z_gt_3": 0.0,
+  "mean_rel_diff": 0.00027912683693974525
+ },
+ "grid_v": {
+  "cells": 310,
+  "rms_z": 1.012775241732895,
+  "max_abs_z": 3.167905683710986,
+  "frac_abs_z_gt_3": 0.00967741935483871,
+  "mean_rel_diff": 0.0009252209322266168
+ },
+ "grid_temp": {
+  "cells": 310,
+  "rms_z": 1.1302336953914054,
+  "max_abs_z": 3.2033052742911696,
+  "frac_abs_z_gt_3": 0.0064516129032258064,
+  "mean_rel_diff": -0.0007821696388558181
+ },
+ "platform": "gpu",
+ "n_seeds": {
+  "jax": 8,
+  "sparta": 8
+ },
+ "np": {
+  "final_jax": [
+   47601.625,
+   58.426369260805515
+  ],
+  "final_sparta": [
+   47619.875,
+   50.55422742673737
+  ],
+  "max_abs_z": 1.163975057076379,
+  "frac_abs_z_gt_3": 0.0,
+  "rms_z": 0.49282272768197816
+ }
+}

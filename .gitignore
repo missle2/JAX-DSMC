@@ -229,3 +229,6 @@ examples/.jax_cache/
 scratch/**/*.npz
 scratch/**/*.pkl
 scratch/**/*.done
+
+# sparta_jax: raw profiler traces (the per-stage JSONs next to them are kept)
+examples/sparta_jax/results/profile_*/

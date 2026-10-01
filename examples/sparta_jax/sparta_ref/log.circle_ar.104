@@ -1,0 +1,243 @@
+SPARTA (24 Sep 2025)
+Running on 1 MPI task(s)
+################################################################################
+# 2d flow around a circle -- single-species argon variant of
+# sparta/examples/circle/in.circle (same grid, density, fnum, timestep, walls).
+#
+# Run:  spa_serial -var seed 12345 -in in.circle_ar -log log.circle_ar.12345
+#
+# The "comm/sort" and "twopass" options make runs reproducible (they match
+# MPI/Kokkos runs) and are kept from the shipped input.
+################################################################################
+
+seed	    	    ${seed}
+seed	    	    104
+dimension   	    2
+global              gridcut 0.0 comm/sort yes
+
+boundary	    o r p
+
+create_box  	    0 10 0 10 -0.5 0.5
+Created orthogonal box = (0 0 -0.5) to (10 10 0.5)
+create_grid 	    20 20 1
+Created 400 child grid cells
+  CPU time = 0.00155616 secs
+  create/ghost percent = 94.4078 5.59216
+balance_grid        rcb cell
+Balance grid migrated 0 cells
+  CPU time = 8.01086e-05 secs
+  reassign/sort/migrate/ghost percent = 27.381 1.4881 42.2619 28.869
+
+global		    nrho 1.0 fnum 0.001
+
+species		    ar.species Ar
+mixture		    ar Ar vstream 100.0 0 0
+
+read_surf           data.circle
+  50 lines
+  2 8 xlo xhi
+  2.00592 7.99408 ylo yhi
+  0 0 zlo zhi
+  0.376743 min line length
+  48 0 = cells overlapping surfs, overlap cells with unmarked corner pts
+  264 88 48 = cells outside/inside/overlapping surfs
+  48 = surf cells with 1,2,etc splits
+  71.8 71.8 = cell-wise and global flow volume
+  CPU time = 0.00056982 secs
+  read/check/sort/surf2grid/ghost/inout/particle percent = 7.53138 15.272 1.21339 67.9079 8.07531 4.76987 0
+  surf2grid time = 0.000386953 secs
+  map/comm1/comm2/comm3/comm4/split percent = 38.2625 4.92914 8.74923 2.5878 34.3192 7.45533
+surf_collide	    1 diffuse 300.0 0.0
+surf_modify         all collide 1
+
+collide             vss ar ar.vss
+
+fix		    in emit/face ar xlo twopass
+
+timestep 	    0.0001
+
+# (a) per-cell geometry and flow volume (area in 2d), written once at step 0
+compute             vol property/grid all id xc yc vol
+dump                gvol grid all 1000 grid_vol.circle_ar.${seed}.txt id xc yc vol
+dump                gvol grid all 1000 grid_vol.circle_ar.104.txt id xc yc vol
+dump_modify         gvol first yes
+
+# (b) surface loads averaged over the last 300 steps (2d: "area" = line length)
+compute             s surf all all n press px py pz shx shy shz fx fy fz ke
+fix                 as ave/surf all 1 300 1000 c_s[*] ave one
+dump                dsurf surf all 1000 surf_ave.circle_ar.${seed}.txt                     id v1x v1y v2x v2y area f_as[*]
+dump                dsurf surf all 1000 surf_ave.circle_ar.104.txt                     id v1x v1y v2x v2y area f_as[*]
+
+# (c) cell fields averaged over the last 300 steps
+compute             g grid all all n nrho u v w temp
+fix                 ag ave/grid all 1 300 1000 c_g[*] ave one
+dump                dgrid grid all 1000 grid_ave.circle_ar.${seed}.txt                     id xc yc f_ag[*]
+dump                dgrid grid all 1000 grid_ave.circle_ar.104.txt                     id xc yc f_ag[*]
+
+# (d) fill curves every 10 steps
+stats		    10
+stats_style	    step cpu np nattempt ncoll nscoll nscheck nexit nbound
+run 		    1000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 0 0 0
+  grid      (ave,min,max) = 1.51379 1.51379 1.51379
+  surf      (ave,min,max) = 0.00514984 0.00514984 0.00514984
+  modify    (ave,min,max) = 0.0747681 0.0747681 0.0747681
+  total     (ave,min,max) = 1.59371 1.59371 1.59371
+Step CPU Np Natt Ncoll Nscoll Nscheck Nexit Nbound 
+       0            0        0        0        0        0        0        0        0 
+      10 0.0016381741     1536        0        0        0        0        0        0 
+      20 0.0022671223     3080        0        0        0        2        0        9 
+      30 0.0030851364     4615        0        0        2       50        0        9 
+      40  0.004196167     6136        0        0        4      208        0       12 
+      50 0.0056381226     7667        0        0       20      556        0       12 
+      60 0.0077030659     9190        0        0       26     1022        0       14 
+      70  0.010211945    10714        0        0       35     1488        1       26 
+      80  0.013271093    12211        0        0       69     2108        6       25 
+      90  0.015665054    13685        0        0       51     2423        9       28 
+     100  0.018460989    15127        0        0       57     2838       10       24 
+     110  0.022751093    16518        0        0       63     3094       12       43 
+     120  0.025963068    17878        0        0       74     3485       19       42 
+     130  0.029440165    19186        0        0       74     3715       26       42 
+     140  0.033029079    20439        0        0       73     4095       36       76 
+     150  0.036906004    21681        0        0       90     4461       26       56 
+     160  0.040995121    22923        0        0       93     4708       39       61 
+     170  0.045531988    24063        0        0       96     5053       41       77 
+     180  0.050028086    25140        0        0      103     5248       39       75 
+     190  0.054774046    26153        0        0       97     5223       63       74 
+     200  0.059703112    27160        0        0       99     5325       52       82 
+     210  0.065834045    28092        0        0       97     5585       64       87 
+     220  0.071453094    29044        0        0       85     5754       64       95 
+     230  0.077401161    29874        0        0      106     5808       80       82 
+     240   0.08355999    30716        0        0       97     5886       84      103 
+     250  0.090123177    31490        0        0       93     6019       81      105 
+     260  0.097110033    32277        0        0      107     6378       64       96 
+     270   0.10974813    32991        0        0      129     6610       85      112 
+     280   0.11679411    33687        0        0      126     6520       83      100 
+     290   0.12482309    34323        0        0      115     6659       87      114 
+     300   0.13304114    34917        0        0      133     6932       89      133 
+     310   0.14301515    35467        0        0      131     6902      107      128 
+     320   0.15076017    36007        0        0      114     6975       92      118 
+     330   0.15882397    36471        0        0      142     7071      106      115 
+     340     0.167063    37021        0        0      117     7232      100      126 
+     350   0.17792201    37520        0        0      119     7301      110      125 
+     360   0.18728018    38002        0        0      150     7488      120      125 
+     370   0.19519114    38393        0        0      126     7472      106      114 
+     380   0.20387506    38826        0        0      134     7387      115      119 
+     390   0.21255398    39242        0        0      133     7448      111      150 
+     400   0.22183514    39678        0        0      122     7531      107      121 
+     410   0.23109317    40060        0        0      114     7379      114      157 
+     420   0.24043608    40396        0        0      125     7517      118      124 
+     430   0.24987411    40669        0        0      118     7541      106      113 
+     440   0.25857902    40948        0        0      127     7643      115      132 
+     450   0.26663709    41181        0        0      147     7735      121      144 
+     460    0.2744391    41431        0        0      132     7893      132      146 
+     470   0.28236794    41706        0        0      155     7956      121      124 
+     480   0.29070997    41991        0        0      133     7665      108      136 
+     490   0.30145812    42203        0        0      123     7815      123      141 
+     500   0.31053996    42491        0        0      141     7986      130      112 
+     510   0.31928611    42755        0        0      122     7957      115      136 
+     520   0.32866001    42957        0        0      150     7937      133      130 
+     530   0.33733106    43164        0        0      137     8011      133      130 
+     540   0.34758997    43334        0        0      142     8096      131      131 
+     550   0.35675097    43501        0        0      134     8107      139      134 
+     560   0.36499095    43688        0        0      139     8263      135      140 
+     570   0.37363505    43841        0        0      117     8147      137      131 
+     580     0.382447    44014        0        0      133     8077      148      129 
+     590   0.39152217    44180        0        0      131     7989      133      128 
+     600   0.40043497    44373        0        0      142     8188      148      161 
+     610   0.40890908    44532        0        0      127     8178      124      148 
+     620   0.41836905    44678        0        0      127     8240      156      131 
+     630   0.42721701    44789        0        0      137     8249      141      141 
+     640   0.43640518    44925        0        0      118     8118      166      142 
+     650   0.44555902    45063        0        0      147     8468      145      135 
+     660   0.45593596    45163        0        0      135     8612      141      143 
+     670     0.465729    45195        0        0      130     8299      149      150 
+     680   0.47522402    45271        0        0      143     8438      135      140 
+     690     0.486871    45357        0        0      136     8161      140      129 
+     700   0.49897599    45507        0        0      157     8396      137      141 
+     710   0.51740408    45683        0        0      144     8342      131      129 
+     720   0.53599215    45761        0        0      137     8564      132      135 
+     730   0.55317307    45842        0        0      131     8590      131      121 
+     740   0.56864595    45971        0        0      144     8390      151      128 
+     750   0.58414197    46028        0        0      103     8575      167      129 
+     760   0.60057306    46143        0        0      160     8631      143      168 
+     770   0.61610508    46194        0        0      113     8290       96      163 
+     780   0.63356304    46254        0        0      127     8334      139      133 
+     790   0.65121102    46351        0        0      154     8557      135      160 
+     800   0.67184305    46428        0        0      125     8713      147      129 
+     810   0.69034815    46535        0        0      146     8701      154      130 
+     820   0.70428109    46589        0        0      141     8673      142      138 
+     830   0.71785307    46713        0        0      146     8915      148      130 
+     840   0.73189497    46839        0        0      178     9005      144      135 
+     850   0.74696517    46944        0        0      155     8917      141      175 
+     860   0.76175404    47066        0        0      133     8447      136      141 
+     870   0.77713299    47138        0        0      157     8673      142      159 
+     880   0.79280114    47161        0        0      128     8781      179      116 
+     890   0.80841303    47181        0        0      153     8587      139      136 
+     900   0.82419109    47150        0        0      148     8650      160      151 
+     910   0.84234715    47227        0        0      138     8756      156      127 
+     920   0.86201501    47220        0        0      122     8768      157      146 
+     930   0.87837505    47279        0        0      149     8723      126      167 
+     940   0.89254904    47308        0        0      158     8871      140      140 
+     950   0.90668797    47349        0        0      123     8479      158      142 
+     960   0.92113113    47404        0        0      139     8889      150      127 
+     970   0.93575096    47443        0        0      159     8953      152      157 
+     980   0.95070004    47538        0        0      138     8894      162      151 
+     990   0.96784306    47547        0        0      121     8715      152      131 
+    1000    1.0016022    47633        0        0      133     8577      121      127 
+Loop time of 1.00161 on 1 procs for 1000 steps with 47633 particles
+Performance: 998.393 timesteps/s, 47.556 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.54292    | 0.54292    | 0.54292    |   0.0 | 54.20
+Coll    | 0.13327    | 0.13327    | 0.13327    |   0.0 | 13.31
+Sort    | 0.090637   | 0.090637   | 0.090637   |   0.0 |  9.05
+Comm    | 0.0018094  | 0.0018094  | 0.0018094  |   0.0 |  0.18
+Modify  | 0.22631    | 0.22631    | 0.22631    |   0.0 | 22.59
+Output  | 0.0058229  | 0.0058229  | 0.0058229  |   0.0 |  0.58
+MPI Sync| 0.00019646 | 0.00019646 | 0.00019646 |   0.0 |  0.02
+Other   |            | 0.0006485  |            |       |  0.06
+
+Particle moves    = 36915480 (36.9M)
+Cells touched     = 40138959 (40.1M)
+Particle comms    = 0 (0K)
+Boundary collides = 111450 (0.111M)
+Boundary exits    = 105712 (0.106M)
+SurfColl checks   = 6875855 (6.88M)
+SurfColl occurs   = 116890 (0.117M)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 3.68561e+07
+Particle-moves/step: 36915.5
+Cell-touches/particle/step: 1.08732
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.00301906
+Particle fraction exiting boundary: 0.00286362
+Surface-checks/particle/step: 0.186259
+Surface-collisions/particle/step: 0.00316642
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 47633 ave 47633 max 47633 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      400 ave 400 max 400 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Surfs:    50 ave 50 max 50 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostSurf: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

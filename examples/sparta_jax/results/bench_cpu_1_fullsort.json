@@ -1,0 +1,21 @@
+{
+ "tag": "cpu_1_fullsort",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "--xla_cpu_multi_thread_eigen=false",
+ "config": {
+  "sort": "full"
+ },
+ "sort": "full",
+ "tally": false,
+ "seconds_first_incl_compile": 14.477977046990418,
+ "seconds": 3.3131407410110114,
+ "seconds_all": [
+  3.3131407410110114,
+  3.3606851200020174,
+  3.3945481950067915
+ ],
+ "moves": 36908727,
+ "moves_per_second": 11140102.36363736,
+ "final_particles": 47643
+}

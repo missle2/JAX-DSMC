@@ -1,0 +1,35 @@
+{
+ "tag": "gpu_cmdbuf",
+ "platform": "gpu",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "xla_flags": "",
+ "config": {
+  "sort": "full"
+ },
+ "sort": "full",
+ "tally": false,
+ "seconds_first_incl_compile": 5.704247586996644,
+ "seconds": 0.8045146479998948,
+ "seconds_all": [
+  0.824778513997444,
+  0.8045146479998948,
+  0.8555171680054627,
+  0.8719538360019214,
+  0.8358817160042236
+ ],
+ "moves": 36919767,
+ "moves_per_second": 45890733.1169001,
+ "final_particles": 47427,
+ "work_second_half": {
+  "np_mean": 45801.546,
+  "np_max": 47608.0,
+  "nlane_mean": 4808.048,
+  "nlane_max": 5056.0,
+  "nwalk_mean": 4.346,
+  "nwalk_max": 5.0,
+  "nscheck_mean": 8456.536,
+  "nscheck_max": 8970.0,
+  "nscoll_mean": 138.342,
+  "nscoll_max": 173.0
+ }
+}

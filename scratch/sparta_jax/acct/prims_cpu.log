@@ -1,0 +1,16 @@
+scalar (loop overhead)            0.0 us
+axpy f64 N                      144.9 us
+5-in 4-out elementwise          628.2 us
+gather f64 random N             333.9 us
+gather f64 identity N           145.7 us
+scatter set f64 random N        245.6 us
+histogram 401 bins (N)           53.5 us
+cumsum i32 N                    872.8 us
+sort i32 N                     3392.6 us
+sort i32 8192                   416.1 us
+sort i32 4096                   173.9 us
+sort i32 1024                    34.2 us
+argsort stable i32 N          14296.7 us
+int div/mod by 20 N             176.9 us
+floor->int N                    135.8 us
+gather 401-table N              123.8 us

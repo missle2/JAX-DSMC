@@ -1,0 +1,78 @@
+{
+ "rows": [
+  [
+   "SPARTA serial (no computes)",
+   "SPARTA (C++)",
+   0.518212
+  ],
+  [
+   "SPARTA serial (full deck)",
+   "SPARTA (C++)",
+   0.649737
+  ],
+  [
+   "SPARTA MPI x8 (no computes)",
+   "SPARTA (C++)",
+   0.208767
+  ],
+  [
+   "sparta_jax GPU, cmd buffers on",
+   "sparta_jax (JAX)",
+   0.8045146479998948
+  ],
+  [
+   "sparta_jax CPU 1 core",
+   "sparta_jax (JAX)",
+   1.2951767009944888
+  ],
+  [
+   "sparta_jax GPU (cmd buffers off)",
+   "sparta_jax (JAX)",
+   1.409536883002147
+  ],
+  [
+   "sparta_jax CPU all cores",
+   "sparta_jax (JAX)",
+   1.9264344389957841
+  ],
+  [
+   "main code GPU (cmd buffers off)",
+   "main code (JAX)",
+   4.502464698001859
+  ],
+  [
+   "main code CPU 1 core",
+   "main code (JAX)",
+   8.725820958003169
+  ]
+ ],
+ "stages_cpu1": {
+  "SPARTA serial (x1.26 to steady state)": {
+   "move": 0.434,
+   "sort": 0.068,
+   "collide": 0.113,
+   "emit/inflow": 0.03,
+   "other": 0.003
+  },
+  "sparta_jax": {
+   "move": 0.995,
+   "sort": 0.437,
+   "collide": 0.005,
+   "emit/inflow": 0.051,
+   "other": 0.084
+  },
+  "main code": {
+   "move": 3.12,
+   "sort": 2.18,
+   "collide": 0.6,
+   "emit/inflow": 0.98,
+   "other": 2.41
+  }
+ },
+ "notes": {
+  "sparta": "2026-10-01 13:2x, spa_serial / spa_ MPI x8, 5 repeats each, best shown, 1-min load 0.5-1.2 (sparta_timing_final.txt)",
+  "sparta_jax": "bench_{cpu_1,cpu_1_tally,cpu_all,gpu,gpu_cmdbuf}.json of the same session, best of 3-5 runs after a compile run",
+  "main": "JAX-DSMC main tree (uncommitted, 2026-10-01), scratch/perf/bench_forward.py polygon body, same session",
+  "stages": "ms per step at steady state (~46-47.6k particles): sparta_jax profile_cpu1_final.json, main code forward_cpu_serial_polygon_final.json (main repo); SPARTA's own timers average over the 1000-step fill (mean 37k particles), scaled by 1.26"
+ }
+}

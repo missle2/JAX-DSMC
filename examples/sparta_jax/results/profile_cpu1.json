@@ -1,0 +1,191 @@
+{
+ "platform": "cpu",
+ "tag": "cpu1",
+ "sort": "partition",
+ "alive": 47576,
+ "wall_ms_per_step": 3.3850058799725957,
+ "op_ms_per_step": 3.1678941599999875,
+ "ops_per_step": 500.29,
+ "stages": {
+  "move_walk": {
+   "ms_per_step": 1.1933847000000015,
+   "ops_per_step": 286.98
+  },
+  "sort": {
+   "ms_per_step": 0.9184405899999992,
+   "ops_per_step": 29.0
+  },
+  "move_dense": {
+   "ms_per_step": 0.5211449400000002,
+   "ops_per_step": 12.0
+  },
+  "other": {
+   "ms_per_step": 0.4035471299999993,
+   "ops_per_step": 138.25
+  },
+  "emit": {
+   "ms_per_step": 0.06366262000000003,
+   "ops_per_step": 22.05
+  },
+  "move_select": {
+   "ms_per_step": 0.060687649999999996,
+   "ops_per_step": 2.0
+  },
+  "collide": {
+   "ms_per_step": 0.0070265300000000004,
+   "ops_per_step": 10.01
+  }
+ },
+ "top_ops": [
+  [
+   "sort",
+   "bitcast_subtract_fusion.14",
+   0.18659961
+  ],
+  [
+   "sort",
+   "sort.1",
+   0.18553537999999992
+  ],
+  [
+   "sort",
+   "select_bitcast_fusion.4",
+   0.18283805000000006
+  ],
+  [
+   "move_dense",
+   "or_and_fusion",
+   0.16249994000000004
+  ],
+  [
+   "move_walk",
+   "select_divide_fusion.12",
+   0.11817477
+  ],
+  [
+   "move_walk",
+   "broadcast_reduce_fusion.11",
+   0.07995360999999998
+  ],
+  [
+   "move_dense",
+   "and_select_fusion",
+   0.06855913999999999
+  ],
+  [
+   "move_dense",
+   "and_select_fusion.1",
+   0.06849315
+  ],
+  [
+   "move_walk",
+   "wrapped_scatter.6",
+   0.05969623999999999
+  ],
+  [
+   "sort",
+   "wrapped_scatter.146",
+   0.05838522000000003
+  ],
+  [
+   "sort",
+   "wrapped_scatter.143",
+   0.058061909999999994
+  ],
+  [
+   "sort",
+   "bitcast_gather_fusion.109",
+   0.05521606
+  ],
+  [
+   "move_walk",
+   "select_bitcast_fusion.145",
+   0.054544300000000004
+  ],
+  [
+   "move_walk",
+   "bitcast_gather_fusion.163",
+   0.05428797999999999
+  ],
+  [
+   "sort",
+   "wrapped_scatter.140",
+   0.053992399999999996
+  ],
+  [
+   "move_dense",
+   "select_select_fusion.16",
+   0.05167371999999997
+  ],
+  [
+   "other",
+   "reduce-window.1078",
+   0.04874679000000001
+  ],
+  [
+   "move_select",
+   "add_bitcast_fusion.3",
+   0.04856062000000003
+  ],
+  [
+   "other",
+   "reduce-window.1075",
+   0.04790667
+  ],
+  [
+   "move_dense",
+   "negate_select_fusion",
+   0.04334754999999997
+  ],
+  [
+   "other",
+   "reduce-window.1069",
+   0.03774705000000001
+  ],
+  [
+   "move_dense",
+   "multiply_add_fusion.4",
+   0.03753449000000002
+  ],
+  [
+   "move_dense",
+   "select_select_fusion.17",
+   0.037192329999999996
+  ],
+  [
+   "other",
+   "reduce-window.1018",
+   0.03616851999999998
+  ],
+  [
+   "emit",
+   "multiply_compare_fusion",
+   0.027435399999999995
+  ],
+  [
+   "move_dense",
+   "compare_or_fusion.1",
+   0.023602589999999996
+  ],
+  [
+   "sort",
+   "select_bitcast_fusion.1",
+   0.02348685999999999
+  ],
+  [
+   "move_walk",
+   "bitcast_gather_fusion.177",
+   0.021119460000000013
+  ],
+  [
+   "move_walk",
+   "select_bitcast_fusion.139",
+   0.01980607000000001
+  ],
+  [
+   "move_walk",
+   "select_bitcast_fusion.143",
+   0.019556020000000004
+  ]
+ ]
+}

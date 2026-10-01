@@ -1,0 +1,19 @@
+{
+ "tag": "base_cpu_1",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "--xla_cpu_multi_thread_eigen=false",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 17.200631999003235,
+ "seconds": 3.187467805997585,
+ "seconds_all": [
+  3.1919781119941035,
+  3.187467805997585,
+  3.4822576209990075
+ ],
+ "moves": 36919767,
+ "moves_per_second": 11582788.987086,
+ "final_particles": 47427
+}
