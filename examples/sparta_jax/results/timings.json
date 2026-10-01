@@ -38,12 +38,12 @@
   [
    "main code GPU (cmd buffers off)",
    "main code (JAX)",
-   4.502464698001859
+   4.478419227001723
   ],
   [
    "main code CPU 1 core",
    "main code (JAX)",
-   8.725820958003169
+   6.307561455003452
   ]
  ],
  "stages_cpu1": {
@@ -62,17 +62,17 @@
    "other": 0.084
   },
   "main code": {
-   "move": 3.12,
-   "sort": 2.18,
-   "collide": 0.6,
-   "emit/inflow": 0.98,
-   "other": 2.41
+   "move": 3.35,
+   "sort": 0.83,
+   "collide": 0.34,
+   "emit/inflow": 0.54,
+   "other": 2.01
   }
  },
  "notes": {
   "sparta": "2026-10-01 13:2x, spa_serial / spa_ MPI x8, 5 repeats each, best shown, 1-min load 0.5-1.2 (sparta_timing_final.txt)",
   "sparta_jax": "bench_{cpu_1,cpu_1_tally,cpu_all,gpu,gpu_cmdbuf}.json of the same session, best of 3-5 runs after a compile run",
-  "main": "JAX-DSMC main tree (uncommitted, 2026-10-01), scratch/perf/bench_forward.py polygon body, same session",
+  "main": "JAX-DSMC main (uncommitted, 2026-10-01 evening: routed tracker, partition sort, bookkeeping), scratch/perf/bench_forward.py polygon body",
   "stages": "ms per step at steady state (~46-47.6k particles): sparta_jax profile_cpu1_final.json, main code forward_cpu_serial_polygon_final.json (main repo); SPARTA's own timers average over the 1000-step fill (mean 37k particles), scaled by 1.26"
  }
 }

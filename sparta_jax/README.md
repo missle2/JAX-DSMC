@@ -107,21 +107,21 @@ Each timing is 1000 steps from an empty box, about 36.9 M particle moves (counte
 | sparta_jax | CPU, all 16 cores (XLA default threading) | 1.926 | 3.7 |
 | sparta_jax, `sort=full` | GPU (RTX 3050 Ti), command buffers off (WSL-safe flags) | 1.410 | 2.7 |
 | sparta_jax, `sort=full` | GPU, command buffers on | **0.805** | 1.6 |
-| main code (JAX-DSMC, polygon, lane tracker) | CPU, 1 core | 8.73 | 16.8 |
-| main code | GPU, command buffers off | 4.50 | 8.7 |
+| main code (JAX-DSMC main, polygon, lane tracker, partition sort) | CPU, 1 core | 6.31 | 12.2 |
+| main code | GPU, command buffers off | 4.48 | 8.6 |
 
 ### Per-stage breakdown on one CPU core
 
-ms per step at steady state (about 46-47.6k particles). sparta_jax: `results/profile_cpu1_final.json`; main code: the main repo's `scratch/perf/profile/forward_cpu_serial_polygon_final.json`. SPARTA's own timers average over the 1000-step fill (mean 37k particles), so they are scaled by 1.26 to steady state.
+ms per step at steady state (about 46-47.6k particles). sparta_jax: `results/profile_cpu1_final.json`; main code: main's `scratch/perf/profile/forward_cpu_serial.json` (2026-10-01 evening, after the partition sort). SPARTA's own timers average over the 1000-step fill (mean 37k particles), so they are scaled by 1.26 to steady state.
 
 | Stage | SPARTA serial | sparta_jax | ratio | main code |
 |---|---|---|---|---|
-| Move (straight move, surface collisions, boundaries) | 0.43 | 1.00 (walk 0.70, dense 0.21, lane select 0.09) | 2.3x | 3.12 (surface search 1.62, tracker 1.41, wall events 0.09) |
-| Sort | 0.068 | 0.44 | 6.4x | 2.18 |
-| Collide (NTC, 0 attempts) | 0.113 | 0.005 | 0.04x | 0.60 |
-| Emit / inflow | 0.030 | 0.051 | 1.7x | 0.98 |
-| Other | ~0 | 0.08 | | 2.41 |
-| **Total** | **0.64** | **1.57** (1.30 without the profiler) | **2.5x** | **9.3** |
+| Move (straight move, surface collisions, boundaries) | 0.43 | 1.00 (walk 0.70, dense 0.21, lane select 0.09) | 2.3x | 3.35 (surface search + inside check 1.58, tracker 1.47, wall events 0.30) |
+| Sort | 0.068 | 0.44 | 6.4x | 0.83 (partition sort) |
+| Collide (NTC, 0 attempts) | 0.113 | 0.005 | 0.04x | 0.34 |
+| Emit / inflow | 0.030 | 0.051 | 1.7x | 0.54 (Halley sampler 0.37, slots and entrant tracking 0.17) |
+| Other | ~0 | 0.08 | | 2.01 (small-op overhead 1.69, cell temperature 0.30) |
+| **Total** | **0.64** | **1.57** (1.30 without the profiler) | **2.5x** | **7.1** (8.0 wall under the profiler) |
 
 ### Work accounting: is the move gap XLA, or extra work?
 
@@ -188,17 +188,12 @@ code now uses the same partition sort (`jax_dsmc.sort.update_table`, `SimStatic.
 | Dense straight move + compacted near lane (cut-free ring as a distance table) | Exact routing bound; draws keyed per particle so the routing does not change randomness | Move 6.3 -> ~1 ms | Ported for XLA:CPU (`wall_adjoint._first_pass_routed`, `mesh.geometry.near_tables`). On GPU the old dense pass 0 is kept: the lane's gathers/scatters cost more launches than they save. |
 | Variadic `lax.reduce` for the earliest hit (time + id + passengers) | Hit time re-formed from the winner's plane for the tangent | Removes recomputed hit tests | Ported (`mesh.geometry._element_hit`) |
 | Counter-based per-particle wall draws (`fold_in(key, slot)`) | Forward, replay and adjoint use the same keyed draws | Removes the full-width per-pass draws (~1 ms) | Ported (`wall_adjoint._slot_uniforms`) |
-| Blocked prefix sum, `materialise`, `floor_int` | Integer-exact | Large in sparta_jax | Tried in the main code: bitwise identical but no measurable gain (its compactions are not on the critical path); not merged |
+| Blocked prefix sum, `materialise`, `floor_int` | Integer-exact | Large in sparta_jax | The blocked prefix sum is in main (`jax_dsmc.compaction.prefix_count`, a small gain); `floor_int` was bitwise but gave nothing measurable there and was not merged |
 | Partition sort (carry the previous order; sort only the slots that changed cell) | A carried order in the collide state; NTC pair draws differ within a cell (same distribution) | Sort 0.9 -> 0.44 ms | Ported for XLA:CPU (`jax_dsmc.sort.update_table`, `SimStatic.sort = "partition"`): 2.2 -> ~1.0 ms per step. GPU keeps the full sort. |
 | Cells-parallel NTC attempt loop (`while_loop` trip count = max attempts) | Same recorded pairs format | 1.6 -> 0.005 ms | Partly: the scratch-row copies are gone (1.6 -> 0.6 ms); the slot scan structure stays |
 
 ## Conclusions
 
 1. **XLA vs C++, same algorithm, one CPU core: 2.5x** (1.295 s vs 0.518 s), and 2.3x with tallies against SPARTA's full deck. By stage: move 2.3x, sort 6.4x, emit 1.7x, collisions faster in JAX (all cells at once). The work accounting shows the residual is per-op XLA runtime overhead and lock-step padding, not extra algorithmic work. On GPU with command buffers sparta_jax is 1.6x SPARTA serial, and 3.9x SPARTA MPI x8.
-2. **The main code is 6.7x slower than sparta_jax on one CPU core** (8.73 s vs 1.295 s; was 10.5x before 2026-10-01) **and 3.2x on GPU** (4.50 s vs 1.41 s, same flags). By stage (main minus sparta_jax, ms per step):
-   * move/tracker: +2.1;
-   * sort: +1.7 (full packed sort of every slot vs the partition sort);
-   * other: +2.3 (record and diagnostic bookkeeping, RNG key derivations, score accumulators);
-   * inflow: +0.9 (entrant tracking and slot assignment; the Halley sampler itself is ~0.1);
-   * collide: +0.6 (slot scan).
-3. **Budget on one CPU core: main code 8.73 s ≈ SPARTA 0.52 s × 2.5 (XLA) × 6.7 (the main code's differentiable machinery).** The main code is 16.8x SPARTA serial (was 51x on 2026-09-28). Getting under 5x needs the sort and the "other" bookkeeping restructured; the tracker is no longer the dominant cost.
+2. **The main code is 4.9x slower than sparta_jax on one CPU core** (6.31 s vs 1.295 s; 10.5x on 2026-09-30) **and 3.2x on GPU** (4.48 s vs 1.41 s, same flags). By stage (main minus sparta_jax, ms per step): move/tracker +2.4, other +1.9 (small-op overhead: ~280 tiny reductions and ~40 carry copies per step, and the cell temperature the certified majorant needs), inflow +0.5, sort +0.4 (the same partition sort, over 60k slots), collide +0.3.
+3. **Budget on one CPU core: main code 6.31 s ≈ SPARTA 0.52 s × 2.5 (XLA) × 4.9 (the main code's differentiable machinery).** The main code is 12.2x SPARTA serial (51x on 2026-09-28). Getting under 5x needs fewer, larger XLA ops in the tracker and the bookkeeping; the sort is now the same as sparta_jax's.
