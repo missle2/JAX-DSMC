@@ -1,0 +1,34 @@
+[Thu Oct  1 18:51:07 MDT 2026] squash_opt_S4 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+    MIG 1g.24gb     Device  0: (UUID: MIG-7b0acf4d-5606-5c01-abf5-8164e13f719c)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize_squash --seeds-per-iterate 4 --iterations 25 --substeps 1 --partners 2
+iterate 0: s 1.0000  D 1.7516e-20 (ref 1.7083e-20)  dD/ds 2.0911e-20 ± 3.5e-22 (ref 2.1018e-20)  J' +3.611e-21  -> s 0.9500  755s
+iterate 1: s 0.9500  D 1.6456e-20 (ref 1.6034e-20)  dD/ds 2.1062e-20 ± 4.3e-22 (ref 2.0928e-20)  J' +3.762e-21  -> s 0.9000  602s
+iterate 2: s 0.9000  D 1.5400e-20 (ref 1.4990e-20)  dD/ds 2.0759e-20 ± 2.8e-22 (ref 2.0823e-20)  J' +3.459e-21  -> s 0.8501  579s
+iterate 3: s 0.8501  D 1.4351e-20 (ref 1.3954e-20)  dD/ds 2.0771e-20 ± 3.1e-22 (ref 2.0702e-20)  J' +3.471e-21  -> s 0.8002  580s
+iterate 4: s 0.8002  D 1.3256e-20 (ref 1.2925e-20)  dD/ds 2.0500e-20 ± 2.5e-22 (ref 2.0561e-20)  J' +3.201e-21  -> s 0.7506  578s
+iterate 5: s 0.7506  D 1.2232e-20 (ref 1.1910e-20)  dD/ds 2.0300e-20 ± 3.7e-22 (ref 2.0397e-20)  J' +3.000e-21  -> s 0.7014  592s
+iterate 6: s 0.7014  D 1.1235e-20 (ref 1.0910e-20)  dD/ds 2.0232e-20 ± 3.9e-22 (ref 2.0206e-20)  J' +2.932e-21  -> s 0.6524  586s
+iterate 7: s 0.6524  D 1.0233e-20 (ref 9.9255e-21)  dD/ds 1.9757e-20 ± 2.0e-22 (ref 1.9983e-20)  J' +2.458e-21  -> s 0.6042  585s
+iterate 8: s 0.6042  D 9.2405e-21 (ref 8.9681e-21)  dD/ds 1.9450e-20 ± 1.4e-22 (ref 1.9726e-20)  J' +2.151e-21  -> s 0.5570  589s
+iterate 9: s 0.5570  D 8.2746e-21 (ref 8.0431e-21)  dD/ds 1.9031e-20 ± 1.2e-22 (ref 1.9428e-20)  J' +1.731e-21  -> s 0.5111  587s
+iterate 10: s 0.5111  D 7.4390e-21 (ref 7.1601e-21)  dD/ds 1.8669e-20 ± 1.4e-22 (ref 1.9089e-20)  J' +1.369e-21  -> s 0.4671  588s
+iterate 11: s 0.4671  D 6.5989e-21 (ref 6.3271e-21)  dD/ds 1.8227e-20 ± 1.7e-22 (ref 1.8704e-20)  J' +9.269e-22  -> s 0.4253  608s
+iterate 12: s 0.4253  D 5.7679e-21 (ref 5.5552e-21)  dD/ds 1.7524e-20 ± 1.9e-22 (ref 1.8276e-20)  J' +2.245e-22  -> s 0.3871  572s
+iterate 13: s 0.3871  D 5.0641e-21 (ref 4.8661e-21)  dD/ds 1.6682e-20 ± 5.4e-23 (ref 1.7818e-20)  J' -6.177e-22  -> s 0.3543  559s
+iterate 14: s 0.3543  D 4.4626e-21 (ref 4.2874e-21)  dD/ds 1.6203e-20 ± 1.5e-22 (ref 1.7364e-20)  J' -1.097e-21  -> s 0.3274  535s
+iterate 15: s 0.3274  D 3.9898e-21 (ref 3.8267e-21)  dD/ds 1.5781e-20 ± 1.7e-22 (ref 1.6943e-20)  J' -1.519e-21  -> s 0.3071  535s
+iterate 16: s 0.3071  D 3.6540e-21 (ref 3.4863e-21)  dD/ds 1.5547e-20 ± 1.7e-22 (ref 1.6591e-20)  J' -1.753e-21  -> s 0.2933  535s
+iterate 17: s 0.2933  D 3.4278e-21 (ref 3.2584e-21)  dD/ds 1.5362e-20 ± 1.5e-22 (ref 1.6332e-20)  J' -1.938e-21  -> s 0.2856  535s
+iterate 18: s 0.2856  D 3.2917e-21 (ref 3.1342e-21)  dD/ds 1.5265e-20 ± 1.1e-22 (ref 1.6182e-20)  J' -2.035e-21  -> s 0.2837  535s
+iterate 19: s 0.2837  D 3.2640e-21 (ref 3.1031e-21)  dD/ds 1.5171e-20 ± 7.1e-23 (ref 1.6144e-20)  J' -2.129e-21  -> s 0.2871  535s
+iterate 20: s 0.2871  D 3.3140e-21 (ref 3.1573e-21)  dD/ds 1.5237e-20 ± 1.3e-22 (ref 1.6210e-20)  J' -2.063e-21  -> s 0.2949  535s
+iterate 21: s 0.2949  D 3.4589e-21 (ref 3.2854e-21)  dD/ds 1.5160e-20 ± 1.6e-22 (ref 1.6364e-20)  J' -2.140e-21  -> s 0.3070  535s
+iterate 22: s 0.3070  D 3.6521e-21 (ref 3.4837e-21)  dD/ds 1.5472e-20 ± 2.1e-22 (ref 1.6588e-20)  J' -1.828e-21  -> s 0.3220  534s
+iterate 23: s 0.3220  D 3.8968e-21 (ref 3.7360e-21)  dD/ds 1.5778e-20 ± 2.1e-22 (ref 1.6853e-20)  J' -1.522e-21  -> s 0.3392  535s
+iterate 24: s 0.3392  D 4.2228e-21 (ref 4.0280e-21)  dD/ds 1.5987e-20 ± 1.6e-22 (ref 1.7134e-20)  J' -1.313e-21  -> s 0.3579  535s
+[Thu Oct  1 22:50:00 MDT 2026] done

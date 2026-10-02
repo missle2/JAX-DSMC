@@ -1,0 +1,17 @@
+[Thu Oct  1 18:51:07 MDT 2026] squash_grad_s1 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+    MIG 1g.24gb     Device  0: (UUID: MIG-bd67acb9-bb70-5bdb-b95e-6c57f3317d03)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.ensemble_mesh --case ellipse --body levelset --parameter squash_y --squash 1.0 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --value-class none --substeps 1 --partners 2 --fd-steps 0.05 0.02 --seeds 8
+seed=0 J=1.7479e-20 ensemble=2.0408e-20 (pathwise 2.041e-20 = x 8.11e-23 + v -3.18e-22 + tally 2.06e-20; score -0, silhouette -0, timing 4.415e-22) F/r=0 FD=[2.0819586144393578e-20, 2.1285984532913853e-20] hits=19673 328s
+seed=1 J=1.7624e-20 ensemble=2.1505e-20 (pathwise 2.15e-20 = x -1.79e-23 + v 2.73e-22 + tally 2.12e-20; score -0, silhouette -0, timing 7.938e-22) F/r=0 FD=[2.1428967310494407e-20, 2.2591827802694237e-20] hits=19819 201s
+seed=2 J=1.7323e-20 ensemble=2.0217e-20 (pathwise 2.022e-20 = x -3.82e-22 + v -1.04e-22 + tally 2.07e-20; score -0, silhouette -0, timing -9.096e-23) F/r=0 FD=[2.1064225953759178e-20, 2.1647812278512302e-20] hits=19780 161s
+seed=3 J=1.7638e-20 ensemble=2.1514e-20 (pathwise 2.151e-20 = x -5.28e-24 + v -1.15e-22 + tally 2.16e-20; score -0, silhouette -0, timing 1.754e-22) F/r=0 FD=[2.1730741676961924e-20, 2.2218580961018492e-20] hits=19837 169s
+seed=4 J=1.7508e-20 ensemble=2.1173e-20 (pathwise 2.117e-20 = x 2.11e-23 + v -2.42e-22 + tally 2.14e-20; score -0, silhouette -0, timing 5.847e-22) F/r=0 FD=[2.1368271959512848e-20, 2.344408448683784e-20] hits=19910 169s
+seed=5 J=1.768e-20 ensemble=2.0583e-20 (pathwise 2.058e-20 = x 8.05e-23 + v -5e-22 + tally 2.1e-20; score -0, silhouette -0, timing 9.344e-22) F/r=0 FD=[2.2290837465327088e-20, 2.223970156728636e-20] hits=19940 160s
+seed=6 J=1.7535e-20 ensemble=2.1461e-20 (pathwise 2.146e-20 = x -3.82e-23 + v -2.54e-22 + tally 2.18e-20; score -0, silhouette -0, timing -4.877e-22) F/r=0 FD=[2.0849805178367476e-20, 1.9849416798886994e-20] hits=19760 169s
+seed=7 J=1.7754e-20 ensemble=2.186e-20 (pathwise 2.186e-20 = x 3.81e-22 + v 2.1e-23 + tally 2.15e-20; score -0, silhouette -0, timing 6.902e-22) F/r=0 FD=[2.2274443415906897e-20, 2.2942560854843882e-20] hits=19704 169s
+[Thu Oct  1 19:18:01 MDT 2026] done

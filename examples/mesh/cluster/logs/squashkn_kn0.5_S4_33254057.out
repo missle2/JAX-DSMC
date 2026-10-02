@@ -1,0 +1,14 @@
+[Thu Oct  1 18:51:07 MDT 2026] squashkn_kn0.5_S4 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+    MIG 1g.24gb     Device  0: (UUID: MIG-54fd6e27-f8d6-5482-aec5-7deb4967b979)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize_squash --seeds-per-iterate 4 --iterations 25 --knudsen 0.5 --a-max 64
+iterate 0: s 1.0000  D 1.3385e-02 (ref 1.5177e-02)  dD/ds 1.4527e-02 ± 2.1e-04 (ref 1.8673e-02)  J' -8.428e-04  -> s 1.0500  7379s
+iterate 1: s 1.0500  D 1.4129e-02 (ref 1.6113e-02)  dD/ds 1.5796e-02 ± 5.7e-04 (ref 1.8742e-02)  J' +4.259e-04  -> s 1.0631  7380s
+iterate 2: s 1.0631  D 1.4501e-02 (ref 1.6359e-02)  dD/ds 1.5788e-02 ± 7.7e-04 (ref 1.8759e-02)  J' +4.180e-04  -> s 1.0594  7352s
+iterate 3: s 1.0594  D 1.4374e-02 (ref 1.6290e-02)  dD/ds 1.4406e-02 ± 1.5e-04 (ref 1.8754e-02)  J' -9.645e-04  -> s 1.0771  7492s
+iterate 4: s 1.0771  D 1.4623e-02 (ref 1.6621e-02)  dD/ds 1.4977e-02 ± 3.5e-04 (ref 1.8776e-02)  J' -3.935e-04  -> s 1.0988  7207s
+iterate 5: s 1.0988  D 1.5003e-02 (ref 1.7029e-02)  dD/ds 1.5322e-02 ± 6.5e-04 (ref 1.8801e-02)  J' -4.800e-05  -> s 1.1183  7399s
