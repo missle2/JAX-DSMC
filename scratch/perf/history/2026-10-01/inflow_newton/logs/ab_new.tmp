@@ -1,0 +1,2 @@
+inflow from /home/aakash/jax_dsmc/wt_inflow/jax_dsmc/inflow.py halley True
+{"platform": "cpu", "device": "cpu", "body": "polygon", "seconds_first_incl_compile": 43.89670723999734, "seconds": 27.84167050200631, "moves": 36651050.0, "final_particles": 47673, "moves_per_second": 1316409.8755266455, "slots": 60000}

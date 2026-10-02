@@ -180,18 +180,28 @@ def cell_temperature(
     arithmetic appears here, the index is simply taken from the module that owns
     it instead of asking for it twice.
 
-    Uses the same two-pass central-moment form as :func:`moments`: the peculiar
-    velocity is taken about the *measured* bulk velocity, never as
-    ``<v^2> - <v>^2``, which cancels catastrophically at high Mach number.
+    One pass, about a shift: the velocities are taken relative to the population's mean
+    ``s`` (one reduction), and each cell's ``<|c|^2> - |<c>|^2`` with ``c = v - s`` is formed
+    from ONE segment sum of ``(c, |c|^2)`` -- not :func:`moments`' two passes (a gather of
+    the cell velocity per particle and a second segment sum).  ``<|v|^2> - |<v>|^2`` about
+    zero cancels catastrophically at high Mach number; about ``s`` the cancellation is
+    that of the cell's bulk speed *relative to the population's* over the thermal speed,
+    ``~ eps (|u_cell - s| / v_th)^2`` -- ``1e-14`` relative at a relative Mach number of 10
+    (``tests/test_sample.py`` holds it to :func:`moments` at ``1e-12``, also under a bulk
+    shift of ``1e8`` thermal speeds).
     """
     C = num_cells(grid)
     c = table.cell  # i32[N], already computed by build_table
     w = state.alive.astype(jnp.float64)
-    cnt = jax.ops.segment_sum(w, c, num_segments=C)
+    # the live count per cell is the table's (dead slots carry the sentinel cell C): the
+    # same integers as a segment sum of `w`, without a scatter over every slot
+    cnt = table.counts.astype(jnp.float64)
     inv = safe_recip_count(cnt)
-    u = jax.ops.segment_sum(w[:, None] * state.v, c, num_segments=C) * inv[:, None]
-    cpec = state.v - u[c]
-    e = jax.ops.segment_sum(w * jnp.sum(cpec * cpec, axis=-1), c, num_segments=C) * inv
+    shift = jnp.sum(w[:, None] * state.v, axis=0) * safe_recip_count(jnp.sum(w))
+    rel = state.v - shift
+    rows = jnp.concatenate([rel, jnp.sum(rel * rel, axis=-1, keepdims=True)], axis=1)
+    sums = jax.ops.segment_sum(w[:, None] * rows, c, num_segments=C) * inv[:, None]
+    e = jnp.maximum(sums[:, 3] - jnp.sum(sums[:, :3] ** 2, axis=1), 0.0)
     return species.mass[0] * e / (3.0 * K_BOLTZ)
 
 

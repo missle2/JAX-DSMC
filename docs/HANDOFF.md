@@ -48,7 +48,10 @@
 >   `2D + model` carry each element model's `diffuse T acc` (`acc = 0` = specular, as
 >   SPARTA's `diffuse 300 0.0`); `GridSpec.volume` (empty = uniform) carries the cut
 >   volumes so NTC, moments and the fill see them with no other change; **split cells are
->   refused** (`SplitCellError`); two trackers share one element branch — the stencil
+>   refused** (`SplitCellError`; since 2026-09-23 they get sub-cells, PSEUDOCODE §4.5); two
+>   trackers share one element branch (since 2026-09-24 a third, the **lane tracker**,
+>   `tracker="lane"`, `K_bounce = 32`, is the default of the mesh examples — PSEUDOCODE
+>   §9.6.1, review §7.10; `SimStatic`'s own default stays `"stencil"`) — the stencil
 >   (`mesh.candidates`, dilation `radius` cells, diagnostic `stencil_overrun` must be 0)
 >   and SPARTA's cell walk (`mesh/walk.py`, `SimStatic.tracker="walk"`, `K_walk`, exact
 >   for any move length, `walk_exhausted` must be 0; agrees with the stencil to roundoff,
@@ -81,7 +84,8 @@
 >   one-sided velocity rule alone mixes the populations at a curved cap (specular
 >   capsule −27 % → z = +0.08).  Artifacts of the stratified fit carry `_vchit`; the
 >   plane runner keeps `"none"`.  `replay_error` is relative and roundoff (`< 1e-12`), not
->   bitwise: same arithmetic, another compilation.  Gates: G1/G2 `examples.ensemble_couette
+>   bitwise: same arithmetic, another compilation (2026-09-24: a flipped outcome reports 1,
+>   the mesh runners allow `REPLAY_TOL = 1e-9` of round-off, review §7.10).  Gates: G1/G2 `examples.ensemble_couette
 >   --objective energy-window|shear-window --device`, G3 `examples.mesh.ensemble_plane`
 >   (rectangle body whose left face is the moving Couette wall; control = translation);
 >   tables/figure from `examples/mesh/report.py` (`adjoint_gates`).  Not in the VJP: the
@@ -969,3 +973,59 @@ sign-wrong; at 1000 steps, where the forward finally reaches Rankine-Hugoniot, t
 slots ran out -- `shortfall` counted only `target > capacity` despite its contract naming
 both. A saturated array read as correct physics (-46 % density ratio at Mach 4, all
 diagnostics zero). Fixed.
+
+## 1.9 Forward performance against SPARTA (2026-09-28 .. 2026-10-01)
+
+The SPARTA circle deck (argon, 20 x 20, r = 3 polygon from `data.circle`, 1000 steps from empty,
+~37 M particle moves), timed on this laptop by `scratch/perf/bench_forward.py` against
+`spa_serial` (`scratch/perf/bench_sparta.txt`):
+
+| 1000 steps | 09-28 before | 10-01 now | vs SPARTA serial (0.52 s) |
+|---|---|---|---|
+| main code, 1 CPU core, polygon / level set | 67.6 / 98.3 s | **6.3 / 11.6 s** | 12x / 22x |
+| main code, GPU (RTX 3050 Ti, WSL flags), polygon / level set | 15.1 / 20.8 s | **4.5 / 6.8 s** | 8.6x / 13x |
+| one optimiser seed (optc settings, fnum x 4) | 391 s | **99 s** | |
+
+Figures: `examples/mesh/figures/forward_speedup_history.png` (forward across the changes),
+`speedup_history.png` (optimiser seed), `forward_step_breakdown_cpu.png` /
+`forward_step_breakdown.png` (where a CPU / GPU step goes now), `forward_vs_sparta.png`,
+`profile_stages.png` / `profile_breakdown.png` (the optimiser seed's GPU stages).
+
+**The reference: SPARTA's algorithm in JAX, on branch `sparta-match`** (worktree
+`../JAX-DSMC-sparta`, `sparta_jax/README.md`).  A non-differentiable, algorithm-for-algorithm
+port validated against 8 SPARTA seeds runs in 1.30 s on one core (2.5x SPARTA) and 1.41 s on
+the GPU.  Its work accounting shows the 2.5x is XLA's per-op overhead and lock-step padding, not
+extra work; it is the floor this code can approach.  **It must never be merged into main:
+main stays fully differentiable.**
+
+What changed, all gated by `scratch/perf/noise_gate.py` (forward on both bodies and the
+gradient, 12 / 4 seeds, |z| < 3; every change came in at |z| < 1) and the full test suite:
+
+* the inflow normal speed is a Halley inverse CDF (was a 64-step bisection);
+* the level-set search uses an exact block-minimum cull, batched samples and a safeguarded
+  Newton refinement (was 16-sample loops and 40 bisections);
+* the polygon search and the inside check run on compacted rows;
+* on XLA:CPU the lane tracker's pass 0 is SPARTA-structured (`wall_adjoint._first_pass_routed`:
+  a dense closed-form pass and a compacted near lane; on GPU the dense pass 0 is kept, since
+  the lane's gathers cost more launches than they save), with per-slot counter-based wall
+  draws and a variadic earliest-hit reduce;
+* NTC: no scratch-row copies, constant checksum weights;
+* `SimStatic.sort = "partition"` (the mesh forward's setting, XLA:CPU): the carried partition
+  sort (PSEUDOCODE §6.2) -- the same cells and members, a different within-cell order, so NTC
+  draws differ at seed level (tested in distribution on a collisional relaxation, `tests/test_sort.py`);
+* entrants are revived at their slots (`inflow.revive_at`), and the cell temperature for the
+  majorant is one shifted pass.
+
+What is left, per CPU step (8.0 ms profiled, `scratch/perf/profile/forward_cpu_serial.json`):
+small-op overhead ("other", ~280 tiny reductions and ~40 carry copies, 1.7 ms), the surface
+search and inside check (1.6), the tracker passes (1.5) and the sort (0.8; ~6x SPARTA's
+linked-list build even in `sparta_jax`, for the reason given in its README).  Under 5x SPARTA
+serial (2.6 s) needs fewer, larger XLA ops in the tracker and bookkeeping; see
+`sparta_jax/README.md`'s "Speed-ups transferable to a differentiable code".  On the GPU the
+step is launch-bound (5.3 ms wall, 2.1 ms of kernels, ~440 kernels per step).
+
+One CPU seed-noise run (`noise_gate/forward_final_cpu.json`) shows the polygon body's ungated
+energy / heat tallies at ~1e-33 against 5e-34 on the GPU: for a specular wall these are pure
+round-off (the flow's energy is ~1e-17) and differ between XLA:CPU and GPU arithmetic; every
+gated observable agrees.  The scratch work of each change is archived in
+`scratch/perf/history/2026-10-01/`.

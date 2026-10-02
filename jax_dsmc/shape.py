@@ -39,7 +39,8 @@ areas) from it.  Cut volumes are NOT re-derived (the cut-volume term of the coll
 step is deferred to gate G5) and the cell tables are fixed by design (no membership
 term).  What the VJP cannot see -- the element-assignment jumps of a flat-normal
 polygon and the silhouette of a diffuse body -- is the edge-band score of plan
-section 2, item 5, not part of this module.
+section 2, item 5: the polygon's is not built; the level set's silhouette band term is
+:func:`silhouette_cotangent` (``gradient(silhouette_band=)``, 2026-09-21).
 
 Everything here is module-level and ``lax.scan``-driven (decision 14); the per-step
 replay is validated against the record (``replay_error``, roundoff at most).
@@ -56,6 +57,7 @@ import jax.numpy as jnp
 from jax import lax
 
 from jax_dsmc import boundary, ensemble_device, sampling
+from jax_dsmc.collide.ntc import step_v_post
 from jax_dsmc.ensemble_device import node_gradients
 from jax_dsmc.mesh import geometry as mesh_geometry
 from jax_dsmc.mesh import levelset as levelset_mod
@@ -63,7 +65,7 @@ from jax_dsmc.mesh import surface as surface_mod
 from jax_dsmc.mesh.types import Mesh
 from jax_dsmc.rng import STAGE_MOVE, key_for
 from jax_dsmc.sampling import log_diffuse_density
-from jax_dsmc.wall_adjoint import RecordEvents, SplitEvents, as_split, particle_sum
+from jax_dsmc.wall_adjoint import RecordEvents, SplitEvents, as_split, lane_slots, particle_sum
 
 jax.config.update("jax_enable_x64", True)
 
@@ -202,7 +204,9 @@ class ShapeTerms(NamedTuple):
     """``f64`` largest relative ``|x_post - record|`` (per box extent) / ``|v_post - record|``
     (per the record's largest speed) over survivors, all steps.  The replay is the same
     arithmetic as the forward under the RNG contract but compiled in another context, so
-    a few ulp (``< 1e-12``) is roundoff; anything larger is a broken replay."""
+    a few ulp is roundoff (amplified to ~1e-12 by grazing reflections on concave walls);
+    ``1`` means a discrete outcome differs (:func:`_mismatch`).  The mesh runners reject
+    anything above ``REPLAY_TOL = 1e-9``."""
     surface_hits: jax.Array
     """``i32[M]`` element hits per replayed step."""
 
@@ -460,7 +464,7 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
         # dense trackers: the (K, N) layout the callers have always had
         r = jnp.concatenate((r.head, r.tail))
         tau = jnp.concatenate((tau.head, tau.tail))
-    return (rec_k.x, rec_k.v_post, rec_k.alive, err), (r, tallies, n_hits, tau)
+    return (rec_k.x, step_v_post(rec_k), rec_k.alive, err), (r, tallies, n_hits, tau)
 
 
 def _mismatch(x_post, v_post, alive, alive_post, rec_k, survivors, grid):
@@ -620,15 +624,61 @@ def _phi_at(coef, ls, x_star):
     return levelset_mod.value(dataclasses.replace(ls, coef=coef), x_star)
 
 
+def _body_hit_slots(events, survivors, dim):
+    """The surviving slots with a body (element) event this step, compacted into the
+    lane's size (``i32[B]``, ``-1`` unused), and the number that did not fit.  A body hit
+    is a pass-0 event that leaves the particle alive, so every such slot is in the
+    tracker's lane and a valid forward never overflows; the count is still returned so a
+    violation is an error, not a silently dropped cotangent."""
+    split = as_split(events)
+    head = jnp.any(split.head.face >= 2 * dim, axis=0).astype(jnp.float64)
+    tail = (split.tail.face >= 2 * dim).astype(jnp.float64)
+    hit = particle_sum(head[None], tail, split.slot) > 0
+    slots, lost = lane_slots(hit & survivors, split.slot.shape[0])
+    return slots, jnp.sum(lost, dtype=jnp.int32)
+
+
+def _inexact_outputs(fn, geom):
+    """``fn(geom)``'s floating leaves (the differentiable outputs) and, as auxiliary data,
+    the whole output: the wall map's VJP restricted to real-valued cotangents, so a stack
+    of them can be pulled back in one batched transpose (:func:`_pullbacks`)."""
+    out = fn(geom)
+    leaves = [a for a in jax.tree.leaves(out) if jnp.issubdtype(a.dtype, jnp.inexact)]
+    return leaves, out
+
+
+def _pullbacks(vjp, cotangents):
+    """``[vjp(c) for c in cotangents]`` as ONE transpose of the wall map batched over the
+    cotangents (``vmap``): the pull-back is linear in its cotangent, so each result is the
+    separate call's up to summation order.  ``cotangents`` are full-structured (``float0``
+    at the integer / boolean outputs); only their floating leaves are pulled back."""
+    parts = [[a for a in jax.tree.leaves(c) if a.dtype != jax.dtypes.float0] for c in cotangents]
+    stacked = [jnp.stack(column) for column in zip(*parts, strict=True)]
+    (batched,) = jax.vmap(vjp)(stacked)
+    return [jax.tree.map(lambda a, j=j: a[j], batched) for j in range(len(cotangents))]
+
+
 def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
-    carry, xs, geom, setup, fit, tally_cotangent, timing_jump, timing_band, silhouette_band, reward
+    carry,
+    xs,
+    geom,
+    setup,
+    fits,
+    tally_cotangent,
+    timing_jump,
+    timing_band,
+    silhouette_band,
+    reward,
+    hit_fits,
 ):
-    """One step of the shape VJP (module-level ``scan`` body)."""
+    """One step of the shape VJP (module-level ``scan`` body).  ``fits`` is a tuple of
+    ``grad lambda`` estimators (the fit settings plus ``"along"``); the per-estimator
+    carries ``g_x``, ``g_v``, ``g_sil`` are tuples over it, the rest is shared."""
     x, v, alive, g_x, g_v, g_tally, g_score, g_time, g_sil, err = carry
     rec_k, lam_k, step, r_k, tally_weight, lam_timing_k, klass_k = xs
     key = key_for(setup["base_key"], step, STAGE_MOVE)
     f = functools.partial(wall_map, x=x, v=v, alive=alive, key=key, **setup["map"])
-    primal, vjp = jax.vjp(f, geom)
+    _floats, vjp, primal = jax.vjp(functools.partial(_inexact_outputs, f), geom, has_aux=True)
     x_post, v_post, alive_post, _logp, _tallies, events = primal
     dim = x.shape[1]
     survivors = alive & rec_k.alive & (rec_k.born_face < 0)
@@ -637,38 +687,37 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     )
     # value gradients at the post-move state (the record's), on survivors only, from the
     # one-sided fit over the nodes on the hit particle's side of its last surface, of the
-    # particle's own class (a body hit ahead or not)
-    gx, gv = node_gradients(
-        rec_k.x,
-        rec_k.v,
-        rec_k.alive,
-        lam_k,
-        setup["map"]["grid"],
-        direction=_last_normal(events),
-        klass=klass_k,
-        **fit,
-    )
-    if lam_timing_k is not None:
-        gx = along_flight(gx, rec_k.v, lam_timing_k)
-    gx = jnp.where(survivors[:, None], gx, 0.0)
-    gv = jnp.where(survivors[:, None], gv, 0.0)
+    # particle's own class (a body hit ahead or not).  `hit_fits`: only where the post-move
+    # state depends on the geometry -- with epsilon = 0 that is the slots with a body
+    # event this step; every other slot's cotangent multiplies an exact zero in the VJP
+    queries = None
+    if hit_fits:
+        queries, lost = _body_hit_slots(events, survivors, dim)
+        err = jnp.maximum(err, jnp.where(lost > 0, 1.0, 0.0))
+    direction = _last_normal(events)
+    zeros = _zero_cotangent(primal)
+    cotangents = []
+    for fit in fits:
+        gx, gv = node_gradients(
+            rec_k.x,
+            rec_k.v,
+            rec_k.alive,
+            lam_k,
+            setup["map"]["grid"],
+            direction=direction,
+            klass=klass_k,
+            queries=queries,
+            **_fit_settings(fit),
+        )
+        if fit["along"]:
+            gx = along_flight(gx, rec_k.v, lam_timing_k)
+        gx = jnp.where(survivors[:, None], gx, 0.0)
+        gv = jnp.where(survivors[:, None], gv, 0.0)
+        cotangents.append((gx, zeros[1], zeros[2], zeros[3], zeros[4], zeros[5]))
+        cotangents.append((zeros[0], gv, zeros[2], zeros[3], zeros[4], zeros[5]))
     split = as_split(events)
     rewards = _masked(_as_event_array(r_k, events), survivors, split.slot)
     to_go = _to_go(jnp.where(survivors, lam_k, 0.0), rewards, split.slot)
-    # --- pathwise: post-move state and the objective's tally weights ---
-    zeros = _zero_cotangent(primal)
-    cot_tally = zeros[4]
-    if tally_cotangent is not None:
-        cot_tally = cot_tally._replace(
-            momentum=tally_weight * tally_cotangent.momentum,
-            energy=tally_weight * tally_cotangent.energy,
-            heat=tally_weight * tally_cotangent.heat,
-        )
-    (d_x,) = vjp((gx, zeros[1], zeros[2], zeros[3], zeros[4], zeros[5]))
-    (d_v,) = vjp((zeros[0], gv, zeros[2], zeros[3], zeros[4], zeros[5]))
-    if tally_cotangent is not None:
-        (d_tally,) = vjp((zeros[0], zeros[1], zeros[2], zeros[3], cot_tally, zeros[5]))
-        g_tally = jax.tree.map(jnp.add, g_tally, d_tally)
     # --- score: the move's log-probability and the diffuse normals ---
     # with a tally cotangent the hit's own reward is pathwise through the traced sample
     # (`wall_adjoint._element_events`), so the normal score carries the value-to-go
@@ -686,10 +735,15 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         "normal",
         EventArray(scored(split.head, score_weight.head), scored(split.tail, score_weight.tail)),
     )
-    (d_score,) = vjp((zeros[0], zeros[1], zeros[2], to_go.start, zeros[4], cot_events))
-    g_x = jax.tree.map(jnp.add, g_x, d_x)
-    g_v = jax.tree.map(jnp.add, g_v, d_v)
-    g_score = jax.tree.map(jnp.add, g_score, d_score)
+    cotangents.append((zeros[0], zeros[1], zeros[2], to_go.start, zeros[4], cot_events))
+    # --- pathwise: the objective's tally weights ---
+    if tally_cotangent is not None:
+        cot_tally = zeros[4]._replace(
+            momentum=tally_weight * tally_cotangent.momentum,
+            energy=tally_weight * tally_cotangent.energy,
+            heat=tally_weight * tally_cotangent.heat,
+        )
+        cotangents.append((zeros[0], zeros[1], zeros[2], zeros[3], cot_tally, zeros[5]))
     if timing_jump is not None:
         jump = _masked(_per_part(timing_jump, events, rec_k, step), survivors, split.slot)
         dt_ = setup["map"]["dt"]
@@ -701,35 +755,47 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
                 timing_cotangent(split.tail, jump.tail, dt_, timing_band),
             ),
         )
-        (d_time,) = vjp((zeros[0], zeros[1], zeros[2], zeros[3], zeros[4], cot_time))
-        g_time = jax.tree.map(jnp.add, g_time, d_time)
+        cotangents.append((zeros[0], zeros[1], zeros[2], zeros[3], zeros[4], cot_time))
+    pulled = _pullbacks(vjp, cotangents)
+    n_fit = 2 * len(fits)
+    g_x = tuple(jax.tree.map(jnp.add, g, d) for g, d in zip(g_x, pulled[0:n_fit:2], strict=True))
+    g_v = tuple(jax.tree.map(jnp.add, g, d) for g, d in zip(g_v, pulled[1:n_fit:2], strict=True))
+    g_score = jax.tree.map(jnp.add, g_score, pulled[n_fit])
+    rest = pulled[n_fit + 1 :]
+    if tally_cotangent is not None:
+        g_tally = jax.tree.map(jnp.add, g_tally, rest.pop(0))
+    if timing_jump is not None:
+        g_time = jax.tree.map(jnp.add, g_time, rest.pop(0))
     if silhouette_band > 0.0:
         mesh_g = with_geometry(setup["map"]["mesh"], geom)
-        c_sil, x_star = silhouette_cotangent(
-            mesh_g.body,
-            x,
-            v,
-            survivors,
-            events,
-            to_go,
-            rec_k,
-            lam_k,
-            step,
-            jax.random.fold_in(key, 7919),
-            setup["map"],
-            fit,
-            silhouette_band,
-            reward,
-        )
-        _phi, vjp_phi = jax.vjp(functools.partial(_phi_at, ls=mesh_g.body, x_star=x_star), geom)
-        (d_sil,) = vjp_phi(c_sil)
-        g_sil = jax.tree.map(jnp.add, g_sil, d_sil)
+        sil = []
+        for fit, g in zip(fits, g_sil, strict=True):
+            c_sil, x_star = silhouette_cotangent(
+                mesh_g.body,
+                x,
+                v,
+                survivors,
+                events,
+                to_go,
+                rec_k,
+                lam_k,
+                step,
+                jax.random.fold_in(key, 7919),
+                setup["map"],
+                _fit_settings(fit),
+                silhouette_band,
+                reward,
+            )
+            _phi, vjp_phi = jax.vjp(functools.partial(_phi_at, ls=mesh_g.body, x_star=x_star), geom)
+            (d_sil,) = vjp_phi(c_sil)
+            sil.append(jax.tree.map(jnp.add, g, d_sil))
+        g_sil = tuple(sil)
     hit_tail = (split.tail.face >= 2 * dim) & _tail_of(survivors, split.slot)[None, :]
     n_hits = jnp.sum((split.head.face >= 2 * dim) & survivors[None, :], dtype=jnp.int32)
     n_hits = n_hits + jnp.sum(hit_tail, dtype=jnp.int32)
     return (
         rec_k.x,
-        rec_k.v_post,
+        step_v_post(rec_k),
         rec_k.alive,
         g_x,
         g_v,
@@ -739,6 +805,12 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         g_sil,
         err,
     ), n_hits
+
+
+def _fit_settings(fit):
+    """The :func:`ensemble_device.node_gradients` / ``value_query`` keywords of an
+    estimator entry (everything but ``"along"``)."""
+    return {name: value for name, value in fit.items() if name != "along"}
 
 
 def _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static):
@@ -811,16 +883,110 @@ def replay(
         "faces",
         "static",
         "npc_max",
-        "k",
         "basis",
         "chunk",
         "timing_jump",
-        "pool",
+        "estimators",
         "silhouette_band",
         "reward",
         "value_class",
+        "hit_fits",
     ),
 )
+def _gradient(
+    records,
+    lam,
+    steps,
+    state0,
+    base_key,
+    grid,
+    faces,
+    wall,
+    mass,
+    dt,
+    mesh,
+    epsilon,
+    acc_delta,
+    static,
+    scale,
+    npc_max,
+    hit_reward=None,
+    tally_cotangent=None,
+    tally_weight=None,
+    basis="quadratic_full",
+    chunk=4096,
+    timing_jump=None,
+    timing_band=0.2,
+    estimators=((0, 32, False),),
+    lam_timing=None,
+    silhouette_band=0.0,
+    reward=None,
+    value_class="hit_ahead",
+    hit_fits=False,
+):
+    """:func:`gradient` for several ``grad lambda`` estimators ``(pool, k, along)`` at once
+    (a tuple of :class:`ShapeTerms`, one per estimator): one wall-map replay and one
+    batched pull-back per step serve them all -- only the fits differ."""
+    if value_class not in ("hit_ahead", "none"):
+        raise ValueError(value_class)
+    setup = _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static)
+    geom = geometry(mesh)
+    fits = tuple(
+        {"npc_max": npc_max, "scale": scale, "k": k_e, "basis": basis, "chunk": chunk,
+         "pool": pool, "along": along}
+        for pool, k_e, along in estimators
+    )  # fmt: skip
+    if any(along for _p, _k, along in estimators) and lam_timing is None:
+        raise ValueError("an along-flight estimator needs lam_timing")
+    body = functools.partial(
+        _gradient_step,
+        geom=geom,
+        setup=setup,
+        fits=fits,
+        tally_cotangent=tally_cotangent,
+        timing_jump=timing_jump,
+        timing_band=timing_band,
+        silhouette_band=silhouette_band if mesh is not None and mesh.kind == "levelset" else 0.0,
+        reward=reward,
+        hit_fits=hit_fits,
+    )
+    m = lam.shape[0]
+    if tally_weight is None:
+        tally_weight = jnp.ones(m)
+    klass = hit_ahead(records, mesh) if value_class == "hit_ahead" else None
+    zero_g = jax.tree.map(jnp.zeros_like, geom)
+    per = (zero_g,) * len(fits)
+    init = (
+        state0.x,
+        state0.v,
+        state0.alive,
+        per,
+        per,
+        zero_g,
+        zero_g,
+        zero_g,
+        per,
+        jnp.float64(0.0),
+    )
+    (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, err), hits = lax.scan(
+        body, init, (records, lam, steps, hit_reward, tally_weight, lam_timing, klass)
+    )
+    return tuple(
+        ShapeTerms(
+            jax.tree.map(lambda a, b, c: a + b + c, gx, gv, g_tally),
+            gx,
+            gv,
+            g_tally,
+            g_score,
+            g_time,
+            gs,
+            err,
+            hits,
+        )
+        for gx, gv, gs in zip(g_x, g_v, g_sil, strict=True)
+    )
+
+
 def gradient(
     records,
     lam,
@@ -851,6 +1017,7 @@ def gradient(
     silhouette_band=0.0,
     reward=None,
     value_class="hit_ahead",
+    hit_fits=False,
 ):
     """The shape gradient of the captured window: :class:`ShapeTerms` shaped like
     :func:`geometry` ``(mesh)``.  ``silhouette_band > 0`` (a length, level-set bodies
@@ -873,34 +1040,46 @@ def gradient(
     ``"hit_ahead"`` (default) fits a particle's value from the particles of its own class,
     class = a body hit at a later captured step; ``"none"`` is the mixed pool of the
     phase-D artifacts.
+
+    ``hit_fits=True`` fits ``grad lambda`` only at the slots with a body event in the step
+    (:func:`_body_hit_slots`) instead of every slot -- the same gradient (to the last bit)
+    at ~1/200 of the fitting work, **valid only for ``epsilon = 0``**: with the regularised
+    flight time every particle's post-move state depends on the geometry through the hit
+    set, and the restriction would drop those terms.  (``epsilon`` is traced, so this is
+    the caller's declaration; ``examples.ensemble_mesh.shape_terms`` runs at 0.)
     """
-    if value_class not in ("hit_ahead", "none"):
-        raise ValueError(value_class)
-    setup = _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static)
-    geom = geometry(mesh)
-    fit = {"npc_max": npc_max, "scale": scale, "k": k, "basis": basis, "chunk": chunk, "pool": pool}
-    body = functools.partial(
-        _gradient_step,
-        geom=geom,
-        setup=setup,
-        fit=fit,
+    (terms,) = _gradient(
+        records,
+        lam,
+        steps,
+        state0,
+        base_key,
+        grid,
+        faces,
+        wall,
+        mass,
+        dt,
+        mesh,
+        epsilon,
+        acc_delta,
+        static,
+        scale,
+        npc_max,
+        hit_reward=hit_reward,
         tally_cotangent=tally_cotangent,
+        tally_weight=tally_weight,
+        basis=basis,
+        chunk=chunk,
         timing_jump=timing_jump,
         timing_band=timing_band,
-        silhouette_band=silhouette_band if mesh is not None and mesh.kind == "levelset" else 0.0,
+        estimators=((pool, k, lam_timing is not None),),
+        lam_timing=lam_timing,
+        silhouette_band=silhouette_band,
         reward=reward,
+        value_class=value_class,
+        hit_fits=hit_fits,
     )
-    m = lam.shape[0]
-    if tally_weight is None:
-        tally_weight = jnp.ones(m)
-    klass = hit_ahead(records, mesh) if value_class == "hit_ahead" else None
-    zero_g = jax.tree.map(jnp.zeros_like, geom)
-    init = (state0.x, state0.v, state0.alive, *([zero_g] * 6), jnp.float64(0.0))
-    (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, err), hits = lax.scan(
-        body, init, (records, lam, steps, hit_reward, tally_weight, lam_timing, klass)
-    )
-    total = jax.tree.map(lambda a, b, c: a + b + c, g_x, g_v, g_tally)
-    return ShapeTerms(total, g_x, g_v, g_tally, g_score, g_time, g_sil, err, hits)
+    return terms
 
 
 def hit_ahead(records, mesh):
@@ -947,10 +1126,12 @@ def gradient_variants(lam_timing, names=None, **kwargs):
     """:func:`gradient` for every entry of :data:`VARIANTS` (the same records, cotangents
     and rewards; only the estimate of ``grad_x lambda`` differs): ``{name: ShapeTerms}``.
     ``lam_timing`` is the timing-reward value of the along-flight variants; ``names``
-    restricts the set (an optimiser needs one replay per step, not four)."""
-    out = {}
-    for name, (pool, k, along) in VARIANTS.items():
-        if names is not None and name not in names:
-            continue
-        out[name] = gradient(**kwargs, pool=pool, k=k, lam_timing=lam_timing if along else None)
-    return out
+    restricts the set.  One scan serves all of them (:func:`_gradient`): the wall-map
+    replay, its pull-back and the shared terms are computed once per step."""
+    chosen = [name for name in VARIANTS if names is None or name in names]
+    estimators = tuple(VARIANTS[name] for name in chosen)
+    along = any(a for _p, _k, a in estimators)
+    for name in ("pool", "k", "lam_timing"):
+        kwargs.pop(name, None)
+    terms = _gradient(**kwargs, estimators=estimators, lam_timing=lam_timing if along else None)
+    return dict(zip(chosen, terms, strict=True))

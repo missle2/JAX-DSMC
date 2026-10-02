@@ -25,9 +25,9 @@ iterate: objective mean and SE over the seeds, area, step, gradient norms, secon
 ``coef_<k>.npy`` and ``frames_<k>.npz`` (the field movie of the first seed's forward at
 iterate ``k``: per-cell ``nrho``, ``u``, ``temp`` every ``--frames-every`` warm-up steps
 and at the end, float32 -- ~1 MB per iterate on the finer circle; ``0`` disables);
-``--plot`` draws ``figures/optimize_circle.png`` (shape sequence, drag and area
-histories) from them and ``examples.mesh.movie`` strings the frames into a GIF (fill of
-the flow around every iterate, then the shape change).
+``--plot`` draws ``figures/optimize_<tag>.png`` (shape sequence, drag and area
+histories) from them and ``examples.mesh.movie`` strings the frames into a GIF or an MP4
+(fill of the flow around every iterate, then the shape change).
 """
 
 from __future__ import annotations
@@ -151,7 +151,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None):
             cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],), every
         )
         terms = all_terms[cfg["variant"]]
-        grads.append(np.asarray(terms.pathwise + terms.score))
+        grads.append(np.asarray(terms.pathwise + terms.score + terms.silhouette))
         objs.append(info["objective"])
         hits.append(info["hits"])
         stuck.append(info["stuck"])
@@ -307,7 +307,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
         adam_state = (z["m"], z["v"])
     while k < cfg["iterations"]:
         t0 = time.time()
-        # the mesh of the current iterate (split cells or an uncovered box raise here)
+        # the mesh of the current iterate (an uncovered box raises here; split cells get
+        # sub-cells since 2026-09-23)
         cut.build_mesh(
             ls, dataclasses.replace(grid, volume=jnp.zeros(0)), radius=cfg["radius_cells"]
         )

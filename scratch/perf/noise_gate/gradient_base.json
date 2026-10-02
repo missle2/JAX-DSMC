@@ -1,0 +1,38 @@
+{
+ "code": "/home/aakash/jax_dsmc/JAX-DSMC",
+ "seeds": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "variant": "along_pool",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "per_seed": {
+  "0": {
+   "objective": 3.580102160081051e-20,
+   "hits": 10329,
+   "alive_final": 11912,
+   "seconds": 310.1587338447571
+  },
+  "1": {
+   "objective": 3.7449066540283285e-20,
+   "hits": 10452,
+   "alive_final": 11764,
+   "seconds": 128.24070358276367
+  },
+  "2": {
+   "objective": 3.736326674939712e-20,
+   "hits": 10409,
+   "alive_final": 11884,
+   "seconds": 126.29624843597412
+  },
+  "3": {
+   "objective": 3.6605680410643344e-20,
+   "hits": 10447,
+   "alive_final": 11844,
+   "seconds": 111.82395339012146
+  }
+ },
+ "seconds": 676.5450613498688
+}

@@ -1,0 +1,17 @@
+{
+ "ms_per_step": {
+  "other": 0.28804443999997476,
+  "surface search + inside check": 0.469860695000005,
+  "tracker: passes, lanes, compaction, epilogue": 0.33749560499999104,
+  "wall events: draws, re-emission, tallies": 0.32305017499999206,
+  "inflow: positions, slots, entrant tracking": 0.22742480999999162,
+  "inflow velocity (Halley inverse CDF)": 0.0030017349999999932,
+  "epsilon conditional time (unused at epsilon = 0)": 0.0012510249999999998,
+  "cell sort": 0.014616859999999997,
+  "NTC collisions (0 accepted at this Kn)": 0.32736016500000026,
+  "cell temperature": 0.1512939600000001,
+  "GPU idle: launches, syncs": 3.16787371492513
+ },
+ "wall_ms": 5.311273184925085,
+ "sparta_serial_ms": 0.518212
+}

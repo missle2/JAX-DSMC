@@ -1,5 +1,7 @@
 """Independent regression cases from the forward review."""
 
+import functools
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -99,6 +101,86 @@ def test_pathwise_flux_moment_and_gradient_against_independent_quadrature(s):
     derivative = (reference_mean(s + 1e-4) - reference_mean(s - 1e-4)) / 2e-4
     np.testing.assert_allclose(actual, reference, rtol=3e-5, atol=3e-5)
     np.testing.assert_allclose(tangent, derivative, rtol=3e-5, atol=3e-5)
+
+
+def _bisect_step(_, bounds, u, s):
+    lo, hi = bounds
+    mid = (lo + hi) / 2
+    left = inflow.flux_cdf(mid, s) < u
+    return jnp.where(left, mid, lo), jnp.where(left, hi, mid)
+
+
+@jax.jit
+def _bisection_quantile(u, s):
+    """The 64-step bisection ``flux_quantile`` used to be: the reference the Halley solve must
+    reproduce, since both invert the same computed :func:`inflow.flux_cdf`."""
+    u, s = jnp.broadcast_arrays(u, s)
+    body = functools.partial(_bisect_step, u=u, s=s)
+    lo, hi = jax.lax.fori_loop(0, 64, body, (jnp.zeros_like(u), jnp.maximum(s, 0.0) + 12.0))
+    return (lo + hi) / 2
+
+
+def test_flux_quantile_reproduces_the_bisection_reference():
+    """Same root as the old bisection, to the round-off of ``flux_cdf`` itself.
+
+    That CDF loses digits to cancellation at strongly outward drift (``s = -10`` costs ~3)
+    and is quantised near ``u = 1``, so the pin is tight where it is well conditioned and
+    residual-only in the tails, where neither solver's root is better than the CDF's noise.
+    """
+    eps = np.finfo(np.float64).eps
+    u = np.concatenate(
+        [
+            [eps, 1e-15],
+            np.logspace(-14, -1, 27),
+            np.linspace(0.05, 0.95, 19),
+            1 - np.logspace(-2, -15, 27),
+            [1 - eps],
+        ]
+    )
+    s = np.linspace(-10.0, 10.0, 81)
+    U, S = (a.ravel() for a in np.meshgrid(u, s))
+    got = np.asarray(jax.jit(inflow.flux_quantile)(U, S))
+    ref = np.asarray(_bisection_quantile(U, S))
+    assert np.isfinite(got).all()
+    residual = np.abs(np.asarray(inflow.flux_cdf(got, S)) - U)
+    assert residual.max() < 1e-10  # the sampler's acceptance test holds everywhere
+    rel = np.abs(got / ref - 1)
+    mid = (U >= 1e-3) & (U <= 1 - 1e-3)
+    tails = (U >= 1e-6) & (U <= 1 - 1e-6)
+    # measured: 1.3e-11, 2.0e-8, 2.0e-9 -- the last is s = -10's cancellation in flux_cdf
+    assert rel[mid & (np.abs(S) <= 3)].max() < 1e-10
+    assert rel[tails & (np.abs(S) <= 3)].max() < 1e-7
+    assert rel[mid].max() < 1e-8
+
+
+@pytest.mark.parametrize(
+    ("s", "rtol"),
+    [
+        (-10.0, 3e-4),
+        (-3.0, 1e-6),
+        (-0.5, 1e-8),
+        (0.0, 1e-8),
+        (0.5, 1e-8),
+        (3.0, 1e-8),
+        (10.0, 1e-8),
+    ],
+)
+def test_flux_quantile_tangent_is_the_implicit_derivative(s, rtol):
+    """The custom JVP against central differences of the Halley primal itself.
+
+    Outward drift loosens ``rtol`` only because the differences see ``flux_cdf``'s
+    cancellation error (~1e-9 relative at ``s = -10``) divided by the step.
+    """
+    u = jnp.linspace(0.02, 0.98, 25)
+    drift = jnp.full_like(u, s)
+    quantile = jax.jit(inflow.flux_quantile)
+    _, d_drift = jax.jvp(lambda d: inflow.flux_quantile(u, d), (drift,), (jnp.ones_like(u),))
+    _, d_u = jax.jvp(lambda v: inflow.flux_quantile(v, drift), (u,), (jnp.ones_like(u),))
+    h_s, h_u = 1e-5, 1e-6
+    fd_drift = (quantile(u, drift + h_s) - quantile(u, drift - h_s)) / (2 * h_s)
+    fd_u = (quantile(u + h_u, drift) - quantile(u - h_u, drift)) / (2 * h_u)
+    np.testing.assert_allclose(d_drift, fd_drift, rtol=rtol)
+    np.testing.assert_allclose(d_u, fd_u, rtol=rtol)
 
 
 def test_inlet_candidate_streams_are_capacity_independent():

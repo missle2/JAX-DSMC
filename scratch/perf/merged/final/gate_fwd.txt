@@ -1,0 +1,33 @@
+forward gate: base 'base' (/home/aakash/jax_dsmc/JAX-DSMC) vs new 'final' (/home/aakash/jax_dsmc/JAX-DSMC)
+criterion: z = diff / sqrt(se_base^2 + se_new^2) (se = seed sd / sqrt(n)); PASS iff |z| < 3 for every gated observable (WARN for |z| >= 2); diff/sd1 = diff / single-seed sd of base
+[polygon] seeds base ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'] new ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+  drag             base +3.679325e-20 (sd 1.05e-22, n 12)  new +3.679325e-20 (sd 1.05e-22, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  lift             base -6.077095e-23 (sd 1.98e-22, n 12)  new -6.077095e-23 (sd 1.98e-22, n 12)  diff -1.528e-37 = -2.51e-15 rel  z -0.00  diff/sd1 -0.00  PASS
+  body_energy      base +5.051063e-34 (sd 2.23e-35, n 12)  new +5.032116e-34 (sd 1.89e-35, n 12)  diff -1.895e-36 = -3.75e-03 rel  z -0.22  diff/sd1 -0.09  info
+  body_heat        base +5.051063e-34 (sd 2.23e-35, n 12)  new +5.032116e-34 (sd 1.89e-35, n 12)  diff -1.895e-36 = -3.75e-03 rel  z -0.22  diff/sd1 -0.09  info
+  body_hits        base +1.373035e+02 (sd 3.02e-01, n 12)  new +1.373035e+02 (sd 3.02e-01, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  exits            base +2.769210e+02 (sd 5.12e-01, n 12)  new +2.769210e+02 (sd 5.12e-01, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  exit_momentum_x  base -1.864841e-21 (sd 1.30e-22, n 12)  new -1.864841e-21 (sd 1.30e-22, n 12)  diff +3.762e-37 = +2.02e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  exit_energy      base +1.284034e-17 (sd 3.74e-20, n 12)  new +1.284034e-17 (sd 3.74e-20, n 12)  diff +4.622e-33 = +3.60e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  injected         base +1.533876e+02 (sd 1.98e-02, n 12)  new +1.533876e+02 (sd 1.98e-02, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  particles        base +4.514265e+04 (sd 6.03e+01, n 12)  new +4.514265e+04 (sd 6.03e+01, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  mean_ke          base +6.910706e-21 (sd 1.76e-23, n 12)  new +6.910706e-21 (sd 1.76e-23, n 12)  diff +1.505e-36 = +2.18e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  temperature      base +3.008932e+02 (sd 7.49e-01, n 12)  new +3.008932e+02 (sd 7.49e-01, n 12)  diff +5.684e-14 = +1.89e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  mean_vx          base +1.430234e+02 (sd 6.26e-01, n 12)  new +1.430234e+02 (sd 6.26e-01, n 12)  diff +2.842e-14 = +1.99e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  same-seed (polygon): 0/12 seeds bitwise identical; differing seeds ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+[levelset] seeds base ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'] new ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+  drag             base +3.685057e-20 (sd 1.05e-22, n 12)  new +3.685057e-20 (sd 1.05e-22, n 12)  diff +3.009e-35 = +8.17e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  lift             base -6.115670e-23 (sd 1.93e-22, n 12)  new -6.115670e-23 (sd 1.93e-22, n 12)  diff -2.313e-35 = -3.78e-13 rel  z -0.00  diff/sd1 -0.00  PASS
+  body_energy      base -2.145728e-34 (sd 2.44e-35, n 12)  new -2.192616e-34 (sd 1.79e-35, n 12)  diff -4.689e-36 = -2.19e-02 rel  z -0.54  diff/sd1 -0.19  info
+  body_heat        base -2.145728e-34 (sd 2.44e-35, n 12)  new -2.192616e-34 (sd 1.79e-35, n 12)  diff -4.689e-36 = -2.19e-02 rel  z -0.54  diff/sd1 -0.19  info
+  body_hits        base +1.371796e+02 (sd 2.73e-01, n 12)  new +1.371796e+02 (sd 2.73e-01, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  exits            base +2.768279e+02 (sd 4.17e-01, n 12)  new +2.768279e+02 (sd 4.17e-01, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  exit_momentum_x  base -1.910074e-21 (sd 1.32e-22, n 12)  new -1.910074e-21 (sd 1.32e-22, n 12)  diff -7.899e-36 = -4.14e-15 rel  z -0.00  diff/sd1 -0.00  PASS
+  exit_energy      base +1.284204e-17 (sd 4.47e-20, n 12)  new +1.284204e-17 (sd 4.47e-20, n 12)  diff +7.704e-33 = +6.00e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  injected         base +1.533876e+02 (sd 1.98e-02, n 12)  new +1.533876e+02 (sd 1.98e-02, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  particles        base +4.510711e+04 (sd 5.97e+01, n 12)  new +4.510711e+04 (sd 5.97e+01, n 12)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  mean_ke          base +6.909509e-21 (sd 1.91e-23, n 12)  new +6.909509e-21 (sd 1.91e-23, n 12)  diff +3.009e-36 = +4.36e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  temperature      base +3.009031e+02 (sd 8.20e-01, n 12)  new +3.009031e+02 (sd 8.20e-01, n 12)  diff +5.684e-14 = +1.89e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  mean_vx          base +1.428739e+02 (sd 6.26e-01, n 12)  new +1.428739e+02 (sd 6.26e-01, n 12)  diff +2.842e-14 = +1.99e-16 rel  z +0.00  diff/sd1 +0.00  PASS
+  same-seed (levelset): 0/12 seeds bitwise identical; differing seeds ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+FORWARD GATE: PASS

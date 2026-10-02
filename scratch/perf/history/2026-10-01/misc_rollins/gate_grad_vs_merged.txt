@@ -1,0 +1,17 @@
+gradient gate: base 'merged' (/home/aakash/jax_dsmc/JAX-DSMC) vs new 'misc' (/home/aakash/jax_dsmc/wt_misc)
+criterion: PASS iff each gated scalar has |z| < 3, z = diff of seed-means / sqrt(se_a^2 + se_b^2), and the RMS over the band coefficients of the per-coefficient z < 1.5 (the 'grad . base-mean-direction' scalar is the gradient's signal component)
+  objective        base +3.680476e-20 (sd 7.69e-22, n 4)  new +3.680476e-20 (sd 7.69e-22, n 4)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  hits             base +1.040925e+04 (sd 5.68e+01, n 4)  new +1.040925e+04 (sd 5.68e+01, n 4)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  grad_sum         base -1.614461e-20 (sd 2.34e-21, n 4)  new -1.614461e-20 (sd 2.34e-21, n 4)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  grad.dir_base    base +8.161990e-21 (sd 7.37e-21, n 4)  new +8.161990e-21 (sd 7.37e-21, n 4)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  PASS
+  grad_norm        base +3.040198e-20 (sd 3.83e-20, n 4)  new +3.040198e-20 (sd 3.83e-20, n 4)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  info
+  pathwise_sum     base -1.614461e-20 (sd 2.34e-21, n 4)  new -1.614461e-20 (sd 2.34e-21, n 4)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  info
+  score_sum        base +0.000000e+00 (sd 0.00e+00, n 4)  new +0.000000e+00 (sd 0.00e+00, n 4)  diff +0.000e+00 = +nan rel  z +0.00  diff/sd1 +nan  info
+  silhouette_sum   base +0.000000e+00 (sd 0.00e+00, n 4)  new +0.000000e+00 (sd 0.00e+00, n 4)  diff +0.000e+00 = +nan rel  z +0.00  diff/sd1 +nan  info
+  timing_sum       base +3.233037e-22 (sd 3.73e-21, n 4)  new +3.233037e-22 (sd 3.73e-21, n 4)  diff +0.000e+00 = +0.00e+00 rel  z +0.00  diff/sd1 +0.00  info
+  per-coefficient (1306 with noise): RMS z 0.00, median |z| 0.00, max |z| 0.00, fraction |z|>2 0.00  PASS
+  same seed 0: objective 3.580102160081e-20 vs 3.580102160081e-20 (bitwise); gradient max rel 5.33e-17; |dgrad| / |seed sd| 0.00
+  same seed 1: objective 3.744906654028e-20 vs 3.744906654028e-20 (bitwise); gradient max rel 3.24e-17; |dgrad| / |seed sd| 0.00
+  same seed 2: objective 3.736326674940e-20 vs 3.736326674940e-20 (bitwise); gradient max rel 1.79e-18; |dgrad| / |seed sd| 0.00
+  same seed 3: objective 3.660568041064e-20 vs 3.660568041064e-20 (bitwise); gradient max rel 3.52e-17; |dgrad| / |seed sd| 0.00
+GRADIENT GATE: PASS

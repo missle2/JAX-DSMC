@@ -1,0 +1,128 @@
+{
+ "polygon": {
+  "alive": 46536,
+  "slots": 60000,
+  "wall_seconds_200_steps": 1.062254636985017,
+  "gpu_busy_seconds": 0.428679894,
+  "kernels_per_step": 438.005,
+  "scopes": {
+   "unscoped": {
+    "gpu_ms_per_step": 0.9330385049999155,
+    "kernels_per_step": 224.075
+   },
+   "move": {
+    "gpu_ms_per_step": 0.6459881100000042,
+    "kernels_per_step": 82.145
+   },
+   "inflow": {
+    "gpu_ms_per_step": 0.19721185999999966,
+    "kernels_per_step": 8.66
+   },
+   "wall_events": {
+    "gpu_ms_per_step": 0.10782687999999864,
+    "kernels_per_step": 20.65
+   },
+   "surface_search": {
+    "gpu_ms_per_step": 0.06365290999999884,
+    "kernels_per_step": 26.495
+   },
+   "cell_sort": {
+    "gpu_ms_per_step": 0.052735704999999806,
+    "kernels_per_step": 12.0
+   },
+   "slot_uniforms": {
+    "gpu_ms_per_step": 0.04026005000000003,
+    "kernels_per_step": 3.33
+   },
+   "collide": {
+    "gpu_ms_per_step": 0.03993772500000008,
+    "kernels_per_step": 28.0
+   },
+   "bounce_pass": {
+    "gpu_ms_per_step": 0.029782079999999978,
+    "kernels_per_step": 16.32
+   },
+   "inside_check": {
+    "gpu_ms_per_step": 0.015617430000000003,
+    "kernels_per_step": 4.0
+   },
+   "inflow_tracking": {
+    "gpu_ms_per_step": 0.009334109999999967,
+    "kernels_per_step": 5.33
+   },
+   "ntc_slots": {
+    "gpu_ms_per_step": 0.004288960000000007,
+    "kernels_per_step": 4.0
+   },
+   "inflow_positions": {
+    "gpu_ms_per_step": 0.0021362399999999993,
+    "kernels_per_step": 2.0
+   },
+   "inflow_velocities": {
+    "gpu_ms_per_step": 0.0015889050000000003,
+    "kernels_per_step": 1.0
+   }
+  }
+ },
+ "levelset": {
+  "alive": 46435,
+  "slots": 60256,
+  "wall_seconds_200_steps": 1.6182434890069999,
+  "gpu_busy_seconds": 0.718146326,
+  "kernels_per_step": 568.21,
+  "scopes": {
+   "unscoped": {
+    "gpu_ms_per_step": 1.1670788349998489,
+    "kernels_per_step": 248.305
+   },
+   "levelset_hit": {
+    "gpu_ms_per_step": 1.0548026350000503,
+    "kernels_per_step": 120.0
+   },
+   "bounce_pass": {
+    "gpu_ms_per_step": 0.49623284999999984,
+    "kernels_per_step": 39.56
+   },
+   "move": {
+    "gpu_ms_per_step": 0.38451971000000673,
+    "kernels_per_step": 78.06
+   },
+   "inflow": {
+    "gpu_ms_per_step": 0.1965006049999989,
+    "kernels_per_step": 9.495
+   },
+   "wall_events": {
+    "gpu_ms_per_step": 0.1438973149999967,
+    "kernels_per_step": 19.1
+   },
+   "cell_sort": {
+    "gpu_ms_per_step": 0.052164109999999875,
+    "kernels_per_step": 12.0
+   },
+   "collide": {
+    "gpu_ms_per_step": 0.03996248500000023,
+    "kernels_per_step": 28.0
+   },
+   "slot_uniforms": {
+    "gpu_ms_per_step": 0.038777924999999956,
+    "kernels_per_step": 2.36
+   },
+   "inflow_tracking": {
+    "gpu_ms_per_step": 0.005806419999999979,
+    "kernels_per_step": 4.33
+   },
+   "inside_check": {
+    "gpu_ms_per_step": 0.0056810250000000105,
+    "kernels_per_step": 2.0
+   },
+   "ntc_slots": {
+    "gpu_ms_per_step": 0.004276275000000032,
+    "kernels_per_step": 4.0
+   },
+   "inflow_positions": {
+    "gpu_ms_per_step": 0.001031439999999999,
+    "kernels_per_step": 1.0
+   }
+  }
+ }
+}

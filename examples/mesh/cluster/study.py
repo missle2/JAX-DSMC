@@ -18,11 +18,27 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
   the seed-count convergence of the gradient itself (bootstrap SE vs seeds).
 * ``optc``: ``opt`` on the SPARTA 20 x 20 DSMC grid (``fnum x 1``, same level set), tags
   ``circle_coarse_S{S}_{opt}``: the variant that fits the 24 GB rtx MIG slices.
-* ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, 20
-  iterates, ``S`` CRN seeds per iterate for ``S in SEED_COUNTS`` and both optimisers
-  (same step, smoothing and band; Adam's step is its learning rate); the ``S`` seeds of an
-  iterate run concurrently on ``min(S, gpus_per_node)`` GPUs (``optimize.py --workers``;
-  ``--gpus-per-node`` = the partition's GPUs per node, default ``GPUS_PER_NODE``).
+* ``squash``: the aspect-ratio test with an analytic reference
+  (``examples/mesh/ellipsoid_reference.py``): the ``ellipse`` case (circle box, R = 1.5,
+  semi-axes ``(R, s R)``) on :data:`COARSE` settings.  ``grad_s{s}``: ``dD/ds`` (control
+  ``squash_y``) at ``s`` in :data:`SQUASH_POINTS` vs CRN FD and the reference, 8 seeds, the
+  unstratified fit (``--value-class none``: the hit-ahead class biased mode2,
+  2026-09-25); ``opt_S{S}``: ``examples.mesh.optimize_squash`` (Adam, learning rate 0.05)
+  from the circle (``s = 1``) on ``J = D - lam V`` with the reference optimum at
+  ``s* = 0.35``, 25 iterates: the optimiser on DSMC gradients against the analytic
+  optimum.  Fits a 24 GB rtx slice (80 k slots, like ``optc``).
+* ``squashkn``: the same optimisation in the transitional regime, where the free-molecular
+  reference no longer holds: the gas density raised to ``Kn = lambda / 2R = 0.5`` at the
+  same particle count (``--knudsen 0.5``, NTC collides every step; ``lam`` still from the
+  free-molecular reference), ``kn0.5_S{S}`` at the deck's stream and ``kn0.5_M10_S{S}`` at
+  M 10 (:data:`KN05_M10`), ``S`` in :data:`SQUASH_KN_SEEDS` (no 8-seed runs: these cost more), the shipped
+  ``4 x 8`` virtual pull-back.
+* ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, 250
+  iterates (``--iterations 250``, resumed across jobs), ``S`` CRN seeds per iterate for
+  ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
+  its learning rate); the ``S`` seeds of an iterate run concurrently on
+  ``min(S, gpus_per_node)`` GPUs (``optimize.py --workers``; ``--gpus-per-node`` = the
+  partition's GPUs per node, default ``GPUS_PER_NODE``).
 
 Settings shared by the finer circle jobs: ``levelset_samples = 16`` so the hit search
 reach ``16 h_phi / 2 = 0.5`` still covers the fastest moves, ``grazing = 0.05`` (the
@@ -47,6 +63,20 @@ FINE = "--fnum-scale 1 --grid-scale 2 --levelset-h 0.0625 --levelset-samples 16 
 COARSE = "--fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05"
 PULLBACK = "--substeps 1 --partners 2"
 RESULTS = "examples/gradient_bench/results"
+SQUASH_POINTS = (0.35, 0.6, 1.0)
+SQUASH_SEEDS = 8
+SQUASH_OPT_SEEDS = (1, 4)
+SQUASH_KN_SEEDS = (1, 4)
+SQUASH_ITERATIONS = 25
+# the Kn = 0.5 settings (measured 2026-10-01: at most 21 NTC attempts per cell at s = 1)
+KN05 = "--knudsen 0.5 --a-max 64"
+# M = 10 (3079 m/s), scaled from the Kn = 0.5 measurement rather than measured: the step
+# keeps a free-stream move at 0.15 cell; the slots hold the full box (1e5 at this fnum) plus
+# a shock layer at ~4x density; NTC attempts go as n^2 (sigma g)_max dt, ~16 x 1.9 x 1/4
+# ~ 8x the measured 21 behind the shock, so A_max 256 at Kn = 0.5.  Both limits fail loudly
+# when exceeded (attempts_clipped / inflow_shortfall stop the job) -- nothing regrows them
+MACH10 = "--mach 10 --dt 2.5e-5 --slots 160000"
+KN05_M10 = f"--knudsen 0.5 {MACH10} --a-max 256"
 SPHERE_ARTIFACT = "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev"
 MODE2_ARTIFACT = (
     "ensemble_mesh_circle_levelset0.0625_gz0.05_grid2_mode2_f1_H700_M300_W200_virt1x2st_dev"
@@ -82,6 +112,30 @@ def jobs(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, str]:
             f"{PULLBACK} --fd-steps 0.1 0.05"
         )
         return seed_jobs(base, MODE2_ARTIFACT, MODE2_SEEDS)
+    if group == "squash":
+        out = {
+            f"grad_s{p:g}": (
+                "python3 -m examples.ensemble_mesh --case ellipse --body levelset "
+                f"--parameter squash_y --squash {p} {COARSE} --value-class none {PULLBACK} "
+                f"--fd-steps 0.05 0.02 --seeds {SQUASH_SEEDS}"
+            )
+            for p in SQUASH_POINTS
+        }
+        for s in SQUASH_OPT_SEEDS:
+            out[f"opt_S{s}"] = (
+                f"python3 -m examples.mesh.optimize_squash --seeds-per-iterate {s} "
+                f"--iterations {SQUASH_ITERATIONS} {PULLBACK}"
+            )
+        return out
+    if group == "squashkn":
+        out = {}
+        for label, extra in (("kn0.5", KN05), ("kn0.5_M10", KN05_M10)):
+            for s in SQUASH_KN_SEEDS:
+                out[f"{label}_S{s}"] = (
+                    f"python3 -m examples.mesh.optimize_squash --seeds-per-iterate {s} "
+                    f"--iterations {SQUASH_ITERATIONS} {extra}"
+                )
+        return out
     if group in OPT_GROUPS:
         label, settings = OPT_GROUPS[group]
         out = {}
@@ -106,7 +160,9 @@ def gpus(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, int]:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--group", choices=("sphere", "mode2", *OPT_GROUPS), required=True)
+    ap.add_argument(
+        "--group", choices=("sphere", "mode2", "squash", "squashkn", *OPT_GROUPS), required=True
+    )
     ap.add_argument("--list", action="store_true", help="print the job commands, one per line")
     ap.add_argument("--names", action="store_true", help="print the job names")
     ap.add_argument("--gpus", action="store_true", help="print `name gpus` per job")

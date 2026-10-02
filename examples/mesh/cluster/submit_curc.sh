@@ -6,7 +6,7 @@
 #   sbatch examples/mesh/cluster/check_env.sbatch          # first: environment check
 #   bash examples/mesh/cluster/submit_curc.sh sphere       # 8 jobs x 1 GPU (one per seed)
 #   bash examples/mesh/cluster/submit_curc.sh mode2        # 32 jobs x 1 GPU
-#   bash examples/mesh/cluster/submit_curc.sh opt          # 8 jobs x {1,2,4} GPUs
+#   bash examples/mesh/cluster/submit_curc.sh opt          # 8 jobs x {1,2,3} GPUs (h200: {1,2,4})
 #   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh optc   # coarser circle, fits rtx
 #   bash examples/mesh/cluster/submit_curc.sh all
 #   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh check   # check_env on that kind
@@ -15,7 +15,7 @@
 # 128 cores, 1.5 TB) -> 32 cores, 128 GB (a quarter of the memory would be 384 GB; the
 # jobs need < 20 GB); aa100 / ami100 (3 GPUs, 64 cores, 243 GB) -> 21 cores, 70 GB.
 # Wall time: sphere 8 h/seed, mode2 4 h/seed, optimisation 12 h (S <= 2) / 24 h (S >= 4,
-# the gpu-normal maximum); every job resumes from its artifact, so a job that hits its
+# the gpu-normal maximum; optc always 24 h); every job resumes from its artifact, so a job that hits its
 # limit is simply resubmitted (`submit_curc.sh <group>` again: finished rows/iterates are
 # skipped).  GPU_KIND=a100 (default, CUDA venv) -> aa100 / gpu:a100-40gb; GPU_KIND=h200
 # -> ah200 / gpu:h200 (faster, but run check_env there first: on 2026-09-22 the ah200
@@ -32,7 +32,7 @@
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|all|check"; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|all|check"; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 GPU_KIND="${GPU_KIND:-a100}"
@@ -77,12 +77,14 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     sphere) HOURS=8 ;;
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
+    squash|squashkn) HOURS=24 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
   # the finer circle (240 k slots x 300 captured steps) peaks above a 24 GB MIG slice: the
   # captured forward alone is 18.7 GB after rematerialisation and ran out of memory on every
   # rtx opt job (2026-09-23).  The sphere (50 k slots) fits.
-  if [ "${GPU_KIND}" = "rtx" ] && [ "${group}" != "sphere" ] && [ "${group}" != "optc" ]; then
+  if [ "${GPU_KIND}" = "rtx" ] && [ "${group}" != "sphere" ] && [ "${group}" != "optc" ] \
+      && [ "${group}" != "squash" ] && [ "${group}" != "squashkn" ]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi

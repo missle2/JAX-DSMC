@@ -22,8 +22,8 @@ Per step ``k`` (forward order: move/walls -> inject -> collide), backward:
    the source's log-density score and its intensity derivative.
 3. move pull-back: a slot alive at ``t_k`` that survived the move keeps ``lam``;
    one that was absorbed has ``0``.  (Specular/periodic faces are deterministic
-   maps; diffuse walls -- not exercised here -- are kernels whose realized
-   re-emission is the unbiased single sample.)
+   maps; diffuse walls are kernels whose realized re-emission is the unbiased single
+   sample -- every recorded hit becomes a :class:`Hits` entry for the kernel score.)
 
 Three collision pull-backs share step 1 (:func:`configure` selects one for the process):
 ``sequential`` -- the accepted attempts in reverse order, each partner ghost read from
@@ -500,6 +500,16 @@ def _collision_pullback(pairs, k, x, v_post, alive, cell, mu, neighbors, scale, 
     return lam, Pairs(k, pi, pj, vi, vj, four)
 
 
+def _require_full_record(records):
+    """The host adjoint reads ``v_post`` and ``born_v``, which a lean record
+    (``SimStatic.record = "lean"``) does not store."""
+    if getattr(records, "v_post", None) is None or getattr(records, "born_v", None) is None:
+        raise ValueError(
+            "the host adjoint needs a full record (SimStatic.record='full'); "
+            "a lean record keeps only what the device backward and the shape VJP read"
+        )
+
+
 def backward(  # noqa: PLR0915 -- the sweep reads best as one unit
     records,
     initial_state,
@@ -528,6 +538,7 @@ def backward(  # noqa: PLR0915 -- the sweep reads best as one unit
     normalization`` with a FIXED normalization.  ``v_scale`` (a thermal speed) and the
     cell width set the phase-space metric of the interpolant.
     """
+    _require_full_record(records)
     rec = records
     steps = int(rec.x.shape[0])
     dim = int(rec.x.shape[2])
@@ -708,12 +719,13 @@ def from_device(records, dev, normalization, hit_reward=None):
     device's ``lam[M, N]``.  ``pairs`` is ``None`` -- kernel-parameter scores come from the
     device's own ``four_term`` (sequential) or ``kernel`` (virtual) outputs.
 
-    With value-form hit rewards (``hit_reward`` ``f64[M, K, N]``, the array the backward
-    was given) the weight of a hit's score is the reward-to-go from the re-emission draw
+    With value-form hit rewards (``hit_reward`` ``f64[M, K, N]``, or a lane replay's
+    ``shape.HitRewards`` -- see :func:`_step_rewards`) the weight of a hit's score is the reward-to-go from the re-emission draw
     onward: ``lam`` at the post-move state plus the rewards of this hit (it is a function
     of the drawn velocity) and of the step's later hits of the same slot; a newborn's
     source score is weighted by ``lam`` plus all its birth-step hit rewards.
     """
+    _require_full_record(records)
     rec = records
     lam_all = np.asarray(dev.lam)
     rewards = None if hit_reward is None else hit_reward

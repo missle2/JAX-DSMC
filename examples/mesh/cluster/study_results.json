@@ -1,14 +1,924 @@
 {
  "merged": {
-  "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev.json": 7
+  "ensemble_mesh_circle_levelset0.0625_gz0.05_grid2_mode2_f1_H700_M300_W200_virt1x2st_dev.json": 32,
+  "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev.json": 8
+ },
+ "optimize": {
+  "circle_coarse_S1_adam": {
+   "seeds_per_iterate": 1,
+   "optimizer": "adam",
+   "iterates": 250,
+   "J_first": 3.6801262566284407e-20,
+   "J_last": 2.3130397371426827e-20,
+   "seconds": 74571.0838546753
+  },
+  "circle_coarse_S1_gd": {
+   "seeds_per_iterate": 1,
+   "optimizer": "gd",
+   "iterates": 131,
+   "J_first": 3.6801262566284407e-20,
+   "J_last": 3.131700828504495e-20,
+   "seconds": 40317.47971081734
+  },
+  "circle_coarse_S2_adam": {
+   "seeds_per_iterate": 2,
+   "optimizer": "adam",
+   "iterates": 96,
+   "J_first": 3.69388643566933e-20,
+   "J_last": 2.2588101988952464e-20,
+   "seconds": 59861.057079315186
+  },
+  "circle_coarse_S2_gd": {
+   "seeds_per_iterate": 2,
+   "optimizer": "gd",
+   "iterates": 216,
+   "J_first": 3.69388643566933e-20,
+   "J_last": 2.9864281107207776e-20,
+   "seconds": 123802.47712254524
+  },
+  "circle_coarse_S4_adam": {
+   "seeds_per_iterate": 4,
+   "optimizer": "adam",
+   "iterates": 102,
+   "J_first": 3.6979140512470935e-20,
+   "J_last": 2.4041126351716532e-20,
+   "seconds": 117332.531635046
+  },
+  "circle_coarse_S4_gd": {
+   "seeds_per_iterate": 4,
+   "optimizer": "gd",
+   "iterates": 113,
+   "J_first": 3.697914051247094e-20,
+   "J_last": 2.9934390838614155e-20,
+   "seconds": 124262.94604182243
+  },
+  "circle_coarse_S8_adam": {
+   "seeds_per_iterate": 8,
+   "optimizer": "adam",
+   "iterates": 37,
+   "J_first": 3.715369432821735e-20,
+   "J_last": 2.161978221866207e-20,
+   "seconds": 80878.7973101139
+  },
+  "circle_coarse_S8_gd": {
+   "seeds_per_iterate": 8,
+   "optimizer": "gd",
+   "iterates": 61,
+   "J_first": 3.715369432821735e-20,
+   "J_last": 3.199021331152939e-20,
+   "seconds": 133779.00510501862
+  }
+ },
+ "optc_runs": {
+  "circle_coarse_S1_adam": {
+   "S": 1,
+   "optimizer": "adam",
+   "iterates": 250,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925266,
+     "iterates": [
+      0,
+      0
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32928968,
+     "iterates": [
+      0,
+      4
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32931849,
+     "iterates": [
+      5,
+      12
+     ],
+     "end": "inside_body fired"
+    },
+    {
+     "job": 32940980,
+     "iterates": [
+      13,
+      55
+     ],
+     "end": "1 cut cell(s) contain flow but no corner that is in the flow and off e"
+    },
+    {
+     "job": 32946196,
+     "iterates": [
+      56,
+      68
+     ],
+     "end": "replay error 1.83767e-12"
+    },
+    {
+     "job": 32962126,
+     "iterates": [
+      69,
+      249
+     ],
+     "end": "complete"
+    }
+   ],
+   "last_end": "complete",
+   "seconds_per_iterate_median": 273.60979413986206,
+   "seconds_per_iterate_p90": 300.40585870742797,
+   "seconds_per_seed": 273.60979413986206,
+   "gpu_hours": 20.714189959632026,
+   "J_first": 3.6801262566284407e-20,
+   "J_last": 2.3130397371426827e-20,
+   "J_min": 2.282254041651774e-20,
+   "stuck_total": 29.0,
+   "area_rel_max": 2.631228568361621e-13
+  },
+  "circle_coarse_S1_gd": {
+   "S": 1,
+   "optimizer": "gd",
+   "iterates": 131,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925265,
+     "iterates": [
+      0,
+      1
+     ],
+     "end": "15 cut cell(s) contain flow but no corner that is in the flow and off "
+    },
+    {
+     "job": 32928967,
+     "iterates": [
+      0,
+      7
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32931847,
+     "iterates": [
+      8,
+      15
+     ],
+     "end": "running / unknown"
+    },
+    {
+     "job": 32940979,
+     "iterates": [
+      16,
+      79
+     ],
+     "end": "running / unknown"
+    },
+    {
+     "job": 32946195,
+     "iterates": null,
+     "end": "running / unknown"
+    },
+    {
+     "job": 32962125,
+     "iterates": [
+      80,
+      130
+     ],
+     "end": "cancelled"
+    }
+   ],
+   "last_end": "cancelled",
+   "seconds_per_iterate_median": 292.4921360015869,
+   "seconds_per_iterate_p90": 304.37894225120544,
+   "seconds_per_seed": 292.4921360015869,
+   "gpu_hours": 11.199299919671482,
+   "J_first": 3.6801262566284407e-20,
+   "J_last": 3.131700828504495e-20,
+   "J_min": 3.1251615450587225e-20,
+   "stuck_total": 66.0,
+   "area_rel_max": 2.1227464230832993e-13
+  },
+  "circle_coarse_S2_adam": {
+   "S": 2,
+   "optimizer": "adam",
+   "iterates": 96,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925268,
+     "iterates": [
+      0,
+      0
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32928970,
+     "iterates": [
+      0,
+      6
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32931851,
+     "iterates": [
+      7,
+      20
+     ],
+     "end": "inside_body fired"
+    },
+    {
+     "job": 32940982,
+     "iterates": [
+      21,
+      56
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32946198,
+     "iterates": [
+      57,
+      71
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32962128,
+     "iterates": [
+      72,
+      95
+     ],
+     "end": "Invalid DSMC trajectory: {'inflow_shortfall': 92.0}"
+    }
+   ],
+   "last_end": "Invalid DSMC trajectory: {'inflow_shortfall': 92.0}",
+   "seconds_per_iterate_median": 588.5434902906418,
+   "seconds_per_iterate_p90": 860.946833729744,
+   "seconds_per_seed": 294.2717451453209,
+   "gpu_hours": 16.628071410920885,
+   "J_first": 3.69388643566933e-20,
+   "J_last": 2.2588101988952464e-20,
+   "J_min": 2.2588101988952464e-20,
+   "stuck_total": 75.0,
+   "area_rel_max": 2.973177259946169e-13
+  },
+  "circle_coarse_S2_gd": {
+   "S": 2,
+   "optimizer": "gd",
+   "iterates": 216,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925267,
+     "iterates": [
+      0,
+      1
+     ],
+     "end": "13 cut cell(s) contain flow but no corner that is in the flow and off "
+    },
+    {
+     "job": 32928969,
+     "iterates": [
+      0,
+      3
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32931850,
+     "iterates": [
+      4,
+      16
+     ],
+     "end": "inside_body fired"
+    },
+    {
+     "job": 32940981,
+     "iterates": [
+      17,
+      54
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32946197,
+     "iterates": [
+      55,
+      62
+     ],
+     "end": "replay error 7.59053e-12"
+    },
+    {
+     "job": 32962127,
+     "iterates": [
+      63,
+      215
+     ],
+     "end": "time limit"
+    }
+   ],
+   "last_end": "time limit",
+   "seconds_per_iterate_median": 547.3978146314621,
+   "seconds_per_iterate_p90": 588.5166903734207,
+   "seconds_per_seed": 273.69890731573105,
+   "gpu_hours": 34.38957697848479,
+   "J_first": 3.69388643566933e-20,
+   "J_last": 2.9864281107207776e-20,
+   "J_min": 2.964863708750934e-20,
+   "stuck_total": 96.0,
+   "area_rel_max": 2.426947531830592e-13
+  },
+  "circle_coarse_S4_adam": {
+   "S": 4,
+   "optimizer": "adam",
+   "iterates": 102,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925270,
+     "iterates": [
+      0,
+      0
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32928972,
+     "iterates": [
+      0,
+      1
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32931853,
+     "iterates": [
+      2,
+      5
+     ],
+     "end": "running / unknown"
+    },
+    {
+     "job": 32940984,
+     "iterates": [
+      6,
+      24
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32946200,
+     "iterates": [
+      25,
+      25
+     ],
+     "end": "replay error 3.12605e-12"
+    },
+    {
+     "job": 32962130,
+     "iterates": [
+      26,
+      101
+     ],
+     "end": "time limit"
+    }
+   ],
+   "last_end": "time limit",
+   "seconds_per_iterate_median": 1128.6362327337265,
+   "seconds_per_iterate_p90": 1402.5555071115493,
+   "seconds_per_seed": 282.1590581834316,
+   "gpu_hours": 32.59236989862389,
+   "J_first": 3.6979140512470935e-20,
+   "J_last": 2.4041126351716532e-20,
+   "J_min": 2.367733869523133e-20,
+   "stuck_total": 15.0,
+   "area_rel_max": 3.290701044988964e-13
+  },
+  "circle_coarse_S4_gd": {
+   "S": 4,
+   "optimizer": "gd",
+   "iterates": 113,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925269,
+     "iterates": [
+      0,
+      1
+     ],
+     "end": "14 cut cell(s) contain flow but no corner that is in the flow and off "
+    },
+    {
+     "job": 32928971,
+     "iterates": [
+      0,
+      5
+     ],
+     "end": "inside_body fired"
+    },
+    {
+     "job": 32931852,
+     "iterates": null,
+     "end": "inside_body fired"
+    },
+    {
+     "job": 32940983,
+     "iterates": [
+      6,
+      24
+     ],
+     "end": "1 cut cell(s) contain flow but no corner that is in the flow and off e"
+    },
+    {
+     "job": 32946199,
+     "iterates": [
+      25,
+      32
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32962129,
+     "iterates": [
+      33,
+      112
+     ],
+     "end": "time limit"
+    }
+   ],
+   "last_end": "time limit",
+   "seconds_per_iterate_median": 1082.5927021503448,
+   "seconds_per_iterate_p90": 1154.174350309372,
+   "seconds_per_seed": 270.6481755375862,
+   "gpu_hours": 34.517485011617346,
+   "J_first": 3.697914051247094e-20,
+   "J_last": 2.9934390838614155e-20,
+   "J_min": 2.95225535478869e-20,
+   "stuck_total": 14.0,
+   "area_rel_max": 2.0383694732117874e-13
+  },
+  "circle_coarse_S8_adam": {
+   "S": 8,
+   "optimizer": "adam",
+   "iterates": 37,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925273,
+     "iterates": [
+      0,
+      0
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32928974,
+     "iterates": [
+      0,
+      0
+     ],
+     "end": "Invalid DSMC trajectory: {'wall_recrossed': 1.0}"
+    },
+    {
+     "job": 32931855,
+     "iterates": [
+      1,
+      8
+     ],
+     "end": "1 cut cell(s) contain flow but no corner that is in the flow and off e"
+    },
+    {
+     "job": 32940986,
+     "iterates": null,
+     "end": "1 cut cell(s) contain flow but no corner that is in the flow and off e"
+    },
+    {
+     "job": 32946202,
+     "iterates": [
+      9,
+      12
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32962132,
+     "iterates": [
+      13,
+      36
+     ],
+     "end": "Invalid DSMC trajectory: {'inflow_shortfall': 168.0}"
+    }
+   ],
+   "last_end": "Invalid DSMC trajectory: {'inflow_shortfall': 168.0}",
+   "seconds_per_iterate_median": 2083.788330078125,
+   "seconds_per_iterate_p90": 2399.7138890743254,
+   "seconds_per_seed": 260.4735412597656,
+   "gpu_hours": 22.46633258614275,
+   "J_first": 3.715369432821735e-20,
+   "J_last": 2.161978221866207e-20,
+   "J_min": 2.161978221866207e-20,
+   "stuck_total": 1.0,
+   "area_rel_max": 1.7719159473017498e-13
+  },
+  "circle_coarse_S8_gd": {
+   "S": 8,
+   "optimizer": "gd",
+   "iterates": 61,
+   "target": 250,
+   "jobs": [
+    {
+     "job": 32925272,
+     "iterates": [
+      0,
+      1
+     ],
+     "end": "12 cut cell(s) contain flow but no corner that is in the flow and off "
+    },
+    {
+     "job": 32928973,
+     "iterates": [
+      0,
+      2
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32931854,
+     "iterates": [
+      3,
+      7
+     ],
+     "end": "inside_body fired"
+    },
+    {
+     "job": 32940985,
+     "iterates": [
+      8,
+      17
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32946201,
+     "iterates": [
+      18,
+      21
+     ],
+     "end": "cancelled"
+    },
+    {
+     "job": 32962131,
+     "iterates": [
+      22,
+      60
+     ],
+     "end": "host OOM kill"
+    }
+   ],
+   "last_end": "host OOM kill",
+   "seconds_per_iterate_median": 2161.560831308365,
+   "seconds_per_iterate_p90": 2423.563095331192,
+   "seconds_per_seed": 270.1951039135456,
+   "gpu_hours": 37.16083475139406,
+   "J_first": 3.715369432821735e-20,
+   "J_last": 3.199021331152939e-20,
+   "J_min": 3.183386530092947e-20,
+   "stuck_total": 17.0,
+   "area_rel_max": 1.8263168755083825e-13
+  }
+ },
+ "optc_heldout": {
+  "circle": {
+   "iterate": 0,
+   "drag": [
+    3.722469732912605e-20,
+    3.6865230096369657e-20,
+    3.7198705889731774e-20,
+    3.682435666041716e-20
+   ],
+   "in_sample": 3.6801262566284407e-20,
+   "seconds": 511.7817032337189
+  },
+  "circle_coarse_S1_adam": {
+   "iterate": 249,
+   "drag": [
+    2.327713292472799e-20,
+    2.3226208783644287e-20,
+    2.3299255301055748e-20,
+    2.324345783096188e-20
+   ],
+   "in_sample": 2.3130397371426827e-20,
+   "seconds": 669.0180568695068
+  },
+  "circle_coarse_S1_gd": {
+   "iterate": 130,
+   "drag": [
+    3.161973176739333e-20,
+    3.159677453406274e-20,
+    3.181393002217031e-20,
+    3.152794815554701e-20
+   ],
+   "in_sample": 3.131700828504495e-20,
+   "seconds": 560.0472176074982
+  },
+  "circle_coarse_S2_adam": {
+   "iterate": 95,
+   "drag": [
+    2.2525649172069558e-20,
+    2.2256771136769182e-20,
+    2.273363961918804e-20,
+    2.2731127237081405e-20
+   ],
+   "in_sample": 2.2588101988952464e-20,
+   "seconds": 1757.397617340088
+  },
+  "circle_coarse_S2_gd": {
+   "iterate": 215,
+   "drag": [
+    3.0148540814121854e-20,
+    2.998103967567242e-20,
+    3.0157692474294206e-20,
+    2.993294289794453e-20
+   ],
+   "in_sample": 2.9864281107207776e-20,
+   "seconds": 2134.4672253131866
+  },
+  "circle_coarse_S4_adam": {
+   "iterate": 101,
+   "drag": [
+    2.4003745664004158e-20,
+    2.3975039081381005e-20,
+    2.4165252057949016e-20,
+    2.404644793433523e-20
+   ],
+   "in_sample": 2.4041126351716532e-20,
+   "seconds": 427.4812717437744
+  },
+  "circle_coarse_S4_gd": {
+   "iterate": 112,
+   "drag": [
+    2.994261497363911e-20,
+    2.99154986720772e-20,
+    3.0277295876096975e-20,
+    3.00882658710486e-20
+   ],
+   "in_sample": 2.9934390838614155e-20,
+   "seconds": 388.0783896446228
+  },
+  "circle_coarse_S8_adam": {
+   "iterate": 36,
+   "drag": [
+    2.1503343617824977e-20,
+    2.1468596742251874e-20,
+    2.1566702799338307e-20,
+    2.163002712478127e-20
+   ],
+   "in_sample": 2.161978221866207e-20,
+   "seconds": 393.39016366004944
+  },
+  "circle_coarse_S8_gd": {
+   "iterate": 60,
+   "drag": [
+    3.2007041480984713e-20,
+    3.1784894834366166e-20,
+    3.2041853294603095e-20,
+    3.173133573719218e-20
+   ],
+   "in_sample": 3.199021331152939e-20,
+   "seconds": 396.7051887512207
+  }
+ },
+ "optc_extent": {
+  "circle_coarse_S1_adam": {
+   "x_min": 0.14000000000000057,
+   "x_max": 10.50000000000001,
+   "y_min": 3.0500000000000003,
+   "y_max": 7.26
+  },
+  "circle_coarse_S1_gd": {
+   "x_min": 1.7500000000000018,
+   "x_max": 8.540000000000008,
+   "y_min": 2.45,
+   "y_max": 7.55
+  },
+  "circle_coarse_S2_adam": {
+   "x_min": -0.009999999999999565,
+   "x_max": 10.50000000000001,
+   "y_min": 2.9,
+   "y_max": 7.01
+  },
+  "circle_coarse_S2_gd": {
+   "x_min": 1.5100000000000016,
+   "x_max": 8.850000000000009,
+   "y_min": 2.58,
+   "y_max": 7.46
+  },
+  "circle_coarse_S4_adam": {
+   "x_min": 0.09000000000000052,
+   "x_max": 10.50000000000001,
+   "y_min": 2.85,
+   "y_max": 7.13
+  },
+  "circle_coarse_S4_gd": {
+   "x_min": 1.3100000000000016,
+   "x_max": 8.430000000000009,
+   "y_min": 2.54,
+   "y_max": 7.46
+  },
+  "circle_coarse_S8_adam": {
+   "x_min": -0.019999999999999574,
+   "x_max": 9.660000000000009,
+   "y_min": 3.06,
+   "y_max": 6.9
+  },
+  "circle_coarse_S8_gd": {
+   "x_min": 1.6300000000000017,
+   "x_max": 8.250000000000007,
+   "y_min": 2.37,
+   "y_max": 7.63
+  }
+ },
+ "gradient_seed_convergence": {
+  "seeds": 32,
+  "counts": [
+   1,
+   2,
+   4,
+   8,
+   16,
+   32
+  ],
+  "se": [
+   2.852144380126129e-22,
+   1.9551706524638733e-22,
+   1.393835667422207e-22,
+   9.878154723246553e-23,
+   7.053951125943683e-23,
+   5.009356846531813e-23
+  ],
+  "ensemble": -2.3864814751295463e-20,
+  "fd": -1.591773891354976e-20,
+  "artifact": "ensemble_mesh_circle_levelset0.0625_gz0.05_grid2_mode2_f1_H700_M300_W200_virt1x2st_dev.json"
+ },
+ "mode2": {
+  "artifact": "ensemble_mesh_circle_levelset0.0625_gz0.05_grid2_mode2_f1_H700_M300_W200_virt1x2st_dev.json",
+  "seeds": 32,
+  "config": {
+   "case": "circle",
+   "fnum_scale": 1.0,
+   "warmup": 700,
+   "steps": 300,
+   "window": 200,
+   "radius_cells": 1,
+   "tracker": "lane",
+   "body": "levelset",
+   "levelset_h": 0.0625,
+   "levelset_samples": 16,
+   "acc": 0.0,
+   "silhouette_band": 0.0,
+   "grazing": 0.05,
+   "grid_scale": 2,
+   "value_class": "hit_ahead",
+   "parameter": "mode2",
+   "seed_start": 32,
+   "timing_band": 0.2,
+   "variant": "along_pool"
+  },
+  "gradient": {
+   "mean": -2.3864814751295463e-20,
+   "se": 5.0695361861299464e-23,
+   "sd": 2.867762731746458e-22
+  },
+  "pathwise_tally": {
+   "mean": -1.596806221667209e-20,
+   "se": 1.9593109936576674e-23,
+   "sd": 1.1083536720549514e-22
+  },
+  "pathwise_x": {
+   "mean": -1.1113354238059526e-21,
+   "se": 3.25361419913766e-23,
+   "sd": 1.840522130860062e-22
+  },
+  "pathwise_v": {
+   "mean": -6.78541711081742e-21,
+   "se": 2.6949759935785704e-23,
+   "sd": 1.5245086401554885e-22
+  },
+  "timing": {
+   "mean": -1.6393784684981243e-22,
+   "se": 9.062155159618305e-23,
+   "sd": 5.126329092424611e-22
+  },
+  "objective": {
+   "mean": 3.7000129721284116e-20,
+   "se": 2.4752466187814625e-23,
+   "sd": 1.4002109353995562e-22
+  },
+  "seconds": {
+   "mean": 927.1726288497448,
+   "se": 2.2617603635689614,
+   "sd": 12.794448723988511
+  },
+  "seconds_backward": {
+   "mean": 162.45146698504686,
+   "se": 0.18902651804599874,
+   "sd": 1.0692954618752561
+  },
+  "seconds_shape": {
+   "mean": 498.2015117779374,
+   "se": 1.9758055283849612,
+   "sd": 11.176843899415006
+  },
+  "fd": [
+   {
+    "mean": -1.591773891354976e-20,
+    "se": 4.786357083601255e-23,
+    "sd": 2.7075724407957716e-22
+   },
+   {
+    "mean": -1.5988608396334144e-20,
+    "se": 5.708623662537304e-23,
+    "sd": 3.2292852024176905e-22
+   }
+  ],
+  "gradient_minus_fd": {
+   "mean": -7.911641096353513e-21,
+   "se": 6.558536008885135e-23,
+   "sd": 3.7100682292310675e-22,
+   "z": -120.63120619655464
+  },
+  "pathwise_tally_minus_fd": {
+   "mean": -1.4888561730139066e-23,
+   "se": 4.502502823261955e-23,
+   "sd": 2.5470002229120833e-22,
+   "z": -0.3306730126457236
+  },
+  "variants": {
+   "one": {
+    "mean": -6.842841779029683e-21,
+    "se": 5.85618185517786e-22,
+    "sd": 3.312756721326305e-21,
+    "z": -11.684817767363983
+   },
+   "one_pool": {
+    "mean": -8.119881723885018e-21,
+    "se": 4.2222847260331844e-23,
+    "sd": 2.3884849295027592e-22,
+    "z": -192.31014132752736
+   },
+   "along": {
+    "mean": -6.877569001303418e-21,
+    "se": 1.6562383131425356e-22,
+    "sd": 9.369098739872444e-22,
+    "z": -41.52523792457116
+   },
+   "along_pool": {
+    "mean": -7.911641096353513e-21,
+    "se": 6.558536008885135e-23,
+    "sd": 3.7100682292310675e-22,
+    "z": -120.63120619655464
+   }
+  },
+  "coarse": {
+   "artifact": "ensemble_mesh_circle_levelset0.125_mode2_f4_H700_M300_W200_virt1x2st_dev.json",
+   "seeds": 4,
+   "gradient": {
+    "mean": -1.586996101355276e-20,
+    "se": 3.026536782803865e-22,
+    "sd": 6.05307356560773e-22
+   },
+   "pathwise_tally": {
+    "mean": -1.595861847504462e-20,
+    "se": 2.6509922605547927e-22,
+    "sd": 5.301984521109585e-22
+   },
+   "pathwise_x": {
+    "mean": -2.7572966838086713e-22,
+    "se": 1.3555018685177174e-22,
+    "sd": 2.711003737035435e-22
+   },
+   "pathwise_v": {
+    "mean": 3.6438712987272836e-22,
+    "se": 1.4989561887355324e-22,
+    "sd": 2.997912377471065e-22
+   },
+   "fd": {
+    "mean": -1.5943715703451627e-20,
+    "se": 4.301725822005458e-22,
+    "sd": 8.603451644010916e-22
+   }
+  }
  },
  "sphere": {
-  "seeds": 7,
-  "ensemble": 3.416940033976517e-20,
-  "ensemble_se": 4.493294404877986e-22,
-  "fd": 3.4879624340568136e-20,
-  "fd_se": 3.619122310407698e-22,
-  "z": -1.230986196929036,
+  "seeds": 8,
+  "ensemble": 3.3886466878691587e-20,
+  "ensemble_se": 4.811175043187345e-22,
+  "fd": 3.486886523157301e-20,
+  "fd_se": 3.1360979841046076e-22,
+  "z": -1.710589239096585,
   "artifact": "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev.json"
  }
 }

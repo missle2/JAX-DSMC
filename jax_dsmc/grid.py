@@ -181,8 +181,9 @@ def cell_volume(grid: GridSpec) -> jnp.ndarray:
     reaches the mesh geometry (the NTC attempt count of section 8.1; the other is
     moment normalisation in ``sample.py``).
 
-    A cut-cell grid carries its per-cell flow volumes in ``grid.volume`` (set by
-    ``mesh.cut.build_mesh``); those are returned as they are.
+    A cut-cell grid carries its per-cell flow volumes in ``grid.volume`` (computed by
+    ``mesh.cut.build_mesh``, set by ``mesh.cut.with_volume``); those are returned as they
+    are.
     """
     if grid.volume.shape[0] > 0:
         return grid.volume

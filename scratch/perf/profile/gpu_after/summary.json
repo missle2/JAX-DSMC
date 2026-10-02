@@ -1,0 +1,66 @@
+{
+ "forward": {
+  "label": "forward (1000 steps, captured 300)",
+  "wall": 18.801738256001045,
+  "gpu_busy": 8.542745727,
+  "kernels": 1428620,
+  "kernels_per_step": 1428.62,
+  "mean_kernel_us": 5.979718698464253,
+  "truncated": false,
+  "categories": {
+   "step body: pass 0, collide, inject, tallies": 4.413043990010337,
+   "lane passes 1..K (while loop)": 3.1635969699959423,
+   "hit search (cull branches)": 0.6431580060004825,
+   "other": 0.20306490499995827,
+   "cell sort": 0.11988185600000395
+  }
+ },
+ "replay": {
+  "label": "traced replay",
+  "wall": 4.421527995998986,
+  "gpu_busy": 1.66365143,
+  "kernels": 358760,
+  "kernels_per_step": 1195.8666666666666,
+  "mean_kernel_us": 4.637226641766084,
+  "truncated": false,
+  "categories": {
+   "step body: pass 0, rewards, checks": 1.3173376749997106,
+   "lane passes 1..K (fixed trip count)": 0.17475633699995333,
+   "hit search (cull branches)": 0.1109016739999849,
+   "other": 0.060655744000013084
+  }
+ },
+ "backward": {
+  "label": "value backwards (x2)",
+  "wall": 67.32494788400072,
+  "gpu_busy": 63.351912695,
+  "kernels": 498656,
+  "kernels_per_step": 831.0933333333334,
+  "mean_kernel_us": 127.04532321881217,
+  "truncated": false,
+  "categories": {
+   "fit: normal equations (einsum)": 31.274496424999906,
+   "partner draws, tables, gathers": 14.408352078999584,
+   "fit: LU solve": 13.44375479400254,
+   "other": 2.594742824000411,
+   "fit: k nearest (top_k)": 1.630566572999989
+  }
+ },
+ "shape": {
+  "label": "shape gradient",
+  "wall": 33.43046656499973,
+  "gpu_busy": 5.071190394,
+  "kernels": 2082561,
+  "kernels_per_step": 6941.87,
+  "mean_kernel_us": 2.4350741197976915,
+  "truncated": true,
+  "categories": {
+   "step body: linearised pass 0, cotangents": 1.748168197999279,
+   "other": 1.3064392899954718,
+   "linearised lane passes 1..K": 1.171716928001168,
+   "pull-back (one batched transpose)": 0.4341132260000616,
+   "grad-lambda fits": 0.2920904729999979,
+   "linearised hit search": 0.11866227899998695
+  }
+ }
+}

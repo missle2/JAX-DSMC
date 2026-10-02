@@ -44,6 +44,8 @@ Surface ids follow :mod:`jax_dsmc.mesh.types`: ``0 .. 2D-1`` box faces
 
 from __future__ import annotations
 
+import functools
+
 import jax
 import jax.numpy as jnp
 
@@ -51,7 +53,7 @@ from jax_dsmc import geometry as box_geometry
 from jax_dsmc.grid import cell_bounds, cell_of
 from jax_dsmc.mesh import analytic
 from jax_dsmc.mesh import levelset as levelset_mod
-from jax_dsmc.mesh.types import INSIDE, OUTSIDE, Mesh
+from jax_dsmc.mesh.types import CUT, INSIDE, OUTSIDE, Mesh
 from jax_dsmc.state import GridSpec
 
 jax.config.update("jax_enable_x64", True)
@@ -213,6 +215,232 @@ def _segment_crossings(a: jax.Array, b: jax.Array, mesh: Mesh, ids: jax.Array) -
     return jnp.sum(hit & valid, axis=1).astype(jnp.int32)
 
 
+def cell_clearance(mesh: Mesh, grid: GridSpec) -> jax.Array:
+    """``f64[C]``: a lower bound on the distance from any point of each Cartesian cell to any
+    of its candidate elements (``mesh.candidates``) -- the gap between the cell's box and
+    the element's bounding box, ``inf`` for a cell without candidates."""
+    c0 = mesh.candidates.shape[0]  # the Cartesian cells (split sub-cells follow them)
+    lower, upper = cell_bounds(grid)
+    lower, upper = lower[:c0], upper[:c0]
+    valid, verts, _n = _gather_elements(mesh, mesh.candidates)  # (C, S, D, D)
+    e_lo = jnp.min(verts, axis=2)
+    e_hi = jnp.max(verts, axis=2)
+    gap = jnp.maximum(
+        jnp.maximum(e_lo - upper[:, None, :], lower[:, None, :] - e_hi), 0.0
+    )  # (C, S, D)
+    dist = jnp.sqrt(jnp.sum(gap * gap, axis=-1))
+    return jnp.min(jnp.where(valid, dist, jnp.inf), axis=1)
+
+
+POLYGON_MARGIN = 1e-9
+"""Relative slack of the polygon cull (:func:`first_hit`) over the round-off of a hit
+time."""
+
+
+def _earliest(a, b):
+    """Variadic-reduce comparator of :func:`_element_hit`: the smaller time wins, ties go
+    to the lower element id (whatever the order of the candidate table)."""
+    ta, ia = a
+    tb, ib = b
+    take_a = (ta < tb) | ((ta == tb) & (ia <= ib))
+    return jnp.where(take_a, ta, tb), jnp.where(take_a, ia, ib)
+
+
+def _element_hit(x, vd, mesh, cand, exclude):
+    """Earliest candidate element and its time, ``(t f64[N], e i32[N])`` -- the dense
+    polygon search of :func:`first_hit`.
+
+    The ``(N, S)`` hit times are reduced by ONE variadic ``lax.reduce`` over ``(t, id)``:
+    a reduction is the root of its fusion on XLA:CPU, so the element tests are computed
+    once (a ``min`` followed by a tie-break ``min`` recomputed them in both fusions).  The
+    reduce runs on frozen inputs; the winner's time is then re-formed from its own plane
+    (:func:`_plane_time`) for the tangent -- value-preserving, the primal is the reduced
+    time bit for bit -- so ``t`` stays differentiable in ``x``, ``v`` and the vertices."""
+    t = _element_times(*jax.lax.stop_gradient((x, vd)), jax.lax.stop_gradient(mesh), cand)
+    t = jnp.where(cand == exclude[:, None], jnp.inf, t)
+    big = jnp.iinfo(jnp.int32).max
+    t_el, e = jax.lax.reduce(
+        (t, cand), (jnp.asarray(jnp.inf, t.dtype), jnp.int32(big)), _earliest, (1,)
+    )
+    # the tangent of the winner's time: d (dist / -(v . n)) through x, v and its vertices
+    _valid, verts, n = _gather_elements(mesh, jnp.maximum(e, 0)[:, None])
+    t_diff, _ok = _plane_time(x, vd, verts[:, :, 0], n)
+    t_diff = t_diff[:, 0]
+    tangent = t_diff - jax.lax.stop_gradient(t_diff)
+    return t_el + jnp.where(jnp.isfinite(t_el), tangent, 0.0), e
+
+
+def _elements_none(args):
+    x = args[0]
+    return jnp.full(x.shape[0], jnp.inf), jnp.full(x.shape[0], -1, jnp.int32)
+
+
+def _elements_dense(args, mesh):
+    x, vd, cell, exclude, _slot = args
+    return _element_hit(x, vd, mesh, mesh.candidates[cell], exclude)
+
+
+def _elements_near(args, mesh, size):
+    """:func:`_element_hit` of the first ``size`` compacted rows ``slot``, scattered back;
+    the other rows get no element (``inf``)."""
+    x, vd, cell, exclude, slot = args
+    slot = slot[:size]
+    n = x.shape[0]
+    take = jnp.maximum(slot, 0)
+    t, e = _element_hit(x[take], vd[take], mesh, mesh.candidates[cell[take]], exclude[take])
+    put = jnp.where(slot >= 0, slot, n)
+    return (
+        jnp.full(n, jnp.inf).at[put].set(t, mode="drop"),
+        jnp.full(n, -1, jnp.int32).at[put].set(e, mode="drop"),
+    )
+
+
+POLYGON_COMPACT = (8, 4, 2)
+"""The compacted tiers of the polygon search (:func:`_polygon_hit`): ``N // 8`` rows, else
+``N // 4``, else ``N // 2``, else every row.  Measured 9 % of the slots near a candidate
+in pass 0 on the SPARTA circle (scratch/trk/stats.py); on the near lane of
+``tracker="lane"`` (a chunk of near slots, part of it unused) about half."""
+
+
+def _polygon_hit(x, vd, grid, mesh, exclude, remaining, tables=None):
+    """The polygon search of :func:`first_hit`.  With ``remaining`` (a move of known
+    length) only the rays that can reach a candidate within it are searched: a ray
+    shorter than its cell's :func:`cell_clearance` (with ``tables``, the finer
+    :func:`near_surface`) hits nothing before the move ends, and it gets ``inf`` -- the caller only acts on a surface within ``remaining``, which such
+    a ray provably does not have.  Skipped / compacted (tiers :data:`POLYGON_COMPACT`) /
+    dense branches as the level set's search (:func:`jax_dsmc.mesh.levelset.hit_body`);
+    the candidate lists are gathered for the searched rows only."""
+    cell = cell_of(x, grid)
+    n = x.shape[0]
+    if remaining is None or n < levelset_mod.NEAR_MIN:
+        return _element_hit(x, vd, mesh, mesh.candidates[cell], exclude)
+    if tables is None:
+        reach = jnp.linalg.norm(vd, axis=1) * remaining
+        clearance = cell_clearance(mesh, grid)[cell]
+        near = jax.lax.stop_gradient(reach * (1.0 + POLYGON_MARGIN) >= clearance)
+    else:
+        near = near_surface(x, vd, remaining, grid, mesh, tables)
+    sizes = [n // k for k in POLYGON_COMPACT]
+    slot, count = levelset_mod._near_slots(near, sizes[-1])
+    branch = jnp.int32(len(sizes) + 1)
+    for i in reversed(range(len(sizes))):
+        branch = jnp.where(count <= sizes[i], i + 1, branch)
+    branch = jnp.where(count == 0, 0, branch)
+    near_branches = tuple(functools.partial(_elements_near, mesh=mesh, size=m) for m in sizes)
+    return jax.lax.switch(
+        branch,
+        (_elements_none, *near_branches, functools.partial(_elements_dense, mesh=mesh)),
+        (x, vd, cell, exclude, slot),
+    )
+
+
+SUB_CELLS = {2: 8, 3: 2}
+"""Sub-cells per axis of :func:`dense_threshold` (by dimension): the clearance is resolved
+below the cell, so that a particle in a CUT cell far from its elements still takes the
+dense pass (measured on the SPARTA circle: 2/3 of the near slots were in CUT cells)."""
+
+
+def dense_threshold(mesh: Mesh, grid: GridSpec) -> jax.Array:
+    """``f64[C, sub^D]``: per sub-cell of every Cartesian cell (:data:`SUB_CELLS`, row
+    major), a path length below which no move starting there can meet the polygon or end
+    in the body -- the gap from the sub-cell to its cell's candidate elements' bounding
+    boxes, at most ``radius h_min`` (an element not among the candidates lies beyond the
+    dilation), less a ``POLYGON_MARGIN h_min`` slack for the rounding of the sub-cell
+    index; ``-1`` in an INSIDE cell (its particles were mis-tracked: they take the full
+    tracker, whose inside check catches them).  The cut-free ring of SPARTA's optimised
+    move, as a distance."""
+    c0 = mesh.candidates.shape[0]
+    d = grid.lo.shape[0]
+    sub = SUB_CELLS[d]
+    lower, upper = cell_bounds(grid)
+    lower, upper = lower[:c0], upper[:c0]
+    h = upper - lower
+    h_min = jnp.min(h, axis=1)
+    offsets = jnp.stack(
+        jnp.meshgrid(*([jnp.arange(sub, dtype=jnp.float64)] * d), indexing="ij"), axis=-1
+    ).reshape(-1, d)  # (sub^D, D), row-major
+    s_lo = lower[:, None, :] + offsets[None] * (h / sub)[:, None, :]
+    s_hi = s_lo + (h / sub)[:, None, :]  # (C, sub^D, D)
+    valid, verts, _n = _gather_elements(mesh, mesh.candidates)  # (C, S, D, D)
+    e_lo = jnp.min(verts, axis=2)[:, None]
+    e_hi = jnp.max(verts, axis=2)[:, None]  # (C, 1, S, D)
+    gap = jnp.maximum(
+        jnp.maximum(e_lo - s_hi[:, :, None, :], s_lo[:, :, None, :] - e_hi), 0.0
+    )  # (C, sub^D, S, D)
+    dist = jnp.sqrt(jnp.sum(gap * gap, axis=-1))
+    clearance = jnp.min(jnp.where(valid[:, None, :], dist, jnp.inf), axis=2)
+    free = jnp.minimum(clearance, (mesh.radius * h_min)[:, None])
+    free = free - POLYGON_MARGIN * h_min[:, None]
+    return jnp.where((mesh.cell_type[:c0] == INSIDE)[:, None], -1.0, free)
+
+
+def _fine_grid(table: jax.Array, n: tuple, sub: int) -> jax.Array:
+    """:func:`dense_threshold` (``C, sub^D``) as the flat row-major table of the fine
+    grid of ``n_a sub`` cells per axis."""
+    d = len(n)
+    t = table.reshape(*n, *([sub] * d))
+    order = [ax for a in range(d) for ax in (a, d + a)]
+    return jnp.transpose(t, order).reshape(-1)
+
+
+def near_tables(mesh: Mesh, grid: GridSpec):
+    """The free-path table :func:`near_surface` reads, frozen: ``(free, origin, inverse
+    spacing, shape)`` of a uniform grid -- for each of its cells a path length below which
+    no move starting there can meet the surface or end in the body (``-1``: always near).
+    Polygon: :func:`dense_threshold` on the ``sub``-refined Cartesian grid.  Level set:
+    :func:`jax_dsmc.mesh.levelset.free_path` on its lattice.  ``None`` for an analytic
+    body.  Formed once per move and passed in: a table computed in the same computation
+    as its gather is fused into it by XLA:CPU and recomputed per particle."""
+    mesh = jax.lax.stop_gradient(mesh)
+    if mesh.kind == "surface":
+        d = grid.lo.shape[0]
+        sub = SUB_CELLS[d]
+        shape = tuple(int(m) * sub for m in grid.n)
+        free = _fine_grid(dense_threshold(mesh, grid), tuple(grid.n), sub)
+        spacing = (grid.hi - grid.lo) / jnp.asarray(shape, jnp.float64)
+        return free, grid.lo, 1.0 / spacing, shape
+    if mesh.kind == "levelset":
+        ls = mesh.body
+        free = levelset_mod.free_path(ls).reshape(-1)
+        return free, ls.lo, jnp.full(ls.dim, 1.0 / ls.h), tuple(ls.coef.shape)
+    return None
+
+
+def near_surface(
+    x: jax.Array,
+    v: jax.Array,
+    length: jax.Array,
+    grid: GridSpec,
+    mesh: Mesh,
+    tables=None,
+) -> jax.Array:
+    """``bool[N]``: may a move of duration ``length`` from ``x`` meet the embedded surface
+    (or start or end in the body)?  ``False`` only where it provably cannot, for ANY path
+    of length ``|v| length`` from ``x`` -- so also for one folded at a specular box face;
+    the dense pass of ``tracker="lane"`` moves those particles without a surface search.
+
+    Polygon and level set: the path is shorter than the free path of the start's cell of
+    :func:`near_tables` (with the :data:`POLYGON_MARGIN` slack of the search's own cull),
+    one gather and no division.  Analytic body: the start's distance to the sphere
+    exceeds the path.  Not differentiated (a routing decision).  ``tables``:
+    :func:`near_tables`, if already formed."""
+    x, v, length = jax.lax.stop_gradient((x, v, length))
+    tables = near_tables(mesh, grid) if tables is None else tables
+    d = x.shape[1]
+    path2 = jnp.sum(v[:, :d] * v[:, :d], axis=1) * (length * length)
+    if tables is not None:
+        free, origin, inverse, shape = tables
+        idx = jnp.floor((x - origin) * inverse).astype(jnp.int32)
+        flat = jnp.zeros(x.shape[0], jnp.int32)
+        for a in range(d):
+            flat = flat * shape[a] + jnp.clip(idx[:, a], 0, shape[a] - 1)
+        limit = free[flat]
+        return (limit < 0.0) | (path2 * (1.0 + POLYGON_MARGIN) ** 2 >= limit * limit)
+    body = jax.lax.stop_gradient(mesh.body)
+    gap = jnp.sqrt(jnp.sum((x - body.centre) ** 2, axis=1)) - body.radius
+    return gap <= jnp.sqrt(path2) * (1.0 + POLYGON_MARGIN) + POLYGON_MARGIN * body.radius
+
+
 # ---------------------------------------------------------------------------
 # Public queries.
 # ---------------------------------------------------------------------------
@@ -225,6 +453,7 @@ def first_hit(
     mesh: Mesh,
     exclude: jax.Array,
     remaining: jax.Array | None = None,
+    tables=None,
 ) -> tuple[jax.Array, jax.Array]:
     """Earliest surface along each ray: ``(time f64[N], surface i32[N])``.
 
@@ -236,8 +465,11 @@ def first_hit(
             (STATIC).
         exclude: ``i32[N]`` element id to skip (``-1`` = none; ``0`` = the analytic body;
             ignored by a level set, whose re-hit rule is the sign pattern of ``phi``).
-        remaining: ``f64[N]`` remaining move time; bounds the level set's root search
-            (polygons and analytic bodies test the whole ray and ignore it).
+        remaining: ``f64[N]`` remaining move time; bounds the level set's root search and
+            culls the polygon search to the rays that can reach a candidate within it
+            (:func:`_polygon_hit`: an element beyond the move may then be reported as no
+            element); analytic bodies ignore it.  ``None``: the whole ray, every row.
+        tables: :func:`near_tables` of the mesh, if already formed (the polygon cull).
 
     Returns the box result of :func:`jax_dsmc.geometry.first_hit` unless an element or
     the analytic body is hit *strictly* earlier; ids and tie rules per the module
@@ -250,13 +482,7 @@ def first_hit(
     t_box, f_box = box_geometry.first_hit(x, v, grid)
     f_box = f_box.astype(jnp.int32)
     if mesh.kind == "surface":
-        cand = mesh.candidates[cell_of(x, grid)]
-        t = _element_times(x, vd, mesh, cand)
-        t = jnp.where(cand == exclude[:, None], jnp.inf, t)
-        t_el = jnp.min(t, axis=1)
-        # lowest id among the tied minima, independent of the table's order
-        big = jnp.iinfo(jnp.int32).max
-        e = jnp.min(jnp.where(t == t_el[:, None], cand, big), axis=1)
+        t_el, e = _polygon_hit(x, vd, grid, mesh, exclude, remaining, tables)
     elif mesh.kind in ("circle", "sphere"):
         t_el = analytic.hit_body(x, vd, mesh.body, exclude == 0)
         e = jnp.zeros_like(exclude)
@@ -303,7 +529,38 @@ def _cell_corner(grid: GridSpec, cell: jax.Array, corner: jax.Array) -> jax.Arra
     return jnp.where(bits == 1, hi, lo)
 
 
-def inside_polygon(x: jax.Array, cell: jax.Array, mesh: Mesh, grid: GridSpec) -> jax.Array:
+def _odd_crossings(args, mesh, grid):
+    """Odd number of crossings from ``x`` to its cell's outside corner, ``bool[N]`` -- the
+    test of :func:`inside_polygon` in a CUT cell, over every row."""
+    x, cell, _slot = args
+    corner = mesh.outside_corner[cell]
+    target = _cell_corner(grid, cell, jnp.maximum(corner, 0))
+    return _segment_crossings(x, target, mesh, mesh.csurfs[cell]) % 2 == 1
+
+
+def _odd_none(args):
+    return jnp.zeros(args[0].shape[0], bool)
+
+
+def _odd_near(args, mesh, grid):
+    """:func:`_odd_crossings` of the compacted rows ``slot``, scattered back (False
+    elsewhere)."""
+    x, cell, slot = args
+    n = x.shape[0]
+    take = jnp.maximum(slot, 0)
+    odd = _odd_crossings((x[take], cell[take], slot), mesh, grid)
+    return jnp.zeros(n, bool).at[jnp.where(slot >= 0, slot, n)].set(odd, mode="drop")
+
+
+INSIDE_COMPACT = 8
+"""The crossing test of :func:`inside_polygon` runs on the CUT-cell rows compacted into
+``N // INSIDE_COMPACT`` entries (every row when more): measured 6 % of the slots on the
+SPARTA circle (scratch/trk/stats.py)."""
+
+
+def inside_polygon(
+    x: jax.Array, cell: jax.Array, mesh: Mesh, grid: GridSpec, active: jax.Array | None = None
+) -> jax.Array:
     """Is ``x`` inside the body?  ``bool[N]``.  SPARTA ``outside_surfs`` in JAX.
 
     For a polygonal body the segment from ``x`` to the cell's known-outside corner
@@ -311,21 +568,42 @@ def inside_polygon(x: jax.Array, cell: jax.Array, mesh: Mesh, grid: GridSpec) ->
     (``mesh.csurfs[cell]``); an odd number of crossings means inside.  INSIDE cells
     (``outside_corner == -1``) return True and OUTSIDE cells False without a test.  For
     an analytic body the answer is ``|x - c| < r``, for a level set ``phi(x) < 0``.
+    ``active`` (``bool[N]``, optional): the rows that matter; the others come out False.
 
     As in SPARTA, a segment through a vertex (2-D) or edge (3-D) shared by two of the
     cell's elements counts twice; the corner choice of the cut routine is what keeps
     that measure-zero case away from the particles.
+
+    Only the rows in CUT cells are tested: compacted (:func:`levelset._near_slots`) into
+    ``N // INSIDE_COMPACT`` entries from ``levelset.NEAR_MIN`` rows, every row when more
+    (a runtime ``switch``); row for row the dense test's arithmetic.
     """
     if mesh.kind == "levelset":
-        return levelset_mod.inside(mesh.body, x)
-    if mesh.kind != "surface":
-        return analytic.inside(mesh.body, x)
-    corner = mesh.outside_corner[cell]
-    ctype = mesh.cell_type[cell]
-    target = _cell_corner(grid, cell, jnp.maximum(corner, 0))
-    count = _segment_crossings(x, target, mesh, mesh.csurfs[cell])
-    odd = count % 2 == 1
-    return jnp.where(ctype == INSIDE, True, jnp.where(ctype == OUTSIDE, False, odd))
+        inside = levelset_mod.inside(mesh.body, x)
+    elif mesh.kind != "surface":
+        inside = analytic.inside(mesh.body, x)
+    else:
+        ctype = mesh.cell_type[cell]
+        n = x.shape[0]
+        args = (x, cell, jnp.zeros(0, jnp.int32))
+        if n < levelset_mod.NEAR_MIN:
+            odd = _odd_crossings(args, mesh, grid)
+        else:
+            cut = ctype == CUT if active is None else (ctype == CUT) & active
+            size = n // INSIDE_COMPACT
+            slot, count = levelset_mod._near_slots(cut, size)
+            branch = jnp.where(count == 0, 0, jnp.where(count <= size, 1, 2))
+            odd = jax.lax.switch(
+                branch,
+                (
+                    _odd_none,
+                    functools.partial(_odd_near, mesh=mesh, grid=grid),
+                    functools.partial(_odd_crossings, mesh=mesh, grid=grid),
+                ),
+                (x, cell, slot),
+            )
+        inside = jnp.where(ctype == INSIDE, True, jnp.where(ctype == OUTSIDE, False, odd))
+    return inside if active is None else active & inside
 
 
 def stencil_sufficient(

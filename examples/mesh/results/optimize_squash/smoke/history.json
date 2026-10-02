@@ -1,0 +1,57 @@
+{
+ "config": {
+  "case": "ellipse",
+  "fnum_scale": 8.0,
+  "warmup": 100,
+  "steps": 60,
+  "window": 40,
+  "radius_cells": 1,
+  "tracker": "lane",
+  "body": "levelset",
+  "levelset_h": 0.0625,
+  "levelset_samples": 16,
+  "acc": 0.0,
+  "silhouette_band": 0.0,
+  "grazing": 0.05,
+  "grid_scale": 1,
+  "value_class": "none",
+  "squash": 1.0,
+  "s0": 1.0,
+  "s_target": 0.35,
+  "step_scale": 0.8,
+  "iterations": 2,
+  "seeds_per_iterate": 2,
+  "seed_start": 32,
+  "variant": "along_pool",
+  "neighbors": 32,
+  "timing_band": 0.2,
+  "tag": "smoke"
+ },
+ "lam": 2.4474257808450853e-21,
+ "eta": 5.311542051540059e+19,
+ "s_star_ref": 0.35,
+ "rows": [
+  {
+   "iterate": 0,
+   "s": 1.0,
+   "drag": 1.170482552619188e-20,
+   "drag_se": 9.737184663780164e-22,
+   "dD_ds": 1.5227484415349102e-20,
+   "dD_ds_se": 8.912014967520254e-22,
+   "parts": {
+    "pathwise_tally": 1.547531732851699e-20,
+    "pathwise_x": -4.679001482580915e-23,
+    "pathwise_v": -2.010428983420875e-22
+   },
+   "J": -5.5950078937537826e-21,
+   "J_prime": -2.072349004596561e-21,
+   "D_ref": 1.708299625651253e-20,
+   "dD_ref_ds": 2.101796205448644e-20,
+   "J_prime_ref": 3.718128634540778e-21,
+   "s_next": 1.110073688833818,
+   "hits": 200.0,
+   "stuck": 0.0,
+   "seconds": 418.57042956352234
+  }
+ ]
+}

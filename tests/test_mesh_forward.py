@@ -165,8 +165,12 @@ def test_run_with_mesh_reports_hits_tallies_and_zero_failures(tracker):
 
 
 def test_step_is_bitwise_box_only_when_the_body_is_unreachable():
-    """A tiny body in a corner no particle visits: `run(mesh=)` equals the DIFFUSE-face
-    tracker run without it, bitwise, including the collisions (FG0 at the run level)."""
+    """A tiny body in a corner no particle visits: `run(mesh=)` equals the tracker run
+    without it -- the alive set, velocities and collisions bitwise, the positions to
+    round-off (FG0 at the run level).  The box faces
+    are deterministic (an outflow face for the diffuse one): with an embedded surface a diffuse face's re-emission draws are
+    per slot (``wall_adjoint._slot_uniforms``), not the box-only tracker's dense draws, so
+    a DIFFUSE face would differ in its random stream (not in its law)."""
     grid = _grid2()
     body = AnalyticBody(centre=jnp.array([0.25, 0.25]), radius=jnp.float64(0.1))
     mesh = cut.build_mesh(body, grid, radius=1, sub=4)
@@ -175,7 +179,7 @@ def test_step_is_bitwise_box_only_when_the_body_is_unreachable():
     N = 3000
     params = SimParams(dt=jnp.float64(1e-4), fnum=jnp.full((C,), 1e18), epsilon=jnp.float64(0.0))
     static = SimStatic(N=N, D=2, S=1, G=1, A_max=8, K_bounce=4, n_steps=4)
-    faces = Faces((BC.DIFFUSE, BC.SPECULAR, BC.PERIODIC, BC.PERIODIC))
+    faces = Faces((BC.OUTFLOW, BC.SPECULAR, BC.PERIODIC, BC.PERIODIC))
     wall = WallParams.uniform(2, T_WALL, n_models=1)
     flow = FlowParams(nrho=jnp.float64(1.0), temp=jnp.float64(273.15), vstream=jnp.zeros(3))
     key = jax.random.PRNGKey(1)
@@ -193,7 +197,15 @@ def test_step_is_bitwise_box_only_when_the_body_is_unreachable():
     out = simulate.run(
         state, cstate, grid, sp, params, static, key, faces=faces, wall=wall, mesh=mesh
     )
-    for a, b in zip(jax.tree.leaves(ref[0]), jax.tree.leaves(out[0]), strict=True):
+    (st_ref, cs_ref), (st_out, cs_out) = ref[0], out[0]
+    alive = np.asarray(st_ref.alive)
+    assert np.array_equal(alive, np.asarray(st_out.alive))
+    assert np.array_equal(np.asarray(st_ref.v), np.asarray(st_out.v))
+    # the mesh path forms a periodic wrap's position in its own order: round-off only
+    np.testing.assert_allclose(
+        np.asarray(st_out.x)[alive], np.asarray(st_ref.x)[alive], rtol=0, atol=1e-14
+    )
+    for a, b in zip(jax.tree.leaves(cs_ref), jax.tree.leaves(cs_out), strict=True):
         assert bool((a == b).all())
     assert int(out[1][1].surface_hits.sum()) == 0
 

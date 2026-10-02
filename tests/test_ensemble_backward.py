@@ -188,6 +188,38 @@ def test_every_wall_bounce_is_recorded_and_scored_separately():
     assert faces[0] != faces[1]
 
 
+def test_lean_record_rebuilds_v_post_bitwise():
+    """``simulate.post_collision_v``: with ``v_post`` dropped (a lean record) the replay of
+    each step's collision writes from ``v`` and the pair record is **bitwise** the stored
+    post-collision state -- on the inlet shock (walls, entrants) and on a dense relaxation
+    where particles collide several times in one step (later attempts see earlier writes)."""
+    from jax_dsmc import simulate  # noqa: PLC0415
+    from jax_dsmc.collide.ntc import step_pairs  # noqa: PLC0415
+
+    _g, _s0, _out, shock = _run(steps=5, particles=256, cells=4)
+    _s, _o, _d, dense, _grid = relaxation_run(
+        dict(CONTROLS), jax.random.key(3), 400, 3, 512, 0.2, "certified", capture=True
+    )
+    for rec in (shock, dense):
+        lean = simulate.lean_record(rec)
+        rebuilt = np.asarray(simulate.post_collision_v(lean))
+        np.testing.assert_array_equal(rebuilt, np.asarray(rec.v_post))
+        for k in range(rec.x.shape[0]):  # the per-step accessors the device code uses
+            step = jax.tree.map(lambda a, k=k: a[k], lean)
+            got = np.asarray(simulate.step_v_post(step))
+            np.testing.assert_array_equal(got, np.asarray(rec.v_post[k]))
+            pairs = step_pairs(step)  # the sequential pull-back's partner ghosts
+            np.testing.assert_array_equal(np.asarray(pairs.vi), np.asarray(rec.pairs.vi[k]))
+            np.testing.assert_array_equal(np.asarray(pairs.vj), np.asarray(rec.pairs.vj[k]))
+        assert np.any(rebuilt != np.asarray(rec.v))  # collisions happened
+    # several accepted collisions of one particle within a step: the case slot order matters
+    acc = np.asarray(dense.pairs.accept[0])
+    pi, pj = np.asarray(dense.pairs.pi[0])[acc], np.asarray(dense.pairs.pj[0])[acc]
+    assert np.bincount(np.concatenate([pi, pj])).max() >= 2
+    with pytest.raises(ValueError, match="full record"):
+        eb.from_device(simulate.lean_record(dense), None, 1.0)
+
+
 def test_capture_works_without_transport():
     """``collide_only`` runs have no wall or source events; capture must still work."""
     state0, out, diag, rec, grid = relaxation_run(

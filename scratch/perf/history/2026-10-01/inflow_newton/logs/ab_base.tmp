@@ -1,0 +1,2 @@
+inflow from /tmp/inflow_ab_base/jax_dsmc/inflow.py halley False
+{"platform": "cpu", "device": "cpu", "body": "polygon", "seconds_first_incl_compile": 44.686126311004045, "seconds": 29.385325208000722, "moves": 36651050.0, "final_particles": 47673, "moves_per_second": 1247256.912781113, "slots": 60000}

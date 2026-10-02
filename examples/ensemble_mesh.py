@@ -12,8 +12,11 @@ last ``--window`` form the objective: the mean drag on the body in N/m,
 a per-hit reward (the traced replay, :func:`jax_dsmc.shape.replay`) whose pathwise part
 (the specular ``v_out`` depends on the normal) enters through the tally cotangent.
 Controls: ``radius`` (analytic ``dF/dr = F/r`` for a specular cylinder in free-molecular
-flow is the reference for the value; blockage is what it is at this box), ``centre_x`` and
-``mode2`` (a ``cos 2 theta`` normal displacement of the surface, level set only).
+flow is the reference for the value; blockage is what it is at this box), ``centre_x``,
+``mode2`` (a ``cos 2 theta`` normal displacement of the surface, level set only), ``width``
+(the half-width of the ``plate`` case's capsule) and ``squash_y`` (the ``y`` semi-axis
+factor ``s`` of the ``ellipse`` / ``spheroid`` cases, evaluated at ``--squash``; reference
+``examples/mesh/ellipsoid_reference.py``).
 Bodies (``--body``): the analytic circle, or the **level set** interpolating its signed
 distance (``jax_dsmc.mesh.levelset``, LS1/LS2 of the plan): the shape VJP then lands on
 the B-spline coefficients and is chained through ``coef(theta)`` -- for ``radius`` that is
@@ -46,7 +49,8 @@ import forward as F
 
 from examples.ensemble_inlet_shock import device_backward
 from examples.gradient_bench import RESULTS
-from jax_dsmc import ensemble_backward, initialize, sample, shape, simulate, sort
+from jax_dsmc import ensemble_backward, inflow, initialize, sample, shape, simulate, sort
+from jax_dsmc import species_data as sd
 from jax_dsmc.constants import K_BOLTZ
 from jax_dsmc.grid import n_cartesian, num_cells
 from jax_dsmc.mesh import cut
@@ -55,7 +59,7 @@ from jax_dsmc.mesh.types import AnalyticBody
 from jax_dsmc.state import FlowParams
 from jax_dsmc.validation import require_valid
 
-PARAMETERS = ("radius", "centre_x", "mode2", "width")
+PARAMETERS = ("radius", "centre_x", "mode2", "width", "squash_y")
 BODIES = ("analytic", "levelset")
 # the replay's continuous error: round-off of one arithmetic compiled twice, amplified by
 # grazing reflections on concave walls to ~1e-12 on optimised shapes; a discrete divergence
@@ -81,6 +85,24 @@ def default_config():
         "grazing": 0.0,
         "grid_scale": 1,
         "value_class": "hit_ahead",
+        # the y semi-axis factor s of the `ellipse` / `spheroid` cases (semi-axes R, s R[, R]):
+        # the evaluation point of the control `squash_y`
+        "squash": 1.0,
+        # the free-stream Knudsen number lambda / (2 R) on the case's body diameter (R its
+        # radius; :func:`knudsen_density`): 0 keeps the deck's nrho = 1 (Kn ~ 1e18, no
+        # collisions).  The density and fnum are scaled alike, so the particle count is the
+        # same; `a_max` (0: forward.py's 4) bounds the NTC attempts per cell and step
+        "knudsen": 0.0,
+        "a_max": 0,
+        # the free-stream Mach number (:func:`stream_speed`; 0: the deck's 100 m/s, M 0.32),
+        # with the time step `dt` (0: the deck's 1e-4 s) and the slot count `slots` (0: the
+        # case's capacity / fnum_scale) a faster, fuller box needs
+        "mach": 0.0,
+        "dt": 0.0,
+        "slots": 0,
+        # the captured record: "lean" drops v_post (rebuilt bitwise from v and the pair
+        # record) and born_v (host adjoint only) -- 48 of ~122 bytes per slot and step
+        "record": "lean",
     }
 
 
@@ -104,6 +126,20 @@ def _capsule_distance(centre, half_width, rho, x):
     return dist - rho
 
 
+def _ellipsoid_distance(centre, semi, x):
+    """``(q - 1) / |grad q|`` with ``q = |(x - centre) / semi|``: zero on the ellipsoid, unit
+    gradient on it and ``d phi / d semi`` there equal to minus the surface's normal speed (the
+    exact shape derivative), a Lipschitz-bounded signed pseudo-distance elsewhere, ``f64[N]``.
+    Written as ``(q^2 - q) / |(x - centre) / semi^2|`` so the centre (``q = 0``) is finite."""
+    rel = (x - centre[None, :]) / semi[None, :]
+    q2 = jnp.sum(rel * rel, axis=1)
+    g2 = jnp.sum((rel / semi[None, :]) ** 2, axis=1)
+    inner = g2 > 1e-24
+    q = jnp.sqrt(jnp.where(inner, q2, 1.0))
+    g = jnp.sqrt(jnp.where(inner, g2, 1.0))
+    return jnp.where(inner, (q2 - q) / g, -jnp.min(semi))
+
+
 def levelset_coef(theta, cfg, parameter, grid):
     """Coefficients of the level-set body at control value ``theta`` (JAX, differentiable:
     the chain ``d coef / d theta`` of the LS2 gate is its VJP)."""
@@ -114,10 +150,22 @@ def levelset_coef(theta, cfg, parameter, grid):
         radius = theta
     elif parameter == "centre_x":
         centre = centre.at[0].set(theta)
-    elif parameter not in ("mode2", "width"):
+    elif parameter not in ("mode2", "width", "squash_y"):
         raise ValueError(f"parameter must be one of {PARAMETERS}")
     h = cfg["levelset_h"]
     lo, shape = levelset_mod.grid_for_box(grid.lo, grid.hi, h)
+    if c.get("kind") == "ellipse":
+        # the aspect-ratio test: semi-axes (R, s R[, R]), s the control `squash_y`
+        if parameter != "squash_y":
+            raise ValueError("the ellipse / spheroid cases take the control squash_y")
+        dim = len(c["centre"])
+        semi = jnp.full((dim,), radius).at[1].set(radius * theta)
+        template = levelset_mod.LevelSet(coef=jnp.zeros(shape), lo=jnp.asarray(lo), h=float(h))
+        sdf = _ellipsoid_distance(centre, semi, levelset_mod.knots(template))
+        ls = levelset_mod.from_values(sdf.reshape(shape), lo, h, n_sample=cfg["levelset_samples"])
+        return ls.coef, ls
+    if parameter == "squash_y":
+        raise ValueError("squash_y is the control of the ellipse / spheroid cases")
     if c.get("kind") == "capsule":
         # the GP plate: half-width is the control, thickness rho = the case's radius
         half_width = theta if parameter == "width" else jnp.float64(c["half_width"])
@@ -139,7 +187,7 @@ def body_of(cfg, parameter, value, grid):
     if cfg["body"] == "levelset":
         coef, ls = levelset_coef(jnp.float64(value), cfg, parameter, grid)
         return dataclasses.replace(ls, coef=coef)
-    if parameter in ("mode2", "width"):
+    if parameter in ("mode2", "width", "squash_y"):
         raise ValueError(f"{parameter} is a level-set control")
     c = F.CASES[cfg["case"]]
     centre = np.array(c["centre"], dtype=np.float64)
@@ -161,6 +209,8 @@ def nominal(cfg, parameter):
         return float(c["centre"][0])
     if parameter == "width":
         return float(c["half_width"])
+    if parameter == "squash_y":
+        return float(cfg["squash"])
     return 0.0
 
 
@@ -178,6 +228,31 @@ def control_gradient(cfg, parameter, grid, geom_cotangent):
 
 def _coef_of(theta, cfg, parameter, grid):
     return levelset_coef(theta, cfg, parameter, grid)[0]
+
+
+def mean_free_path(nrho, gas="Ar"):
+    """The VHS free-stream mean free path ``(T / T_ref)^(omega - 1/2) / (sqrt 2 pi d^2 n)``
+    at the deck's temperature (Bird 1994, eq. 4.65 with the VHS diameter at ``T``), m."""
+    sp = sd.BY_SYMBOL[gas]
+    sigma = np.pi * sp.diam**2 * (F.TEMP / sp.tref) ** (0.5 - sp.omega)
+    return 1.0 / (np.sqrt(2.0) * sigma * nrho)
+
+
+def knudsen_density(cfg):
+    """The factor on the deck's ``nrho`` (and on ``fnum``) that gives ``cfg["knudsen"]`` on
+    the body diameter ``2 R``; 1 when ``knudsen`` is 0."""
+    if cfg.get("knudsen", 0.0) <= 0.0:
+        return 1.0
+    length = 2.0 * F.CASES[cfg["case"]]["radius"]
+    return mean_free_path(F.NRHO) / (cfg["knudsen"] * length)
+
+
+def stream_speed(cfg, gas="Ar"):
+    """The free-stream speed: ``mach`` times the sound speed ``sqrt(5/3 k T / m)`` of the
+    monatomic gas at the deck's temperature, or the deck's ``VSTREAM`` when ``mach`` is 0."""
+    if cfg.get("mach", 0.0) <= 0.0:
+        return F.VSTREAM
+    return cfg["mach"] * float(np.sqrt(5.0 / 3.0 * K_BOLTZ * F.TEMP / sd.BY_SYMBOL[gas].mass))
 
 
 def build(cfg, parameter, value, steps, body=None):
@@ -203,17 +278,37 @@ def build(cfg, parameter, value, steps, body=None):
         body, dataclasses.replace(grid, volume=jnp.zeros(0)), radius=cfg["radius_cells"]
     )
     grid = cut.with_volume(grid, mesh)
-    # uniform weights on every collision cell, split cells' sub-cells included
-    params = dataclasses.replace(
-        params, fnum=jnp.full((num_cells(grid),), float(params.fnum[0]) * cfg["fnum_scale"])
+    # uniform weights on every collision cell, split cells' sub-cells included; a denser gas
+    # (`knudsen`) at the same particle count weighs each particle as much more
+    density = knudsen_density(cfg)
+    fnum = float(params.fnum[0]) * cfg["fnum_scale"] * density
+    params = dataclasses.replace(params, fnum=jnp.full((num_cells(grid),), fnum))
+    if density != 1.0:
+        res = dataclasses.replace(res, nrho=res.nrho * density)
+    n = int(cfg.get("slots", 0)) or int(static.N / cfg["fnum_scale"]) + 256
+    a_max = int(cfg.get("a_max", 0)) or static.A_max
+    static = dataclasses.replace(
+        static, N=n, A_max=a_max, n_steps=steps, record=cfg.get("record", "lean")
     )
-    n = int(static.N / cfg["fnum_scale"]) + 256
-    static = dataclasses.replace(static, N=n, n_steps=steps)
     capacity = int(capacity / cfg["fnum_scale"]) + 64
+    if cfg.get("mach", 0.0) > 0.0 or cfg.get("dt", 0.0) > 0.0:
+        # the inflow's per-step budget follows the stream speed and the step (F.build's rule)
+        if cfg.get("dt", 0.0) > 0.0:
+            params = dataclasses.replace(params, dt=jnp.float64(cfg["dt"]))
+        res = dataclasses.replace(
+            res,
+            vstream=res.vstream.at[:, 0].set(
+                jnp.where(res.vstream[:, 0] != 0.0, stream_speed(cfg), 0.0)
+            ),
+        )
+        target = inflow.target_count(res, grid, 0, 0, sp.mass[0], params.fnum[0], params.dt)
+        capacity = int(2 * float(target) + 64)
     return grid, mesh, sp, params, static, faces, res, wall, capacity
 
 
-@functools.partial(jax.jit, static_argnames=("faces", "static", "capacity", "step0", "capture"))
+# `step0` is traced (integer arithmetic on the step index only): the frames mode's warm-up
+# blocks and the captured run at `warmup` share one compilation per block length
+@functools.partial(jax.jit, static_argnames=("faces", "static", "capacity", "capture"))
 def _run(
     state, cstate, grid, sp, params, key, faces, wall, res, mesh, static, capacity, step0, capture
 ):
@@ -274,7 +369,9 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
         cfg, parameter, value, cfg["steps"], body
     )
     flow = FlowParams(
-        nrho=jnp.float64(F.NRHO), temp=jnp.float64(F.TEMP), vstream=jnp.array([F.VSTREAM, 0.0, 0.0])
+        nrho=jnp.float64(F.NRHO * knudsen_density(cfg)),
+        temp=jnp.float64(F.TEMP),
+        vstream=jnp.array([stream_speed(cfg), 0.0, 0.0]),
     )
     state = initialize.initial_state(key, flow, grid, sp, static, n_alive=0)
     cstate = initialize.initial_collide_state(flow, grid, sp, static)
@@ -308,6 +405,21 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
         "frames": stack_frames(frames) if frames else None,
     }
     return state0, final, aux[1], (aux[2] if capture else None), aux[-1], setup
+
+
+NPC_BUCKET = 64
+
+
+@functools.lru_cache(maxsize=16)
+def drag_rewards(mass: float, dim: int, first: int, last: int, scale: float):
+    """The windowed-drag per-hit reward and its window-edge jump as ``functools.partial``
+    objects, one pair per distinct setting.  They are static arguments of the jitted
+    ``shape.replay`` and ``shape.gradient``, and a partial hashes by identity: building new
+    ones for every seed recompiled both (~40 s per seed, 2026-09-28), so they are cached
+    on the (hashable) values that define them."""
+    reward = functools.partial(_drag_reward, mass=mass, dim=dim, first=first, scale=scale)
+    jump = functools.partial(_drag_jump, mass=mass, dim=dim, first=first, last=last, scale=scale)
+    return reward, jump
 
 
 def _drag_reward(events, tallies, rec_k, step, mass, dim, first, scale):
@@ -404,10 +516,7 @@ def shape_terms(
     scale_r = float(params.fnum[0]) / (w * float(dt))
     first = cfg["warmup"] + m - w
     steps = cfg["warmup"] + jnp.arange(m, dtype=jnp.int32)
-    reward = functools.partial(_drag_reward, mass=mass, dim=dim, first=first, scale=scale_r)
-    jump = functools.partial(
-        _drag_jump, mass=mass, dim=dim, first=first, last=cfg["warmup"] + m - 1, scale=scale_r
-    )
+    reward, jump = drag_rewards(float(mass), dim, first, cfg["warmup"] + m - 1, scale_r)
     rep = shape.replay(
         rec,
         steps,
@@ -447,11 +556,13 @@ def shape_terms(
     dx = (np.asarray(grid.hi) - np.asarray(grid.lo)) / np.asarray(grid.n)
     v_scale = float(np.sqrt(K_BOLTZ * F.TEMP / float(mass)))
     fit_scale = jnp.concatenate((jnp.asarray(dx), jnp.full(3, v_scale)))
-    npc_max = max(
-        64,
-        4 * int(np.asarray(rec.alive).sum(axis=1).max()) // num_cells(grid),
-        int(ensemble_backward.max_occupancy(rec, grid)) + 8,
-    )
+    # the node tables' width: the densest cell of the record (a narrower table would drop
+    # nodes; checked by the backward) -- the fits' and partner draws' cost scales with it.
+    # A static argument of the jitted backward and gradient: rounded up so that seeds and
+    # iterates with slightly different occupancies share one compilation (the padded rows
+    # are masked out of every fit and partner draw, so the result does not depend on it)
+    npc_max = int(ensemble_backward.max_occupancy(rec, grid)) + 8
+    npc_max = -(-npc_max // NPC_BUCKET) * NPC_BUCKET
     t0 = time.time()
     dev, dev_t = _backwards(
         rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hit_reward, timing_total
@@ -486,6 +597,9 @@ def shape_terms(
         silhouette_band=float(cfg["silhouette_band"]),
         reward=reward if cfg["silhouette_band"] > 0.0 else None,
         value_class=cfg.get("value_class", "hit_ahead"),
+        # epsilon = 0 above: only the slots with a body hit have a geometry-dependent
+        # post-move state, so the grad-lambda fits run there only (shape.gradient)
+        hit_fits=True,
     )
     t_shape = time.time() - t0
     for t in all_terms.values():
@@ -567,6 +681,12 @@ def artifact_tag(cfg):
         tag += f"_gz{cfg['grazing']:g}"
     if cfg["grid_scale"] > 1:
         tag += f"_grid{cfg['grid_scale']}"
+    if F.CASES[cfg["case"]].get("kind") == "ellipse":
+        tag += f"_s{cfg['squash']:g}"  # the evaluation point of squash_y
+    if cfg.get("knudsen", 0.0) > 0.0:
+        tag += f"_kn{cfg['knudsen']:g}"
+    if cfg.get("mach", 0.0) > 0.0:
+        tag += f"_M{cfg['mach']:g}"
     if cfg.get("value_class", "hit_ahead") != "none":
         # stratified grad-lambda fits (2026-09-22); untagged artifacts are the mixed pool
         tag += "_vchit"

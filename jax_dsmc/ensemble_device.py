@@ -34,6 +34,7 @@ import jax.numpy as jnp
 from jax import lax
 
 from jax_dsmc import sort
+from jax_dsmc.collide.ntc import step_pairs, step_v_post
 from jax_dsmc.collide.vss import collision_rate, scatter
 from jax_dsmc.grid import cell_neighbourhood as grid_neighbourhood
 from jax_dsmc.grid import collision_cell
@@ -42,6 +43,11 @@ from jax_dsmc.state import ParticleState
 jax.config.update("jax_enable_x64", True)
 
 RIDGE_REL = 1e-8
+FIT_PAIRS = 1 << 20
+"""(query, node) pairs one :func:`cell_query` chunk may gather: a chunk materialises
+~70-100 bytes per pair (the scaled node block, distances, masks, top-k), so the fit's
+working set stays ~100 MB whatever the node table width ``P`` (which grows with the
+particles per cell -- ~17 k candidates for a pooled fit at the fine circle's density)."""
 
 
 class Backward(NamedTuple):
@@ -199,13 +205,13 @@ def _step_pullback(mu, xs, grid, npc_max, scale, k, basis):
     ids, valid, cell, _, _ = cell_nodes(rec_k.x, rec_k.alive, grid, npc_max)
     # scratch row for inactive attempts, as in the forward slot scan
     lam0 = jnp.concatenate((mu, jnp.zeros(1)))
-    v0 = jnp.concatenate((rec_k.v_post, jnp.zeros((1, 3))))
+    v0 = jnp.concatenate((step_v_post(rec_k), jnp.zeros((1, 3))))
     x = jnp.concatenate((rec_k.x, jnp.zeros((1, rec_k.x.shape[1]))))
     del cell
     body = functools.partial(
         _slot_pullback, x=x, ids=ids, valid=valid, scale=scale, k=k, basis=basis
     )
-    p = rec_k.pairs
+    p = step_pairs(rec_k)
     slots = (p.pi, p.pj, p.accept, p.vi, p.vj)
     (lam, _), four_rev = lax.scan(body, (lam0, v0), slots, reverse=True)
     mu_prev, lam = _move_pullback(lam[:n], rec_k, r_k)
@@ -236,7 +242,8 @@ def backward(
     each step's post-collision state (the state ``simulate.run``'s ``reward`` hook sees),
     added to the carried value before that step's pull-back; ``hit_reward`` ``f64[M, K, N]``
     is a per-hit reward (one slot per tracker pass, as ``EventRecord.walls``), added on the
-    move pull-back.  Both are per slot and already divided by the normalization; a windowed
+    move pull-back -- only its sum over the pass axis is used, so a lane replay passes its
+    per-step totals ``shape.HitRewards.totals()[:, None]`` (``f64[M, 1, N]``).  Both are per slot and already divided by the normalization; a windowed
     objective is nonzero only on its window.  The returned ``lam`` stays the value at the
     post-move state; :func:`ensemble_backward.from_device` forms the per-hit weights
     ``lam + (rewards of the later hits of the step)`` from ``hit_reward``.
@@ -270,6 +277,16 @@ def _chunk_query(
     return (value, grad_x, grad_v) if gradients else value
 
 
+def fit_chunk(q, width, chunk):
+    """Queries per :func:`cell_query` pass: at most ``chunk``, at most ``FIT_PAIRS / width``
+    (at least 64) for a node table ``width`` wide, and the ``Q`` queries split into equal
+    passes so the padding stays below one pass.  Each query's fit reads only the tables
+    and its own state, so the chunking changes nothing but XLA's batching."""
+    cap = max(1, min(chunk, max(64, FIT_PAIRS // max(width, 1)), q))
+    passes = -(-q // cap)
+    return -(-q // passes)
+
+
 def cell_query(
     tables,
     q_c,
@@ -284,7 +301,8 @@ def cell_query(
     q_class=None,
 ):
     """Field value at ``Q`` queries in cells ``q_c`` from per-cell node tables ``(C, P, .)``,
-    ``chunk`` queries at a time (the per-query node gather is ``P x (D+3)`` floats).
+    at most ``chunk`` queries at a time (the per-query node gather is ``P x (D+3)``
+    floats; :func:`fit_chunk` bounds the pass by ``FIT_PAIRS``).
     ``gradients=True`` returns ``(value, grad_x, grad_v)`` instead; ``direction``
     ``f64[Q, 3]`` restricts a query's nodes to those with ``v . direction > 0`` (rows of
     zeros: no restriction).  A fifth table ``node_class`` (``bool[C, P]``) with ``q_class``
@@ -293,6 +311,7 @@ def cell_query(
     node_x, node_v, node_valid, node_val, *rest = tables
     node_class = rest[0] if rest else None
     q = q_c.shape[0]
+    chunk = fit_chunk(q, node_valid.shape[1], chunk)
     pad = (-q) % chunk
     c = jnp.pad(q_c, (0, pad)).reshape(-1, chunk)
     x = jnp.pad(q_x, ((0, pad), (0, 0))).reshape(-1, chunk, q_x.shape[1])
@@ -358,6 +377,7 @@ def node_gradients(
     direction=None,
     pool=0,
     klass=None,
+    queries=None,
 ):
     """``(grad_x f64[N, D], grad_v f64[N, 3])`` of the carried adjoint at every alive slot's
     own state, from the per-cell fit of ``lam`` over the slot's cell (the slot is one of
@@ -383,6 +403,13 @@ def node_gradients(
     below it) -- the fitted ``grad_v lambda`` of a reflected particle then reads the
     approaching population's ``d(2 m v_x)/dv``, a -27 % bias on the specular capsule
     whose true post-hit value gradient is zero (review section 7.8).
+
+    ``queries`` ``i32[Q]`` (slot ids, ``-1`` = unused entry) fits only at those slots and
+    returns zeros elsewhere; the nodes are still every alive slot.  Each query's fit reads
+    only the node tables and its own state, so the fitted values at the queried slots are
+    those of the full call (up to the last bit, if XLA batches a different query count
+    differently) -- the shape adjoint uses it for the slots whose post-move state depends
+    on the geometry (:func:`jax_dsmc.shape.gradient`, ``hit_fits``).
     """
     ids, valid, cell, _, count = cell_nodes(x, alive, grid, npc_max)
     c = jnp.minimum(cell, count.shape[0] - 1)
@@ -391,10 +418,25 @@ def node_gradients(
         tables = (*tables, klass[ids])
     if pool:
         tables = pooled_tables(tables, grid, pool)
-    _, grad_x, grad_v = cell_query(
-        tables, c, x, v, scale, k, basis, chunk, gradients=True, direction=direction, q_class=klass
-    )
-    return jnp.where(alive[:, None], grad_x, 0.0), jnp.where(alive[:, None], grad_v, 0.0)
+    if queries is None:
+        _, grad_x, grad_v = cell_query(
+            tables, c, x, v, scale, k, basis, chunk, gradients=True, direction=direction,
+            q_class=klass,
+        )  # fmt: skip
+        return jnp.where(alive[:, None], grad_x, 0.0), jnp.where(alive[:, None], grad_v, 0.0)
+    n = x.shape[0]
+    used = queries >= 0
+    q = jnp.where(used, queries, 0)
+    _, qx, qv = cell_query(
+        tables, c[q], x[q], v[q], scale, k, basis, chunk, gradients=True,
+        direction=None if direction is None else direction[q],
+        q_class=None if klass is None else klass[q],
+    )  # fmt: skip
+    keep = (used & alive[q])[:, None]
+    target = jnp.where(used, queries, n)
+    grad_x = jnp.zeros((n, x.shape[1])).at[target].set(jnp.where(keep, qx, 0.0), mode="drop")
+    grad_v = jnp.zeros((n, 3)).at[target].set(jnp.where(keep, qv, 0.0), mode="drop")
+    return grad_x, grad_v
 
 
 def value_query(
@@ -624,9 +666,11 @@ def _step_pullback_virtual(
     weight = per_particle[c] / rec_k.sigma[c] / (partners * substeps)
     weight = jnp.where(rec_k.alive & (count[c] >= 2), weight, 0.0)
     if nodes == "staged":
-        stages = staged_velocities(rec_k.pairs, rec_k.v, rec_k.v_post, cell, substeps)
+        stages = staged_velocities(rec_k.pairs, rec_k.v, step_v_post(rec_k), cell, substeps)
     else:
-        stages = jnp.concatenate((rec_k.v[None], jnp.broadcast_to(rec_k.v_post, (substeps, n, 3))))
+        stages = jnp.concatenate(
+            (rec_k.v[None], jnp.broadcast_to(step_v_post(rec_k), (substeps, n, 3)))
+        )
     body = functools.partial(
         _substep,
         x=rec_k.x,

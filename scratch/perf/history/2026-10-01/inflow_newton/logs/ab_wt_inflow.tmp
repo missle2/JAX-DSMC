@@ -1,0 +1,2 @@
+jax_dsmc from /home/aakash/jax_dsmc/wt_inflow/jax_dsmc/__init__.py
+{"platform": "cpu", "device": "cpu", "body": "polygon", "seconds_first_incl_compile": 63.666537205004715, "seconds": 37.59884646200226, "moves": 36651050.0, "final_particles": 47673, "moves_per_second": 974791.8739219804, "slots": 60000}

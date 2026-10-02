@@ -32,10 +32,49 @@ random numbers across perturbed runs.
 from __future__ import annotations
 
 import functools
+import math
 
 import jax
 import jax.numpy as jnp
 from jax import random
+
+STRAIGHT_LINE_MAX_WORDS = 8192
+"""Largest ``threefry2x32`` call (output words) lowered straight-line on XLA:CPU."""
+
+
+def _threefry_cpu_lowering(ctx, *args, straight, rolled):
+    """Straight-line rounds for small hashes, JAX's rolled loop for large ones."""
+    words = math.prod(ctx.avals_out[0].shape)
+    return (straight if words <= STRAIGHT_LINE_MAX_WORDS else rolled)(ctx, *args)
+
+
+def _straight_line_threefry_on_cpu():
+    """Lower small ``threefry2x32`` calls on XLA:CPU as JAX does on the other backends:
+    straight-line rounds instead of a 5-trip ``while`` loop (JAX's CPU default, chosen
+    for compile time).  Same arithmetic, so every draw is bitwise unchanged; but each
+    rolled hash is a loop of a few tiny thunks whose carries are copied every trip, and
+    a step derives dozens of keys (``fold_in`` / ``split``) and draws several small
+    batches (attempt slots, inflow candidates): ~0.3 ms per step on one CPU core
+    (2026-10-01).  Large draws (the per-slot wall uniforms) keep the rolled loop: inlined
+    there, the hash fuses into its consumers, whose float arithmetic (``uniform``'s
+    ``minval`` scaling) then rounds differently in the dense and the compacted tracker
+    passes (``test_compacted_rows_equal_the_dense_pass``).  Private JAX API: skipped
+    (default lowering kept) if it moves."""
+    try:
+        from jax._src import prng  # noqa: PLC0415
+        from jax.interpreters import mlir  # noqa: PLC0415
+
+        rule = functools.partial(
+            _threefry_cpu_lowering,
+            straight=prng._threefry2x32_lowering_rule,
+            rolled=prng._threefry2x32_cpu_lowering_rule,
+        )
+        mlir.register_lowering(prng.threefry2x32_p, rule, platform="cpu")
+    except (ImportError, AttributeError):
+        pass
+
+
+_straight_line_threefry_on_cpu()
 
 # --- stage ids (section 1).  Module-level Python ints, never traced. --------
 STAGE_INIT = 0

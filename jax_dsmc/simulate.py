@@ -22,7 +22,10 @@ collisions``).
 Every loop here is a ``scan`` with a **static** trip count -- the time loop, the
 attempt-slot loop, and the wall-bounce loop.  No ``while_loop`` anywhere: a
 data-dependent trip count is neither reverse-differentiable nor statically shaped,
-and the jaxpr audit in the test suite enforces it.
+and the jaxpr audit in the test suite enforces it (for the collision step).  One
+exception (2026-09-24): the *untraced* move of ``tracker="lane"`` stops its lane passes
+with a ``while_loop`` once no particle needs another; the traced replay the shape adjoint
+differentiates keeps the fixed trip count (``wall_adjoint._lane_passes``).
 """
 
 from __future__ import annotations
@@ -37,12 +40,18 @@ from jax import lax
 
 from jax_dsmc import boundary, inflow, sample, sort
 from jax_dsmc.boundary import BC
-from jax_dsmc.collide.ntc import collide, decision_weights
+from jax_dsmc.collide.ntc import (
+    collide,
+    decision_weights,
+    post_collision_velocities,
+    step_v_post,
+)
 from jax_dsmc.move import move_with_decisions
 from jax_dsmc.rng import STAGE_INFLOW, STAGE_MOVE, key_for
 from jax_dsmc.state import CollideState, ParticleState, lane_capacity
 from jax_dsmc.validation import require_valid, validate_inputs
 from jax_dsmc.wall_adjoint import (
+    RecordEvents,
     SplitEvents,
     WallEvents,
     compact_record,
@@ -66,17 +75,73 @@ class EventRecord:
     v: jax.Array
     alive: jax.Array
     born_face: jax.Array
-    born_v: jax.Array
+    born_v: jax.Array | None
+    """``None`` in a lean record (``SimStatic.record = "lean"``): read by the host adjoint
+    only."""
     pairs: object
-    v_post: jax.Array
-    """velocities after the collisions: with ``x`` and ``alive`` this is the state at ``t_{k+1}``."""
+    v_post: jax.Array | None
+    """velocities after the collisions: with ``x`` and ``alive`` this is the state at
+    ``t_{k+1}``.  ``None`` in a lean record -- :func:`post_collision_v` rebuilds it bitwise
+    from ``v`` and ``pairs``."""
     walls: object
-    """:class:`jax_dsmc.wall_adjoint.WallEvents` -- the step's diffuse-face hits per slot."""
+    """The step's recorded wall events: diffuse-face hits and, with a mesh, every element
+    hit -- :class:`jax_dsmc.wall_adjoint.WallEvents` (``K, N``) for the stencil and walk
+    trackers, :class:`jax_dsmc.wall_adjoint.RecordEvents` (pass 0 dense, later passes as a
+    list, :func:`jax_dsmc.wall_adjoint.compact_record`) for ``tracker="lane"``."""
     sigma: jax.Array
     """``f64[C]`` the collision majorant the step's attempts were accepted against."""
 
 
 jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
+
+
+def post_collision_v(rec):
+    """``v_post`` of one step's (or a stack of steps') record: the stored array, or for a
+    lean record the exact replay of the step's collision writes
+    (:func:`jax_dsmc.collide.ntc.post_collision_velocities`, vmapped over a leading step
+    axis when ``rec`` is stacked)."""
+    if rec.v_post is not None:
+        return rec.v_post
+    if rec.v.ndim == 3:
+        return jax.vmap(post_collision_velocities)(rec.v, rec.pairs)
+    return step_v_post(rec)
+
+
+def _lean_faces(face, dim):
+    """A lean record's surface ids: ``-1`` (no event), the box face ``0..2D-1``, or ``2D``
+    for any body element (the element index is read by the host adjoint only), ``i8``."""
+    return jnp.minimum(face, 2 * dim).astype(jnp.int8)
+
+
+def lean_record(record):
+    """``record`` (one step's or a stack's :class:`EventRecord`) reduced to what the device
+    backward and the shape VJP read: no ``v_post`` (:func:`post_collision_v`), ``born_v``,
+    pair ``vi`` / ``vj`` (:func:`jax_dsmc.collide.ntc.step_pairs`) or wall ``v_out`` /
+    ``diffuse``; ``born_face`` (a box face, ``< 2D``) and the wall surface ids as ``i8``
+    (:func:`_lean_faces` -- ``>= 0`` and ``>= 2D`` keep their meaning).  The forward is
+    untouched: this only selects what the captured run keeps."""
+    dim = record.x.shape[-1]
+    walls = record.walls
+    if isinstance(walls, RecordEvents):
+        walls = walls._replace(
+            head=WallEvents(_lean_faces(walls.head.face, dim), None, None),
+            face=_lean_faces(walls.face, dim),
+            v_out=None,
+            diffuse=None,
+        )
+    elif isinstance(walls, WallEvents):
+        walls = WallEvents(_lean_faces(walls.face, dim), None, None)
+    pairs = record.pairs
+    if pairs is not None:
+        pairs = pairs._replace(vi=None, vj=None)
+    return dataclasses.replace(
+        record,
+        born_face=record.born_face.astype(jnp.int8),
+        born_v=None,
+        v_post=None,
+        pairs=pairs,
+        walls=walls,
+    )
 
 
 def _merge_born_split(walls, born_walls, born, size):
@@ -177,6 +242,8 @@ def _event_record(moved, source, wall_events, captured, state, static, diffuse, 
         # store the later passes as a list of the recorded events, not K - 1 lane rows
         walls, overflow = compact_record(walls, _record_capacity(static))
         record = dataclasses.replace(record, walls=walls)
+    if static.record == "lean":
+        record = lean_record(record)
     return record, (lost, overflow)
 
 
@@ -237,6 +304,10 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
     ``collide`` rewrites velocities but never positions, so cell occupancy is
     unchanged.
     """
+    partition = sort.partition_active(static)
+    if partition:
+        # the carried cell order rides last in the carry (`run` adds and removes it)
+        *carry, sort_carry = carry
     if reward is None:
         state, cstate = carry
     else:
@@ -285,9 +356,11 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
             wall_events = extra
             if mesh is not None:
                 recrossed, tracking = _tracking_diagnostics(recrossed, static.tracker)
-            fold = boundary.fold_index(x, grid, BC.PERIODIC)
-            w = decision_weights(fold.size).reshape(fold.shape)
-            bc_chk = lax.stop_gradient(jnp.sum(w * fold))
+            # No fold term here (2026-10-01): `apply_faces` returns resolved in-box
+            # positions, whose fold index is 0 for every live particle bar one exactly on
+            # an upper face -- the term fingerprinted dead slots' stale positions, and
+            # deaths are already in the collision checksum's cell term.  It cost 0.5 ms
+            # per step at N = 6e4 on one CPU core.
             # M7: the boundary decisions' score joins the collision score in the same
             # accumulator, because `surrogate` weights the reward by `grad` of the WHOLE
             # prefix `L_{<=k}` -- a separate accumulator would drop the cross terms.
@@ -323,7 +396,10 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
                     tracker=static.tracker,
                     max_walk=static.K_walk,
                 )
-    table = sort.build_table(state, grid)
+    if partition:
+        table, sort_carry = sort.update_table(state, grid, sort_carry)
+    else:
+        table = sort.build_table(state, grid)
     # Only the cell temperature feeds the a-priori majorant floor (section 7.2.3);
     # the full moments -- pressure tensor and heat flux, an (N, 3, 3) intermediate --
     # are formed once, AFTER the collisions, so the emitted snapshot describes the
@@ -391,6 +467,8 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
         **tracking,
     )
     new_carry = (state, cstate) if reward is None else (state, cstate, j_acc + reward(state, table))
+    if partition:
+        new_carry = (*new_carry, sort_carry)
     if emit_moments == "none":
         # Emit nothing per step.  `scan` stacks its ys over time, so a full
         # CellMoments costs `n_steps * C * 6 * 8` bytes -- 29 GB for 8 steps at
@@ -512,7 +590,7 @@ def run(
 
     ``mesh`` embeds a surface (:func:`jax_dsmc.mesh.cut.build_mesh`); it needs ``faces``
     and a ``grid`` carrying the mesh's flow volumes (:func:`jax_dsmc.mesh.cut.with_volume`).
-    ``static.tracker`` selects the stencil or the cell-walk tracker.  ``emit_surface``
+    ``static.tracker`` selects the stencil, lane or cell-walk tracker.  ``emit_surface``
     appends the step's :class:`jax_dsmc.surface.SurfaceTallies` (rows ``2D`` box faces
     then the elements; extensive momentum / energy / heat of the resident particles'
     hits -- entrants' birth-step hits are not tallied) as the last element of the
@@ -555,8 +633,14 @@ def run(
     policy = getattr(jax.checkpoint_policies, static.remat_policy, None)
     body = jax.checkpoint(body, policy=policy, static_argnums=())
     init = (state, cstate) if reward is None else (state, cstate, jnp.float64(0.0))
+    partition = sort.partition_active(static)
+    if partition:
+        # the carried cell order lives inside the scan only: a run starts from the full
+        # sort of its initial state and returns the carry it was given (structure too)
+        init = (*init, sort.initial_carry(state, grid))
     if static.checkpoint_block_size == 0:
-        return lax.scan(body, init, step0 + jnp.arange(static.n_steps))
+        final, outputs = lax.scan(body, init, step0 + jnp.arange(static.n_steps))
+        return (final[:-1] if partition else final), outputs
     size = static.checkpoint_block_size
     blocks = (static.n_steps + size - 1) // size
     output_shape = jax.eval_shape(functools.partial(_probe_step, body, step0), init)[1]
@@ -566,7 +650,7 @@ def run(
     )
     final, outputs = lax.scan(jax.checkpoint(block), init, jnp.arange(blocks))
     outputs = jax.tree.map(functools.partial(_flatten_blocks, n_steps=static.n_steps), outputs)
-    return final, outputs
+    return (final[:-1] if partition else final), outputs
 
 
 def run_adaptive(  # noqa: PLR0915 -- the resize/retry loop reads best as one unit

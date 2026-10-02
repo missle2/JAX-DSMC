@@ -6,7 +6,7 @@ section-scoped; do not renumber sections without updating the comments that cite
 
 | file | content |
 |---|---|
-| `ensemble_adjoint.tex` | The particle-carried ensemble adjoint as implemented in `jax_dsmc/ensemble_backward.py` / `ensemble_device.py`: forward notation, objectives, the three collision pull-backs (sequential, linearised, virtual-partner substepped), the kNN quadratic field interpolant, the score terms, births/deaths, the validation table (numbers from `docs/ADJOINT_BRANCH_REVIEW.md`), and the planned shape extension.  Cites the equation labels of P3 (`papers_reference/arXiv-2603.20946v2/main.tex`). |
+| `ensemble_adjoint.tex` | The particle-carried ensemble adjoint as implemented in `jax_dsmc/ensemble_backward.py` / `ensemble_device.py`: forward notation, objectives, the three collision pull-backs (sequential, linearised, virtual-partner substepped), the kNN quadratic field interpolant, the score terms, births/deaths, the validation table (numbers from `docs/ADJOINT_BRANCH_REVIEW.md`), the shape adjoint, the shape optimiser and its status, and (appendix A) a primer on the DSMC forward solver for CFD readers (NTC, VSS, sources, tracking, cut/split cells).  Cites the equation labels of P3 (`papers_reference/arXiv-2603.20946v2/main.tex`). |
 
 ## Building
 

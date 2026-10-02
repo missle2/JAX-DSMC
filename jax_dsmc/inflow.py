@@ -10,8 +10,9 @@ That failure is silent -- no error, no ``NaN``, no shape change, just a wrong gr
 which is the same shape as the two worst defects this project has found (section 8.1's
 exactly-zero gradients and section 8.4.1's momentum violation), both of which survived
 careful reading.  So the rule is structural rather than remembered: :func:`revive_slots`
-is the **only** sanctioned way to set ``alive`` from ``False`` to ``True``, and it zeroes
-every per-particle accumulator itself.  :func:`stale_accumulator_count` is the runtime
+(a mask over every slot) and :func:`revive_at` (a list of slots) are the **only**
+sanctioned ways to set ``alive`` from ``False`` to ``True``, and both zero every
+per-particle accumulator themselves.  :func:`stale_accumulator_count` is the runtime
 check, and ``tests/test_inflow.py`` asserts the gradient of a revived slot equals a fresh
 particle's -- which is the gate section 19 states for U6.
 """
@@ -30,12 +31,19 @@ jax.config.update("jax_enable_x64", True)
 
 from jax_dsmc import sampling  # noqa: E402
 from jax_dsmc.boundary import BC  # noqa: E402
+from jax_dsmc.compaction import prefix_count  # noqa: E402
 from jax_dsmc.constants import K_BOLTZ  # noqa: E402
 from jax_dsmc.geometry import surface_measure  # noqa: E402
 from jax_dsmc.rng import indexed_normal, indexed_uniform  # noqa: E402
 from jax_dsmc.safe import safe_log  # noqa: E402
 from jax_dsmc.state import ParticleState  # noqa: E402
-from jax_dsmc.wall_adjoint import WallEvents, advance, no_wall_events, to_dense  # noqa: E402
+from jax_dsmc.wall_adjoint import (  # noqa: E402
+    WallEvents,
+    advance,
+    lane_slots,
+    no_wall_events,
+    to_dense,
+)
 
 ACCUMULATOR_FIELDS = ("logh_acc",)
 """Per-particle state that is a *history* and so must be reset on slot reuse.
@@ -70,6 +78,25 @@ def revive_slots(state: ParticleState, revive, x_new, v_new, species=None) -> Pa
         alive=state.alive | revive,
         logh_acc=logh,
     )
+
+
+def revive_at(state: ParticleState, slots, x_new, v_new) -> ParticleState:
+    """:func:`revive_slots` for a list of slots: ``slots`` ``i32[M]`` distinct dead slots
+    (``N`` = none), ``x_new`` ``f64[M, D]``, ``v_new`` ``f64[M, 3]``.  The same state,
+    accumulators zeroed on the revived slots (gap U6), written at the ``M`` slots alone
+    instead of selected over all ``N``."""
+    put = functools.partial(_put_at, slots=slots)
+    return ParticleState(
+        x=put(state.x, x_new),
+        v=put(state.v, v_new),
+        species=state.species,
+        alive=put(state.alive, True),
+        logh_acc=put(state.logh_acc, 0.0),
+    )
+
+
+def _put_at(target, values, slots):
+    return target.at[slots].set(values, mode="drop")
 
 
 def stale_accumulator_count(state: ParticleState, revived) -> jnp.ndarray:
@@ -229,21 +256,120 @@ def flux_cdf(y, s):
     return 1.0 - tail(y) / tail(jnp.zeros_like(y))
 
 
+QUANTILE_ITERATIONS = 4
+"""Safeguarded Halley steps after the closed-form start of :func:`flux_quantile`.
+
+Three already reach the round-off floor of :func:`flux_cdf` over ``s`` in ``[-10, 10]`` and
+``u`` in ``[eps, 1 - eps]`` (``scratch/inflow_newton``); the fourth is margin.  Unrolled in
+Python: a handful of fused elementwise steps, where the 64-step bisection it replaces was a
+64-trip loop (130 kernel launches a step on the GPU).
+"""
+
+
+def _flux_model_step(t, s, target):
+    """Newton step in ``t = log y`` on the endpoint-Laplace model of the lower tail.
+
+    For drift ``s > 0`` and ``y`` below it, ``t0 F(y) ~ y^2 exp(-(s-y)^2) / (2 (1 + (s-y) y))``
+    -- exact as ``y -> 0`` and Bird's Gaussian tail when ``(s-y) y >> 1``.  Only a start.
+    """
+    y = jnp.exp(t)
+    x = s - y
+    w = jnp.maximum(1.0 + x * y, 1e-3)
+    return t - (2.0 * t - x * x - jnp.log(w) - target) / (2.0 + 2.0 * x * y - y * (s - 2.0 * y) / w)
+
+
+def _flux_quantile_start(u, s, t0, e0):
+    """Closed-form start of the flux quantile: the asymptote of whichever regime ``u`` is in.
+
+    Returns ``(y, y1)``; ``y1 = sqrt(u / A)`` is the leading small-``y`` quantile
+    (``F ~ A y^2``), which also decides where the series start is exact.
+    """
+    shift = jnp.minimum(s, 0.0) ** 2
+    # small y: F = A y^2 (1 + 4s/3 y + (2s^2-1)/2 y^2 + ...), inverted to third order
+    y1 = jnp.sqrt(u * 2.0 * t0 / e0)
+    series = y1 * (1.0 - (2.0 * s / 3.0) * y1 + (22.0 * s * s + 9.0) / 36.0 * y1 * y1)
+    # large y: tail(y) ~ exp(-(y-s)^2 + shift) / 2, so (y-s)^2 = -log(1-u) + shift - log(2 t0)
+    upper = s + jnp.sqrt(jnp.maximum(-jnp.log1p(-u) + shift - jnp.log(2.0 * t0), 0.0))
+    # s > 0 bulk: Laplace (normal) approximation about the mode of y exp(-(y-s)^2)
+    mode = (s + jnp.sqrt(s * s + 2.0)) / 2.0
+    normal = mode + jax.scipy.special.ndtri(u) / jnp.sqrt(2.0 + 1.0 / (mode * mode))
+    # s > 0 lower half: solve the endpoint-Laplace model, from below the mode
+    t = jnp.log(jnp.minimum(y1, mode))
+    target = jnp.log(2.0 * u * t0)
+    for _ in range(4):
+        t = _flux_model_step(t, s, target)
+    small = y1 * jnp.maximum(jnp.abs(s), 1.0) < 0.1
+    # for s <= 0 the density is below A y^2's, so y1 is a lower bound and `upper` an upper one
+    lower = jnp.where(small, series, jnp.where(s <= 0.0, y1, jnp.exp(t)))
+    upper = jnp.where(s <= 0.0, upper, jnp.maximum(upper, normal))
+    return jnp.where(u < 0.5, lower, upper), y1
+
+
+def _flux_halley_step(y, lo, hi, u, s, t0, noise):
+    """One bracketed Halley step on ``flux_cdf(y, s) = u``.
+
+    Below the median the equation is ``log F = log u`` in ``log y`` (a power law near 0),
+    above it ``log(tail / t0) = log(1 - u)`` in ``y`` (a quadratic in the Gaussian tail),
+    which keeps both tails well scaled.  One evaluation of the shift-scaled tail serves the
+    value, the pdf and its derivative.  ``[lo, hi]`` brackets the crossing of the computed
+    CDF exactly as the bisection did; a step leaving it falls back to the midpoint.
+    """
+    shift = jnp.minimum(s, 0.0) ** 2
+    e = jnp.exp(-((y - s) ** 2) + shift)
+    tail = 0.5 * e + s * jnp.sqrt(jnp.pi) * jnp.exp(shift + log_ndtr(jnp.sqrt(2.0) * (s - y)))
+    cdf = 1.0 - tail / t0
+    left = cdf < u
+    lo = jnp.where(left, y, lo)
+    hi = jnp.where(left, hi, y)
+    below = u < 0.5
+    h = jnp.log(jnp.where(below, cdf, tail / t0)) - jnp.where(below, jnp.log(u), jnp.log1p(-u))
+    # below: p = dlogF/dlogy; Halley factor from d2logF/dlogy2 = p (2 - 2y(y-s)) - p^2
+    p = y * y * e / (t0 * cdf)
+    dt = h / p
+    fl = 1.0 - 0.5 * dt * (2.0 - 2.0 * y * (y - s) - p)
+    dt = dt / jnp.where(fl > 0.5, fl, 1.0)
+    # above: r = -dlog(tail)/dy; d2/dy2 = -r (1/y - 2(y-s)) - r^2
+    r = y * e / tail
+    dy = -h / r
+    fu = 1.0 - 0.5 * dy * (1.0 / y - 2.0 * (y - s) + r)
+    dy = dy / jnp.where(fu > 0.5, fu, 1.0)
+    # where the computed CDF is round-off (a noisy staircase), log F is meaningless: plain Newton
+    y_new = jnp.where(
+        below,
+        jnp.where(cdf > 64.0 * noise, y * jnp.exp(-dt), y + (u - cdf) * t0 / (y * e)),
+        y - dy,
+    )
+    overshoot = ~jnp.isfinite(y_new) | jnp.where(left, y_new >= hi, y_new <= lo)
+    return jnp.where(overshoot, (lo + hi) / 2, jnp.clip(y_new, lo, hi)), lo, hi
+
+
 @jax.custom_jvp
 def flux_quantile(u, s):
-    """Inverse normalized drifting flux CDF, with an implicit pathwise tangent."""
-    u, s = jnp.broadcast_arrays(u, s)
+    """Inverse normalized drifting flux CDF, with an implicit pathwise tangent.
+
+    A closed-form start (:func:`_flux_quantile_start`) and :data:`QUANTILE_ITERATIONS`
+    bracketed Halley steps (:func:`_flux_halley_step`) on the same :func:`flux_cdf`.
+    Where the third-order series start is already more accurate than that CDF's own
+    cancellation error allows (the far lower tail, strongly outward drift above all) it is
+    kept rather than iterated on round-off.
+    """
+    s = jnp.asarray(s, dtype=jnp.float64)
+    shift = jnp.minimum(s, 0.0) ** 2
+    e0 = jnp.exp(-s * s + shift)
+    b0 = s * jnp.sqrt(jnp.pi) * jnp.exp(shift + log_ndtr(jnp.sqrt(2.0) * s))
+    t0 = 0.5 * e0 + b0  # tail(0) of flux_cdf, computed once per drift
+    noise = 8.0 * jnp.finfo(jnp.float64).eps * (0.5 * e0 + jnp.abs(b0)) / t0
+    u, s, t0, e0, noise = jnp.broadcast_arrays(u, s, t0, e0, noise)
+    y, y1 = _flux_quantile_start(u, s, t0, e0)
+    z = y1 * jnp.maximum(jnp.abs(s), 1.0)
+    frozen = (z < 0.1) & (z**3 < noise / u)
     lo = jnp.zeros_like(u)
     hi = jnp.maximum(s, 0.0) + 12.0
-
-    def bisect(_, bounds):
-        a, b = bounds
-        mid = (a + b) / 2
-        left = flux_cdf(mid, s) < u
-        return jnp.where(left, mid, a), jnp.where(left, b, mid)
-
-    lo, hi = jax.lax.fori_loop(0, 64, bisect, (lo, hi))
-    return (lo + hi) / 2
+    y = jnp.clip(y, lo, hi)
+    for _ in range(QUANTILE_ITERATIONS):
+        y_next, lo, hi = _flux_halley_step(y, lo, hi, u, s, t0, noise)
+        y = jnp.where(frozen, y, y_next)
+    return y
 
 
 @flux_quantile.defjvp
@@ -343,7 +469,7 @@ def inject(  # noqa: PLR0915 -- source accounting remains one replayable event
     slots.  Like ``attempts_clipped`` it must be surfaced rather than swallowed: a
     silently dropped entrant is a mass sink that looks exactly like correct physics.
 
-    Every revival goes through :func:`revive_slots`, so the U6 accumulator reset cannot
+    Every revival goes through :func:`revive_at`, so the U6 accumulator reset cannot
     be skipped at this call site or any future one.
 
     Entrants get a **randomised first-move fraction** ``dtremain = dt * U``
@@ -364,18 +490,21 @@ def inject(  # noqa: PLR0915 -- source accounting remains one replayable event
         born_v=jnp.zeros((n_part, 3)),
         born_walls=no_wall_events(n_part, k_events),
     )
-    # dead slots first; `argsort` on a bool puts False (dead) ahead of True
-    order = jnp.argsort(state.alive.astype(jnp.int32), stable=True)
-    n_dead = jnp.sum(~state.alive)
+    # the dead slots in slot order (what a stable argsort of `alive` puts first), as many
+    # as the entrants can take: rank r of the births below goes to dead slot r
+    n_inflow = sum(
+        faces.of(axis, side) is BC.INFLOW for axis in range(len(grid.n)) for side in (0, 1)
+    )
+    dead_size = max(1, min(n_part, n_inflow * capacity))
+    order, _ = lane_slots(~state.alive, dead_size)
+    n_dead = jnp.sum(~state.alive, dtype=jnp.int32)
 
-    revive = jnp.zeros(n_part, bool)
-    x_new = state.x
-    v_new = state.v
+    # per face: the slots the entrants take, their states and their birth scores
+    births = []
     # M8: the score of the injection-count decision.  `stochastic_round` is a frozen
     # decision that carries no tangent, so `nrho` (and `dt`, `fnum`, `face_area`) reach
     # the objective through this log-probability and through nothing else -- without it
     # `dJ/d(nrho)` reads exactly 0.0, which looks like an answer rather than an absence.
-    logh_new = jnp.zeros(n_part, dtype=jnp.float64)
     injected = jnp.array(0, jnp.int32)
     shortfall = jnp.array(0.0, jnp.float64)
     used = jnp.array(0, jnp.int32)
@@ -448,15 +577,12 @@ def inject(  # noqa: PLR0915 -- source accounting remains one replayable event
 
             wanted = (jnp.arange(capacity) < n_emit) & accepted
             # Compact actual candidates, not the padded per-face allocation.
-            rank = jnp.cumsum(wanted.astype(jnp.int32)) - 1 + used
+            rank = prefix_count(wanted) - 1 + used
             take = wanted & (rank < n_dead)
-            slots = jnp.where(take, order[jnp.clip(rank, 0, n_part - 1)], n_part)
-            revive = revive.at[slots].set(True, mode="drop")
-            x_new = x_new.at[slots].set(xf, mode="drop")
-            v_new = v_new.at[slots].set(vf, mode="drop")
+            slots = jnp.where(take, order[jnp.clip(rank, 0, dead_size - 1)], n_part)
             # An entrant's own birth-step wall events belong to it (paper mode); the
             # trajectory scalar already carries them in `trajectory`.
-            logh_new = logh_new.at[slots].set(log_p_count + boundary_score, mode="drop")
+            births.append((slots, xf, vf, log_p_count + boundary_score))
             inserted = jnp.sum(take, dtype=jnp.int32)
             injected = injected + inserted
             used = used + inserted
@@ -480,16 +606,17 @@ def inject(  # noqa: PLR0915 -- source accounting remains one replayable event
                 ),
             )
 
-    # AFTER `revive_slots`, which zeroes the accumulator for revived slots (gap U6): an
-    # entrant has no inherited history, but the decision that created it is its own.
-    state = revive_slots(state, revive, x_new, v_new)
+    if births:
+        slots, xf, vf, logh_birth = (jnp.concatenate(parts) for parts in zip(*births, strict=True))
+        # AFTER `revive_at`, which zeroes the accumulator for revived slots (gap U6): an
+        # entrant has no inherited history, but the decision that created it is its own.
+        state = revive_at(state, slots, xf, vf)
+        logh = state.logh_acc.at[slots].add(logh_birth, mode="drop")
+    else:
+        logh = state.logh_acc
     state = dataclasses.replace(
         state,
-        logh_acc=(
-            jnp.broadcast_to(trajectory, (n_part,))
-            if score_mode == "trajectory"
-            else state.logh_acc + logh_new
-        ),
+        logh_acc=jnp.broadcast_to(trajectory, (n_part,)) if score_mode == "trajectory" else logh,
     )
     result = (state, injected, shortfall)
     return (*result, details) if return_diagnostics else result

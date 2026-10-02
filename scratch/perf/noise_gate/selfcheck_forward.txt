@@ -1,0 +1,31 @@
+forward gate: base 'base' (/home/aakash/jax_dsmc/JAX-DSMC) vs new 'base2' (/home/aakash/jax_dsmc/JAX-DSMC)
+criterion: z = diff / sqrt(se_base^2 + se_new^2) (se = seed sd / sqrt(n)); PASS iff |z| < 3 for every gated observable (WARN for |z| >= 2); diff/sd1 = diff / single-seed sd of base
+[polygon] seeds base ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'] new ['100', '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '111']
+  drag             base +3.679325e-20 (sd 1.05e-22, n 12)  new +3.680785e-20 (sd 1.40e-22, n 12)  diff +1.460e-23 = +3.97e-04 rel  z +0.29  diff/sd1 +0.14  PASS
+  lift             base -6.077095e-23 (sd 1.98e-22, n 12)  new +1.279930e-22 (sd 1.84e-22, n 12)  diff +1.888e-22 = +3.11e+00 rel  z +2.42  diff/sd1 +0.95  WARN
+  body_energy      base +5.051063e-34 (sd 2.23e-35, n 12)  new +5.135259e-34 (sd 1.09e-35, n 12)  diff +8.420e-36 = +1.67e-02 rel  z +1.18  diff/sd1 +0.38  info
+  body_heat        base +5.051063e-34 (sd 2.23e-35, n 12)  new +5.135259e-34 (sd 1.09e-35, n 12)  diff +8.420e-36 = +1.67e-02 rel  z +1.18  diff/sd1 +0.38  info
+  body_hits        base +1.373035e+02 (sd 3.02e-01, n 12)  new +1.372454e+02 (sd 5.26e-01, n 12)  diff -5.806e-02 = -4.23e-04 rel  z -0.33  diff/sd1 -0.19  PASS
+  exits            base +2.769210e+02 (sd 5.12e-01, n 12)  new +2.768275e+02 (sd 5.83e-01, n 12)  diff -9.347e-02 = -3.38e-04 rel  z -0.42  diff/sd1 -0.18  PASS
+  exit_momentum_x  base -1.864841e-21 (sd 1.30e-22, n 12)  new -1.887135e-21 (sd 9.78e-23, n 12)  diff -2.229e-23 = -1.20e-02 rel  z -0.47  diff/sd1 -0.17  PASS
+  exit_energy      base +1.284034e-17 (sd 3.74e-20, n 12)  new +1.283288e-17 (sd 5.37e-20, n 12)  diff -7.467e-21 = -5.82e-04 rel  z -0.40  diff/sd1 -0.20  PASS
+  injected         base +1.533876e+02 (sd 1.98e-02, n 12)  new +1.533894e+02 (sd 1.96e-02, n 12)  diff +1.806e-03 = +1.18e-05 rel  z +0.22  diff/sd1 +0.09  PASS
+  particles        base +4.514265e+04 (sd 6.03e+01, n 12)  new +4.514191e+04 (sd 8.08e+01, n 12)  diff -7.389e-01 = -1.64e-05 rel  z -0.03  diff/sd1 -0.01  PASS
+  mean_ke          base +6.910706e-21 (sd 1.76e-23, n 12)  new +6.916264e-21 (sd 1.96e-23, n 12)  diff +5.558e-24 = +8.04e-04 rel  z +0.73  diff/sd1 +0.32  PASS
+  temperature      base +3.008932e+02 (sd 7.49e-01, n 12)  new +3.012224e+02 (sd 8.93e-01, n 12)  diff +3.292e-01 = +1.09e-03 rel  z +0.98  diff/sd1 +0.44  PASS
+  mean_vx          base +1.430234e+02 (sd 6.26e-01, n 12)  new +1.428808e+02 (sd 3.54e-01, n 12)  diff -1.426e-01 = -9.97e-04 rel  z -0.69  diff/sd1 -0.23  PASS
+[levelset] seeds base ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'] new ['100', '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '111']
+  drag             base +3.685057e-20 (sd 1.05e-22, n 12)  new +3.688240e-20 (sd 1.55e-22, n 12)  diff +3.183e-23 = +8.64e-04 rel  z +0.59  diff/sd1 +0.30  PASS
+  lift             base -6.115670e-23 (sd 1.93e-22, n 12)  new +1.217001e-22 (sd 1.73e-22, n 12)  diff +1.829e-22 = +2.99e+00 rel  z +2.44  diff/sd1 +0.95  WARN
+  body_energy      base -2.145728e-34 (sd 2.44e-35, n 12)  new -2.129309e-34 (sd 1.64e-35, n 12)  diff +1.642e-36 = +7.65e-03 rel  z +0.19  diff/sd1 +0.07  info
+  body_heat        base -2.145728e-34 (sd 2.44e-35, n 12)  new -2.129309e-34 (sd 1.64e-35, n 12)  diff +1.642e-36 = +7.65e-03 rel  z +0.19  diff/sd1 +0.07  info
+  body_hits        base +1.371796e+02 (sd 2.73e-01, n 12)  new +1.370729e+02 (sd 4.78e-01, n 12)  diff -1.067e-01 = -7.78e-04 rel  z -0.67  diff/sd1 -0.39  PASS
+  exits            base +2.768279e+02 (sd 4.17e-01, n 12)  new +2.766638e+02 (sd 5.43e-01, n 12)  diff -1.642e-01 = -5.93e-04 rel  z -0.83  diff/sd1 -0.39  PASS
+  exit_momentum_x  base -1.910074e-21 (sd 1.32e-22, n 12)  new -1.962821e-21 (sd 1.10e-22, n 12)  diff -5.275e-23 = -2.76e-02 rel  z -1.06  diff/sd1 -0.40  PASS
+  exit_energy      base +1.284204e-17 (sd 4.47e-20, n 12)  new +1.283533e-17 (sd 4.73e-20, n 12)  diff -6.716e-21 = -5.23e-04 rel  z -0.36  diff/sd1 -0.15  PASS
+  injected         base +1.533876e+02 (sd 1.98e-02, n 12)  new +1.533894e+02 (sd 1.96e-02, n 12)  diff +1.806e-03 = +1.18e-05 rel  z +0.22  diff/sd1 +0.09  PASS
+  particles        base +4.510711e+04 (sd 5.97e+01, n 12)  new +4.509649e+04 (sd 8.52e+01, n 12)  diff -1.062e+01 = -2.35e-04 rel  z -0.35  diff/sd1 -0.18  PASS
+  mean_ke          base +6.909509e-21 (sd 1.91e-23, n 12)  new +6.914786e-21 (sd 1.94e-23, n 12)  diff +5.277e-24 = +7.64e-04 rel  z +0.67  diff/sd1 +0.28  PASS
+  temperature      base +3.009031e+02 (sd 8.20e-01, n 12)  new +3.012204e+02 (sd 8.93e-01, n 12)  diff +3.173e-01 = +1.05e-03 rel  z +0.91  diff/sd1 +0.39  PASS
+  mean_vx          base +1.428739e+02 (sd 6.26e-01, n 12)  new +1.427295e+02 (sd 3.54e-01, n 12)  diff -1.444e-01 = -1.01e-03 rel  z -0.70  diff/sd1 -0.23  PASS
+FORWARD GATE: PASS

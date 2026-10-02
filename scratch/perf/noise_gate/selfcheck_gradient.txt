@@ -1,0 +1,13 @@
+gradient gate: base 'base' (/home/aakash/jax_dsmc/JAX-DSMC) vs new 'base2' (/home/aakash/jax_dsmc/JAX-DSMC)
+criterion: PASS iff each gated scalar has |z| < 3, z = diff of seed-means / sqrt(se_a^2 + se_b^2), and the RMS over the band coefficients of the per-coefficient z < 1.5 (the 'grad . base-mean-direction' scalar is the gradient's signal component)
+  objective        base +3.680476e-20 (sd 7.69e-22, n 4)  new +3.682382e-20 (sd 3.88e-22, n 4)  diff +1.906e-23 = +5.18e-04 rel  z +0.04  diff/sd1 +0.02  PASS
+  hits             base +1.040925e+04 (sd 5.68e+01, n 4)  new +1.042125e+04 (sd 1.07e+02, n 4)  diff +1.200e+01 = +1.15e-03 rel  z +0.20  diff/sd1 +0.21  PASS
+  grad_sum         base -1.614461e-20 (sd 2.34e-21, n 4)  new -1.798497e-20 (sd 1.18e-21, n 4)  diff -1.840e-21 = -1.14e-01 rel  z -1.40  diff/sd1 -0.79  PASS
+  grad.dir_base    base +8.161990e-21 (sd 7.37e-21, n 4)  new +1.242745e-21 (sd 1.00e-21, n 4)  diff -6.919e-21 = -8.48e-01 rel  z -1.86  diff/sd1 -0.94  PASS
+  grad_norm        base +3.040198e-20 (sd 3.83e-20, n 4)  new +1.204808e-20 (sd 8.13e-22, n 4)  diff -1.835e-20 = -6.04e-01 rel  z -0.96  diff/sd1 -0.48  info
+  pathwise_sum     base -1.614461e-20 (sd 2.34e-21, n 4)  new -1.798497e-20 (sd 1.18e-21, n 4)  diff -1.840e-21 = -1.14e-01 rel  z -1.40  diff/sd1 -0.79  info
+  score_sum        base +0.000000e+00 (sd 0.00e+00, n 4)  new +0.000000e+00 (sd 0.00e+00, n 4)  diff +0.000e+00 = +nan rel  z +0.00  diff/sd1 +nan  info
+  silhouette_sum   base +0.000000e+00 (sd 0.00e+00, n 4)  new +0.000000e+00 (sd 0.00e+00, n 4)  diff +0.000e+00 = +nan rel  z +0.00  diff/sd1 +nan  info
+  timing_sum       base +3.233037e-22 (sd 3.73e-21, n 4)  new -2.628480e-21 (sd 4.90e-21, n 4)  diff -2.952e-21 = -9.13e+00 rel  z -0.96  diff/sd1 -0.79  info
+  per-coefficient (1306 with noise): RMS z 1.21, median |z| 0.69, max |z| 9.71, fraction |z|>2 0.08  PASS
+GRADIENT GATE: PASS

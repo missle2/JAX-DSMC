@@ -1,0 +1,24 @@
+[
+ {
+  "platform": "cpu",
+  "device": "cpu",
+  "body": "polygon",
+  "seconds_first_incl_compile": 43.72452748700016,
+  "seconds": 27.88889688600102,
+  "moves": 36651050.0,
+  "final_particles": 47673,
+  "moves_per_second": 1314180.6988571566,
+  "slots": 60000
+ },
+ {
+  "platform": "cpu",
+  "device": "cpu",
+  "body": "levelset",
+  "seconds_first_incl_compile": 76.63678366599925,
+  "seconds": 59.23417393899945,
+  "moves": 36649750.0,
+  "final_particles": 47685,
+  "moves_per_second": 618726.4472995378,
+  "slots": 60256
+ }
+]

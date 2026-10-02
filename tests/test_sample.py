@@ -417,6 +417,18 @@ def test_cell_temperature_agrees_with_full_moments():
         full = sample.moments(state, table, grid, params, species).temp
         fast = sample.cell_temperature(state, table, grid, species)
         assert np.allclose(np.asarray(full), np.asarray(fast), rtol=1e-12, atol=0.0)
+        # under a bulk shift of 1e8 thermal speeds: the shifted one-pass form keeps it
+        vth = math.sqrt(K_BOLTZ * TEMP / MASS)
+        shifted = ParticleState(
+            x=state.x,
+            v=state.v + 1e8 * vth,
+            species=state.species,
+            alive=state.alive,
+            logh_acc=state.logh_acc,
+        )
+        full_s = sample.moments(shifted, table, grid, params, species).temp
+        fast_s = sample.cell_temperature(shifted, table, grid, species)
+        assert np.allclose(np.asarray(full_s), np.asarray(fast_s), rtol=1e-6, atol=0.0)
 
 
 def test_cell_temperature_is_jittable_and_differentiable():

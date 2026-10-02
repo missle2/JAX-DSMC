@@ -1,0 +1,13 @@
+{
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "total": 229.12162331699983,
+ "stages": {
+  "forward (1000 steps, captured 300)": 20.044534947999637,
+  "traced replay": 5.153245514999071,
+  "value backwards (x2)": 69.45315291800034,
+  "shape gradient": 56.84956179799883
+ },
+ "hits": 10329,
+ "seconds_backward": 69.45320558547974,
+ "seconds_shape": 56.850619316101074
+}

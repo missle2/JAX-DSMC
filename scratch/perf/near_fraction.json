@@ -1,0 +1,54 @@
+{
+ "initial": {
+  "G_local_median_max": [
+   1.0420912002019336,
+   3.612856385930125
+  ],
+  "G_bound": 3.612856385930125,
+  "max_grad_sampled": 1.3648976848649477,
+  "max_grad_near_surface": 1.0000003977898684,
+  "near_fraction_pass0": 0.010950785879927854,
+  "near_fraction_reach": 0.6161270778637437,
+  "reach": 0.5,
+  "mean_step_length": 0.0312113024346423
+ },
+ "circle_coarse_S1_adam@40": {
+  "G_local_median_max": [
+   1.0382668500185457,
+   7.962374594322512
+  ],
+  "G_bound": 7.998068165912952,
+  "max_grad_sampled": 3.2065103461989413,
+  "max_grad_near_surface": 3.2065103461989413,
+  "near_fraction_pass0": 0.03352204434999216,
+  "near_fraction_reach": 1.0,
+  "reach": 0.5,
+  "mean_step_length": 0.0312113024346423
+ },
+ "circle_coarse_S8_gd@61": {
+  "G_local_median_max": [
+   1.0590531644163437,
+   6.698457431571135
+  ],
+  "G_bound": 6.803237169446748,
+  "max_grad_sampled": 2.482456252257404,
+  "max_grad_near_surface": 2.482456252257404,
+  "near_fraction_pass0": 0.02597465954866677,
+  "near_fraction_reach": 0.9939715372928369,
+  "reach": 0.5,
+  "mean_step_length": 0.0312113024346423
+ },
+ "circle_coarse_S4_adam@60": {
+  "G_local_median_max": [
+   1.016007953016764,
+   7.838056964055663
+  ],
+  "G_bound": 7.838056964055663,
+  "max_grad_sampled": 2.775075024257321,
+  "max_grad_near_surface": 2.775075024257321,
+  "near_fraction_pass0": 0.04077228570533548,
+  "near_fraction_reach": 1.0,
+  "reach": 0.5,
+  "mean_step_length": 0.0312113024346423
+ }
+}

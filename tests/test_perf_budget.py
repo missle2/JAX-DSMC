@@ -11,8 +11,8 @@ which describe the compiled HLO and are **bit-identical across runs**: same flop
 bytes, same temp allocation, every time.  A 5x slower kernel that kept the same jaxpr
 shape would move these; noise does not.
 
-**Baselines are per backend** and differ a lot (the forward solve is 9.6e5 flops on CPU
-and 2.3e6 on GPU -- XLA counts a fused GPU kernel differently), so `BUDGETS` is keyed on
+**Baselines are per backend** and differ (the forward solve accesses 5.7e5 bytes on CPU
+and 5.3e5 on GPU -- XLA counts a fused GPU kernel differently), so `BUDGETS` is keyed on
 `jax.default_backend()`.  Bands are deliberately wide: this is a "did something dramatic
 happen" gate, not a micro-benchmark.  Refresh with
 
@@ -52,9 +52,12 @@ TOL = 0.35
 
 BUDGETS = {
     # backend: {label: (flops, bytes_accessed, temp_bytes)}
+    # cpu refreshed 2026-10-01: `rng.py` lowers threefry straight-line on XLA:CPU too, so
+    # its rounds are counted (flops ~2.4x; a rolled loop's body counted once) and the
+    # loop-carry copies are gone (bytes ~0.4x); plus the NTC scratch slot no longer copies
     "cpu": {
-        "forward": (9.607770e05, 1.580740e06, 0.200e6),
-        "grad": (1.882729e06, 5.314315e06, 1.314e6),
+        "forward": (2.346384e06, 5.654990e05, 0.147e6),
+        "grad": (4.770972e06, 3.343646e06, 1.253e6),
     },
     "gpu": {
         "forward": (2.286232e06, 5.276180e05, 0.158e6),

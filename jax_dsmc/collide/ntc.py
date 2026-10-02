@@ -7,7 +7,7 @@ measurement rather than by reading a reference code:
   ``dt``, ``fnum`` and ``cell_volume`` out of the gradient *entirely* -- measured
   as exactly ``[0.0, 0.0, 0.0]``.  The fix makes the count a scored random
   decision, which is where those three sensitivities live.
-* **the scratch row** at index ``N`` and the clamped ``npc`` (8.4.1).  Without
+* **the scratch slot** at index ``N`` and the clamped ``npc`` (8.4.1).  Without
   them an empty cell's attempt writes stale velocities over a neighbouring
   cell's particles -- silently, and in 176/300 runs.
 * **the a-priori thermal majorant** (7.2.3).  A pure ratchet lags a transient and
@@ -22,6 +22,7 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import lax, random
 
 from jax_dsmc.collide.vss import (
@@ -136,6 +137,15 @@ def certified_majorant(state, table, sp):
     bound = sp.prefactor[0, 0] * upper2 ** (1 - sp.omega[0, 0])
     valid = (sp.omega[0, 0] >= 0.5) & (sp.omega[0, 0] <= 1.0)
     return jnp.where(valid, bound * (1 + 1e-12), jnp.nan)
+
+
+def _unfused(x):
+    """``x`` itself, through an identity scatter-add onto zeros (exact: ``0 + x = x``, and
+    ``logP`` is never ``-0``).  XLA fuses a per-cell producer into a per-particle gather of
+    it, evaluating the producer -- here ``logP``'s logarithms -- once per particle
+    (measured 1 ms per step on one CPU core at N = 6e4); a scatter is not fused into its
+    consumers, and an ``optimization_barrier`` is removed before fusion."""
+    return jnp.zeros_like(x).at[jnp.arange(x.shape[0])].add(x)
 
 
 def attempt_count(counts, vremax, volume, dt, fnum, key):
@@ -262,14 +272,25 @@ def decision_weights(k):
     (``346`` against a true ``127``).  A checksum with a zero weight is not a
     checksum; the offset keeps every weight in ``[0.5, 1.5)``.
     """
-    return jnp.mod((jnp.arange(k, dtype=jnp.float64) + 1.0) * PHI_INV, 1.0) + 0.5
+    return jnp.asarray(_decision_weights(k))
+
+
+@functools.lru_cache(maxsize=16)
+def _decision_weights(k):
+    """:func:`decision_weights` as a host constant: ``np.mod`` and ``jnp.mod`` are both the
+    exact ``fmod`` here (positive operands), so the weights are bitwise the traced ones
+    -- which XLA did not fold, evaluating an ``fmod`` per slot every step (0.6 ms per
+    step at ``N = 6e4`` on one CPU core, measured 2026-10-01)."""
+    w = np.mod((np.arange(k, dtype=np.float64) + 1.0) * PHI_INV, 1.0) + 0.5
+    w.setflags(write=False)
+    return w
 
 
 class PairRecord(NamedTuple):
     """What an attempt slot decided, for the ensemble adjoint's realized-pair quadrature.
 
     Shapes ``(A_max, C)`` (``(A_max, C, 3)`` for the velocities).  ``pi``/``pj`` are
-    particle slots (``N`` = the scratch row on inactive attempts), ``accept`` the frozen
+    particle slots (``N`` = the scratch slot on inactive attempts), ``accept`` the frozen
     decision, ``vi``/``vj`` the **pre**-collision velocities the pair was drawn with --
     the post-collision ones are the next state's.  The velocities are the partner
     "ghosts" of section 5.1 of the branch review: the field is interpolated there.
@@ -282,6 +303,63 @@ class PairRecord(NamedTuple):
     vj: jax.Array
     vi_post: jax.Array
     vj_post: jax.Array
+
+
+def _gather_rows(v, idx):
+    """``v[idx]`` with the scratch slot ``idx == N`` reading zeros (section 8.4.1).  The
+    scratch slot used to be a physical zero row appended to ``v``; reading it as an
+    out-of-bounds fill (and dropping writes to it) gives the same values bit for bit
+    without copying the ``(N + 1, 3)`` array in and out of the slot scan every step."""
+    return v.at[idx].get(mode="fill", fill_value=0.0)
+
+
+def _replay_writes(v, xs):
+    """One attempt slot's velocity writes of :func:`_slot`, from its record (scan body)."""
+    pi, pj, accept, vi_post, vj_post = xs
+    vi, vj = _gather_rows(v, pi), _gather_rows(v, pj)
+    v = v.at[pi].set(jnp.where(accept[..., None], vi_post, vi), mode="drop")
+    v = v.at[pj].set(jnp.where(accept[..., None], vj_post, vj), mode="drop")
+    return v, (vi, vj)
+
+
+def post_collision_velocities(v, pairs: PairRecord):
+    """The post-collision velocities of a step from its pre-collision velocities ``v``
+    (``f64[N, 3]``) and its :class:`PairRecord`: the slot scan of :func:`collide` replayed
+    write for write -- same scratch slot at ``N``, same gathers from the pre-slot state,
+    same ``where`` / ``set`` in slot order -- so the result is **bitwise** the ``v`` the
+    forward returned (``EventRecord.v_post``, which a lean record does not store)."""
+    xs = (pairs.pi, pairs.pj, pairs.accept, pairs.vi_post, pairs.vj_post)
+    out, _ = lax.scan(_replay_writes, v, xs)
+    return out
+
+
+def pair_velocities(v, pairs: PairRecord):
+    """``(vi, vj)`` of a :class:`PairRecord` whose pre-collision partner velocities were
+    dropped (a lean record): the gathers of :func:`post_collision_velocities`'s replay,
+    which read the same pre-slot state the forward's slot scan did -- **bitwise** the
+    stored ``vi`` / ``vj``, scratch-slot attempts included."""
+    xs = (pairs.pi, pairs.pj, pairs.accept, pairs.vi_post, pairs.vj_post)
+    _, (vi, vj) = lax.scan(_replay_writes, v, xs)
+    return vi, vj
+
+
+def step_pairs(rec_k):
+    """One captured step's :class:`PairRecord` with ``vi`` / ``vj`` present (rebuilt by
+    :func:`pair_velocities` for a lean record)."""
+    p = rec_k.pairs
+    if p.vi is not None:
+        return p
+    vi, vj = pair_velocities(rec_k.v, p)
+    return p._replace(vi=vi, vj=vj)
+
+
+def step_v_post(rec_k):
+    """One captured step's post-collision velocities: ``rec_k.v_post``, or, for a lean
+    record (``v_post is None``), :func:`post_collision_velocities` of ``rec_k.v`` and
+    ``rec_k.pairs``."""
+    if rec_k.v_post is not None:
+        return rec_k.v_post
+    return post_collision_velocities(rec_k.v, rec_k.pairs)
 
 
 def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
@@ -304,11 +382,11 @@ def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
     active = (a < n) & (table.counts >= 2)  # bool[C]
 
     i, j = pair_from_draws(u_i, u_r, table.counts)
-    # inactive cells address the SCRATCH ROW at index n_part, never a neighbour's
-    # particles.  Both `where`s are essential: see 8.4.1.
+    # inactive cells address the SCRATCH SLOT n_part (zero reads, dropped writes), never
+    # a neighbour's particles.  Both `where`s are essential: see 8.4.1.
     pi = jnp.where(active, table.order[table.starts + i], n_part)
     pj = jnp.where(active, table.order[table.starts + j], n_part)
-    vi, vj = v[pi], v[pj]
+    vi, vj = _gather_rows(v, pi), _gather_rows(v, pj)
 
     q = collision_rate(vi, vj, isp, jsp, sp)
     p = acceptance_prob(q, sigma)  # FIXED Sigma -- stale-max rule
@@ -317,16 +395,16 @@ def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
     vi_n, vj_n = scatter(vi, vj, isp, jsp, sp, u_chi, u_eps)
     # `vi` and `vj` are both gathered from the SAME pre-scatter `v`, so for an
     # inactive slot where pi == pj the second `.set` would write stale data over
-    # the first.  The scratch row is what makes that harmless.
-    v = v.at[pi].set(jnp.where(accept[..., None], vi_n, vi))
-    v = v.at[pj].set(jnp.where(accept[..., None], vj_n, vj))
+    # the first.  The scratch slot (dropped writes) is what makes that harmless.
+    v = v.at[pi].set(jnp.where(accept[..., None], vi_n, vi), mode="drop")
+    v = v.at[pj].set(jnp.where(accept[..., None], vj_n, vj), mode="drop")
 
     # BOTH partners get the SAME log h, and BOTH branches contribute (section 7.3).
     lh = jnp.where(active, log_h(q, sigma, accept), 0.0)
     if score_mode == "trajectory":
         logh = logh + jnp.sum(lh)
     else:
-        logh = logh.at[pi].add(lh).at[pj].add(lh)
+        logh = logh.at[pi].add(lh, mode="drop").at[pj].add(lh, mode="drop")
 
     # masked so an untested slot's meaningless q cannot inflate the next majorant
     qmax = jnp.where(active, jnp.maximum(qmax, q), qmax)
@@ -443,15 +521,12 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     u_chi = indexed_uniform(k_chi, A, (C,))
     u_eps = indexed_uniform(k_eps, A, (C,))
 
-    # v and logh carry an extra SCRATCH ROW at index N (8.4.1).
-    v0 = jnp.concatenate([state.v, jnp.zeros((1, 3), dtype=state.v.dtype)])
+    # Slot N is the SCRATCH slot of v and logh (8.4.1): reads of it are zero and writes
+    # to it are dropped (`_gather_rows`, `mode="drop"`).
+    v0 = state.v
     # The trajectory prefix is scalar inside the attempt scan. Broadcasting it
     # only at the state boundary avoids an N-vector addition for every attempt.
-    logh0 = (
-        state.logh_acc[:1]
-        if score_mode == "trajectory"
-        else jnp.concatenate([state.logh_acc, jnp.zeros((1,), dtype=state.logh_acc.dtype)])
-    )
+    logh0 = state.logh_acc[:1] if score_mode == "trajectory" else state.logh_acc
 
     body = functools.partial(
         _slot,
@@ -477,7 +552,7 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     if score_mode == "trajectory":
         logh = logh + jnp.sum(logP)
     else:
-        logh = logh.at[:n_part].add(jnp.where(state.alive, logP[table.cell], 0.0))
+        logh = logh + jnp.where(state.alive, _unfused(logP)[table.cell], 0.0)
 
     # Cell membership and the attempt count are decided once per step, outside the
     # slot scan, so they are folded in here rather than per slot.
@@ -523,10 +598,10 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     )
     new_state = ParticleState(
         x=state.x,
-        v=v[:n_part],
+        v=v,
         species=state.species,
         alive=state.alive,
-        logh_acc=jnp.broadcast_to(logh, (n_part,)) if score_mode == "trajectory" else logh[:n_part],
+        logh_acc=jnp.broadcast_to(logh, (n_part,)) if score_mode == "trajectory" else logh,
     )
     vremax_next = jnp.maximum(cstate.vremax, qmax[:, None, None])
     result = (new_state, CollideState(vremax=vremax_next, remainder=remainder), diag)

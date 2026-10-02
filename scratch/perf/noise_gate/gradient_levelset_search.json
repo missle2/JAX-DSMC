@@ -1,0 +1,38 @@
+{
+ "code": "/home/aakash/jax_dsmc/wt_levelset",
+ "seeds": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "variant": "along_pool",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "per_seed": {
+  "0": {
+   "objective": 3.580102160081051e-20,
+   "hits": 10329,
+   "alive_final": 11912,
+   "seconds": 284.4864993095398
+  },
+  "1": {
+   "objective": 3.744906654028327e-20,
+   "hits": 10452,
+   "alive_final": 11764,
+   "seconds": 114.32876753807068
+  },
+  "2": {
+   "objective": 3.7363266749397124e-20,
+   "hits": 10409,
+   "alive_final": 11884,
+   "seconds": 109.67003107070923
+  },
+  "3": {
+   "objective": 3.6605680410643344e-20,
+   "hits": 10447,
+   "alive_final": 11844,
+   "seconds": 109.81612133979797
+  }
+ },
+ "seconds": 618.3164670467377
+}

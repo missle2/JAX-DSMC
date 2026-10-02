@@ -431,9 +431,9 @@ def _drag_reward(events, tallies, rec_k, step, mass, dim):
     return jnp.where(events.face >= 2 * dim, r, 0.0)
 
 
-def _replay_chain(tracker):
+def _replay_chain(tracker, record="full", **gradient_kw):
     """Forward -> traced replay -> value-form backward -> shape VJP on a short specular
-    circle run: ``(terms, replay, diag, tallies)``."""
+    circle run: ``(terms, replay, diag, tallies, record)``."""
     grid, mesh = _circle_setup("analytic")
     grid = cut.with_volume(grid, mesh)
     sp = _sp()
@@ -441,8 +441,9 @@ def _replay_chain(tracker):
     N = 3000
     params = SimParams(dt=jnp.float64(2e-4), fnum=jnp.full((C,), 1e-3), epsilon=jnp.float64(0.0))
     static = SimStatic(
-        N=N, D=2, S=1, G=1, A_max=2, K_bounce=4, n_steps=6, tracker=tracker, K_walk=8
-    )
+        N=N, D=2, S=1, G=1, A_max=2, K_bounce=4, n_steps=6, tracker=tracker, K_walk=8,
+        record=record,
+    )  # fmt: skip
     faces = Faces.uniform(BC.SPECULAR, 2)
     wall = WallParams.uniform(2, T_WALL, acc=0.0, n_models=1)
     flow = FlowParams(nrho=jnp.float64(1.0), temp=jnp.float64(273.15), vstream=jnp.zeros(3))
@@ -519,8 +520,30 @@ def _replay_chain(tracker):
         hit_reward=rep.hit_reward,
         tally_cotangent=d_tally,
         k=16,
+        **gradient_kw,
     )
     return terms, rep, diag, tallies, rec
+
+
+@pytest.mark.parametrize("tracker", ["stencil", "lane"])
+def test_lean_record_gives_the_full_records_chain_bitwise(tracker):
+    """``SimStatic.record = "lean"`` (``simulate.lean_record``) keeps only what the replay,
+    the device backward and the shape VJP read: the whole chain -- replay rewards, the
+    stratified classes (from the ``i8`` surface ids) and every shape term -- is bitwise the
+    full record's."""
+    full = _replay_chain(tracker, value_class="hit_ahead")
+    lean = _replay_chain(tracker, "lean", value_class="hit_ahead")
+    rec_f, rec_l = full[4], lean[4]
+    assert rec_l.v_post is None and rec_l.born_v is None and rec_l.pairs.vi is None
+    assert rec_l.born_face.dtype == jnp.int8
+    np.testing.assert_array_equal(
+        np.asarray(shape.hit_ahead(rec_l, None)), np.asarray(shape.hit_ahead(rec_f, None))
+    )
+    np.testing.assert_array_equal(np.asarray(lean[1].hit_total), np.asarray(full[1].hit_total))
+    for part in ("pathwise", "pathwise_x", "pathwise_v", "pathwise_tally", "score"):
+        a, b = getattr(full[0], part), getattr(lean[0], part)
+        for leaf_a, leaf_b in zip(jax.tree.leaves(a), jax.tree.leaves(b), strict=True):
+            np.testing.assert_array_equal(np.asarray(leaf_b), np.asarray(leaf_a))
 
 
 @pytest.mark.parametrize("tracker", ["stencil", "lane", "walk"])
@@ -714,6 +737,41 @@ def test_stratified_node_gradients_ignore_the_other_class():
         np.testing.assert_allclose(np.asarray(gv[:, 0])[~np.asarray(klass)], 0.0, atol=1e-9)
         np.testing.assert_allclose(np.asarray(gv[:, 0])[np.asarray(klass)], 2.0, rtol=1e-4)
         np.testing.assert_allclose(np.asarray(gv[:, 1:])[np.asarray(klass)], 0.0, atol=1e-4)
+
+
+def test_node_gradients_at_queried_slots_match_the_full_fit():
+    """``queries``: the fit at a subset of slots (with unused ``-1`` entries, a dead
+    queried slot, one-sided directions and the class stratification) equals the full
+    call's rows there and is zero elsewhere -- what ``shape.gradient(hit_fits=True)``
+    relies on."""
+    key = jax.random.PRNGKey(7)
+    n, dim = 700, 2
+    grid = GridSpec(jnp.zeros(dim), jnp.ones(dim), (4, 3))
+    x = jax.random.uniform(key, (n, dim))
+    v = jax.random.normal(jax.random.fold_in(key, 1), (n, 3))
+    lam = jnp.sin(3 * x[:, 0]) + x[:, 1] * v[:, 0] + 0.2 * v[:, 1] ** 2
+    alive = jnp.arange(n) % 17 != 0
+    klass = jax.random.bernoulli(jax.random.fold_in(key, 2), 0.5, (n,))
+    direction = jnp.zeros((n, 3)).at[:, 1].set(jnp.sign(v[:, 1]))
+    scale = jnp.array([0.25, 1 / 3, 1.0, 1.0, 1.0])
+    picked = np.array([3, 17, 40, 41, 200, 699, 512])  # 17: a dead slot
+    queries = jnp.asarray(np.concatenate([picked, -np.ones(9, int)]), dtype=jnp.int32)
+    for pool, k in ((0, 24), (1, 96)):
+        kw = {"pool": pool, "direction": direction, "klass": klass}
+        gx, gv = ensemble_device.node_gradients(x, v, alive, lam, grid, 128, scale, k, **kw)
+        qx, qv = ensemble_device.node_gradients(
+            x, v, alive, lam, grid, 128, scale, k, queries=queries, **kw
+        )
+        mask = np.zeros(n, bool)
+        mask[picked] = True
+        np.testing.assert_allclose(
+            np.asarray(qx)[mask], np.asarray(gx)[mask], rtol=1e-12, atol=1e-14
+        )
+        np.testing.assert_allclose(
+            np.asarray(qv)[mask], np.asarray(gv)[mask], rtol=1e-12, atol=1e-14
+        )
+        assert not np.asarray(qx)[~mask].any() and not np.asarray(qv)[~mask].any()
+        assert not np.asarray(qx)[17].any()  # dead
 
 
 def test_hit_ahead_marks_later_body_hits_only():

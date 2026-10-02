@@ -362,6 +362,135 @@ def test_lane_tracker_equals_the_stencil(kind, acc):
     assert int(np.sum(np.asarray(es.face)[1:] >= 0)) > 0
 
 
+@pytest.mark.parametrize("kind", ["polygon", "levelset", "analytic"])
+def test_near_surface_is_conservative(kind):
+    """The dense pass's routing test (``near_surface``) is exact in one direction: a move
+    it lets through cannot come within its path length of the surface -- checked against
+    the polygon's distance, the sphere's, and the level set sampled on the disc the path
+    can reach."""
+    from jax_dsmc.mesh import geometry as G  # noqa: PLC0415 -- only this test needs it
+    from jax_dsmc.mesh import levelset as L  # noqa: PLC0415
+
+    dim, grid, body, outside = _lane_case(kind)
+    mesh = cut.build_mesh(body, grid, radius=1, sub=4)
+    x, v, alive = _outside_state(jax.random.PRNGKey(4), 4000, dim, grid, outside, speed=900.0)
+    length = jnp.full(x.shape[0], 1.0e-4) * jax.random.uniform(jax.random.PRNGKey(5), (4000,))
+    near = np.asarray(G.near_surface(x, v, length, grid, mesh))
+    path = np.asarray(jnp.linalg.norm(v[:, :dim], axis=1) * length)
+    far = ~near & np.asarray(alive)
+    assert far.sum() > 1000 and (near & np.asarray(alive)).sum() > 10
+    if kind == "polygon":
+        verts = np.asarray(mesh.body.points)[np.asarray(mesh.body.elements)]
+        p1 = jnp.broadcast_to(verts[None, :, 0], (x.shape[0], *verts[:, 0].shape))
+        p2 = jnp.broadcast_to(verts[None, :, 1], (x.shape[0], *verts[:, 1].shape))
+        dist = np.asarray(jnp.min(G._segment_distance(x, p1, p2), axis=1))
+        assert (dist[far] > path[far]).all()
+    elif kind == "analytic":
+        dist = np.linalg.norm(np.asarray(x) - np.asarray(body.centre), axis=1) - float(body.radius)
+        assert (dist[far] > path[far]).all()
+    else:
+        # phi > 0 on a polar grid of the disc of radius `path` around each far start
+        k = 24
+        ang = np.linspace(0.0, 2.0 * np.pi, k, endpoint=False)
+        rad = np.linspace(0.0, 1.0, 6)
+        offsets = (rad[:, None, None] * np.stack((np.cos(ang), np.sin(ang)), 1)[None]).reshape(
+            -1, 2
+        )
+        xf = np.asarray(x)[far]
+        pts = xf[:, None, :] + path[far][:, None, None] * offsets[None]
+        phi = np.asarray(L.value(mesh.body, jnp.asarray(pts.reshape(-1, 2))))
+        assert (phi > 0.0).all()
+
+
+@pytest.mark.parametrize("first", ["routed", "dense"])
+@pytest.mark.parametrize("kind", ["polygon", "levelset", "sphere"])
+@pytest.mark.parametrize("dt", [3e-5, 4e-4])
+def test_lane_dense_pass_and_chunks_equal_the_stencil(kind, dt, first, monkeypatch):
+    """The lane tracker's dense pass (box events of the moves that cannot reach the body,
+    in closed form, on the compacted candidates) and its near lane in several chunks: the
+    same step as the stencil tracker -- the discrete outcome and events exactly, the floats
+    to round-off (the dense pass writes the same expressions in other fusions), the
+    tallies to the order of the additions.  Outflow, inflow-as-outflow, periodic and
+    specular faces; a slot count above the compaction threshold; a small ``dt`` (almost
+    every move dense) and a large one (several chunks, many second box events).  ``first =
+    "dense"``: the GPU's pass 0 over every slot (``_first_pass_dense``) in its place."""
+    dim, grid, body, outside = _lane_case(kind)
+    mesh = cut.build_mesh(body, grid, radius=1 if kind != "sphere" else 2, sub=4)
+    x, v, alive = _outside_state(jax.random.PRNGKey(7), 6000, dim, grid, outside, speed=600.0)
+    faces = Faces(
+        (BC.OUTFLOW, BC.INFLOW, BC.PERIODIC, BC.PERIODIC) + (BC.SPECULAR,) * (2 * dim - 4)
+    )
+    if dim == 3:
+        faces = Faces((BC.OUTFLOW, BC.SPECULAR, BC.PERIODIC, BC.PERIODIC, BC.SPECULAR, BC.DIFFUSE))
+    common = {"return_events": True, "return_tallies": True, "max_bounces": 12}
+    wall = _wall(dim, 0.5)
+    ref = _advance(x, v, alive, grid, faces, wall, mesh, "stencil", dt, key=9, **common)
+    # chunks of 500 slots: the near lane runs several of them at the large dt
+    monkeypatch.setattr(wall_adjoint, "NEAR_LANE", 12)
+    if first == "dense":
+        monkeypatch.setattr(wall_adjoint, "_first_pass_routed", wall_adjoint._first_pass_dense)
+    jax.clear_caches()
+    # the event lane sized for the large dt's box events (the default N // 32 = 256 would
+    # overflow and delete -- and count -- the rest; the stencil tracker has no lane)
+    got = _advance(
+        x, v, alive, grid, faces, wall, mesh, "lane", dt, key=9, lane_size=2048, **common
+    )
+    xs, vs, als, cs, ls, es, ts = ref
+    xl, vl, all_, cl, ll, el, tl = got
+    np.testing.assert_array_equal(np.asarray(als), np.asarray(all_))
+    for a, b in ((xs, xl), (vs, vl), (ls, ll)):
+        np.testing.assert_allclose(np.asarray(b), np.asarray(a), rtol=1e-13, atol=1e-12)
+    for name in ("exhausted", "surface_hits", "inside_body"):
+        assert int(getattr(cs, name)) == int(getattr(cl, name)), name
+    assert int(cl.lane_overflow) == 0
+    for a, b in zip(ts, tl, strict=True):
+        np.testing.assert_allclose(np.asarray(b), np.asarray(a), rtol=1e-11, atol=1e-30)
+    dense = wall_adjoint.to_dense(el)
+    for name in ("face", "diffuse"):
+        np.testing.assert_array_equal(
+            np.asarray(getattr(dense, name)), np.asarray(getattr(es, name))
+        )
+    np.testing.assert_allclose(np.asarray(dense.v_out), np.asarray(es.v_out), rtol=1e-13)
+    assert int(np.sum(np.asarray(ts.hits)[: 2 * dim])) > 0
+
+
+def test_lane_traced_replay_equals_the_forward(monkeypatch):
+    """The traced move (``trace=True``: fixed trip counts, the near lane's chunks under
+    ``lax.cond``) is the untraced one, and its hit times differentiate: the gradient of the
+    summed post-move positions with respect to the polygon's points is finite and nonzero."""
+    from jax_dsmc import shape  # noqa: PLC0415 -- only this test needs it
+
+    dim, grid, body, outside = _lane_case("polygon")
+    mesh = cut.build_mesh(body, grid, radius=1, sub=4)
+    x, v, alive = _outside_state(jax.random.PRNGKey(3), 3000, dim, grid, outside, speed=900.0)
+    faces = _open(2)
+    monkeypatch.setattr(wall_adjoint, "NEAR_LANE", 12)
+    monkeypatch.setattr(wall_adjoint, "COMPACT_MIN", 1000)
+    jax.clear_caches()
+    kw = {"return_events": True, "return_tallies": True, "max_bounces": 8}
+    plain = _advance(x, v, alive, grid, faces, _wall(2), mesh, "lane", 3e-4, key=2, **kw)
+    traced = _advance(
+        x, v, alive, grid, faces, _wall(2), mesh, "lane", 3e-4, key=2, trace=True, **kw
+    )
+    np.testing.assert_array_equal(np.asarray(plain[2]), np.asarray(traced[2]))
+    np.testing.assert_allclose(np.asarray(traced[0]), np.asarray(plain[0]), rtol=1e-14)
+    np.testing.assert_array_equal(
+        np.asarray(wall_adjoint.to_dense(plain[5]).face),
+        np.asarray(wall_adjoint.to_dense(traced[5]).face),
+    )
+    assert int(plain[3].surface_hits) > 20
+
+    def moved(points):
+        out = shape.wall_map(
+            points, x, v, alive, jax.random.PRNGKey(2), grid, faces, _wall(2), MASS, 3e-4,
+            mesh, max_bounces=8, tracker="lane",
+        )  # fmt: skip
+        return jnp.sum(jnp.where(out[2][:, None], out[0], 0.0))
+
+    grad = np.asarray(jax.grad(moved)(mesh.body.points))
+    assert np.isfinite(grad).all() and np.abs(grad).sum() > 0.0
+
+
 def test_lane_overflow_is_counted_and_deleted():
     dim, grid, body, outside = _lane_case("analytic")
     mesh = cut.build_mesh(body, grid, radius=4 * max(grid.n), sub=4)
@@ -370,6 +499,43 @@ def test_lane_overflow_is_counted_and_deleted():
     n_event = int(out[3].lane_overflow)
     assert n_event > 0
     assert int(np.sum(np.asarray(out[2]))) <= int(np.sum(np.asarray(alive))) - n_event
+
+
+@pytest.mark.parametrize("kind", ["polygon", "levelset"])
+@pytest.mark.parametrize("dt", [1e-4, 4e-4, 1.5e-3])
+def test_compacted_rows_equal_the_dense_pass(kind, dt, monkeypatch):
+    """From ``COMPACT_MIN`` / ``NEAR_MIN`` rows the tracker works on compacted rows: the
+    pass-0 hits (face tallies, element hits, the lane), the polygon search and the
+    inside check.  Against the same step with every compaction switched off: the same
+    discrete outcome and events exactly, the floats to an ulp (the batch shapes differ),
+    the tallies to the order of the additions.  The small
+    ``dt`` fits the compactions, the large one overflows them (the dense fallbacks)."""
+    from jax_dsmc.mesh import levelset as L  # noqa: PLC0415 -- only this test patches it
+
+    dim, grid, body, outside = _lane_case(kind)
+    mesh = cut.build_mesh(body, grid, radius=4 * max(grid.n), sub=4)
+    x, v, alive = _outside_state(jax.random.PRNGKey(5), 6000, dim, grid, outside)
+    faces = Faces((BC.DIFFUSE, BC.OUTFLOW) + (BC.SPECULAR,) * (2 * dim - 2))
+    common = {"return_events": True, "return_tallies": True, "max_bounces": 12}
+
+    def run():
+        jax.clear_caches()
+        return _advance(x, v, alive, grid, faces, _wall(dim, 0.5), mesh, "lane", dt, 3, **common)
+
+    got = run()
+    monkeypatch.setattr(wall_adjoint, "COMPACT_MIN", 10**9)
+    monkeypatch.setattr(L, "NEAR_MIN", 10**9)
+    ref = run()
+    assert int(np.sum(np.asarray(ref[-1].hits))) > 0
+    for a, b in zip(jax.tree.leaves(ref[:-1]), jax.tree.leaves(got[:-1]), strict=True):
+        if jnp.issubdtype(a.dtype, jnp.inexact):
+            # the near lane's chunk is a different batch shape with compaction off: XLA
+            # may contract a level set's Newton polish differently (1 ulp, rarely)
+            np.testing.assert_allclose(np.asarray(b), np.asarray(a), rtol=1e-14, atol=1e-14)
+        else:
+            np.testing.assert_array_equal(np.asarray(b), np.asarray(a))
+    for a, b in zip(ref[-1], got[-1], strict=True):
+        np.testing.assert_allclose(np.asarray(b), np.asarray(a), rtol=1e-12, atol=1e-30)
 
 
 def test_lane_resolves_many_bounces():

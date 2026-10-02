@@ -1,0 +1,38 @@
+{
+ "code": "/home/aakash/jax_dsmc/wt_inflow",
+ "seeds": [
+  0,
+  1,
+  2,
+  3
+ ],
+ "variant": "along_pool",
+ "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+ "per_seed": {
+  "0": {
+   "objective": 3.580102160081052e-20,
+   "hits": 10329,
+   "alive_final": 11912,
+   "seconds": 370.3330490589142
+  },
+  "1": {
+   "objective": 3.7449066540283297e-20,
+   "hits": 10452,
+   "alive_final": 11764,
+   "seconds": 173.4748866558075
+  },
+  "2": {
+   "objective": 3.736326674939713e-20,
+   "hits": 10409,
+   "alive_final": 11884,
+   "seconds": 148.1005880832672
+  },
+  "3": {
+   "objective": 3.6605680410643344e-20,
+   "hits": 10447,
+   "alive_final": 11844,
+   "seconds": 160.46579837799072
+  }
+ },
+ "seconds": 852.392899274826
+}

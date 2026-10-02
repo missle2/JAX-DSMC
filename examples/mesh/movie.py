@@ -1,7 +1,7 @@
 """A GIF of a level-set optimisation: the flow filling in around every iterate's shape,
 then the shape stepping to the next iterate, from the optimiser's artifacts.
 
-    python3 -m examples.mesh.movie --tag circle_fine_S4_gd [--fps 6 --morph 8 --hold 4]
+    python3 -m examples.mesh.movie --tag circle_fine_S4_gd [--fps 6 --morph 8 --hold 4 --stride 1]
 
 Reads ``results/optimize/<tag>/{history.json, coef_<k>.npy, frames_<k>.npz}``
 (``examples.mesh.optimize`` writes ``frames_<k>.npz`` for the first seed of iterate ``k``:
@@ -11,7 +11,12 @@ fill (panels ``nrho`` and ``|u|`` with the body carved out, colour limits fixed 
 whole movie), holds the steady state ``--hold`` frames, then ``--morph`` frames of the
 body's zero contour blending linearly from ``coef_k`` to ``coef_{k+1}`` over the held
 steady field; the third panel is the drag history with the current iterate marked.
-PNG frames go to ``figures/movie/<tag>/`` and the GIF to ``figures/optimize_<tag>.gif``.
+``--stride s`` shows every ``s``-th iterate (the morph then spans ``s`` shape steps and
+the final iterate is always shown), which keeps a 250-iterate run's GIF to a few hundred
+frames.
+PNG frames go to ``figures/movie/<tag>/`` and the GIF to ``figures/optimize_<tag>.gif``
+(``--mp4``: an H.264 ``figures/optimize_<tag>.mp4`` through the ``ffmpeg`` executable
+instead -- a tenth of the GIF's size, so longer runs can keep more frames).
 """
 
 from __future__ import annotations
@@ -108,7 +113,7 @@ def fields_of(frame, i):
     return {"nrho": frame["nrho"][i], "|u|": np.sqrt(np.sum(u**2, axis=1))}
 
 
-def render(out: Path, fig_dir: Path, morph: int, hold: int, every: int):
+def render(out: Path, fig_dir: Path, morph: int, hold: int, every: int, stride: int = 1):
     """Every PNG frame of the movie, in order; returns their paths."""
     cfg, rows, coefs, frames = load_run(out)
     if not frames:
@@ -120,8 +125,10 @@ def render(out: Path, fig_dir: Path, morph: int, hold: int, every: int):
     fig_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     n_iter = min(len(frames), len(coefs) - 1)
-    for k in range(n_iter):
+    shown = sorted({*range(0, n_iter, stride), n_iter - 1})
+    for k in shown:
         f = frames[k]
+        k_next = min(k + stride, n_iter)
         phi_k = r.phi(coefs[k])
         steps = f["step"]
         # every n-th fill frame, the last (steady) one always included
@@ -134,9 +141,9 @@ def render(out: Path, fig_dir: Path, morph: int, hold: int, every: int):
             r.draw(paths[-1], last, phi_k, k, f"iterate {k}   steady (window mean of the drag)")
         for m in range(1, morph + 1):
             a = m / morph
-            phi_m = r.phi((1.0 - a) * coefs[k] + a * coefs[k + 1])
+            phi_m = r.phi((1.0 - a) * coefs[k] + a * coefs[k_next])
             paths.append(fig_dir / f"f_{len(paths):04d}.png")
-            r.draw(paths[-1], last, phi_m, k, f"iterate {k} -> {k + 1}   shape step")
+            r.draw(paths[-1], last, phi_m, k, f"iterate {k} -> {k_next}   shape step")
         print(f"iterate {k}: {len(paths)} frames so far", flush=True)
     return paths
 
@@ -151,6 +158,21 @@ def assemble(paths, gif: Path, fps: float):
     return gif
 
 
+def assemble_mp4(fig_dir: Path, n_frames: int, mp4: Path, fps: float):
+    """The frames ``f_0000.png ..`` of ``fig_dir`` (the first ``n_frames``: a previous,
+    longer render may have left more) -> an H.264 MP4 by the ``ffmpeg`` executable."""
+    import subprocess  # noqa: PLC0415
+
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error", "-framerate", f"{fps}",
+        "-i", str(fig_dir / "f_%04d.png"), "-frames:v", str(n_frames),
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:v", "libx264",
+        "-pix_fmt", "yuv420p", "-crf", "23", str(mp4),
+    ]  # fmt: skip
+    subprocess.run(cmd, check=True)
+    return mp4
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--tag", default="circle")
@@ -158,12 +180,19 @@ def main(argv=None):
     ap.add_argument("--morph", type=int, default=8, help="frames of the shape step")
     ap.add_argument("--hold", type=int, default=4, help="frames holding the steady state")
     ap.add_argument("--every", type=int, default=1, help="use every n-th fill frame")
+    ap.add_argument("--stride", type=int, default=1, help="show every n-th iterate")
+    ap.add_argument("--mp4", action="store_true", help="write an MP4 (ffmpeg) instead of a GIF")
     args = ap.parse_args(argv)
     out = Path(O.RESULTS) / args.tag
     fig_dir = Path(O.FIGURES) / "movie" / args.tag
-    paths = render(out, fig_dir, args.morph, args.hold, args.every)
-    gif = assemble(paths, Path(O.FIGURES) / f"optimize_{args.tag}.gif", args.fps)
-    print(f"wrote {gif} ({len(paths)} frames, {gif.stat().st_size / 1e6:.1f} MB)")
+    paths = render(out, fig_dir, args.morph, args.hold, args.every, args.stride)
+    if args.mp4:
+        movie = assemble_mp4(
+            fig_dir, len(paths), Path(O.FIGURES) / f"optimize_{args.tag}.mp4", args.fps
+        )
+    else:
+        movie = assemble(paths, Path(O.FIGURES) / f"optimize_{args.tag}.gif", args.fps)
+    print(f"wrote {movie} ({len(paths)} frames, {movie.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":

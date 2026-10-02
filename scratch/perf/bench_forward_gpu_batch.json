@@ -1,0 +1,24 @@
+[
+ {
+  "platform": "gpu",
+  "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+  "body": "polygon",
+  "seconds_first_incl_compile": 37.61465558300188,
+  "seconds": 9.414220203998411,
+  "moves": 36702750.0,
+  "final_particles": 47713,
+  "moves_per_second": 3898650.0426675375,
+  "slots": 60000
+ },
+ {
+  "platform": "gpu",
+  "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+  "body": "levelset",
+  "seconds_first_incl_compile": 54.408994919002,
+  "seconds": 17.714343041003303,
+  "moves": 36657650.0,
+  "final_particles": 47673,
+  "moves_per_second": 2069376.7708544831,
+  "slots": 60256
+ }
+]

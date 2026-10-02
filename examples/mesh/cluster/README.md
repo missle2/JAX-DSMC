@@ -43,10 +43,10 @@ python3 -m examples.mesh.cluster.collect           # merges the seed files, figu
 | `env.sh` | the job environment: the CUDA venv at `/projects/$USER/jax-env` (`GPU_KIND=a100`, default, or `h200`; `JAX_VENV` overrides the path), `JAX_PLATFORMS` pinned so a CPU fallback is an error or `module load rocm/5.3.0; module load jax` (`GPU_KIND=mi100`, jax 0.4.7 today — unusable), `JAX_ENABLE_X64=1`, no preallocation |
 | `bad_nodes.txt` | nodes whose preflight failed (one per line); `submit_curc.sh` excludes them.  Seeded 2026-09-22 with `c3gpu-g5-u5` |
 | `check_env.sbatch` / `check_env.py` | asserts JAX ≥ 0.4.36 (the code uses `jax.tree.map`, `jax.random.key`, `register_dataclass(data_fields, meta_fields)`), an accelerator, float64; runs a 40-step level-set circle with its shape terms; `--quick` stops after the device checks and is every job's preflight.  `gpu-normal` on one A100 (on `gpu-testing` only a MIG slice `a100_3g.20gb` is given) |
-| `study.py` | the job matrix by group (`--group sphere\|mode2\|opt --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |
+| `study.py` | the job matrix by group (`--group sphere\|mode2\|opt\|optc --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |
 | `job.sbatch` | one job: resources from the `sbatch` line, the command from `CMD`; logs `nvidia-smi -L`, then the preflight, then the command |
 | `submit_curc.sh` | one `sbatch` per job line with a GPU's share of the node (H200: 32 cores, 128 GB; A100: 21 cores, 70 GB), the group's wall time; `GPU_KIND=a100\|h200\|rtx\|mi100` (`rtx`: the RTX PRO 6000 partition, gres and per-GPU sizing read from `sinfo`; `submit_curc.sh check` runs `check_env` on the chosen kind first), `PART`, `GRES_TYPE` override the partition / GPU; builds the job list with the venv's python (the login node's `python3` is 3.6; `PYTHON` overrides) |
-| `collect.py` | per-seed files → artifacts, `figures/optimize_convergence.png`, `figures/gradient_seed_convergence.png`, the sphere gate row |
+| `collect.py` | per-seed files → artifacts, `figures/optimize_convergence.png` / `optimize_convergence_coarse.png`, `figures/optc_drag.png`, `figures/optc_body_extent.png`, `figures/gradient_seed_convergence.png`, `figures/mode2_gate.png`, the sphere gate row, `study_results.json` |
 
 Every command **resumes from its own artifact** (seed rows / optimiser iterates already
 written are skipped), so a job that hits its time limit is resubmitted with the same
@@ -59,11 +59,11 @@ written are skipped), so a job that hits its time limit is resubmitted with the 
 |---|---|---|---|---|---|
 | `sphere` | `seed{0..7}` | 3-D level-set sphere (`h_φ = 0.1` on the 0.2 grid, `fnum × 2` ≈ 40 k particles), radius gradient vs CRN FD (h = 0.05, 0.02), one seed per job | 1 | `gradient_bench/results/ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_…_dev_seed{i}.json` → merged `…_dev.json` | ~3× the circle's 9 min/seed on the workstation GPU → ≤ 30 min/seed, 8 h limit |
 | `mode2` | `seed{0..31}` | finer circle (`fnum × 1` ≈ 48 k particles, 40 × 40 DSMC grid, `h_φ = 0.0625`), `cos 2θ` gradient vs CRN FD, one seed per job | 1 | `…circle_levelset0.0625_gz0.05_grid2_mode2_f1_…_dev_seed{i}.json` → merged | ~15 min/seed on the workstation → < 1 h, 4 h limit |
-| `opt` | `opt_S{1,2,4,8}_{gd,adam}` | finer circle drag minimisation at fixed area, 20 iterates, S CRN seeds per iterate evaluated concurrently (`optimize.py --workers min(S, GPUs/node)`), GD (normalised, projected) vs Adam | min(S, 3) | `mesh/results/optimize/circle_fine_S{S}_{opt}/history.json` + `coef_k.npy` | ~8 min per seed-evaluation on the workstation; per iterate ⌈S / GPUs⌉ × 8 min → S = 1, 2, 4: ~3 h; S = 8: ~6 h (24 h limit) |
-| `optc` | `opt_S{1,2,4,8}_{gd,adam}` (jobs `optc_opt_…`) | `opt` on the SPARTA 20 × 20 DSMC grid (`--grid-scale 1`, `fnum × 1`, same level set and step): 60 k slots, a quarter of `opt`'s memory, fits a 24 GB rtx MIG slice (`GPU_KIND=rtx`, one slice, seeds run in turn) | 1 | `mesh/results/optimize/circle_coarse_S{S}_{opt}/` → `optimize_convergence_coarse.png` | not yet timed; ~¼ of `opt` per seed |
+| `opt` | `opt_S{1,2,4,8}_{gd,adam}` | finer circle drag minimisation at fixed area, 250 iterates (`--iterations 250`; 20 when this table was written), S CRN seeds per iterate evaluated concurrently (`optimize.py --workers min(S, GPUs/node)`), GD (normalised, projected) vs Adam | min(S, 3) | `mesh/results/optimize/circle_fine_S{S}_{opt}/history.json` + `coef_k.npy` | ~8 min per seed-evaluation on the workstation; per iterate ⌈S / GPUs⌉ × 8 min → S = 1, 2, 4: ~3 h; S = 8: ~6 h for 20 iterates (24 h limit; resubmit to continue) |
+| `optc` | `opt_S{1,2,4,8}_{gd,adam}` (jobs `optc_opt_…`) | `opt` on the SPARTA 20 × 20 DSMC grid (`--grid-scale 1`, `fnum × 1`, same level set and step): 60 k slots, a quarter of `opt`'s memory, fits a 24 GB rtx MIG slice (`GPU_KIND=rtx`, one slice, seeds run in turn) | 1 | `mesh/results/optimize/circle_coarse_S{S}_{opt}/` → `optimize_convergence_coarse.png`, `optc_drag.png`, `optc_body_extent.png` | measured (`study_results.json`, `optc_runs`): ≈ 4.3–4.9 min per seed evaluation, median 4.6–4.9 / 9.1–9.8 / 18–19 / 35–36 min per iterate at S = 1 / 2 / 4 / 8 |
 
 Sizing: `submit_curc.sh` gives every job a GPU's share of its node (A100: 21 cores and
-70 GB per GPU; H200: 32 cores, 128 GB).  GPU memory: the finer circle (`mode2`, `opt`: 240 k slots × 300 captured steps) peaks above 18.7 GB in the captured forward alone and ran out of memory on the 24 GB rtx MIG slices (2026-09-23), so `submit_curc.sh` runs only `sphere` there; `mode2` and `opt` need an A100-40GB or H200 and `--time` 8 h (sphere), 4 h (mode2), 12 h
+70 GB per GPU; H200: 32 cores, 128 GB).  GPU memory: the finer circle (`mode2`, `opt`: 240 k slots × 300 captured steps) peaks above 18.7 GB in the captured forward alone and ran out of memory on the 24 GB rtx MIG slices (2026-09-23), so `submit_curc.sh` runs only `sphere` and `optc` there; `mode2` and `opt` need an A100-40GB or H200 and `--time` 8 h (sphere), 4 h (mode2), 12 h
 (opt, S ≤ 2), 24 h (opt, S ≥ 4).  The `opt` jobs with S ≥ 3 take a whole A100 node's GPUs; if the account's concurrent-GPU limit bites, submit `opt` first.  Estimates are
 extrapolated from the workstation (RTX 3050 Ti, weak fp64); the first job's log
 calibrates them — **measured 2026-09-22 on 32 CPU cores** (the failed-GPU runs):
@@ -95,19 +95,23 @@ modes, the smooth C1 optimisation iterates), on the terms validated on the works
 (phase D circle: pathwise + timing, z = −1.4 / +0.7 for radius / `cos 2θ`).  The two
 workstation analyses still open — the **diffuse circle** (the hybrid normal term and the
 silhouette on a curved body; GP validated them on the plate) and the **specular capsule**
-(the `∇_vλ` part of a flat-faced body, −25 %) — do **not** gate them: no cluster job has a
+(the `∇_vλ` part of a flat-faced body, −25 %; closed 2026-09-22 by the hit-ahead
+stratified fit, z = +0.08, review §7.9) — do **not** gate them: no cluster job has a
 diffuse wall, and none starts from a flat face.  The capsule question would matter only if
 an optimisation iterate developed a flat, cap-terminated face; the drag history and
 `coef_k.npy` sequence show whether it does.
 
 `collect.py` draws `figures/optimize_convergence.png` (J per iterate and per unit cost `S
 × iterates` for every run, the area constraint), `figures/gradient_seed_convergence.png`
-(bootstrap SE of the `cos 2θ` gradient vs the number of seeds against 1 % of the FD) and
-prints the sphere gate row; everything from the artifacts.  `python3 -m
+(bootstrap SE of the `cos 2θ` gradient vs the number of seeds against 1 % of the FD), for
+`optc` `optimize_convergence_coarse.png`, `optc_drag.png` and `optc_body_extent.png`, for
+`mode2` `mode2_gate.png`, and prints the sphere gate row (all written to
+`study_results.json`); everything from the artifacts.  `python3 -m
 examples.mesh.movie --tag circle_fine_S4_gd` strings an optimisation's
 `frames_<k>.npz` (the first seed's forward at every iterate: fields every 50 warm-up
 steps from the empty box, then the steady state) and `coef_<k>.npy` into
-`figures/optimize_<tag>.gif` — fill, shape step, fill, … with the drag history alongside.
+`figures/optimize_<tag>.gif` (`--mp4`: `.mp4` through `ffmpeg`; `--stride s`: every s-th
+iterate, for the long runs) — fill, shape step, fill, … with the drag history alongside.
 
 ## Disk
 

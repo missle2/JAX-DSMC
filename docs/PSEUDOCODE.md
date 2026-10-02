@@ -49,7 +49,7 @@ Reference material:
 | `S` | number of species (static) | 1 for now |
 | `G` | number of collision groups (static) | 1 for now, `G <= S` |
 | `n[d]` | number of cells along axis `d` (static) | |
-| `C` | total cells, `prod(n)` (static) | |
+| `C` | total cells, `prod(n)` (static; `prod(n) + n_sub` with split cells, §4.5) | |
 | `A` | `A_max`, max collision attempts per cell per step (static) | 8 – 64 |
 | `K` | `K_bounce`, max wall bounces per step (static) | 4 |
 | `M` | number of timesteps (static) | |
@@ -599,7 +599,8 @@ and `cell_of` is used as-is — the cut-cell machinery is a *separate* per-cell 
 (`Mesh`: `cell_type`, `volume`, `candidates[C, S_max]`, `csurfs[C, S_cell]`,
 `outside_corner`, element `normals`/`areas`) built once on the host (`mesh/cut.py`, SPARTA
 `cut2d.cpp` / `cut3d.cpp` / `grid_surf.cpp` semantics: inclusive clip test, corner parity
-along an irrational ray, stratified sub-grid flow fractions, split cells refused) and a
+along an irrational ray, stratified sub-grid flow fractions, split cells refused -- since
+2026-09-23 split into sub-cells, §4.5) and a
 surface-aware `mesh.geometry.first_hit(x, v, grid, mesh, exclude)` that returns the box result
 unless an element (`2D + e`) or the analytic body (`2D`) is hit strictly earlier.  Every table
 is indexed by the flat cell id and padded with `-1`, so a hierarchical grid later replaces only
@@ -657,10 +658,13 @@ analytic path.
   `+ → −` sign change between consecutive samples brackets the entry root; a start with
   `φ ≤ 0`, `|φ| ≤ tol` and `v · ∇φ < 0` hits at `t = 0`; a start deeper inside returns
   `inf` (the post-step inside check counts it).  No `exclude`: after a reflection φ
-  increases along `v_out`, so the reflection point is never a `+ → −` crossing.  `n_bisect`
-  bisections on the bracket, then **one Newton step from the bracket, the bracket search
-  being a function of `stop_gradient` inputs** — the `where` selections of the bisection
-  carry no derivative and the Newton step restores the implicit-function derivative
+  increases along `v_out`, so the reflection point is never a `+ → −` crossing.  The
+  samples of a ray are one batched evaluation; only the rays whose cells' coefficient
+  minima (`block_min_table`, exact by the B-spline convex hull) allow `φ ≤ 0` are searched,
+  compacted.  The bracket is refined by a safeguarded Newton iteration (bisection when a
+  step leaves the bracket; at most `n_bisect` iterations), then **one Newton step from the
+  bracket, the bracket search being a function of `stop_gradient` inputs** — the `where`
+  selections of the refinement carry no derivative and the Newton step restores the implicit-function derivative
   `∂t/∂coef = −B_j(x_hit)/(v·∇φ)` (and `∂t/∂x`, `∂t/∂v` likewise); freezing the search's
   inputs rather than only its output keeps reverse mode from tracing the two loops.
   Measured (LS0, `figures/mesh_levelset_checks.png`): surface and hit errors fall as
@@ -678,8 +682,11 @@ analytic path.
   parity; linear in the knot values, so `∂coef/∂points` exists); the knot values are
   interpolated by the separable `(1, 4, 1)/6` system with natural end conditions,
   applied as one precomputed inverse per axis (`tensordot`), differentiable.
-  `reinitialise(ls, n_iter)`: closest-point projection `x ← x − φ ∇φ/|∇φ|²` from every
-  knot, distance to the projected point with the sign of φ, refit.
+  `reinitialise(ls, n_iter, band)`: closest-point projection `x ← x − φ ∇φ/|∇φ|²` (steps
+  clipped to `h`, `ceil(band/h) + 4` of them) from every knot within `band` (default
+  `3h + reach`) of the surface, distance to the projected point; every other knot (and a
+  band knot whose projection did not converge) takes its distance to the cloud of
+  projected points; signs from φ; refit (2026-09-23, review §7.10).
 - **Silhouette term** (`shape.silhouette_cotangent`, `ShapeTerms.silhouette`;
   `gradient(silhouette_band=ε_b, reward=...)`): for every survivor the closest approach
   of its *undeflected* flight, `φ_min = min_s φ(x + s v̂)` (`levelset.closest_approach`:
@@ -914,11 +921,38 @@ Particle `j` of cell `k` is `order[starts[k] + j]`, valid for `j < counts[k]`.
 operation whose VJP is a scatter, so cotangents flow back to the correct particles automatically.
 Nothing special is needed. The permutation being frozen is correct and matches the papers.
 
-### 6.2 Scaling note
+### 6.2 Scaling note, and the partition sort (2026-10-01)
 
-`argsort` is `O(N log N)`. At `N ~ 1e9` this becomes the bottleneck and should be replaced by a
-counting sort (the cell index is already a bounded integer, so a `bincount` + prefix-sum +
-scatter does it in `O(N)`). Deferred; the interface does not change.
+The full sort is one `lax.sort` of packed `(cell, slot)` keys (`sort.stable_cell_order`: unique
+keys, so any sort is the stable order), `O(N log N)` -- 2.2 ms per step on one CPU core at
+`N = 6e4`, the largest single stage of the mesh forward after the tracker work.
+
+`SimStatic.sort = "partition"` (`sort.update_table`; the mesh forward `examples/mesh/forward.py`
+sets it) is SPARTA-JAX's partition sort.  The previous step's sorted order is carried
+(`CollideState.sort: SortCarry(order, key)`, set by `simulate.run` before its scan and cleared
+after it, so a run's input and output collide states have the same structure):
+
+```
+c      = cell_of(x), C for dead                  # this step's cells
+knew   = c[order_prev]                           # new cell at each previous sorted position
+stay   = knew == key_prev                        # kept its cell
+cs     = exclusive prefix count of stay
+movers = the ~stay positions, compacted (buffers N/16, N/8, N/6, N/4; more -> full sort)
+start  = exclusive scan(stayers per cell + movers per cell)
+stayer -> start[knew] + its rank among the cell's stayers (order kept)
+movers sorted by (cell, slot) -> after their cell's stayers
+```
+
+The same cells, starts, counts and members as `build_table`, exactly; within a cell the stayers
+come first in their previous order, then the newcomers by slot.  NTC indexes a cell's members
+uniformly at random, so its pairs are drawn from the same distribution but not draw for draw
+(`tests/test_sort.py`: membership exact over chained steps and every buffer; a collisional
+relaxation over 12 seeds within 3 standard errors of the full sort).  XLA:CPU only
+(`sort.partition_active`): on GPU the full sort is one fast kernel and the partition's branch
+and searches cost launches.  Measured 2.2 -> ~1.0 ms per step on one CPU core.  It stays at
+~6x SPARTA's linked-list build (`Particle::sort`) for the reason SPARTA-JAX's does: four passes
+over all `N` (a gather, a prefix count, a scatter, an elementwise pass) at XLA:CPU's per-element
+cost against SPARTA's single loop (`sparta_jax/README.md` on the `sparta-match` branch).
 
 ### 6.3 Tests (`tests/test_sort.py`)
 
@@ -1757,6 +1791,7 @@ real:
 | suspect | verdict | measured |
 |---|---|---|
 | `moments` called every step but only `temp` used | **real** — the pressure tensor materialises an `(N,3,3)` intermediate for nothing | 2.9-3.5x; fixed by `sample.cell_temperature` |
+| `cell_temperature`'s two passes (a per-particle gather of the cell velocity, a second segment sum) | **real** at mesh sizes (0.8 ms per step on one CPU core, 2026-10-01) | one segment sum of `(v - s, |v - s|^2)` about the population mean `s`: the cancellation is that of the cell's bulk speed relative to `s`, `~1e-14` at relative Mach 10; held to `moments` at `1e-12`, and under a `1e8 v_th` shift |
 | `moments` recomputes `cell_of` although `table.cell` holds it | **real** — `build_table` returns it for exactly this reason | a further 1.6-3.0x |
 | scratch-row `concatenate` on every `collide` call | **not real** — XLA fuses it | no measurable overhead at `N` up to 4e6 |
 | scan carry copied per iteration instead of updated in place | **real, but only at `C == 1`** | see below |
@@ -1913,8 +1948,10 @@ Dead particles keep their array slots (static shapes) and are sorted to the sent
 > non-increasing; from M5 it is not, and the replacement invariant is a mass balance
 > (`injected - deleted == change in alive count`).
 >
-> **Built** — `jax_dsmc/inflow.py`. `revive_slots` is the *only* sanctioned way to set
-> `alive` from `False` to `True` and zeroes every field in `ACCUMULATOR_FIELDS` in the same
+> **Built** — `jax_dsmc/inflow.py`. `revive_slots` (a mask) and `revive_at` (a list of
+> slots; what `inject` uses since 2026-10-01, writing the entrants' few hundred slots instead
+> of selecting over all `N`) are the *only* sanctioned ways to set
+> `alive` from `False` to `True`, and both zero every field in `ACCUMULATOR_FIELDS` in the same
 > update; `ACCUMULATOR_FIELDS` is checked by reflection over `ParticleState`, so a future
 > accumulator cannot be silently missed. The mass balance is asserted at **every** step of a
 > 400-step inflow run and holds exactly.
@@ -2087,14 +2124,29 @@ particle until its time step is used up, as SPARTA's `Update::move` does, instea
 stopping after a fixed number of passes over every particle.
 
 ```
-pass 0:   the stencil pass over all N slots (first_hit, _apply_events)       -- as 9.6
+pass 0 (GPU, _first_pass_dense): the stencil pass over all N slots (first_hit,
+          _apply_events)                                                  -- as 9.6
+pass 0 (XLA:CPU, _first_pass_routed, 2026-10-01 -- SPARTA's optimised move):
+          dense:  one elementwise pass over all N -- near = the path |v| dt may reach
+                  the body (mesh_geometry.near_tables: per fine cell, a free path below
+                  which no move from there can meet the surface or end inside it;
+                  levelset.free_path from block_min_table for a level set); box = the
+                  straight end point may leave the box.  Box candidates (compacted) take
+                  their first box event in closed form (_box_events); a diffuse or
+                  periodic face or a second box event joins near
+          near:   the near slots compacted (chunks of N/16) run the stencil pass 0
+          the post-move inside check runs on the near slots only
+          (the same results as the dense pass 0: tests/test_mesh_tracking.py
+          test_lane_dense_pass_and_chunks_equal_the_stencil, both variants)
 lane:     slots with a pass-0 event (alive after it: an outflow ends the flight),
           compacted by cumulative sum into B = lane_capacity(N) entries (N/32, >= 256;
           overflow -> deleted + Diagnostics.lane_overflow, an error)
 passes 1 .. K-1 on the lane only:
           the same _bounce body on the gathered (x, v, elapsed, exclude, ...);
-          diffuse draws = the dense pass's full-width draws gathered at each entry's slot
-          (so the result equals the stencil tracker's with the same K);
+          re-emission draws per slot, counter-based (fold_in(pass key, slot):
+          wall_adjoint._slot_uniforms), so a particle meets the same randomness in
+          any row of any tracker and the result equals the stencil tracker's with
+          the same K;
           a pass runs only while some lane particle had an event in the previous one
           (an untraced move: while_loop; the traced replay: fori_loop + lax.cond, which
           reverse mode can differentiate)
@@ -2107,8 +2159,8 @@ a dense record is the special case `tail = passes 1.., slot = arange(N)` (`as_sp
 every consumer reads one layout: per-event functions run on head and tail separately,
 `particle_sum` folds a per-event array onto the slots, the shape adjoint's reward-to-go
 (`shape._to_go`) takes the suffix sums across head -> tail, and a lane replay returns its
-rewards as `shape.HitRewards(values, slot, total)` (the device backward reads `total`, the
-host bookkeeping `ensemble_backward.from_device` expands the events per step).  Entrants
+rewards as `shape.HitRewards(values, slot)` (the device backward reads the per-step totals
+`HitRewards.totals()`, the host bookkeeping `ensemble_backward.from_device` expands the events per step).  Entrants
 use the same tracker; `inflow.inject` expands their split events over its entrants, and
 `simulate._event_record` splits the record again (the entrants' later passes in an extra
 tail segment).  The **stored** record compacts once more: `wall_adjoint.RecordEvents` keeps
@@ -2164,6 +2216,9 @@ inputs and one helper; the collision pull-back is untouched):
   pathwise.  `ShapeTerms` reports the pathwise and score parts separately plus
   `replay_error` (relative, roundoff: the replay is the forward's arithmetic in another
   compilation, so `< 1e-12` rather than bitwise) and the element hits per step.
+  (2026-09-24, review §7.10: a flipped discrete outcome now reports `1`, and the runners
+  hold the continuous part to `REPLAY_TOL = 1e-9` -- grazing reflections on concave
+  walls amplify the round-off to ~1e-12.)
   `shape.replay` is the forward-only pass that evaluates per-hit rewards (`reward(events,
   tallies, rec_k, step) -> f64[K, N]`) for the backward.  Not in the VJP by design: the
   cut-volume dependence of the NTC attempt count (gate G5) and the element-assignment
@@ -2630,7 +2685,9 @@ discrepancy is `O(dt * ||B - I||)` and so does **not** vanish at realistic times
 - **No `while_loop` anywhere.** Every loop is a `scan` or `fori_loop` with a static trip count:
   the time loop (`n_steps`), the attempt-slot loop (`A_max`), the wall-bounce loop (`K_bounce`),
   and the inflow rejection sampler when it arrives (M5). This is a hard invariant, checked by a
-  jaxpr audit in the test suite.
+  jaxpr audit in the test suite (of the collision step).  One deliberate exception
+  (2026-09-24, §9.6.1): the forward move of `tracker = "lane"` ends its lane passes with a
+  `while_loop`; the traced replay that the shape adjoint differentiates uses `fori_loop`.
 
 ---
 
@@ -3353,7 +3410,7 @@ Anything marked **MEAS** has a scratch probe behind it. Nothing here is a matter
 | S6 | `vr2` clamp | `vr2 ** (1-omega)` unguarded, `collide_vss.cpp:222` | `safe_pow` with a **relative** clamp `EPS_REL_VR2 * (2kT_ref/m_r)` | **GRAD** | Unclamped, `dq/d\|vr\|` is unbounded (~`2.5e16`). Relative, not absolute: the bound becomes exactly `2\|1-omega\| eps^(0.5-omega)`. Gate U1, §2.3/§17.4 |
 | S7 | Scattering-frame guard | `if (d > 1.0e-6)`, `collide_vss.cpp:429` | `d > EPS_D * vrm` — **relative** — via the double-`where` pattern | **GRAD**, MEAS | SPARTA's test is *dimensional* and only works because it runs SI with thermal speeds ~1e2 m/s. Measured an **order-unity** change in post-collision velocity from a change of units alone. §7.4 |
 | S8 | `alpha == 1` fast path | `if (fabs(alpha_r - 1.0) < 0.001)` branch, `collide_vss.cpp:405+` | dropped; the general branch is used always | **JAX** | `alpha` is a traced parameter, so a Python branch on it is illegal. The general form is already correct at `alpha = 1`; SPARTA's case is a speed shortcut, not different physics. §7.4 |
-| S9 | Cell occupancy | per-cell linked lists, `collide.cpp:508-512` | sort: `argsort` + `bincount` + exclusive scan | **GPU** | Linked lists are a CPU structure. A sort is the right GPU primitive and its permutation is a frozen integer decision, so gathers stay differentiable. §6 |
+| S9 | Cell occupancy | per-cell linked lists, `collide.cpp:508-512` | sort: packed-key `lax.sort` + bucket bounds; on XLA:CPU optionally the carried partition sort (`SimStatic.sort`) | **GPU** | Linked lists are a CPU structure. A sort is the right GPU primitive and its permutation is a frozen integer decision, so gathers stay differentiable. The partition sort keeps SPARTA's per-cell membership with a different within-cell order. §6 |
 | S10 | Maxwellian sampling | polar `vn/vr` construction, `create_particles.cpp:761-780` | three independent normals | [DF], GRAD | Statistically identical; removes `sqrt(-log U)` and its singular gradient at `U=1` from the init path entirely. §5.1, §18.3 |
 | S11 | Specular reflection | mirrors once, assumes at most one crossing, `domain.cpp:337-357` | closed-form triangle-wave fold, any number of bounces, branch-free | **JAX** | Strictly more general at no cost, and branch-free is what a static-shape kernel wants. [P3] §3.2 makes the same single-crossing assumption. §9.2 |
 | S12 | Particle weighting | scalar `fnum` with an optional `cinfo.weight` | `fnum` is a per-cell field `f64[C]` from the first commit | [DF] | Retrofitting it later would mean a simultaneous diff across `ntc.py`, `sample.py` and `boundary.py`. Comes with a mass-conservation guard (gap U7). §3.3, §18.4 |

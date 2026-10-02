@@ -106,7 +106,7 @@ class LevelSet:
         h: STATIC knot spacing (one value for every axis).
         n_sample: STATIC number of ray samples of the hit search; the search covers
             ``reach = n_sample * h / 2`` at spacing ``h / 2``.
-        n_bisect: STATIC bisection count on the bracketed root.
+        n_bisect: STATIC cap on the refinement iterations (safeguarded Newton) of the bracket.
         grazing: STATIC cut-off ``eps`` of the hit-time derivative: its ``1 / (v . grad
             phi)`` is evaluated with ``|v . grad phi| >= eps |v| |grad phi|`` (the primal
             hit is exact; ``0`` = exact derivative, heavy-tailed at grazing incidence).

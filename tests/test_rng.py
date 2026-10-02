@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 jax.config.update("jax_enable_x64", True)
@@ -109,3 +110,27 @@ def test_rule_2_keys_are_recomputable_not_carried():
     _burn = [jax.random.uniform(key_for(BASE, s, STAGE_PAIR), (100,)) for s in range(6)]
     again = [key_for(BASE, s, STAGE_SCATTER) for s in range(6)]
     assert all(jnp.array_equal(a, b) for a, b in zip(first, again, strict=True))
+
+
+def test_split_diffuse_draws_are_the_draws():
+    """``standard_diffuse_uniforms`` + ``diffuse_draws_from_uniforms`` (the wall passes
+    transform only the rows that re-emit) are bit for bit the original construction:
+    ``jax.random.normal`` and the Rayleigh of ``jax.random.uniform`` on the same keys.
+    Guards the reliance on ``jax.random.normal``'s internal transform."""
+    from jax_dsmc import sampling  # noqa: PLC0415
+    from jax_dsmc.safe import safe_sqrt  # noqa: PLC0415
+
+    for seed, n in ((0, 1), (3, 17), (11, 4096)):
+        key = jax.random.PRNGKey(seed)
+        k_perp, k_tan = jax.random.split(key)
+        z_ref = jax.random.normal(k_tan, (n, 3), dtype=jnp.float64)
+        u = jax.random.uniform(k_perp, (n,), dtype=jnp.float64)
+        r_ref = safe_sqrt(-2.0 * jnp.log1p(-u))
+        z, r = sampling.standard_diffuse_draws(key, n)
+        np.testing.assert_array_equal(np.asarray(z), np.asarray(z_ref))
+        np.testing.assert_array_equal(np.asarray(r), np.asarray(r_ref))
+        u_z, u_r = sampling.standard_diffuse_uniforms(key, n)
+        take = np.arange(n)[::3]
+        z_rows, r_rows = sampling.diffuse_draws_from_uniforms(u_z[take], u_r[take])
+        np.testing.assert_array_equal(np.asarray(z_rows), np.asarray(z_ref)[take])
+        np.testing.assert_array_equal(np.asarray(r_rows), np.asarray(r_ref)[take])

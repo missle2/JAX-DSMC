@@ -513,7 +513,8 @@ the body is a `Surface` (SPARTA line/triangle files, normals into the flow) or a
 `AnalyticBody`, overlapped cells are cut (per-cell flow volume, candidate-element tables),
 and two trackers share one event routine — the dilated-stencil earliest-hit loop and
 SPARTA's cell-by-cell walk (`update.cpp:879-1547`) as the robust reference. Split cells are
-detected and refused (convex bodies only for now). The plan, gates and figure list are in
+detected and refused (convex bodies only for now; since 2026-09-23 they get SPARTA sub-cells,
+PSEUDOCODE §4.5). The plan, gates and figure list are in
 `docs/ADJOINT_BRANCH_REVIEW.md` §7 once the phases land.
 
 **Status 2026-09-17 — phases A (geometry) and B (forward) built; gates in
@@ -633,6 +634,15 @@ specular bodies).  **Diffuse circle gate (GD)** on the same code, 4 seeds: 1.312
 estimate is 9 % below the precise FD (z = −2.3), the plate's pattern; silhouette 61 %,
 tally 28 %.  Not closed: 8 more seeds and a silhouette band sweep decide it.
 Remaining after that: Kn 0.5 (G4/G5); the cluster results.
+
+**Note (2026-09-28): later changes are recorded elsewhere.**  The 2026-09-23/24 fixes the
+`optc` cluster runs forced (split cells, PSEUDOCODE §4.5; the lane tracker with 32 passes
+and stuck-particle deletion, §9.6.1; compact wall records; the replay check's
+`REPLAY_TOL = 1e-9`; the re-smoothed Adam step) are in review §7.10.  The optimiser as
+built (`examples/mesh/optimize.py`) differs from the representation decision above: no
+line search (a fixed largest displacement per iterate), reinitialisation at every iterate,
+and the area held by a uniform shift of φ (`docs/math/ensemble_adjoint.tex`, the
+optimiser section).
 
 **Further note — hierarchical (multi-level) grids, deliberately not built yet.** SPARTA
 refines parent cells into child grids (`create_grid ... level`, `adapt_grid`), which is

@@ -8,6 +8,7 @@ grazing (tunnelling) family, the box-only invariance and reinitialisation.  CPU,
 from __future__ import annotations
 
 import dataclasses
+import functools
 import math
 
 import jax
@@ -543,3 +544,200 @@ def test_closest_approach_of_rays_past_the_circle():
     assert np.all(np.asarray(s_far) >= ls.reach * (1 - 1e-6)) and np.all(
         np.asarray(phi_far) > b[:2]
     )
+
+
+def _dense(fn, fill, ls, rows, candidate):
+    """``_culled`` without the cull: ``fn`` on every row."""
+    del fill, candidate
+    return fn(ls, *rows)
+
+
+def _jit_hit(x, v, ls, remaining):
+    """``hit_body`` compiled afresh (a new function object: no cache shared across a
+    monkeypatch)."""
+    return jax.jit(functools.partial(L.hit_body, remaining=remaining))(x, v, ls)
+
+
+def _t_sum(coef, ls, x, v, remaining=None):
+    t = L.hit_body(x, v, dataclasses.replace(ls, coef=coef), remaining)
+    return jnp.sum(jnp.where(jnp.isfinite(t), t, 0.0))
+
+
+def _perturbed(dim):
+    """The level-set circle / sphere with a smooth bump: a non-distance ``phi`` whose
+    gradient norm varies."""
+    ls = _levelset(dim)
+    knots = L.knots(ls)
+    bump = 0.4 * jnp.sin(1.3 * knots[:, 0]) * jnp.cos(0.7 * knots[:, 1])
+    return dataclasses.replace(ls, coef=ls.coef + bump.reshape(ls.coef.shape))
+
+
+@pytest.mark.parametrize("radius", [0, 1, 3])
+def test_block_min_table_bounds_phi_on_the_cells_within_radius(radius):
+    """``block_min_table`` at a point's lattice cell bounds ``phi`` from below on every
+    segment of length ``<= radius h`` from it (at the point itself for radius 0), inside
+    and beyond the lattice, and is attained closely enough to cull (positive far from the
+    surface)."""
+    ls = _perturbed(2)
+    key = jax.random.PRNGKey(5 + radius)
+    kx, kd, ks = jax.random.split(key, 3)
+    n = 20000
+    x = jax.random.uniform(kx, (n, 2), minval=-3.0, maxval=13.0)
+    ang = jax.random.uniform(kd, (n,), maxval=2 * math.pi)
+    vhat = jnp.stack([jnp.cos(ang), jnp.sin(ang)], axis=1)
+    lower = L.block_min_table(ls, radius)[L._table_index(ls, x, radius)]
+    worst = jnp.full(n, jnp.inf)
+    for frac in np.linspace(0.0, 1.0, 11):
+        s = frac * radius * ls.h * jax.random.uniform(jax.random.fold_in(ks, int(frac * 10)), (n,))
+        worst = jnp.minimum(worst, L.value(ls, x + s[:, None] * vhat))
+    # the bound up to the round-off of the weights' sum; the sign exactly (what the cull uses)
+    assert bool(jnp.all(worst >= lower - 1e-14 * jnp.abs(lower)))
+    assert bool(jnp.all((worst > 0.0) | (lower <= 0.0)))
+    assert float(jnp.mean(lower > 0.0)) > 0.3
+
+
+@pytest.mark.parametrize(
+    ("n", "far"),
+    [(4096, False), (4096, True), (200, False), (200, True), (2600, "most_near")],
+)
+def test_culled_hit_search_is_the_dense_search_bitwise(monkeypatch, n, far):
+    """The candidate cull of ``hit_body`` and ``inside`` (skip / compacted / dense branches,
+    and the small-N ``cond``) returns the search over every ray, ray for ray, bitwise, and
+    the same hit-time derivatives to round-off; ``inside`` is ``phi < 0`` bitwise."""
+    ls = _perturbed(2)
+    grid = _grid(2)
+    key = jax.random.PRNGKey(11)
+    kx, kv, kr = jax.random.split(key, 3)
+    if far is True:
+        # every ray far from the body: the search is skipped
+        x = jnp.stack([jax.random.uniform(kx, (n,), minval=0.1, maxval=0.9)] * 2, axis=1)
+    elif far == "most_near":
+        # rays on a ring just outside the surface: more candidates than the compaction holds
+        ang = jax.random.uniform(kx, (n,), maxval=2 * math.pi)
+        x = 5.0 + 3.05 * jnp.stack([jnp.cos(ang), jnp.sin(ang)], axis=1)
+    else:
+        x, _v = _outside(kx, n, 2, grid, _body(2))
+    n = x.shape[0]
+    v = 700.0 * jax.random.normal(kv, (n, 3))
+    remaining = jax.random.uniform(kr, (n,), minval=1e-5, maxval=1e-4)
+    # both compiled (eager dispatch rounds differently from a fused program)
+    culled = _jit_hit(x, v, ls, remaining)
+    culled_reach = _jit_hit(x, v, ls, None)
+    inside_culled = jax.jit(L.inside)(ls, x)
+    with monkeypatch.context() as m:
+        m.setattr(L, "_culled", _dense)
+        dense = _jit_hit(x, v, ls, remaining)
+        dense_reach = _jit_hit(x, v, ls, None)
+        g_dense = jax.jit(jax.grad(_t_sum))(ls.coef, ls, x, v, remaining)
+    np.testing.assert_array_equal(np.asarray(culled), np.asarray(dense))
+    np.testing.assert_array_equal(np.asarray(culled_reach), np.asarray(dense_reach))
+    want = jax.jit(L.value)(ls, x) < 0.0
+    np.testing.assert_array_equal(np.asarray(inside_culled), np.asarray(want))
+    g_culled = jax.jit(jax.grad(_t_sum))(ls.coef, ls, x, v, remaining)
+    # the transpose's scatter-add into coef sums in the order of its program: round-off
+    scale = max(float(np.abs(np.asarray(g_dense)).max()), 1e-300)
+    np.testing.assert_allclose(
+        np.asarray(g_culled), np.asarray(g_dense), rtol=0, atol=1e-13 * scale
+    )
+    hits = int(np.isfinite(np.asarray(dense_reach)).sum())
+    if far is True:
+        assert hits == 0
+    else:
+        assert hits > 0
+
+
+def test_inside_cull_is_exact_for_points_inside_the_body():
+    """``inside`` on points spread over the body, its surface band and beyond the lattice
+    equals ``phi < 0`` bitwise, on every branch of the cull."""
+    ls = _perturbed(2)
+    key = jax.random.PRNGKey(4)
+    for n, lo, hi in [(5000, 1.0, 9.0), (5000, -3.0, 13.0), (100, 2.0, 8.0)]:
+        x = jax.random.uniform(jax.random.fold_in(key, n + int(lo)), (n, 2), minval=lo, maxval=hi)
+        want = np.asarray(L.value(ls, x) < 0.0)
+        np.testing.assert_array_equal(np.asarray(L.inside(ls, x)), want)
+        assert want.any()
+
+
+# --- the refinement against the bisection it replaced -------------------------------------
+
+
+def _bisection_hit(x, v, ls, remaining):
+    """The hit search before 2026-09-30: sampled bracket (a loop), ``n_bisect`` bisections,
+    one Newton polish -- the reference of the safeguarded Newton refinement."""
+    d = x.shape[1]
+    vd = v[:, :d]
+    speed = jnp.linalg.norm(vd, axis=1)
+    moving = speed > 0.0
+    vhat = vd / jnp.where(moving, speed, 1.0)[:, None]
+    length = jnp.minimum(ls.reach, jnp.where(moving, speed, 1.0) * remaining)
+    ds = length / ls.n_sample
+    phi0, g0 = L.value_and_grad(ls, x)
+    tol = L.SURFACE_TOL * ls.h
+    inward = jnp.sum(vhat * g0, axis=1) < 0.0
+    hit_now = (phi0 <= 0.0) & (phi0 >= -tol) & inward & moving
+    deep = phi0 < -tol
+    leaving = (jnp.abs(phi0) <= tol) & ~inward
+    phi_prev = jnp.where(leaving, jnp.maximum(phi0, jnp.finfo(phi0.dtype).tiny), phi0)
+    fr, xf, vf = jax.lax.stop_gradient((ls, x, vhat))
+    found = jnp.zeros(x.shape[0], bool)
+    s_lo = s_hi = jnp.zeros(x.shape[0])
+    for i in range(1, ls.n_sample + 1):
+        s = i * ds
+        phi = L.value(fr, xf + s[:, None] * vf)
+        cross = ~found & (phi_prev > 0.0) & (phi <= 0.0)
+        s_lo = jnp.where(cross, s - ds, s_lo)
+        s_hi = jnp.where(cross, s, s_hi)
+        found, phi_prev = found | cross, phi
+    for _ in range(ls.n_bisect):
+        mid = 0.5 * (s_lo + s_hi)
+        positive = L.value(fr, xf + mid[:, None] * vf) > 0.0
+        s_lo, s_hi = jnp.where(positive, mid, s_lo), jnp.where(positive, s_hi, mid)
+    phi_b, g_b = L.value_and_grad(ls, x + s_hi[:, None] * vhat)
+    den = jnp.sum(vhat * g_b, axis=1)
+    floor = 1e-12 * jnp.linalg.norm(g_b, axis=1)
+    den = jnp.where(jnp.abs(den) < floor, -floor, den)
+    den = jnp.where(den == 0.0, -1.0, den)
+    s = s_hi - L.regularised_quotient(phi_b, den, ls.grazing * jnp.linalg.norm(g_b, axis=1))
+    t = jnp.maximum(s, 0.0) / jnp.where(moving, speed, 1.0)
+    ok = found & moving & ~deep & ~hit_now
+    return jnp.where(hit_now, 0.0, jnp.where(ok, t, jnp.inf))
+
+
+def _t_sum_bisection(coef, ls, x, v, remaining):
+    t = _bisection_hit(x, v, dataclasses.replace(ls, coef=coef), remaining)
+    return jnp.sum(jnp.where(jnp.isfinite(t), t, 0.0))
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+def test_refinement_matches_the_bisection_reference(dim):
+    """Safeguarded Newton vs ``n_bisect`` bisections, both then Newton-polished: the same
+    rays hit (the sampled bracket decides), the hit points agree to the round-off of the
+    root (``|phi|`` noise over the slope) and the ``coef`` derivatives to round-off -- on
+    rays from outside the bumped surface, many of them grazing it.  (Starts on the surface
+    are left out: their ``t = 0`` / ``leaving`` rules turn on the sign of a round-off
+    ``phi``, which any two compiled programs may evaluate differently.)"""
+    ls = dataclasses.replace(_perturbed(dim), n_sample=16)
+    body = _body(dim)
+    key = jax.random.PRNGKey(21)
+    k1, k2, k3 = jax.random.split(key, 3)
+    n = 6000
+    u = jax.random.normal(k1, (n, dim))
+    u = u / jnp.linalg.norm(u, axis=1, keepdims=True)
+    rad = float(body.radius) * jax.random.uniform(k2, (n,), minval=0.6, maxval=1.4)
+    x = body.centre + rad[:, None] * u
+    x = x[np.abs(np.asarray(L.value(ls, x))) > 1e-3]
+    v = 500.0 * jax.random.normal(k3, (x.shape[0], 3))
+    if dim == 2:
+        v = v.at[:, 2].set(0.0)
+    remaining = jnp.full(x.shape[0], 1e-3)  # the whole reach
+    new = np.asarray(jax.jit(L.hit_body)(x, v, ls, remaining))
+    ref = np.asarray(jax.jit(_bisection_hit)(x, v, ls, remaining))
+    np.testing.assert_array_equal(np.isfinite(new), np.isfinite(ref))
+    hit = np.isfinite(ref)
+    assert hit.sum() > 300
+    speed = np.linalg.norm(np.asarray(v)[:, :dim], axis=1)
+    np.testing.assert_allclose(new[hit] * speed[hit], ref[hit] * speed[hit], rtol=0, atol=1e-12)
+    g_new = jax.jit(jax.grad(_t_sum))(ls.coef, ls, x, v, remaining)
+    g_ref = jax.jit(jax.grad(_t_sum_bisection))(ls.coef, ls, x, v, remaining)
+    scale = float(np.abs(np.asarray(g_ref)).max())
+    np.testing.assert_allclose(np.asarray(g_new), np.asarray(g_ref), rtol=0, atol=1e-10 * scale)

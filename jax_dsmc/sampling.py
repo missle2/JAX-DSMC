@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import lax, random
 
 from jax_dsmc.constants import K_BOLTZ
@@ -158,10 +159,31 @@ def standard_diffuse_draws(key, n):
     faces draws once rather than once per face -- a particle hits at most one face
     per pass, so reusing the draw across faces leaves every marginal law unchanged.
     """
+    return diffuse_draws_from_uniforms(*standard_diffuse_uniforms(key, n))
+
+
+NORMAL_LO = np.nextafter(np.float64(-1.0), np.float64(0.0))
+"""Lower end of the uniform ``jax.random.normal`` transforms (``_normal_real``)."""
+
+
+def standard_diffuse_uniforms(key, n):
+    """The uniforms behind :func:`standard_diffuse_draws`: ``(u_z f64[n, 3], u_r f64[n])``.
+    ``u_z`` is the uniform ``jax.random.normal`` draws internally for the same key and
+    shape (on ``(nextafter(-1, 0), 1)``) -- the transform to normals
+    (:func:`diffuse_draws_from_uniforms`) can then run on the few rows that use them.
+    ``test_split_diffuse_draws_are_the_draws`` pins the identity to the installed JAX."""
     k_perp, k_tan = jax.random.split(key)
-    z = jax.random.normal(k_tan, (n, 3), dtype=jnp.float64)
-    u = jax.random.uniform(k_perp, (n,), dtype=jnp.float64)
-    return z, safe_sqrt(-2.0 * jnp.log1p(-u))
+    u_z = jax.random.uniform(k_tan, (n, 3), dtype=jnp.float64, minval=NORMAL_LO, maxval=1.0)
+    u_r = jax.random.uniform(k_perp, (n,), dtype=jnp.float64)
+    return u_z, u_r
+
+
+def diffuse_draws_from_uniforms(u_z, u_r):
+    """``(z, r)`` of :func:`standard_diffuse_draws` from its uniforms, row for row:
+    ``z = sqrt(2) erfinv(u_z)`` (``jax.random.normal``'s own transform) and the standard
+    Rayleigh ``r = sqrt(-2 log(1 - u_r))``."""
+    z = jax.lax.mul(np.array(np.sqrt(2), np.float64), jax.lax.erf_inv(u_z))
+    return z, safe_sqrt(-2.0 * jnp.log1p(-u_r))
 
 
 def diffuse_velocity_from_draws(z, r, temp_wall, mass, axis, inward, vwall):

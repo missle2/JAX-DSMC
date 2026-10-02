@@ -37,13 +37,15 @@ Design (SPARTA ``cut2d.cpp`` / ``cut3d.cpp`` / ``grid_surf.cpp``):
   ``~ sqrt(2 sub) / (2 sub^2)`` in 2-D (4e-3 at ``sub = 32``) and ``~ sqrt(2) / (2 sub^2)``
   in 3-D (3e-3 at ``sub = 16``) per cut cell.  Totals over ``n_cut`` cells add in
   quadrature.
-* **split cells** (:func:`split_check`): refused.  The outside sub-samples of a cut cell are
-  joined into a graph (neighbouring samples whose joining segment crosses no element),
-  small components are re-attached by straight uncrossed segments to the others, and a cell
-  whose flow samples still form more than one component raises :class:`SplitCellError`
-  -- refine the grid.  A plate thinner than a sub-cell is still detected because
-  connectivity is decided by segment crossings, not by adjacency.  Flow pockets smaller than
-  a sub-cell can go unnoticed.
+* **split cells** (:func:`split_check`, :func:`split_regions`, :func:`split_tables`).  The
+  outside sub-samples of a cut cell are joined into a graph (neighbouring samples whose
+  joining segment crosses no element), small components are re-attached by straight
+  uncrossed segments to the others, and a cell whose flow samples still form more than one
+  component is split: :func:`build_mesh` gives each extra region a sub-cell (SPARTA
+  ``nsplit > 1``, PSEUDOCODE section 4.5; until 2026-09-23 such a cell raised
+  :class:`SplitCellError`, which :func:`split_check` still does on request).  A plate
+  thinner than a sub-cell is still detected because connectivity is decided by segment
+  crossings, not by adjacency.  Flow pockets smaller than a sub-cell can go unnoticed.
 
 Tie rules (all crossing tests): an element is crossed at parameter ``t`` strictly inside
 ``(0, t_max)``; in 2-D the segment endpoints are classified by the half-open rule

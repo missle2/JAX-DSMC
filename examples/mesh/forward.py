@@ -62,6 +62,34 @@ CASES = {
         "fnum": 1.0e-3,
         "capacity": 60_000,
     },
+    "ellipse": {
+        # the aspect-ratio test: the circle box with a smaller circle (blockage ~3 % at s = 1,
+        # free_molecular_circle.json) squashed in y to semi-axes (R, s R); a level-set body
+        # only, control `squash_y` (examples.ensemble_mesh), reference ellipsoid_reference.py
+        "dim": 2,
+        "lo": [0.0, 0.0],
+        "hi": [10.0, 10.0],
+        "n": (20, 20),
+        "surf": "data.circle",
+        "centre": [5.0, 5.0],
+        "radius": 1.5,
+        "kind": "ellipse",
+        "fnum": 1.0e-3,
+        "capacity": 80_000,
+    },
+    "spheroid": {
+        # the 3-D aspect-ratio test: the sphere box with semi-axes (R, s R, R)
+        "dim": 3,
+        "lo": [-2.0, -2.0, -2.0],
+        "hi": [2.0, 2.0, 2.0],
+        "n": (20, 20, 20),
+        "surf": "data.sphere",
+        "centre": [0.0, 0.0, 0.0],
+        "radius": 0.5,
+        "kind": "ellipse",
+        "fnum": 5.0e-4,
+        "capacity": 100_000,
+    },
     "plate": {
         # GP (plan section 4): a diffuse plate normal to the stream -- a stadium (capsule)
         # level set of half-width `half_width` and thickness `radius`; only reachable
@@ -147,6 +175,7 @@ def build(
         n_steps=BLOCK,
         tracker=tracker,
         K_walk=8,
+        sort="partition",
     )
     faces = Faces((BC.INFLOW, BC.OUTFLOW) + (BC.SPECULAR,) * (2 * D - 2))
     res = inflow.InflowParams.uniform(D, NRHO, TEMP, [VSTREAM, 0.0, 0.0])

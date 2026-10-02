@@ -229,3 +229,4 @@ examples/.jax_cache/
 scratch/**/*.npz
 scratch/**/*.pkl
 scratch/**/*.done
+scratch/perf/profile/**/plugins/

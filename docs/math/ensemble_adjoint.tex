@@ -1,6 +1,7 @@
 % docs/math/ensemble_adjoint.tex
 % The particle-carried ensemble adjoint of JAX-DSMC, as implemented on branch
-% fix/paper-adjoints (2026-09-17).  Build: see docs/math/README.md.
+% fix/paper-adjoints (2026-09-17), shape status updated on main (2026-09-24).
+% Build: see docs/math/README.md.
 %
 % Equation numbers are section-scoped (e.g. (3.7)) and are meant to be cited from
 % code comments as "docs/math/ensemble_adjoint.tex eq. (3.7)".  Do not renumber
@@ -31,7 +32,7 @@
 \newcommand{\pref}[1]{P3~eq.~\code{#1}}
 
 \title{The ensemble adjoint of JAX-DSMC as implemented\\
-\large branch \code{fix/paper-adjoints}, 2026-09-17}
+\large 2026-09-17; shape optimiser and status updated 2026-09-24}
 \author{}
 \date{}
 
@@ -48,6 +49,13 @@ where in the code it lives.  Equation labels of the form \pref{label} are the
 \verb|\label{eq:label}| names in P3's source.  Numbers quoted in section~\ref{sec:validation}
 are copied from \code{docs/ADJOINT\_BRANCH\_REVIEW.md} (``review'') sections~5.7, 5.12 and~6.
 Everything marked \textbf{planned} is not in the code.
+
+\paragraph{Reading order.}  Readers who know CFD but not DSMC should start with
+appendix~\ref{sec:dsmc-primer}, which writes out the forward solver (NTC collisions,
+the VSS model, sources, particle tracking through cut cells) as the code does it.
+Section~\ref{sec:forward} is the compact notation the adjoint uses.  The shape
+optimiser and the status of the shape work are in
+sections~\ref{sec:optimiser} and~\ref{sec:status}.
 
 \section{Forward step and notation}
 \label{sec:forward}
@@ -181,7 +189,9 @@ the ensemble adjoint acquires a running source, in the sense of P3 section~7.5
 \code{backward} and \code{backward\_virtual} take \code{phi\_step} $=\phi_k/\Nn$
 (\code{f64[M, N]}, at each step's post-collision state -- the state
 \code{simulate.run}'s \code{reward} hook sees) and \code{hit\_reward} $=r_{k,j}/\Nn$
-(\code{f64[M, K, N]}, one slot per tracker pass).  Before the pull-back of step $k$
+(\code{f64[M, K, N]}, one slot per tracker pass; for the lane tracker the per-step
+totals \code{shape.HitRewards.totals()}, \code{f64[M, 1, N]}, which is all the move
+pull-back sums).  Before the pull-back of step $k$
 \begin{equation}
 \label{eq:running-source}
 \mu_{k,i} \leftarrow \mu_{k,i} + \phi_k(x^{\pth}_{k,i}, v^{\pth}_{k,i})/\Nn ,
@@ -443,14 +453,14 @@ every column but the intercept).  Then
 \nabla_v \Lam = \beta_{1+D:\,4+D} / v_{\mathrm{scale}}, \qquad
 \nabla_x \Lam = \beta_{1:\,1+D} / \Delta x .
 \end{equation}
-\code{ensemble\_device.field\_query} returns $(\Lam, \nabla_v \Lam)$; the $x$-slopes are
-computed by the same solve but not returned.  The host
-\code{LocalFit(gradient=True)} returns both slope blocks.  Only the value is consumed
-by the shipped estimator; $\nabla_v \Lam$ and $\nabla_x \Lam$ are for the planned terms
-of section~\ref{sec:shape}.  A query in a cell with no valid node returns~0.
-The device \code{field\_query} docstring still says ``ridge \code{1e-12}''; the code is the
-relative $10^{-8}$ of~\eqref{eq:fit} on both host and device, and the ridge is not
-innocent (review section~5.12: the sequential gradient moves $3\times10^{-3}$ between
+\code{ensemble\_device.field\_query} returns $(\Lam, \nabla_x \Lam, \nabla_v \Lam)$
+(since 2026-09-18).  The host
+\code{LocalFit(gradient=True)} returns both slope blocks.  The collision pull-backs
+consume only the value; $\nabla_x \Lam$ and $\nabla_v \Lam$ are the cotangents of the
+shape adjoint (section~\ref{sec:shape-built}, \code{node\_gradients}).  A query in a cell
+with no valid node returns~0.
+The ridge is the relative $10^{-8}$ of~\eqref{eq:fit} on both host and device, and it is
+not innocent (review section~5.12: the sequential gradient moves $3\times10^{-3}$ between
 \code{RIDGE\_REL} $10^{-10}$ and $10^{-8}$ on the $N = 256$ inlet).
 
 \section{Score terms and the parameter gradient}
@@ -687,8 +697,13 @@ of the previous post-collision state and the step's key $\kappa_k$ (\code{key\_f
 k, STAGE\_MOVE)}); $T_k$ are the step's surface tallies and $\mathcal{E}_k$ its traced
 events (hit point $x^h$, incident velocity $v^{\mathrm{in}}$, normal $n$, event time
 $t^h$ of every recorded hit, \code{advance(trace=True)}).  \code{shape.replay} re-runs
-$\mathcal{W}_\theta$ on the captured record and checks it reproduces the record
-(relative error $<10^{-12}$: the same arithmetic in another compilation);
+$\mathcal{W}_\theta$ on the captured record and reports how well it reproduces the record
+(\code{replay\_error}; the runners enforce it):
+any discrete disagreement (a particle alive in the replay and not in the record, or
+the reverse) reports~1 and is an error, and the continuous states must agree to
+$10^{-9}$ relative (\code{REPLAY\_TOL} of the mesh runners)
+(the same arithmetic in another compilation; round-off is amplified $\sim 10^{3}$ by a
+few grazing reflections in a concave pocket, so the earlier $10^{-12}$ was too tight);
 \code{shape.gradient} takes \code{jax.vjp} of~\eqref{eq:wall-map} with respect to
 $\theta$ at every captured step and sums
 \begin{equation}
@@ -922,6 +937,184 @@ $F/r = 1.24\times 10^{-20}$; the flow-field feedback of the blockage ($\mathrm{F
 \approx 0.15\times 10^{-20}$) is what the $\nabla\lambda$ terms carry, and the $x$-part
 carries most of the estimator's noise (see the review, section~7.6).
 
+\subsection{The shape optimiser (\code{examples/mesh/optimize.py})}
+\label{sec:optimiser}
+
+The optimiser has two separate parts.  The \emph{gradient estimator} is the
+ensemble adjoint of this note.  The \emph{update rule} is plain gradient descent
+(\code{gd}) or Adam.  Adam is used only as a step rule on the adjoint's gradient: it
+never evaluates the objective and does not estimate the gradient itself.
+
+\paragraph{Design variables and objective.}
+The controls are the level-set coefficients $c\in\R^{m_1\times\cdots\times m_D}$ of
+$\phi(x;c)=\sum_j c_j B_j(x)$ (spacing $h_\phi$; $h_\phi = 0.0625$ against the DSMC
+cell $h = 0.5$ for the coarse circle).  The objective $J(c)$ is the windowed drag: the
+$x$-momentum given to the body over the last $W = 200$ of $700 + 300$ steps,
+$J = \frac{F_{\mathrm{num}}}{W\Delta t}\sum_{k\in\text{window}}\sum_{\text{hits}}
+m\,(v^{\mathrm{in}} - v^{\mathrm{out}})_x$.  The body is specular in the
+\code{optc} study.  Every iterate
+runs the same seeds $s = 1,\dots,S$ (common random numbers across iterates, so the
+objective history is comparable).  Its gradient is the seed mean
+$g = \frac1S\sum_s \widehat{\nabla_c J}_s$ of~\eqref{eq:shape-gradient} (pathwise $x$,
+$v$ and tally parts, the score part and the silhouette part, \code{pathwise + score +
+silhouette} in \code{optimize.seed\_terms}; the \code{along\_pool} cotangent).  The
+silhouette part is zero for these specular bodies (\code{--silhouette-band 0}); before
+2026-09-28 the optimiser omitted it, which would have mattered only for a diffuse body.
+
+\paragraph{One iterate.}
+\begin{enumerate}
+\item Build the cut-cell mesh of $\phi(\cdot;c)$ on the host: classify cells, compute
+  cut volumes, and detect split cells.
+\item Run $S$ forward + ensemble-backward solves and average: $g$ and $\bar J\pm$SE.
+\item \emph{Band and $H^1$ smoothing.}  With $M_j = \ind[|\phi(x_j)|\le b + h_\phi]$ the
+  coefficients whose knot is within the band $b = 1$ of the surface,
+  \begin{equation}
+  \label{eq:opt-smooth}
+  d = M\odot\big(G_\sigma * (M\odot g)\big),
+  \end{equation}
+  $G_\sigma$ a Gaussian of $\sigma = 2$ knots.  This is a cheap Sobolev ($H^1$-type)
+  gradient that removes the knot-scale noise of the estimator.
+\item \emph{Adam only:}
+  $m\leftarrow\beta_1 m+(1-\beta_1)d$, $v\leftarrow\beta_2 v+(1-\beta_2)d^2$,
+  $d\leftarrow \hat m/(\sqrt{\hat v}+\epsilon)$ with the usual bias corrections
+  ($\beta_1 = 0.9$, $\beta_2 = 0.999$), then $d$ is smoothed again
+  by~\eqref{eq:opt-smooth}.  The elementwise normalisation undoes the smoothing: at
+  $k = 0$ it is exactly $\operatorname{sign}(d)$, and unsmoothed it grew overhangs.
+\item \emph{Fixed-size step:} $\eta = s_{\max}/\max_j|d_j|$ and $\tilde c = c - \eta d$,
+  $s_{\max} = 0.05$.  Since $\phi$ is kept a signed distance ($|\nabla\phi| = 1$), a
+  coefficient change is a normal displacement: the surface moves outward by
+  $V_n = -\delta\phi = \eta\,d$, so $s_{\max}$ is the largest boundary displacement
+  per iterate (a tenth of a DSMC cell).  There is no line search and no acceptance
+  test; the noisy $\bar J$ is recorded, not used.
+\item \emph{Reinitialise} $\tilde c$ to the signed distance of its own zero set
+  (closest-point projection of the band knots, distance to the projected cloud for
+  the rest; \code{levelset.reinitialise}).
+\item \emph{Restore the area:} find the scalar $\gamma$ with
+  $A(\tilde\phi + \gamma) = A_0$ by bisection on $[-4h_\phi, 4h_\phi]$ (40 steps;
+  $A$ = sub-sampled smoothed-Heaviside body area, \code{levelset.body\_volume}),
+  and set $c_{k+1} = \tilde c + \gamma$.
+\end{enumerate}
+
+\paragraph{Why the uniform shift is a projection.}
+The area constraint is not imposed on the gradient.  The step is taken
+unconstrained, and the area is then restored by a uniform shift of $\phi$, which is
+a uniform normal displacement $-\gamma$ of the whole surface.  To first order in the
+step, $\delta A = \oint_\Gamma V_n\,\dd s$ for $|\nabla\phi| = 1$, so
+\[
+A_0 = A\big(\phi - \eta d + \gamma\big) \approx A_0 + \oint_\Gamma (\eta d - \gamma)\,\dd s
+\;\Rightarrow\;
+\gamma \approx \eta\,\langle d\rangle_\Gamma,
+\qquad
+V_n = \eta\big(d - \langle d\rangle_\Gamma\big),
+\]
+with $\langle\cdot\rangle_\Gamma$ the perimeter mean.  The net displacement is the
+$L^2(\Gamma)$ projection of the (smoothed, possibly Adam-normalised) step onto the
+tangent space $\{\oint V_n = 0\}$ of the constraint.  The shift makes the constraint
+hold exactly, not only to first order, so the method is a projected-gradient
+(retraction) method, and the projection acts on the step, not on the raw gradient.
+Two consequences:
+\begin{itemize}
+\item For drag the gradient is dominated by its mean.  A smaller body has less drag,
+  so $g$ mostly says ``shrink everywhere''.  The shift removes that part, and what is
+  left is the redistribution of area, not a loss of it.
+\item The Adam moments see the unprojected $d$, and $\max_j|d_j|$ normalises before
+  the projection.  The realised largest displacement is therefore
+  $\le s_{\max} + |\gamma|$, and the history records $\gamma$
+  (\code{area\_shift}) for every iterate.
+\end{itemize}
+The predicted first-order change $-\eta\, g\cdot d$ is recorded as well.  It is
+computed before the projection and is therefore an upper bound on the decrease.
+
+\subsection{Status of the shape work (2026-09-24)}
+\label{sec:status}
+
+\paragraph{Forward on embedded bodies (validated).}
+\begin{itemize}
+\item Surfaces: SPARTA line/triangle files, analytic circle/sphere, and the $C^1$ level
+  set, embedded in the Cartesian grid.
+\item Cut cells: flow volumes by stratified sub-sampling, used in NTC.
+\item Split cells: SPARTA-style sub-cells for disconnected flow regions of one cell,
+  each with its own volume and collision table (PSEUDOCODE~4.5).
+\item Tracking: the SPARTA move loop (section~\ref{sec:primer-move}) with an
+  unbounded-in-practice bounce count (lane tracker, 32 passes).
+\item Gated against the rebuilt serial SPARTA on the circle and sphere cases
+  (fill curves, surface loads, fields).
+\end{itemize}
+
+\paragraph{Shape gradients validated against CRN finite differences.}
+\begin{itemize}
+\item Level-set circle radius: $z = -1.4$; per seed it agrees with the analytic body
+  to $10^{-4}$.
+\item $\cos 2\theta$ normal mode, coarse (grid 1, $f_{\mathrm{num}}\times4$, 4 seeds, before
+  the hit-ahead class): $z = +0.7$ and $-0.2$.  See ``Open'' for the fine-grid result.
+\item Sphere radius (8 seeds): $z = -1.71$.
+\item Specular capsule with the hit-ahead fit: $z = +0.08$.
+\item Diffuse plate (silhouette $+$ hybrid normal term): $1.191\pm0.068$ against FD
+  $1.17$--$1.34\times10^{-20}$, $|z|\le 1.6$ at five FD steps.
+\item Lane tracker against the old stencil tracker: the gradients agree to
+  $2.3\times10^{-15}$ at production scale.
+\end{itemize}
+
+\paragraph{Open.}
+\begin{itemize}
+\item \textbf{The hit-ahead class biases the $\cos 2\theta$ gradient} (2026-09-25).  On
+  the fine circle (grid 2, $f_{\mathrm{num}}\times1$, 32 seeds) the adjoint is
+  $-2.386\pm0.005$ against CRN FD $-1.592$ / $-1.599\times10^{-20}$ ($z\approx-120$).  The
+  tally term alone ($-1.597$) matches the FD seed by seed; the excess is in the fitted
+  $\nabla_v\lambda$ ($-0.68$) and $\nabla_x\lambda$ ($-0.11$) parts.  The coarse
+  configuration on the current code reproduces the old artifact exactly with
+  \code{value\_class="none"} and shows the same excess with \code{"hit\_ahead"}, so the
+  stratification~\eqref{eq:hit-ahead} is the cause.  Suspected mechanism (not yet
+  verified): the class is computed per slot, and a reflected particle's slot is refilled
+  by a newborn that later hits, so the departed particle is classed as ``hit ahead''.
+  The \code{optc} study ran with the class on.
+\item The diffuse circle meets the criterion against the noisy FD but is 9\,\% low
+  against the precise one ($z = -2.3$; silhouette 61\,\% of the total).  More seeds
+  and a band sweep are pending.
+\item The Kn $\approx 0.5$ gates are not run: fits at low occupancy (G4) and the
+  cut-volume term (G5).
+\item The collisional term of the along-flight identity~\eqref{eq:along-flight} is
+  neglected.
+\item Translations of flat walls are not supported as controls.
+\end{itemize}
+
+\paragraph{Memory and robustness.}
+\begin{itemize}
+\item Records store wall events compactly (only slots with an event).  The replay
+  keeps only what the VJP needs.
+\item The full forward $+$ backward chain peaks at $\approx 64$\,kB per particle slot
+  (was 116).
+\item The forward is $2\times$ faster than the fixed four-pass tracker.
+\item A fixed $\approx 300$\,MB spike of the shape VJP remains.
+\end{itemize}
+
+\paragraph{Failures the optimised shapes exposed, each now fixed.}
+Concave notches produced multi-bounce traps (5--7 specular hits per step), a notch
+that split a cell into two flow pockets, Adam overhangs, and grazing multi-bounce
+round-off that tripped a $10^{-12}$ replay check.  Not fixed: the Adam bodies of the
+\code{optc} study reach the inflow and outflow faces (below), where entrants are born
+inside the body (\code{inflow\_shortfall}).
+
+\paragraph{Optimisation study.}
+\begin{itemize}
+\item Earlier result: 8 GD iterates on the circle cut drag by 7.4\,\% at fixed area
+  (review~7.7).
+\item Current study (\code{examples/mesh/cluster}, group \code{optc}): the coarse
+  circle, $S\in\{1,2,4,8\}$ seeds per iterate $\times$ \{\code{gd}, \code{adam}\},
+  a target of 250 iterates each (\code{study.py --iterations 250}).
+\item Cost: 270--290\,s per seed per iterate on one 24\,GB RTX PRO 6000 MIG slice
+  (seeds run in turn; $S = 8$: median 35\,min per iterate, p90 40\,min).
+\item Outcome (\code{examples/mesh/cluster/study\_results.json},
+  \code{figures/optc\_drag.png}): S1 Adam completed 250 iterates; the others stopped at
+  the 24\,h limit, a host out-of-memory kill (S8 GD) or a cancellation, and S2 / S8 Adam
+  failed when the body crossed the inflow face.  Drag re-measured on four held-out seeds
+  agrees with each run's own CRN value within 1\,\%: GD $-14$ to $-19\,\%$, Adam $-35$
+  to $-42\,\%$ against the circle.  The Adam shapes pass through the outflow face from
+  iterate 43 (S1, S2, S4) and reach the inflow face; the area constraint counts only the
+  area inside the box, so these reductions are not those of an isolated body.  A
+  body-to-face clearance constraint is needed before they are quoted.
+\end{itemize}
+
 \section{The shape extension as first planned (superseded by section~\ref{sec:shape-built})}
 \label{sec:shape}
 
@@ -958,5 +1151,337 @@ Arbiters, in order: an embedded specular plane in a fixed box (position as contr
 against ensemble FD over independent keys, $|z| \le 2$ at two $\Delta t$; then the analytic
 circle's radius (free-molecular $dF/dr = F/r$ for a cylinder, $2F/r$ for a sphere, in an
 unbounded stream); then the 50-gon through the edge-band score.
+
+\appendix
+
+\section{The DSMC forward solver, for CFD readers}
+\label{sec:dsmc-primer}
+
+This appendix writes out what one forward run of the code does, in the order it does
+it.  It uses only the forward code (\code{simulate.\_step} and the modules it calls).
+Equation numbers are \emph{A.n}.
+
+\subsection{What is being solved, and how it differs from CFD}
+
+DSMC solves the Boltzmann equation for the one-particle distribution
+$f(x, v, t)$ of a dilute gas,
+\begin{equation}
+\label{eq:boltzmann}
+\partial_t f + v\cdot\nabla_x f = Q(f, f),
+\end{equation}
+where $Q$ is the binary-collision operator.  It is used where continuum closures
+(Navier--Stokes) fail, i.e.\ when the Knudsen number
+$\mathrm{Kn} = \lambda/L$ (mean free path over body size) is not small.  The SPARTA
+circle case is $\mathrm{Kn}\gg 1$, close to free-molecular.
+\begin{itemize}
+\item \textbf{Unknowns.}  DSMC does not discretise~\eqref{eq:boltzmann} on a grid.  It
+  samples $f$ with $N$ \emph{simulator particles} $(x_i, v_i)$, each standing for
+  $F_{\mathrm{num}}$ real molecules.
+\item \textbf{Operator splitting.}  Over one time step the equation is split into free
+  flight ($\partial_t f + v\cdot\nabla f = 0$, solved exactly by moving particles and
+  applying the boundary conditions) and a spatially homogeneous collision step
+  ($\partial_t f = Q$, solved stochastically in each cell).
+\item \textbf{The grid.}  It is only a partition used to (i) choose collision partners
+  that are close to each other and (ii) average particle data into fields.  There are
+  no fluxes, no reconstruction and no linear solves.
+\item \textbf{Resolution requirements.}  The step must be below the mean collision
+  time and the cell below the mean free path, with $\gtrsim 10$--$20$ particles per
+  cell for the collision statistics.
+\item \textbf{Error.}  Every macroscopic output is a moment of the particles.  Its
+  error is statistical, $O(1/\sqrt{\text{samples}})$, on top of the $O(\Delta t^2,
+  \Delta x^2)$ splitting and cell errors.  This noise is why the gradients in this
+  note are expectations estimated over seeds.
+\end{itemize}
+The state is a fixed-capacity array of $N$ slots: $x\in\R^{N\times D}$ ($D = 1$, $2$ or
+$3$ spatial dimensions; $2$ or $3$ with an embedded body), $v\in\R^{N\times 3}$ (always three velocity components, as in
+SPARTA), and an alive mask.  Particles enter and leave by reviving and killing
+slots.  Every array has a static shape, which is what lets the whole step be
+JIT-compiled and differentiated.
+
+\subsection{One time step}
+\label{sec:primer-step}
+\begin{enumerate}
+\item \textbf{Move} every alive particle for $\Delta t$, handling every wall, surface
+  and outflow event on its path (section~\ref{sec:primer-move}).
+\item \textbf{Inject} new particles through the inflow faces
+  (section~\ref{sec:primer-inflow}); they are moved for a random fraction of
+  $\Delta t$.
+\item \textbf{Sort} particles by collision cell: compute each particle's cell index,
+  \code{argsort} by index, per-cell counts $N_c$ and start offsets
+  (\code{sort.build\_table}).  Dead slots go to a sentinel cell.
+\item \textbf{Collide} within every cell, independently and in parallel
+  (section~\ref{sec:primer-collide}).  Collisions change velocities, not positions.
+\item \textbf{Sample} (when requested): accumulate the cell moments and the surface
+  tallies (section~\ref{sec:primer-sample}).
+\end{enumerate}
+Every stage draws its random numbers from its own key
+$\code{key\_for}(\kappa, k, s)$~\eqref{eq:key-for}, so a run is a deterministic
+function of the base key $\kappa$ and the parameters.  This is what makes common
+random numbers and exact replay possible.
+
+\subsection{Initial state}
+\label{sec:primer-init}
+For a box without a body, $N_0 = n V/F_{\mathrm{num}}$ particles are placed uniformly
+in the box.  Each gets a Maxwellian velocity
+\begin{equation}
+\label{eq:init}
+x_i = x_{\mathrm{lo}} + U_i\odot(x_{\mathrm{hi}} - x_{\mathrm{lo}}),\qquad
+v_i = u + \sqrt{kT/m}\;\xi_i,\qquad U_i\sim\mathcal U[0,1]^D,\ \xi_i\sim\mathcal N(0, I_3)
+\end{equation}
+(\code{initialize.initial\_state}).  With a body, SPARTA's \code{create\_particles}
+draws the same way and rejects every sample that lands inside the body: accept/reject on position, with
+the count scaled by the flow volume.  The
+circle, sphere and optimisation cases, like SPARTA's reference inputs, instead start
+from an \emph{empty} box and fill from the inflow ($\approx 700$ warm-up steps),
+so no body-aware initial fill is needed.
+
+\subsection{Inflow boundary (emission)}
+\label{sec:primer-inflow}
+Behind every inflow face $f$ is a reservoir at $(n, T, u)$.  With
+$v_s = \sqrt{2kT/m}$ (most probable speed) and speed ratio $s = u\cdot n_f/v_s$, the
+expected number of simulator particles entering per step is~\eqref{eq:target-count},
+with the one-sided flux
+\begin{equation}
+\label{eq:flux-integral}
+F(s) = \frac{e^{-s^2} + \sqrt\pi\, s\,(1+\operatorname{erf} s)}{2\sqrt\pi}.
+\end{equation}
+The realised count is the stochastic rounding
+$\lfloor\bar N\rfloor + \ind[U < \bar N - \lfloor\bar N\rfloor]$.  Each entrant gets:
+\begin{itemize}
+\item a uniform position on the face;
+\item tangential velocity components that are Gaussian about the stream,
+  $u_t + \sqrt{kT/m}\,\xi$;
+\item a normal component $v_n = v_s\,y$ drawn from the \emph{flux-weighted} density
+  \begin{equation}
+  \label{eq:flux-normal}
+  p(y) \propto y\,e^{-(y - s)^2},\qquad y \ge 0.
+  \end{equation}
+\end{itemize}
+Faster particles cross a face more often, hence the factor $y$.
+
+\paragraph{The classic sampler (Bird; SPARTA \code{fix\_emit\_face.cpp}).}
+Acceptance--rejection on $\beta = y - s$:
+\begin{enumerate}
+\item draw $\beta$ uniform on $[\max(-3, -s), 3]$;
+\item accept with probability
+  $p(\beta) = \dfrac{2(\beta+s)}{s+\sqrt{s^2+2}}\,
+  \exp\!\Big(\tfrac12 + \tfrac12 s\big(s - \sqrt{s^2+2}\big) - \beta^2\Big)$,
+  the density divided by its maximum;
+\item otherwise go back to step~1.
+\end{enumerate}
+The code keeps this as \code{inflow.sample\_normal\_beta}: a fixed number of trials
+with a mask, because a data-dependent loop cannot be JIT-compiled with static shapes.
+Production uses an exact inverse CDF instead (\code{inflow.flux\_quantile}): 64
+bisection steps on the closed-form CDF of~\eqref{eq:flux-normal}, with an
+implicit-function derivative, so that $\partial v_n/\partial(T, u)$ is defined.
+
+\paragraph{Placement.}
+The entrant is given a random first-move fraction $\xi\sim\mathcal U[0,\Delta t]$ and
+tracked from the face for that time, like any other particle.  Without it all
+entrants would start on the face and make a density spike there.  The inflow face is
+assumed clear of the body: an entrant that starts inside it is killed by the post-move
+inside test and counted as a source shortfall (\code{inflow\_shortfall}), which
+invalidates the step.
+
+\subsection{Move: particle tracking with walls and embedded surfaces}
+\label{sec:primer-move}
+Without surfaces the move is $x\leftarrow x + v\,\Delta t$ followed by the face rules
+(periodic wrap, specular mirror, outflow delete).  With walls or a body, each particle
+follows SPARTA's event loop (\code{update.cpp}): a particle with remaining time
+$\tau$ (initially $\Delta t$, or the first-move fraction $\xi$ for an entrant)
+repeats the following.
+\begin{enumerate}
+\item Find the earliest event on the segment $x + t v$, $0 < t \le \tau$, among:
+  \begin{itemize}
+  \item the box faces: an exact slab test;
+  \item the body.  For a level set, $\phi$ is sampled along the segment at spacing
+    $\le h_\phi/2$ to find the first sign change $+\to-$ (outside to inside).  The
+    root is refined by bisection plus one Newton step,
+    $t^h = t - \phi/(v\cdot\nabla\phi)$.  Only incoming hits ($v\cdot n < 0$)
+    count.  For a line or triangle surface the test is ray--element, excluding the
+    element just hit.
+  \end{itemize}
+\item If there is no event, fly: $x \leftarrow x + \tau v$, done.
+\item Otherwise move to the hit, $x\leftarrow x + t^h v$, $\tau\leftarrow\tau - t^h$, and
+  apply the boundary model with the outward (into-the-flow) normal $n$:
+  \begin{align}
+  \text{specular:}\quad & v \leftarrow v - 2(v\cdot n)\,n, \label{eq:specular}\\
+  \text{diffuse at } T_w:\quad & v \leftarrow \sigma_w\big(r\,n + z_1 t_1 + z_2 t_2\big) + u_w,
+  \qquad \sigma_w = \sqrt{kT_w/m},\ r = \sqrt{-2\ln U},\ z_{1,2}\sim\mathcal N(0,1),
+  \label{eq:diffuse}
+  \end{align}
+  where $(t_1, t_2)$ is any tangent frame.  The normal component is Rayleigh
+  distributed, which is the flux-weighted half-Maxwellian~\eqref{eq:flux-normal} at
+  $s = 0$.  With accommodation coefficient $\alpha$ the wall is diffuse with
+  probability $\alpha$ and specular otherwise.  Outflow faces delete the particle,
+  and periodic faces wrap it.
+\item Repeat from step~1 with the remaining $\tau$.
+\end{enumerate}
+The event loop is batched over all particles as follows (the \emph{lane tracker},
+\code{wall\_adjoint}, section~9.6.1 of \code{PSEUDOCODE.md}).
+\begin{itemize}
+\item Pass~0 runs the search over all $N$.  Typically $0.5\,\%$ of particles have an
+  event.
+\item Those particles are compacted by a prefix sum into a lane of static size
+  $B = \max(256, N/32)$.
+\item Passes $1,\dots,31$ run on the lane only.  A concave pocket can make a particle
+  bounce 5--7 times in one step.
+\item A particle still unresolved after 32 passes is deleted and counted
+  (\code{surface\_stuck}), as SPARTA's \code{MAXSTUCK} does.  Lane overflow is an
+  error.
+\end{itemize}
+After the move, a particle found inside the body is an error (\code{inside\_body}).
+The hit list (element, point, velocities, time) is recorded for the adjoint and for
+the surface tallies.
+
+\subsection{Cut cells and split cells}
+Cells stay Cartesian and the body is embedded in them.
+\begin{itemize}
+\item \textbf{Cut volumes.}  A cell crossed by the surface is \emph{cut}.  Its flow
+  volume $V_c$ is the fraction of a stratified sub-sample of the cell outside the
+  body; this is what NTC uses in~\eqref{eq:ntc-count}.  Cells wholly inside the body
+  have $V_c = 0$ and never collide.
+\item \textbf{Split cells.}  If the body cuts a cell into two or more disconnected
+  flow regions (a notch), each region becomes its own \emph{sub-cell} with its own
+  volume and particle list, as SPARTA does.  Particles on opposite sides of a thin
+  wall must not collide with each other.  Tracking still uses the Cartesian cell; only
+  the collision cell (\code{grid.collision\_cell}) resolves the region.
+\end{itemize}
+
+\subsection{Collisions: No-Time-Counter (NTC) with the VSS model}
+\label{sec:primer-collide}
+
+\paragraph{The VSS molecular model.}
+For a pair with relative speed $g = |v_i - v_j|$ and reduced mass
+$m_r = m_i m_j/(m_i + m_j)$, the variable-soft-sphere total cross section is
+\begin{equation}
+\label{eq:vss-sigma}
+\sigma_T(g) = \frac{\pi d_{\mathrm{ref}}^2}{\Gamma(\tfrac52-\omega)}
+\left(\frac{2kT_{\mathrm{ref}}}{m_r g^2}\right)^{\omega-\frac12},
+\qquad
+q(g) \equiv \sigma_T(g)\,g = C_{\mathrm{VSS}}\,(g^2)^{1-\omega}
+\quad(\code{vss.collision\_rate}).
+\end{equation}
+The exponent $\omega$ is the viscosity--temperature exponent ($\mu\propto T^\omega$;
+$\omega = \frac12$ is hard spheres).  Argon (SPARTA \code{ar.vss}):
+$d_{\mathrm{ref}} = 4.11\times10^{-10}$\,m, $\omega = 0.81$,
+$T_{\mathrm{ref}} = 273.15$\,K, $\alpha = 1.40$.
+The deflection angle $\chi$ and azimuth $\varepsilon$ of the relative velocity are
+drawn as
+\begin{equation}
+\label{eq:vss-angles}
+\cos\chi = 2U_1^{1/\alpha} - 1,\qquad \varepsilon = 2\pi U_2
+\end{equation}
+($\alpha = 1$ is isotropic VHS scattering; $\alpha > 1$ biases forward).  With
+$g = v_i - v_j$ and $g_\perp = \sqrt{g_y^2 + g_z^2}$, the post-collision relative
+velocity is (Bird eq.~2.22, \code{vss.scatter})
+\begin{equation}
+\label{eq:vss-scatter}
+\begin{aligned}
+g'_x &= \cos\chi\, g_x + \sin\chi\,\sin\varepsilon\; g_\perp,\\
+g'_y &= \cos\chi\, g_y + \sin\chi\,\big(|g|\, g_z\cos\varepsilon - g_x g_y \sin\varepsilon\big)/g_\perp,\\
+g'_z &= \cos\chi\, g_z - \sin\chi\,\big(|g|\, g_y\cos\varepsilon + g_x g_z \sin\varepsilon\big)/g_\perp,
+\end{aligned}
+\end{equation}
+so $|g'| = |g|$.  The centre-of-mass velocity is kept:
+\begin{equation}
+\label{eq:vss-post}
+v_i' = v_{\mathrm{cm}} + \frac{m_j}{m_i + m_j}\, g',\qquad
+v_j' = v_{\mathrm{cm}} - \frac{m_i}{m_i + m_j}\, g',\qquad
+v_{\mathrm{cm}} = \frac{m_i v_i + m_j v_j}{m_i + m_j}.
+\end{equation}
+Momentum and energy are therefore conserved exactly per collision.  When
+$g_\perp \approx 0$, a fallback frame is used.
+
+\paragraph{NTC: how many pairs to test.}
+The expected number of real collisions in cell $c$ over $\Delta t$ is
+$\tfrac12 n^2\langle\sigma_T g\rangle V_c\Delta t$.  With $n = N_c F_{\mathrm{num}}/V_c$
+this is $\tfrac12 N_c^2 F_{\mathrm{num}}\langle q\rangle\Delta t/V_c$ in simulator
+pairs.  Testing every one of the $\tfrac12 N_c(N_c-1)$ pairs would cost $O(N_c^2)$.
+Bird's no-time-counter scheme instead tests
+\begin{equation}
+\label{eq:ntc-count}
+n_{\mathrm{att},c} = \operatorname{round}\Big(\tfrac12 N_c(N_c-1)\,
+\Sigma_c\,\Delta t\,F_{\mathrm{num}}/V_c\Big)
+\end{equation}
+random pairs.  Each is accepted with probability $q(g_{ij})/\Sigma_c$, where
+$\Sigma_c\ge\max q$ is a majorant of $\sigma_T g$ in the cell.  Then
+$\E[\text{accepted}] = n_{\mathrm{att}}\langle q\rangle/\Sigma_c$ is exactly the
+collision count above, at $O(N_c)$ cost.  This is thinning of a Poisson process
+with rate bounded by $\Sigma_c$: the result is exact whenever $q\le\Sigma_c$ holds.
+\begin{itemize}
+\item \textbf{The majorant.}  SPARTA ratchets $\Sigma_c$ up to the largest $q$ seen.
+  This code uses an a-priori thermal bound
+  $\Sigma_c = 2\,C_{\mathrm{VSS}}\,(25\cdot 2kT_c/m_r)^{1-\omega}$ (a $5v_{\mathrm{th}}$
+  relative speed, safety factor 2, \code{ntc.thermal\_majorant}), at least the
+  ratcheted value.  Violations ($q > \Sigma_c$) are counted and must be zero.
+\item \textbf{Rounding.}  The round in~\eqref{eq:ntc-count} is stochastic, which keeps
+  it unbiased and gives the count a probability the adjoint can score.
+\end{itemize}
+
+\paragraph{The collision algorithm in one cell} (\code{ntc.collide}, \code{ntc.\_slot}):
+\begin{enumerate}
+\item $N_c\leftarrow$ number of particles in the cell; if $N_c < 2$ or $V_c = 0$, stop.
+\item $\Sigma_c\leftarrow\max(\text{carried ratchet},\ \text{thermal bound at } T_c)$,
+  held fixed for the step.
+\item $n_{\mathrm{att}}\leftarrow\lfloor f\rfloor + \ind[U < f - \lfloor f\rfloor]$ with
+  $f$ the argument of~\eqref{eq:ntc-count}.
+\item For $a = 0, 1, \dots, n_{\mathrm{att}}-1$, in order:
+  \begin{enumerate}
+  \item \emph{Select a pair} uniformly with replacement across attempts:
+    $i\sim\mathcal U\{0..N_c-1\}$, $j = (i + 1 + r)\bmod N_c$ with
+    $r\sim\mathcal U\{0..N_c-2\}$, so $j\ne i$ is uniform on the rest.
+  \item $g\leftarrow|v_i - v_j|$ from the \emph{current} velocities (a particle may
+    collide more than once per step), $q\leftarrow q(g)$ by~\eqref{eq:vss-sigma}.
+  \item \emph{Accept} if $U < q/\Sigma_c$ (and count a violation if $q > \Sigma_c$).
+  \item If accepted, draw $(\chi, \varepsilon)$ by~\eqref{eq:vss-angles} and replace
+    $(v_i, v_j)$ by~\eqref{eq:vss-post}.
+  \end{enumerate}
+\item Update the carried ratchet with the largest $q$ tested.
+\end{enumerate}
+In the code all cells run at once.  The loop over $a$ is a \code{lax.scan} over a
+static maximum $A_{\max}$ of attempt slots, and a slot is inactive in cells with
+$a\ge n_{\mathrm{att},c}$.  If a cell needs more than $A_{\max}$ attempts, the excess
+is counted (\code{attempts\_clipped}, must be zero).  All random numbers for all
+slots are drawn in one batch before the scan.
+
+\subsection{Sampling: fields and surface loads}
+\label{sec:primer-sample}
+Fields are cell averages accumulated over steps, with $N_c$ the particles and $V_c$
+the flow volume of cell $c$:
+\begin{equation}
+\label{eq:moments}
+n_c = \frac{F_{\mathrm{num}}\,\langle N_c\rangle}{V_c},\qquad
+u_c = \langle v\rangle_c,\qquad
+T_c = \frac{m}{3k}\,\big\langle |v - u_c|^2\big\rangle_c .
+\end{equation}
+Surface loads are momentum and energy tallies of the hits.  The force on the body
+over a window of $W$ steps is
+\begin{equation}
+\label{eq:drag-tally}
+\mathbf F = \frac{F_{\mathrm{num}}}{W\Delta t}\sum_{k\in\text{window}}\sum_{\text{hits}}
+m\,\big(v^{\mathrm{in}} - v^{\mathrm{out}}\big),
+\end{equation}
+and its $x$-component is the drag objective of the optimiser
+(section~\ref{sec:optimiser}).  Pressure and shear per surface element are the same
+sum restricted to the element and divided by its area.
+
+\subsection{The SPARTA reference cases}
+Circle:
+\begin{itemize}
+\item 2-D box $[0,10]^2$\,m on a $20\times20$ grid ($h = 0.5$), body $r = 3$ at $(5,5)$;
+\item boundaries: inflow at $x_{\mathrm{lo}}$, outflow at $x_{\mathrm{hi}}$, specular
+  in $y$;
+\item argon at $n = 1\,\mathrm{m^{-3}}$, $T = 273.15$\,K, $u = 100$\,m/s
+  ($s\approx 0.30$);
+\item $F_{\mathrm{num}} = 10^{-3}$, $\Delta t = 10^{-4}$\,s, 1000 steps from empty;
+  $\approx 43\,000$ particles at steady state;
+\item almost no collisions, so the case is dominated by the body and the boundaries
+  and $V_c$ matters little.
+\end{itemize}
+The sphere is the 3-D analogue: box $[-2,2]^3$, $20^3$ cells, radius 1.
+The Kn\,$\approx 0.5$ circle raises $n$ so that $\lambda\approx 2r$, where the
+collision step and the cut volumes matter.
+
 
 \end{document}

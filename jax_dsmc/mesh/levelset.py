@@ -16,17 +16,22 @@ the tracker, tallies, kernel scores and the replayed shape VJP (``shape.geometry
 
 Hit search (``hit_body``): along ``x + s v_hat``, ``s in [0, L]`` with ``L = min(reach,
 |v| remaining)`` and ``reach = n_sample h / 2``, the first ``+ -> -`` sign change between
-consecutive samples brackets the entry root; ``n_bisect`` bisections; then **one Newton
-step from the bracket, the bracket search being a function of ``stop_gradient`` inputs**.
-The bisection's ``where`` selections carry no derivative at all -- the Newton step is what
-restores the implicit-function derivative ``dt/dc_j = -B_j(x_hit) / (v . grad phi)`` (and
-``dt/dx``, ``dt/dv``); freezing the search's *inputs* (not only its output) keeps reverse
-mode from tracing the two loops at all.  There is no
+consecutive samples (all ``n_sample`` evaluated at once) brackets the entry root; a
+safeguarded Newton iteration on the bracket resolves it (bisection where Newton leaves the
+bracket or stalls, at most ``n_bisect`` iterations, stopping when every ray is resolved);
+then **one Newton step from the bracket, the bracket search being a function of
+``stop_gradient`` inputs**.  The search's ``where`` selections carry no derivative at all
+-- the Newton step is what restores the implicit-function derivative ``dt/dc_j =
+-B_j(x_hit) / (v . grad phi)`` (and ``dt/dx``, ``dt/dv``); freezing the search's *inputs*
+(not only its output) keeps reverse mode from tracing the search at all.  There is no
 ``exclude``: after a reflection ``phi`` increases along ``v_out``, so the reflection point
 is never a ``+ -> -`` crossing; a start on the surface (``|phi| <= tol``) moving inward
 hits at ``t = 0``; a start deeper inside returns ``inf`` and the tracker's post-step inside
 check counts it.  A grazing dip shorter than the sample spacing ``h / 2`` is missed
-(tunnelling); it is counted by the LS0 grazing family, not hidden.
+(tunnelling); it is counted by the LS0 grazing family, not hidden.  Only the rays that can
+hit are searched, and only the points that can be inside are tested by :func:`inside`: the
+coefficient minimum over the cells a segment can visit bounds ``phi`` from below (convex
+hull, :func:`block_min_table`), an exact cull.
 
 Every function is pure and jit-able; ``dim`` and the coefficient shape are static.
 """
@@ -40,6 +45,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from jax_dsmc.compaction import prefix_count, ranked_slots
 from jax_dsmc.mesh.types import LevelSet
 
 jax.config.update("jax_enable_x64", True)
@@ -137,9 +143,155 @@ def normal(ls: LevelSet, x_hit: jax.Array) -> jax.Array:
     return g / jnp.maximum(jnp.linalg.norm(g, axis=1, keepdims=True), 1e-300)
 
 
-def inside(ls: LevelSet, x: jax.Array) -> jax.Array:
-    """``phi(x) < 0``, ``bool[N]`` (points on the surface count as outside)."""
+# --- cull tables (convex hull of the coefficients) ---------------------------------------
+
+CULL_SLACK = 1e-6
+"""Slack, in lattice cells, of the segment-length tests of the cull (:func:`hit_body`):
+far above the round-off of ``(x + s v_hat - lo) / h``."""
+
+
+def block_min_table(ls: LevelSet, radius: int) -> jax.Array:
+    """Per lattice cell, a lower bound of ``phi`` on the cells within ``radius`` of it.
+
+    Entry ``i + radius + 2`` (per axis; ``i = floor((x - lo) / h)`` clipped to ``-2 - radius
+    .. m + radius``, see :func:`_table_index`) is the minimum coefficient over the ``4^D``
+    blocks of the cells ``i - radius .. i + radius``, i.e. over the coefficients ``i - 1 -
+    radius .. i + 2 + radius`` (clipped to the grid).  The cubic B-spline weights are
+    non-negative and sum to one (convex hull), so ``phi >= `` that minimum on those cells --
+    for the *evaluated* ``phi`` too: every term of :func:`_contract` is a product of
+    non-negative weights with the block's coefficients, so a positive minimum gives a
+    positive float.  A cell beyond the lattice evaluates the block of the clipped cell
+    (:func:`_block` clips each index), which the window then contains.  Separable: ``D``
+    running minima of width ``2 radius + 4``."""
+    width = 2 * radius + 4
+    out = ls.coef
+    for axis in range(ls.dim):
+        out = _running_min(out, axis, width)
+    return out
+
+
+def _running_min(a: jax.Array, axis: int, width: int) -> jax.Array:
+    """Minimum over every window of ``width`` along ``axis`` of ``a`` padded with
+    ``width - 1`` infinities on both sides (``lax.reduce_window``'s result, exactly) in
+    ``O(log width)`` passes: the minima over windows of ``2^p`` by doubling, then two
+    overlapping ones (the naive window costs ``width`` operations per entry; this table is
+    rebuilt in every tracker pass)."""
+    pad = [(0, 0)] * a.ndim
+    pad[axis] = (width - 1, width - 1)
+    cur = jnp.pad(a, pad, constant_values=jnp.inf)
+    size = a.shape[axis] + width - 1
+    span = 1
+    while 2 * span <= width:
+        n = cur.shape[axis]
+        cur = jnp.minimum(
+            jax.lax.slice_in_dim(cur, 0, n - span, axis=axis),
+            jax.lax.slice_in_dim(cur, span, n, axis=axis),
+        )
+        span *= 2
+    return jnp.minimum(
+        jax.lax.slice_in_dim(cur, 0, size, axis=axis),
+        jax.lax.slice_in_dim(cur, width - span, width - span + size, axis=axis),
+    )
+
+
+def _table_index(ls: LevelSet, x: jax.Array, radius: int) -> tuple[jax.Array, ...]:
+    """The :func:`block_min_table` entry of each point's lattice cell (the cell of
+    :func:`_block`: the same ``floor((x - lo) / h)``)."""
+    u = (x - ls.lo) / ls.h
+    top = jnp.asarray(ls.coef.shape, u.dtype) + radius
+    i = jnp.clip(jnp.floor(u), -2.0 - radius, top)
+    return tuple((i[:, a] + (radius + 2)).astype(jnp.int32) for a in range(ls.dim))
+
+
+def _cell_edge(ls: LevelSet, x: jax.Array) -> jax.Array:
+    """``bool[N]``: ``x`` within ``CULL_SLACK`` cells of a lattice-cell face, where a
+    rounding difference between two evaluations of ``floor((x - lo) / h)`` could pick the
+    neighbouring cell."""
+    u = (x - ls.lo) / ls.h
+    f = u - jnp.floor(u)
+    return jnp.any((f < CULL_SLACK) | (f > 1.0 - CULL_SLACK), axis=1)
+
+
+CULL_MIN = 256
+"""Rows per culled call (:func:`hit_body`, :func:`inside`) below which the candidates are
+not compacted: the work is skipped when there are none, else done on every row."""
+CULL_BUCKETS = (8,)
+"""The compacted sizes ``N // b`` of the culled calls, smallest first; more candidates
+than ``N // CULL_BUCKETS[-1]`` run on every row.  Measured 2026-09-30 (SPARTA circle,
+60 k slots, steady state): pass-0 hit candidates <= 3.2 k, inside candidates <= 1.5 k.
+One bucket: a second, smaller one was not measurably faster and cost compile time."""
+
+
+def _rows_none(args, fill):
+    """No candidate: every row gets ``fill``."""
+    _ls, rows, _slot = args
+    return jnp.full(rows[0].shape[0], fill)
+
+
+def _rows_dense(args, fn):
+    """``fn`` on every row."""
+    ls, rows, _slot = args
+    return fn(ls, *rows)
+
+
+def _rows_compact(args, fn, fill, size):
+    """``fn`` on the rows ``slot[:size]`` (``-1`` unused), scattered back into ``fill``."""
+    ls, rows, slot = args
+    n = rows[0].shape[0]
+    slot = slot[:size]
+    take = jnp.maximum(slot, 0)
+    out = fn(ls, *(r[take] for r in rows))
+    put = jnp.where(slot >= 0, slot, n)
+    return jnp.full(n, fill, out.dtype).at[put].set(out, mode="drop")
+
+
+def _culled(fn, fill, ls, rows, candidate):
+    """``where(candidate, fn(ls, *rows), fill)`` with ``fn`` (row-wise) evaluated only on
+    the candidate rows: skipped when there is none, on the candidates compacted into the
+    smallest of the ``N // CULL_BUCKETS`` sizes that holds them, else on every row (a
+    runtime ``switch``; ``N < CULL_MIN``: a ``cond`` between skipped and every row).  The
+    caller guarantees that ``fn`` gives ``fill`` on a non-candidate row; every branch
+    then returns, row for row, what ``fn`` does on all of them."""
+    n = candidate.shape[0]
+    none = functools.partial(_rows_none, fill=fill)
+    dense = functools.partial(_rows_dense, fn=fn)
+    if n < CULL_MIN:
+        args = (ls, rows, jnp.zeros(0, jnp.int32))
+        return jax.lax.cond(jnp.any(candidate), dense, none, args)
+    sizes = tuple(n // b for b in CULL_BUCKETS)
+    slot, count = _near_slots(candidate, sizes[-1])
+    branch = jnp.where(count == 0, 0, 1 + sum((count > s).astype(jnp.int32) for s in sizes))
+    compact = [functools.partial(_rows_compact, fn=fn, fill=fill, size=s) for s in sizes]
+    return jax.lax.switch(branch, (none, *compact, dense), (ls, rows, slot))
+
+
+def _near_slots(near, size):
+    """The ``near`` rows compacted into ``size`` entries (``-1`` unused) and their count
+    (the cumulative-sum compaction of ``wall_adjoint.lane_slots``,
+    :func:`jax_dsmc.compaction.ranked_slots`)."""
+    pos = prefix_count(near) - 1
+    return ranked_slots(pos, 0, size), pos[-1] + 1
+
+
+NEAR_MIN = 2048
+"""Rows below which the polygon search of :mod:`jax_dsmc.mesh.geometry` is not compacted."""
+
+
+def _inside_rows(ls, x):
     return value(ls, x) < 0.0
+
+
+def inside(ls: LevelSet, x: jax.Array) -> jax.Array:
+    """``phi(x) < 0``, ``bool[N]`` (points on the surface count as outside).
+
+    Evaluated only where it can hold: a point whose cell's coefficient block is
+    non-negative has ``phi >= 0`` (:func:`block_min_table`, radius 0; a point within
+    ``CULL_SLACK`` of a cell face is tested against its neighbours' blocks too, radius 1),
+    so the answer is exactly the dense ``value(ls, x) < 0``."""
+    own = block_min_table(ls, 0)[_table_index(ls, x, 0)]
+    near = block_min_table(ls, 1)[_table_index(ls, x, 1)]
+    candidate = (own < 0.0) | (_cell_edge(ls, x) & (near < 0.0))
+    return _culled(_inside_rows, False, ls, (x,), candidate)
 
 
 # ---------------------------------------------------------------------------
@@ -147,37 +299,77 @@ def inside(ls: LevelSet, x: jax.Array) -> jax.Array:
 # ---------------------------------------------------------------------------
 
 
-def _sample_step(i, carry, ls, x, vhat, ds):
-    """One sample of the bracket search (``fori_loop`` body): the first ``+ -> -`` crossing."""
-    found, s_lo, s_hi, phi_prev = carry
-    s = i * ds
-    phi = value(ls, x + s[:, None] * vhat)
-    cross = ~found & (phi_prev > 0.0) & (phi <= 0.0)
-    s_lo = jnp.where(cross, s - ds, s_lo)
-    s_hi = jnp.where(cross, s, s_hi)
-    return found | cross, s_lo, s_hi, phi
+def _samples(ls, x, vhat, ds, phi_start):
+    """The sampled bracket, all ``n_sample`` samples of a ray in one evaluation: the first
+    ``+ -> -`` sign change between consecutive samples (the start's ``phi_start`` first).
+    Returns ``(found bool[N], s_lo, s_hi, phi_lo, phi_hi)`` (``f64[N]`` each; meaningless
+    where not found)."""
+    n, d = x.shape
+    k = jnp.arange(1, ls.n_sample + 1, dtype=ds.dtype)
+    s = k[None, :] * ds[:, None]  # [N, S]
+    points = x[:, None, :] + s[:, :, None] * vhat[:, None, :]
+    phi = value(ls, points.reshape(-1, d)).reshape(n, ls.n_sample)
+    prev = jnp.concatenate([phi_start[:, None], phi[:, :-1]], axis=1)
+    cross = (prev > 0.0) & (phi <= 0.0)
+    first = jnp.argmax(cross, axis=1)[:, None]
+    s_hi = jnp.take_along_axis(s, first, axis=1)[:, 0]
+    phi_lo = jnp.take_along_axis(prev, first, axis=1)[:, 0]
+    phi_hi = jnp.take_along_axis(phi, first, axis=1)[:, 0]
+    return jnp.any(cross, axis=1), s_hi - ds, s_hi, phi_lo, phi_hi
 
 
-def _bisect_step(_i, carry, ls, x, vhat):
-    """One bisection of the bracket (``fori_loop`` body); ``phi(s_lo) > 0 >= phi(s_hi)``."""
-    s_lo, s_hi = carry
-    mid = 0.5 * (s_lo + s_hi)
-    phi = value(ls, x + mid[:, None] * vhat)
+ROOT_PHI_TOL = 1e-13
+"""``|phi| <= ROOT_PHI_TOL h`` at an iterate ends its refinement: a root error of ``1e-13 h /
+|d phi / ds|``, which the Newton polish of :func:`hit_body` squares (the round-off of
+``phi`` itself is ~1e-16 h, so a tighter test only buys bisections through noise)."""
+
+
+def _refine_more(carry, max_iter):
+    """``while_loop`` condition of :func:`_refine`: iterations left and a ray unresolved."""
+    k, _s, _a, _b, _dx, done = carry
+    return (k < max_iter) & ~jnp.all(done)
+
+
+def _refine_step(carry, ls, x, vhat, tol):
+    """One safeguarded Newton iteration on the bracket ``phi(a) > 0 >= phi(b)`` (``rtsafe``):
+    the Newton step when it stays inside the updated bracket and at most halves the previous
+    step, else bisection."""
+    k, s, a, b, dx_old, done = carry
+    phi, g = value_and_grad(ls, x + s[:, None] * vhat)
+    slope = jnp.sum(vhat * g, axis=1)
     positive = phi > 0.0
-    return jnp.where(positive, mid, s_lo), jnp.where(positive, s_hi, mid)
+    a = jnp.where(positive, s, a)
+    b = jnp.where(positive, b, s)
+    step = phi / jnp.where(slope == 0.0, 1.0, slope)
+    newton = s - step
+    use_newton = (slope != 0.0) & (newton > a) & (newton < b) & (2.0 * jnp.abs(step) <= dx_old)
+    s_new = jnp.where(use_newton, newton, 0.5 * (a + b))
+    dx = jnp.abs(s_new - s)
+    resolved = jnp.abs(phi) <= ROOT_PHI_TOL * ls.h
+    keep = done | resolved
+    s = jnp.where(keep, s, s_new)
+    return k + 1, s, a, b, jnp.where(keep, dx_old, dx), keep | (dx <= tol)
 
 
-def _bracket(ls, x, vhat, ds, phi0):
-    """Sampled ``+ -> -`` bracket and its bisection: ``(found bool[N], s_hi f64[N])``."""
-    n = x.shape[0]
-    carry = (jnp.zeros(n, bool), jnp.zeros(n), jnp.zeros(n), phi0)
-    found, s_lo, s_hi, _ = jax.lax.fori_loop(
-        1, ls.n_sample + 1, functools.partial(_sample_step, ls=ls, x=x, vhat=vhat, ds=ds), carry
+def _refine(ls, x, vhat, found, s_lo, s_hi, phi_lo, phi_hi, tol):
+    """The root in the sampled bracket to ``tol``: safeguarded Newton from the secant point,
+    a ``while_loop`` that stops when every ray is resolved (at most ``n_bisect`` iterations;
+    a pure bisection would reach ``tol = ds 2^-n_bisect`` in as many).  ``f64[N]``, ``0``
+    where not found."""
+    s0 = s_lo + (s_hi - s_lo) * (phi_lo / (phi_lo - phi_hi))
+    # kept off the bracket's lower end: after a reflection (`leaving`) its `phi > 0` is a
+    # rule and `phi` near it is round-off of the start's own root, which a first iterate
+    # there could take for the root (later iterates stay above a point of positive `phi`)
+    width = s_hi - s_lo
+    s0 = jnp.clip(s0, s_lo + width / 16.0, s_hi)
+    s0 = jnp.where(found, s0, 0.0)
+    carry = (jnp.int32(0), s0, s_lo, s_hi, s_hi - s_lo, ~found)
+    carry = jax.lax.while_loop(
+        functools.partial(_refine_more, max_iter=ls.n_bisect),
+        functools.partial(_refine_step, ls=ls, x=x, vhat=vhat, tol=tol),
+        carry,
     )
-    _s_lo, s_hi = jax.lax.fori_loop(
-        0, ls.n_bisect, functools.partial(_bisect_step, ls=ls, x=x, vhat=vhat), (s_lo, s_hi)
-    )
-    return found, s_hi
+    return carry[1]
 
 
 def regularised_quotient(num: jax.Array, den: jax.Array, floor: jax.Array) -> jax.Array:
@@ -191,6 +383,109 @@ def regularised_quotient(num: jax.Array, den: jax.Array, floor: jax.Array) -> ja
     den_reg = jnp.where(den_reg == 0.0, floor, den_reg)
     primal = jax.lax.stop_gradient(num / den)
     return primal + (num - jax.lax.stop_gradient(num)) / jax.lax.stop_gradient(den_reg)
+
+
+def _hit_rows(ls, x, vhat, speed, ds):
+    """:func:`hit_body` on every row given (``vhat`` the unit direction, ``0`` where
+    ``speed = 0``; ``ds`` the sample spacing)."""
+    moving = speed > 0.0
+    phi0, g0 = value_and_grad(ls, x)
+    tol = SURFACE_TOL * ls.h
+    on_surface = (phi0 <= 0.0) & (phi0 >= -tol)
+    inward = jnp.sum(vhat * g0, axis=1) < 0.0
+    hit_now = on_surface & inward & moving
+    deep = phi0 < -tol
+    # a start on the surface moving out of the body -- the state right after a reflection,
+    # phi = round-off of either sign -- is outside: its first sample interval must count
+    # as a `+ -> -` bracket, or a re-entry closer than one sample spacing (a grazing
+    # particle skimming a concave wall) is missed and the particle flies into the body
+    # (2026-09-23, optc S4 gd iterate 6: 0.4 deg incidence, 0.015 chords, spacing 0.031)
+    leaving = (jnp.abs(phi0) <= tol) & ~inward
+    phi_start = jnp.where(leaving, jnp.maximum(phi0, jnp.finfo(phi0.dtype).tiny), phi0)
+    # the bracket search is a function of constants to AD (its inputs are frozen, not
+    # just its output): reverse mode never traces it, only the Newton step below
+    frozen = jax.lax.stop_gradient(ls)
+    xf = jax.lax.stop_gradient(x)
+    vf = jax.lax.stop_gradient(vhat)
+    found, s_lo, s_hi, phi_lo, phi_hi = _samples(
+        frozen, xf, vf, ds, jax.lax.stop_gradient(phi_start)
+    )
+    tol = jnp.maximum(ds, 0.5 * ls.h) * 2.0**-ls.n_bisect
+    s_b = _refine(frozen, xf, vf, found, s_lo, s_hi, phi_lo, phi_hi, tol)
+    # Newton polish with the bracket frozen: the implicit-function derivative of the root
+    phi_b, g_b = value_and_grad(ls, x + s_b[:, None] * vhat)
+    den = jnp.sum(vhat * g_b, axis=1)
+    floor = 1e-12 * jnp.linalg.norm(g_b, axis=1)
+    den = jnp.where(jnp.abs(den) < floor, -floor, den)
+    den = jnp.where(den == 0.0, -1.0, den)
+    s = s_b - regularised_quotient(phi_b, den, ls.grazing * jnp.linalg.norm(g_b, axis=1))
+    s = jnp.maximum(s, 0.0)
+    t = s / jnp.where(moving, speed, 1.0)
+    ok = found & moving & ~deep & ~hit_now
+    return jnp.where(hit_now, 0.0, jnp.where(ok, t, jnp.inf))
+
+
+def _hit_candidates(ls, x, length, moving, bounded):
+    """``bool[N]``: can the ray hit at all (``hit_now`` or a sampled ``+ -> -`` crossing)?
+    Every point of ``x + s v_hat``, ``s in [0, L]``, lies in the cells within ``ceil(L /
+    h)`` of the start's; where the coefficient minimum over their blocks
+    (:func:`block_min_table`) is positive, ``phi > 0`` on the whole segment, so no sample
+    is ``<= 0``, the start is neither on the surface nor inside, and :func:`_hit_rows`
+    returns ``inf``.  Radius 1 for ``L <= h`` (``bounded``: the moves of a known remaining
+    time), else ``n_sample // 2 + 1`` (covers ``reach = n_sample h / 2``)."""
+    wide = ls.n_sample // 2 + 1
+    lower = block_min_table(ls, wide)[_table_index(ls, x, wide)]
+    if bounded:
+        short = block_min_table(ls, 1)[_table_index(ls, x, 1)]
+        lower = jnp.where(length <= (1.0 - CULL_SLACK) * ls.h, short, lower)
+    return moving & (lower <= 0.0)
+
+
+REACH_TIERS = (1, 2, 4)
+"""Path lengths, in lattice cells, of the windows of :func:`may_reach` below the search
+reach: the tightest window that holds the path decides."""
+
+
+def _reach_radii(ls: LevelSet) -> tuple[int, ...]:
+    """The window radii of :func:`may_reach`: :data:`REACH_TIERS` below the search's
+    ``n_sample // 2 + 1``, then that one."""
+    wide = ls.n_sample // 2 + 1
+    return (*(k for k in REACH_TIERS if k < wide), wide)
+
+
+def may_reach(ls: LevelSet, x: jax.Array, path: jax.Array) -> jax.Array:
+    """``bool[N]``: may a path of length ``path`` from ``x`` (any path: a straight move,
+    or one folded at a box face) meet ``phi <= 0``?  ``False`` only where the coefficient
+    minimum over every cell it can visit is positive (:func:`block_min_table`) -- then
+    :func:`hit_body` finds nothing and the end point is not inside.  A path of at most
+    ``(1 - CULL_SLACK) k h`` stays within ``k`` cells of the start's (the rounding of
+    either cell index included, as in :func:`_hit_candidates`): windows of radius ``k``
+    in :data:`REACH_TIERS`, else the search's ``n_sample // 2 + 1``.  A path beyond the
+    search reach is always ``True`` (the hit search covers no more; the tracker counts
+    the overrun).  The reference of :func:`free_path` (which the tracker reads)."""
+    radii = _reach_radii(ls)
+    lower = block_min_table(ls, radii[-1])[_table_index(ls, x, radii[-1])]
+    for k in reversed(radii[:-1]):
+        bound = block_min_table(ls, k)[_table_index(ls, x, k)]
+        lower = jnp.where(path <= (1.0 - CULL_SLACK) * k * ls.h, bound, lower)
+    return (lower <= 0.0) | (path > (1.0 - CULL_SLACK) * ls.reach)
+
+
+def free_path(ls: LevelSet) -> jax.Array:
+    """``f64[m_1, ..., m_D]``: per lattice cell, the longest path :func:`may_reach` clears
+    from a start in it -- ``(1 - CULL_SLACK) k h`` for the widest window ``k`` whose
+    coefficient minimum is positive (capped at the search reach), ``-1`` where none is
+    (every move from there may meet the surface).  One table read per particle instead of
+    one per window."""
+    m = ls.coef.shape
+    radii = _reach_radii(ls)
+    free = jnp.full(m, -1.0)
+    for k in radii:
+        table = block_min_table(ls, k)
+        window = table[tuple(slice(k + 2, k + 2 + m[a]) for a in range(ls.dim))]
+        length = (1.0 - CULL_SLACK) * min(k * ls.h, ls.reach)
+        free = jnp.where(window > 0.0, length, free)
+    return free
 
 
 def hit_body(
@@ -207,7 +502,8 @@ def hit_body(
             ``min(reach, |v| remaining)``); ``None`` -> ``reach``.
 
     Returns ``inf`` when no ``+ -> -`` crossing lies within the search length, when the
-    ray starts inside the body beyond ``SURFACE_TOL``, or when ``v = 0``.
+    ray starts inside the body beyond ``SURFACE_TOL``, or when ``v = 0``.  Only the rays
+    that can hit (:func:`_hit_candidates`, exact) are searched (:func:`_culled`).
     """
     d = x.shape[1]
     vd = v[:, :d]
@@ -217,40 +513,15 @@ def hit_body(
     length = jnp.full_like(speed, ls.reach)
     if remaining is not None:
         length = jnp.minimum(length, jnp.where(moving, speed, 1.0) * remaining)
-    ds = length / ls.n_sample
-    phi0, g0 = value_and_grad(ls, x)
-    tol = SURFACE_TOL * ls.h
-    on_surface = (phi0 <= 0.0) & (phi0 >= -tol)
-    inward = jnp.sum(vhat * g0, axis=1) < 0.0
-    hit_now = on_surface & inward & moving
-    deep = phi0 < -tol
-    # a start on the surface moving out of the body -- the state right after a reflection,
-    # phi = round-off of either sign -- is outside: its first sample interval must count
-    # as a `+ -> -` bracket, or a re-entry closer than one sample spacing (a grazing
-    # particle skimming a concave wall) is missed and the particle flies into the body
-    # (2026-09-23, optc S4 gd iterate 6: 0.4 deg incidence, 0.015 chords, spacing 0.031)
-    leaving = (jnp.abs(phi0) <= tol) & ~inward
-    phi_start = jnp.where(leaving, jnp.maximum(phi0, jnp.finfo(phi0.dtype).tiny), phi0)
-    # the bracket search is a function of constants to AD (its inputs are frozen, not
-    # just its output): reverse mode never traces the loops, only the Newton step below
-    found, s_b = _bracket(
+    ds = jax.lax.stop_gradient(length / ls.n_sample)
+    candidate = _hit_candidates(
         jax.lax.stop_gradient(ls),
         jax.lax.stop_gradient(x),
-        jax.lax.stop_gradient(vhat),
-        jax.lax.stop_gradient(ds),
-        jax.lax.stop_gradient(phi_start),
+        jax.lax.stop_gradient(length),
+        moving,
+        remaining is not None,
     )
-    # Newton polish with the bracket frozen: the implicit-function derivative of the root
-    phi_b, g_b = value_and_grad(ls, x + s_b[:, None] * vhat)
-    den = jnp.sum(vhat * g_b, axis=1)
-    floor = 1e-12 * jnp.linalg.norm(g_b, axis=1)
-    den = jnp.where(jnp.abs(den) < floor, -floor, den)
-    den = jnp.where(den == 0.0, -1.0, den)
-    s = s_b - regularised_quotient(phi_b, den, ls.grazing * jnp.linalg.norm(g_b, axis=1))
-    s = jnp.maximum(s, 0.0)
-    t = s / jnp.where(moving, speed, 1.0)
-    ok = found & moving & ~deep & ~hit_now
-    return jnp.where(hit_now, 0.0, jnp.where(ok, t, jnp.inf))
+    return _culled(_hit_rows, jnp.inf, ls, (x, vhat, speed, ds), candidate)
 
 
 def _min_sample_step(i, carry, ls, x, vhat, ds):

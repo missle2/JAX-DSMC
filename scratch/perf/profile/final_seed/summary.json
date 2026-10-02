@@ -1,0 +1,65 @@
+{
+ "forward": {
+  "label": "forward (1000 steps, captured 300)",
+  "wall": 7.878754545003176,
+  "gpu_busy": 2.250007746,
+  "kernels": 512916,
+  "kernels_per_step": 512.916,
+  "mean_kernel_us": 4.386698301476265,
+  "truncated": false,
+  "categories": {
+   "step body: pass 0, collide, inject, tallies": 1.746017024000187,
+   "other": 0.20506548599993013,
+   "hit search (cull branches)": 0.1804910420000139,
+   "lane passes 1..K (while loop)": 0.11843419399998727
+  }
+ },
+ "replay": {
+  "label": "traced replay",
+  "wall": 2.152206369995838,
+  "gpu_busy": 0.597702654,
+  "kernels": 130274,
+  "kernels_per_step": 434.24666666666667,
+  "mean_kernel_us": 4.58804254110567,
+  "truncated": false,
+  "categories": {
+   "step body: pass 0, rewards, checks": 0.41810372799995404,
+   "other": 0.0893893330000024,
+   "hit search (cull branches)": 0.06822990600000095,
+   "lane passes 1..K (fixed trip count)": 0.02197968699999561
+  }
+ },
+ "backward": {
+  "label": "value backwards (x2)",
+  "wall": 68.36773192198598,
+  "gpu_busy": 64.20138482,
+  "kernels": 495656,
+  "kernels_per_step": 826.0933333333334,
+  "mean_kernel_us": 129.52810985845022,
+  "truncated": false,
+  "categories": {
+   "fit: normal equations (einsum)": 31.806463155999936,
+   "partner draws, tables, gathers": 16.09272477200079,
+   "fit: LU solve": 13.60606491200103,
+   "fit: k nearest (top_k)": 1.6640202939999758,
+   "other": 1.0321116859998791
+  }
+ },
+ "shape": {
+  "label": "shape gradient",
+  "wall": 37.32804177800426,
+  "gpu_busy": 4.125895956,
+  "kernels": 2081898,
+  "kernels_per_step": 6939.66,
+  "mean_kernel_us": 1.981795436664044,
+  "truncated": true,
+  "categories": {
+   "other": 1.2885656549982096,
+   "linearised lane passes 1..K": 1.2186412200025132,
+   "step body: linearised pass 0, cotangents": 0.8486203459998177,
+   "pull-back (one batched transpose)": 0.41729723800011426,
+   "grad-lambda fits": 0.270670693,
+   "linearised hit search": 0.08210080399999883
+  }
+ }
+}

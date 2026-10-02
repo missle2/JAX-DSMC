@@ -117,6 +117,23 @@ class ParticleState:
 
 @register_dataclass
 @dataclass(frozen=True)
+class SortCarry:
+    """The previous step's sorted cell order, carried for ``SimStatic.sort = "partition"``
+    (:func:`jax_dsmc.sort.update_table`) as the last element of
+    :func:`jax_dsmc.simulate.run`'s scan carry (inside the scan only).  TRACED integer
+    leaves.
+
+    Fields:
+        order: ``i32[N]`` slots sorted by collision cell, dead slots (cell ``C``) last.
+        key: ``i32[N]`` the cell of ``order[p]``: non-decreasing.
+    """
+
+    order: jax.Array
+    key: jax.Array
+
+
+@register_dataclass
+@dataclass(frozen=True)
 class CollideState:
     """NTC majorant state carried across steps.  TRACED leaf.
 
@@ -268,8 +285,8 @@ class Diagnostics:
     """``i32`` later-pass events a lane-tracked step's record had no room for (the record's
     list, ``simulate._record_capacity``).  Must be zero: the record would lose them."""
     surface_stuck: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
-    """``i32`` particles the stencil tracker deleted because a hit was still unresolved
-    after ``K_bounce`` passes -- SPARTA's stuck particle (``MAXSTUCK``, deleted and
+    """``i32`` particles the stencil or lane tracker deleted because a hit was still
+    unresolved after ``K_bounce`` passes -- SPARTA's stuck particle (``MAXSTUCK``, deleted and
     counted in ``nstuck``): repeated reflections in a concave pocket of the body.  A rate
     to report, not an error; the replay deletes the same particle, so the adjoint stays
     consistent (the particle leaves like an outflow)."""
@@ -483,6 +500,23 @@ class SimStatic:
     """Lane capacity of ``tracker="lane"`` (particles with a pass-0 event per step);
     ``0`` = :func:`lane_capacity`'s default ``max(256, N // 32)``.  An overfull lane is
     counted (``Diagnostics.lane_overflow``, an error), never silently truncated."""
+    sort: str = "full"
+    """The per-step cell sort (:mod:`jax_dsmc.sort`): ``"full"`` -- every slot's packed
+    (cell, slot) key sorted, the stable order; or ``"partition"`` -- SPARTA-JAX's: the
+    previous step's order carried (:class:`SortCarry`), slots that kept their cell keep
+    their place, only the ones that changed cell are sorted and placed after a cell's
+    stayers.  The same cells, counts and members; within a cell the order (which NTC's
+    random pair selection indexes) differs, so draws differ at the seed level, not in
+    distribution.  XLA:CPU only (:func:`jax_dsmc.sort.partition_active`); a GPU run takes
+    the full sort."""
+    record: str = "full"
+    """What a captured run stores per step (:class:`jax_dsmc.simulate.EventRecord`):
+    ``"full"``, or ``"lean"`` (:func:`jax_dsmc.simulate.lean_record`) -- no ``v_post``
+    (rebuilt bitwise from ``v`` and the pair record by
+    :func:`jax_dsmc.simulate.post_collision_v`), no ``born_v``, pair ``vi`` / ``vj`` or wall
+    ``v_out`` / ``diffuse``, face ids as ``i8``: ~43 of the lane record's ~122 bytes per
+    slot and step remain.  What the device backward and the shape VJP read; the host
+    adjoint needs ``"full"``."""
 
     def __post_init__(self) -> None:
         """Reject values that would produce a wrong shape rather than an error."""
@@ -490,6 +524,10 @@ class SimStatic:
             raise ValueError("checkpoint_block_size must be a nonnegative integer")
         if self.tracker not in ("stencil", "lane", "walk"):
             raise ValueError("tracker must be stencil, lane or walk")
+        if self.sort not in ("full", "partition"):
+            raise ValueError("sort must be full or partition")
+        if self.record not in ("full", "lean"):
+            raise ValueError("record must be full or lean")
         if not isinstance(self.lane_size, int) or self.lane_size < 0:
             raise ValueError(f"lane_size must be a nonnegative Python int; got {self.lane_size!r}")
         if not isinstance(self.K_walk, int) or isinstance(self.K_walk, bool) or self.K_walk < 1:

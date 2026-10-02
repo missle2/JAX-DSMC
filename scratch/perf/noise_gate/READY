@@ -1,0 +1,46 @@
+NOISE GATE READY (forward baseline 'base' saved and validated; gradient gate: see below when appended)
+
+Script: /home/aakash/jax_dsmc/JAX-DSMC/scratch/perf/noise_gate.py  (run from the baseline repo;
+--code points at the tree to test: the work runs in a subprocess with PYTHONPATH=<code>, cwd=<code>).
+Results: /home/aakash/jax_dsmc/JAX-DSMC/scratch/perf/noise_gate/forward_<TAG>.json (+ _series.npz)
+
+FORWARD GATE (SPARTA circle, polygon + levelset bodies, lane tracker, collisions on, empty box,
+1000 steps in blocks of 20, observables averaged over steps 400..1000; 12 seeds 0..11 by default;
+~10-11 min on the GPU for both bodies, ~4 min polygon / ~6 min levelset):
+
+  cd /home/aakash/jax_dsmc/JAX-DSMC
+  /home/aakash/jax_dsmc/run_locked.sh gpu python3 scratch/perf/noise_gate.py forward \
+      --code /home/aakash/jax_dsmc/wt_inflow --save inflow
+  python3 scratch/perf/noise_gate.py forward --compare base inflow      # numpy only, no lock
+
+  (one body only: add --bodies levelset  or  --bodies polygon; the compare uses the bodies both
+   sets have.  Keep the default seeds 0..11 so the same-seed bitwise line is meaningful.)
+  Use a distinct TAG per tree/change (e.g. inflow, levelset, tracker, sparta).
+
+CRITERION: per gated observable z = (mean_new - mean_base) / sqrt(se_base^2 + se_new^2),
+se = seed sd / sqrt(12).  FAIL if |z| >= 3, WARN if 2 <= |z| < 3; FORWARD GATE: PASS iff no FAIL.
+(2 sigma per observable was too tight: base vs base2 (seeds 100..111, same code) gave lift z=2.4
+on both bodies.)  On a marginal FAIL (|z| 3..4) add seeds before concluding:
+  ... noise_gate.py forward --code DIR --save TAG --append --seeds 12 13 14 15 16 17 18 19
+  (and the same --append --seeds for base if you want the base set equally large).
+Also printed: diff relative to the single-seed sd ("diff/sd1") and whether same-seed values are
+bitwise identical (a bitwise-preserving change shows 12/12 identical and z = 0).
+Resolution (12 vs 12 seeds, 3 sigma): drag ~0.35 %, body hits ~0.3 %, temperature ~0.3 %.
+
+GRADIENT GATE (READY; baseline 'base' = seeds 0..3, validated against 'base2' = seeds 100..103):
+regress.py's chain (level-set circle h 0.0625, 16 samples, grazing 0.05, fnum x4, virtual 1x2 staged,
+variant along_pool, key = jax.random.key(32 + seed) for forward AND backward), 4 seeds, ~11-12 min GPU
+(first seed ~4-5 min incl. compile, then ~2 min each).
+
+  cd /home/aakash/jax_dsmc/JAX-DSMC
+  /home/aakash/jax_dsmc/run_locked.sh gpu python3 scratch/perf/noise_gate.py gradient \
+      --code /home/aakash/jax_dsmc/wt_inflow --save inflow
+  python3 scratch/perf/noise_gate.py gradient --compare base inflow
+
+Criterion: |z| < 3 on objective, hits, grad_sum (uniform-shift derivative) and grad . (base median
+gradient direction); plus RMS over the ~1300 noisy coefficients of the per-coefficient z < 1.5.
+The same-seed lines report objective/gradient bitwise-or-not and |dgrad| / |seed sd|.
+Note: gradients are heavy-tailed (base seed 2 has a few coefficients ~30x the rest), so the
+per-coefficient max |z| is not meaningful with 4 seeds; judge by RMS z and the scalars.
+Self-check base vs base2: PASS (objective z +0.04, hits z +0.20, grad_sum z -1.40, grad.dir z -1.86,
+per-coefficient RMS z 1.21).  base vs base: all bitwise, seeds 0,1 match regress/base.json bitwise.
