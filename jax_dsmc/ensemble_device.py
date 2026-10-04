@@ -20,6 +20,12 @@ terms (``grad_x λ`` at reflected states) consume the same primitive; this modul
 only ``λ`` on the slots per step and the four-term of every accepted attempt, so the
 parameter scoring stays outside it.
 
+Value columns: the virtual backward carries ``R`` value fields at once when its rewards
+have a trailing axis -- ``λ`` is ``f64[N, R]``, every fit factorised once for all columns
+(:func:`field_query`, :func:`_spd_solve`).  The sweep decides nothing from the values, so
+column ``r`` is the backward of reward ``r``; a shape seed's two value backwards run as
+one (PSEUDOCODE section 9.7.1).
+
 Memory: the whole ``EventRecord`` stack is resident (``O(M·N)``); block re-capture of
 the forward is the known fix for long horizons and is not done here.
 """
@@ -37,7 +43,7 @@ from jax_dsmc import sort
 from jax_dsmc.collide.ntc import step_pairs, step_v_post
 from jax_dsmc.collide.vss import collision_rate, scatter
 from jax_dsmc.grid import cell_neighbourhood as grid_neighbourhood
-from jax_dsmc.grid import collision_cell
+from jax_dsmc.grid import collision_cell, spacing
 from jax_dsmc.state import ParticleState
 
 jax.config.update("jax_enable_x64", True)
@@ -51,6 +57,11 @@ particles per cell -- ~17 k candidates for a pooled fit at the fine circle's den
 
 
 class Backward(NamedTuple):
+    """The backward's outputs.  Under :func:`backward_virtual` with value columns (rewards
+    with a trailing axis ``R``) every value carries it: ``lambda0`` ``f64[N, R]``, ``lam``
+    ``f64[M, N, R]``, ``kernel`` ``f64[M, R]`` -- column ``r`` the backward of reward
+    column ``r``."""
+
     lambda0: jax.Array
     """``f64[N]`` adjoint at the initial state, on the initially alive slots (else 0)."""
     lam: jax.Array
@@ -62,6 +73,15 @@ class Backward(NamedTuple):
     """``f64[M]`` per-step ``sum 1/2 w * four_term * pair_score(v_i, v_j)`` over the virtual
     pairs -- the kernel-parameter gradient's collision term when ``pair_score`` is
     ``d/dtheta log q``; zeros under the sequential pull-back (score the record's pairs)."""
+    collision: jax.Array | None = None
+    """``f32[M, N]`` (``backward_virtual(collision_out=True)``) each slot's collision
+    increment of the step (value column 0), ``sum_substeps sum_kappa w four`` =
+    ``dt (L* lam)(x, v)`` at its post-move state: the along-flight identity's collision
+    term (``shape.gradient_variants(collision=)``).  ``None`` otherwise."""
+    cell_collision: jax.Array | None = None
+    """``f64[M, C]`` (``collision_out=True``) half the sum of :attr:`collision` over each
+    collision cell: the expected change of the objective by the cell's collisions in the
+    step, ``C_kc`` of the cut-volume term (``shape.volume_weights``)."""
 
 
 def cell_nodes(x, alive, grid, npc_max):
@@ -95,6 +115,38 @@ def _design(offsets, basis):
     return jnp.concatenate(cols, axis=-1)
 
 
+def _spd_solve(m, rhs):
+    """``m^-1 rhs`` for a batch of small symmetric positive-definite matrices: ``m``
+    ``f64[Q, p, p]``, ``rhs`` ``f64[Q, p, R]`` -> ``f64[Q, p, R]``.
+
+    The Cholesky factor ``m = L L^T`` written out over the (static, small) dimension, then
+    the forward and back substitutions for all ``R`` columns: every operation is
+    elementwise over the ``Q`` queries, which XLA fuses into a few kernels -- where
+    ``jnp.linalg.solve``'s batched LU of 14 x 14 matrices costs 2.3x as much on the GPU
+    (`scratch/adjoint_fit/`, 2026-10-02) and refactorises per right-hand side.  The
+    normal matrices of :func:`field_query` are positive definite (a weighted Gram matrix
+    plus the relative ridge on the slopes); a pivot that rounding drives to zero or below
+    -- a fit with fewer nodes than columns at the ridge's 1e-8 -- is floored at the
+    smallest normal float rather than turned into a NaN.  Agrees with the LU solve to
+    ~1e-13 relative on the fits' values and slopes."""
+    p = m.shape[-1]
+    tiny = jnp.finfo(m.dtype).tiny
+    low = [[None] * p for _ in range(p)]  # low[i][j], j <= i: the entries of L, f64[Q, 1]
+    for j in range(p):
+        pivot = m[:, j, j, None] - sum(low[j][t] ** 2 for t in range(j))
+        low[j][j] = jnp.sqrt(jnp.maximum(pivot, tiny))
+        for i in range(j + 1, p):
+            dot = sum(low[i][t] * low[j][t] for t in range(j))
+            low[i][j] = (m[:, i, j, None] - dot) / low[j][j]
+    y = []  # forward substitution, L y = rhs
+    for i in range(p):
+        y.append((rhs[:, i] - sum(low[i][t] * y[t] for t in range(i))) / low[i][i])
+    x = [None] * p  # back substitution, L^T x = y
+    for i in reversed(range(p)):
+        x[i] = (y[i] - sum(low[t][i] * x[t] for t in range(i + 1, p))) / low[i][i]
+    return jnp.stack(x, axis=1)
+
+
 def field_query(node_x, node_v, node_valid, node_val, q_x, q_v, scale, k, basis="quadratic_full"):
     """Weighted local-polynomial fit of ``node_val`` at each query; returns
     ``(value, grad_x, grad_v)`` -- the intercept and the linear slopes of the fit at the
@@ -105,7 +157,17 @@ def field_query(node_x, node_v, node_valid, node_val, q_x, q_v, scale, k, basis=
     ``(x, v)`` metric, weights ``1/(1+(d/d_k)^2)``, ridge ``1e-8`` (relative) on the slopes.
     The shape adjoint consumes ``grad_x`` (the position cotangent of the replayed wall
     map); the pathwise and collision terms consume the value and ``grad_v``.
+
+    **Value columns.**  ``node_val`` may carry trailing value columns, ``f64[Q, P, R]``:
+    ``R`` fields of the same nodes (the two value backwards of a shape seed,
+    :func:`backward_virtual`).  The nearest nodes, the weights, the design and the normal
+    matrix depend on the node and query states only, so they are formed and factorised
+    once and every column is a right-hand side of the same solve: ``value`` is then
+    ``f64[Q, R]``, ``grad_x`` ``f64[Q, D, R]``, ``grad_v`` ``f64[Q, 3, R]`` -- column ``r``
+    exactly the single-column fit of ``node_val[..., r]`` (the same arithmetic per column).
     """
+    columns = node_val.ndim == 3
+    vals = node_val if columns else node_val[..., None]
     dim = q_x.shape[-1]
     pts = jnp.concatenate((node_x, node_v), axis=-1) / scale
     q = jnp.concatenate((q_x, q_v), axis=-1) / scale
@@ -117,7 +179,7 @@ def field_query(node_x, node_v, node_valid, node_val, q_x, q_v, scale, k, basis=
     dk = jnp.max(jnp.where(good, dist, 0.0), axis=1, keepdims=True)
     weights = jnp.where(good, 1.0 / (1.0 + (dist / jnp.maximum(dk, 1e-12)) ** 2), 0.0)
     chosen = jnp.take_along_axis(pts, ids[..., None], axis=1)
-    values = jnp.take_along_axis(node_val, ids, axis=1)
+    values = jnp.take_along_axis(vals, ids[..., None], axis=1)  # (Q, k, R)
     design = _design(chosen - q[:, None, :], basis)
     design = jnp.where(good[..., None], design, 0.0)
     matrix = jnp.einsum("qki,qk,qkj->qij", design, weights, design)
@@ -127,11 +189,20 @@ def field_query(node_x, node_v, node_valid, node_val, q_x, q_v, scale, k, basis=
     # a query with no valid node at all gets value 0 rather than a singular solve
     empty = ~jnp.any(good, axis=1)
     matrix = matrix.at[:, 0, 0].add(empty.astype(jnp.float64))
-    rhs = jnp.einsum("qki,qk,qk->qi", design, weights, jnp.where(good, values, 0.0))
-    beta = jnp.linalg.solve(matrix, rhs[..., None])[..., 0]
-    value = jnp.where(empty, 0.0, beta[:, 0])
-    grad_x = beta[:, 1 : 1 + dim] / scale[:dim]
-    grad_v = beta[:, 1 + dim : 1 + dim + 3] / scale[-3:]
+    # the right-hand sides as a weighted sum over the k nodes (Q, p, R); the named scopes
+    # label these ops in a profile (scratch/perf/profile_report.py)
+    with jax.named_scope("fit_rhs"):
+        weighted = design * weights[..., None]
+        rhs = jnp.sum(
+            weighted[..., None] * jnp.where(good[..., None], values, 0.0)[:, :, None, :], axis=1
+        )
+    with jax.named_scope("spd_solve"):
+        beta = _spd_solve(matrix, rhs)  # (Q, p, R)
+    value = jnp.where(empty[:, None], 0.0, beta[:, 0])
+    grad_x = beta[:, 1 : 1 + dim] / scale[:dim, None]
+    grad_v = beta[:, 1 + dim : 1 + dim + 3] / scale[-3:, None]
+    if not columns:
+        return value[:, 0], grad_x[..., 0], grad_v[..., 0]
     return value, grad_x, grad_v
 
 
@@ -177,13 +248,19 @@ def _slot_events(carry, xs, x, ids, valid, scale, k, basis):
     return (lam, v_cur), four
 
 
+def _per_slot(a, lam):
+    """A per-slot array ``a`` (``(N,)``, a mask or a weight) shaped to multiply or select
+    ``lam``, which may carry trailing value columns ``(N, R)``."""
+    return a.reshape(a.shape + (1,) * (lam.ndim - a.ndim))
+
+
 def _add_step_reward(mu, rec_k, phi_k):
     """Value form of a per-step reward: the carried value at step ``k``'s post-collision
     state includes the reward collected there, so ``phi_k`` (``f64[N]``, per slot, already
     divided by the normalization) joins ``mu`` BEFORE the step's pull-back."""
     if phi_k is None:
         return mu
-    return jnp.where(rec_k.alive, mu + phi_k, mu)
+    return jnp.where(_per_slot(rec_k.alive, mu), mu + phi_k, mu)
 
 
 def _move_pullback(lam, rec_k, r_k):
@@ -192,9 +269,9 @@ def _move_pullback(lam, rec_k, r_k):
     tracker pass, zero where there was no hit).  Newborns (``born_face >= 0``) have no
     pre-move state; their value and birth-step hit rewards weight the source score."""
     born = rec_k.born_face >= 0
-    lam = jnp.where(rec_k.alive, lam, 0.0)
+    lam = jnp.where(_per_slot(rec_k.alive, lam), lam, 0.0)
     total = lam if r_k is None else lam + jnp.sum(r_k, axis=0)
-    return jnp.where(rec_k.alive & ~born, total, 0.0), lam
+    return jnp.where(_per_slot(rec_k.alive & ~born, lam), total, 0.0), lam
 
 
 def _step_pullback(mu, xs, grid, npc_max, scale, k, basis):
@@ -258,16 +335,22 @@ def backward(
 
 
 def _chunk_query(
-    args, node_x, node_v, node_valid, node_val, node_class, scale, k, basis, gradients
+    args, node_x, node_v, node_valid, node_val, node_class, scale, k, basis, gradients, halfspace
 ):
     """Field values (and slopes) at one chunk of queries, each from its own cell's nodes;
     ``direction`` (``f64[chunk, 3]``, zero = no restriction) keeps only the nodes with
-    ``v . direction > 0`` -- the one-sided fit of the shape adjoint; ``node_class`` /
+    ``v . direction > 0`` -- the one-sided fit of the shape adjoint -- and, with
+    ``halfspace`` (a length), only those with ``(x_node - x_q) . direction >= -halfspace``
+    (not behind the surface's tangent plane: a thin body's far side); ``node_class`` /
     ``q_class`` (``bool``) keep only the nodes of the query's class."""
     c, q_x, q_v, direction, q_class = args
     valid = node_valid[c]
     one_sided = jnp.any(direction != 0.0, axis=1)
     same_side = jnp.einsum("qpk,qk->qp", node_v[c], direction) > 0.0
+    if halfspace is not None:
+        d = q_x.shape[1]
+        ahead = jnp.einsum("qpk,qk->qp", node_x[c] - q_x[:, None, :], direction[:, :d])
+        same_side = same_side & (ahead >= -halfspace)
     valid = valid & (same_side | ~one_sided[:, None])
     if node_class is not None:
         valid = valid & (node_class[c] == q_class[:, None])
@@ -299,15 +382,18 @@ def cell_query(
     gradients=False,
     direction=None,
     q_class=None,
+    halfspace=None,
 ):
     """Field value at ``Q`` queries in cells ``q_c`` from per-cell node tables ``(C, P, .)``,
     at most ``chunk`` queries at a time (the per-query node gather is ``P x (D+3)``
     floats; :func:`fit_chunk` bounds the pass by ``FIT_PAIRS``).
     ``gradients=True`` returns ``(value, grad_x, grad_v)`` instead; ``direction``
     ``f64[Q, 3]`` restricts a query's nodes to those with ``v . direction > 0`` (rows of
-    zeros: no restriction).  A fifth table ``node_class`` (``bool[C, P]``) with ``q_class``
+    zeros: no restriction) and, with ``halfspace``, to the nodes not more than that far
+    behind the query's plane normal to ``direction``.  A fifth table ``node_class`` (``bool[C, P]``) with ``q_class``
     ``bool[Q]`` restricts them to the query's class -- the stratified fit of the shape
-    adjoint (:func:`node_gradients`)."""
+    adjoint (:func:`node_gradients`).  A node-value table with trailing columns
+    ``(C, P, R)`` gives ``R`` columns per query (:func:`field_query`)."""
     node_x, node_v, node_valid, node_val, *rest = tables
     node_class = rest[0] if rest else None
     q = q_c.shape[0]
@@ -333,16 +419,15 @@ def cell_query(
         k=k,
         basis=basis,
         gradients=gradients,
+        halfspace=halfspace,
     )
     out = lax.map(body, (c, x, v, d, qc))
-    if gradients:
-        value, grad_x, grad_v = out
-        return (
-            value.reshape(-1)[:q],
-            grad_x.reshape(-1, grad_x.shape[-1])[:q],
-            grad_v.reshape(-1, 3)[:q],
-        )
-    return out.reshape(-1)[:q]
+    return jax.tree.map(functools.partial(_unchunk, q=q), out)
+
+
+def _unchunk(a, q):
+    """``(passes, chunk, ...)`` -> the first ``q`` rows of ``(passes * chunk, ...)``."""
+    return a.reshape(-1, *a.shape[2:])[:q]
 
 
 def pooled_tables(tables, grid, pool):
@@ -378,6 +463,7 @@ def node_gradients(
     pool=0,
     klass=None,
     queries=None,
+    halfspace=None,
 ):
     """``(grad_x f64[N, D], grad_v f64[N, 3])`` of the carried adjoint at every alive slot's
     own state, from the per-cell fit of ``lam`` over the slot's cell (the slot is one of
@@ -394,9 +480,15 @@ def node_gradients(
     not ``grad_x lambda`` (gate G3: the sign of the plane's shear gradient came out
     wrong).  ``pool = 1`` draws the ``k`` nearest nodes from the ``3^D`` block of cells
     around the slot's cell (:func:`pooled_tables`) instead of the cell alone.
+    ``halfspace`` (in cells; one-sided queries only) also drops the nodes farther than
+    that behind the plane through the query normal to ``direction``: a pooled block around
+    a body thinner than the block reaches the body's far side, whose particles have their
+    own, unrelated values (the squash ellipse at ``s = 0.35``: ``one_pool`` -15 %).
 
     ``klass`` ``bool[N]`` **stratifies** the fit: a slot's nodes are the slots of its own
-    class.  The shape adjoint passes "has a body hit ahead in the window": a particle's
+    class.  **Diagnostic only** when the class depends on the particle's future (the shape
+    adjoint's hit-ahead class): the fit then drops ``grad P (lam_1 - lam_0)`` and is biased
+    by construction (``shape.gradient``, ``value_class``).  The shape adjoint passes "has a body hit ahead in the window": a particle's
     value jumps by its next hit's reward across the hit / no-hit boundary in phase space,
     and next to a curved surface the velocity half-space of ``direction`` does not
     separate the two (particles leaving a cap's tangent plane still hit the flat face
@@ -413,6 +505,7 @@ def node_gradients(
     """
     ids, valid, cell, _, count = cell_nodes(x, alive, grid, npc_max)
     c = jnp.minimum(cell, count.shape[0] - 1)
+    halfspace = _halfspace_length(halfspace, grid)
     tables = (x[ids], v[ids], valid, lam[ids])
     if klass is not None:
         tables = (*tables, klass[ids])
@@ -421,7 +514,7 @@ def node_gradients(
     if queries is None:
         _, grad_x, grad_v = cell_query(
             tables, c, x, v, scale, k, basis, chunk, gradients=True, direction=direction,
-            q_class=klass,
+            q_class=klass, halfspace=halfspace,
         )  # fmt: skip
         return jnp.where(alive[:, None], grad_x, 0.0), jnp.where(alive[:, None], grad_v, 0.0)
     n = x.shape[0]
@@ -430,7 +523,7 @@ def node_gradients(
     _, qx, qv = cell_query(
         tables, c[q], x[q], v[q], scale, k, basis, chunk, gradients=True,
         direction=None if direction is None else direction[q],
-        q_class=None if klass is None else klass[q],
+        q_class=None if klass is None else klass[q], halfspace=halfspace,
     )  # fmt: skip
     keep = (used & alive[q])[:, None]
     target = jnp.where(used, queries, n)
@@ -454,12 +547,14 @@ def value_query(
     chunk=4096,
     direction=None,
     pool=0,
+    halfspace=None,
 ):
     """``f64[Q]``: the carried adjoint at arbitrary query states ``(q_x, q_v)`` from the
     per-cell fit of ``lam`` over the population ``(x, v, alive)`` -- the value of a
     *virtual* post-move state (the silhouette term of :mod:`jax_dsmc.shape` asks for the
     value a particle would carry had its hit / miss gone the other way).  Queries outside
-    the box are clipped to it.  ``direction`` / ``pool`` as :func:`node_gradients`."""
+    the box are clipped to it.  ``direction`` / ``pool`` / ``halfspace`` as
+    :func:`node_gradients`."""
     ids, valid, _cell, _, count = cell_nodes(x, alive, grid, npc_max)
     tables = (x[ids], v[ids], valid, lam[ids])
     if pool:
@@ -467,7 +562,15 @@ def value_query(
     lo, hi = grid.lo, grid.hi
     q_x = jnp.clip(q_x, lo + 1e-9 * (hi - lo), hi - 1e-9 * (hi - lo))
     q_c = jnp.minimum(collision_cell(q_x, grid), count.shape[0] - 1)
-    return cell_query(tables, q_c, q_x, q_v, scale, k, basis, chunk, direction=direction)
+    return cell_query(
+        tables, q_c, q_x, q_v, scale, k, basis, chunk, direction=direction,
+        halfspace=_halfspace_length(halfspace, grid),
+    )  # fmt: skip
+
+
+def _halfspace_length(halfspace, grid):
+    """``halfspace`` (in cells: the smallest cell spacing) as a length, or ``None``."""
+    return None if halfspace is None else halfspace * jnp.min(spacing(grid))
 
 
 def staged_velocities(pairs_k, v_pre, v_post, cell, substeps):
@@ -550,9 +653,10 @@ def _partner_pass(
     )
     four = f_i + f_j - f_node - f_node[j]
     w = weight * q
-    delta = delta + w * four
+    delta = delta + _per_slot(w, four) * four
     if pair_score is not None:
-        kern = kern + jnp.sum(0.5 * w * four * jax.vmap(pair_score)(v_nodes, v_nodes[j]))
+        score = jax.vmap(pair_score)(v_nodes, v_nodes[j])
+        kern = kern + jnp.sum(_per_slot(0.5 * w * score, four) * four, axis=0)
     return (delta, kern), None
 
 
@@ -571,7 +675,7 @@ def _boundary_move(lam, x, v_prev, v_nodes, ids, valid, c, moved, normals, scale
     f_here = cell_query(
         tables, c, x, v_nodes, scale, k, basis, chunk, direction=_side(v_nodes, normals)
     )
-    return jnp.where(moved, lam + f_prev - f_here, lam)
+    return jnp.where(_per_slot(moved, lam), lam + f_prev - f_here, lam)
 
 
 def _boundary_skip(lam, *args):
@@ -629,9 +733,10 @@ def _substep(
         normals=normals,
     )
     (delta, kern), _ = lax.scan(
-        body, (jnp.zeros(lam.shape[0]), 0.0), jax.random.split(sub, partners)
+        body, (jnp.zeros_like(lam), jnp.zeros(lam.shape[1:])), jax.random.split(sub, partners)
     )
-    lam = jnp.where(alive, lam + delta, lam)
+    delta = jnp.where(_per_slot(alive, delta), delta, 0.0)
+    lam = lam + delta
     moved = alive & jnp.any(v_prev != v_nodes, axis=1)
     lam = lax.cond(
         jnp.any(moved),
@@ -647,11 +752,25 @@ def _substep(
         moved,
         normals,
     )
-    return (lam, key), kern
+    return (lam, key), (kern, delta)
 
 
 def _step_pullback_virtual(
-    carry, xs, grid, npc_max, scale, k, basis, chunk, sp, substeps, partners, nodes, pair_score
+    carry,
+    xs,
+    grid,
+    npc_max,
+    scale,
+    k,
+    basis,
+    chunk,
+    sp,
+    substeps,
+    partners,
+    nodes,
+    pair_score,
+    collision_out,
+    columns_out,
 ):
     """One captured step backward under the virtual pull-back, then the move pull-back."""
     mu, key = carry
@@ -690,9 +809,23 @@ def _step_pullback_virtual(
         pair_score=pair_score,
         normals=normals_k,
     )
-    (lam, _), kern = lax.scan(body, (mu, step_key), (stages[1:], stages[:-1]), reverse=True)
+    (lam, _), (kern, delta) = lax.scan(
+        body, (mu, step_key), (stages[1:], stages[:-1]), reverse=True
+    )
     mu_prev, lam = _move_pullback(lam, rec_k, r_k)
-    return (mu_prev, key), (lam, jnp.sum(kern))
+    coll = None
+    if collision_out:
+        # the first value column only (the objective's; the others are auxiliary values):
+        # per slot in float32 (it feeds the along-flight identity's parallel component, a
+        # memory peak in f64 at the production occupancy), per collision cell in f64
+        per = jnp.sum(delta, axis=0)
+        per = per[..., 0] if per.ndim > 1 else per
+        cells = jnp.zeros(count.shape[0] + 1).at[cell].add(0.5 * per)[:-1]
+        coll = (per.astype(jnp.float32), cells)
+    if columns_out:
+        # one stacked output per value column: the [M, N, R] array is never formed
+        lam = tuple(lam[..., r] for r in range(lam.shape[-1]))
+    return (mu_prev, key), (lam, jnp.sum(kern, axis=0), coll)
 
 
 @functools.partial(
@@ -706,6 +839,8 @@ def _step_pullback_virtual(
         "partners",
         "nodes",
         "pair_score",
+        "collision_out",
+        "columns_out",
     ),
 )
 def backward_virtual(
@@ -728,6 +863,8 @@ def backward_virtual(
     phi_step=None,
     hit_reward=None,
     normals=None,
+    collision_out=False,
+    columns_out=False,
 ):
     """Reverse scan over the captured steps with the virtual-partner collision pull-back.
 
@@ -739,8 +876,27 @@ def backward_virtual(
     position, zero rows away from surfaces: :func:`jax_dsmc.mesh.geometry.nearest_normal`)
     makes every fit query one-sided -- the nodes on the query velocity's side of
     ``v . n = 0`` only; ``None`` keeps the two-sided fit (bitwise the old results).
+    ``collision_out=True`` also returns each slot's per-step collision increment of the
+    first value column and its cell sums (:attr:`Backward.collision`, ``f32[M, N]``;
+    :attr:`Backward.cell_collision`, ``f64[M, C]``).  ``columns_out=True`` (value columns
+    only) returns ``lam`` as a tuple of the ``R`` columns ``f64[M, N]`` -- the stacked
+    ``f64[M, N, R]`` and the copies its slicing makes are never formed (the shape seed's
+    memory peak at the production occupancy).
+
+    **Several value fields in one sweep.**  ``phi_final`` ``f64[N, R]``, ``phi_step``
+    ``f64[M, N, R]`` and ``hit_reward`` ``f64[M, K, N, R]`` carry ``R`` reward columns;
+    ``lam`` is then ``f64[N, R]`` throughout and every output gains the trailing axis
+    (:class:`Backward`).  The sweep is linear in the rewards, and nothing it decides --
+    the cell tables, the partners and their draws, the scattered velocities, the nodes
+    and weights of each fit -- depends on the values, so column ``r`` is the single-column
+    backward of reward column ``r`` (to the solve's rounding, ~1e-13).  What the columns
+    share is most of the cost: every fit forms its nearest nodes, design and normal
+    matrix and its factorisation once and solves for all columns (:func:`field_query`),
+    and the partner draws and VSS scatterings are made once.  The shape seed's two value
+    backwards (hit rewards, timing rewards: ``examples/ensemble_mesh._backwards``) run
+    as one ``R = 2`` sweep, 2.1x faster than two (2026-10-02, PSEUDOCODE section 9.7.1).
     """
-    mu = jnp.where(final_state.alive, phi_final, 0.0)
+    mu = jnp.where(_per_slot(final_state.alive, phi_final), phi_final, 0.0)
     body = functools.partial(
         _step_pullback_virtual,
         grid=grid,
@@ -754,9 +910,13 @@ def backward_virtual(
         partners=partners,
         nodes=nodes,
         pair_score=pair_score,
+        collision_out=collision_out,
+        columns_out=columns_out,
     )
-    (mu0, _), (lam, kern) = lax.scan(
+    (mu0, _), (lam, kern, coll) = lax.scan(
         body, (mu, key), (records, phi_step, hit_reward, normals), reverse=True
     )
     m, a, c = records.pairs.pi.shape
-    return Backward(jnp.where(initial_alive, mu0, 0.0), lam, jnp.zeros((m, a, c)), kern)
+    lambda0 = jnp.where(_per_slot(initial_alive, mu0), mu0, 0.0)
+    per, cells = (None, None) if coll is None else coll
+    return Backward(lambda0, lam, jnp.zeros((m, a, c)), kern, per, cells)

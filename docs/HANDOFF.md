@@ -986,7 +986,7 @@ The SPARTA circle deck (argon, 20 x 20, r = 3 polygon from `data.circle`, 1000 s
 | main code, GPU (RTX 3050 Ti, WSL flags), polygon / level set | 15.1 / 20.8 s | **4.5 / 6.8 s** | 8.6x / 13x |
 | one optimiser seed (optc settings, fnum x 4) | 391 s | **99 s** | |
 
-Figures: `examples/mesh/figures/forward_speedup_history.png` (forward across the changes),
+Figures: `examples/mesh/figures/performance/forward_speedup_history.png` (forward across the changes),
 `speedup_history.png` (optimiser seed), `forward_step_breakdown_cpu.png` /
 `forward_step_breakdown.png` (where a CPU / GPU step goes now), `forward_vs_sparta.png`,
 `profile_stages.png` / `profile_breakdown.png` (the optimiser seed's GPU stages).
@@ -1016,16 +1016,85 @@ gradient, 12 / 4 seeds, |z| < 3; every change came in at |z| < 1) and the full t
 * entrants are revived at their slots (`inflow.revive_at`), and the cell temperature for the
   majorant is one shifted pass.
 
-What is left, per CPU step (8.0 ms profiled, `scratch/perf/profile/forward_cpu_serial.json`):
-small-op overhead ("other", ~280 tiny reductions and ~40 carry copies, 1.7 ms), the surface
-search and inside check (1.6), the tracker passes (1.5) and the sort (0.8; ~6x SPARTA's
-linked-list build even in `sparta_jax`, for the reason given in its README).  Under 5x SPARTA
-serial (2.6 s) needs fewer, larger XLA ops in the tracker and bookkeeping; see
-`sparta_jax/README.md`'s "Speed-ups transferable to a differentiable code".  On the GPU the
-step is launch-bound (5.3 ms wall, 2.1 ms of kernels, ~440 kernels per step).
+What is left (2026-10-02 study, `scratch/xla_ops/`; one core, polygon, steady state ~6.8 ms
+per step untraced).  **The 2026-10-01 "small-op overhead" reading was a profiler artefact:**
+the host tracer charges every executed op (traced 8.7 vs untraced ~6.6-7.4 ms per step), and
+removing 685 of the ~2200 executed ops per step (an unrolled binary search for
+`compaction.ranked_slots`) was time-neutral in an interleaved A/B (reverted).  About 70 % of
+the step is ~100 large ops, each a memory-bound pass over particle-sized arrays; packaging
+into fewer XLA ops does not pay, fewer *passes* would.  Upper bounds by ablation
+(`scratch/xla_ops/ablate.py`, the stage removed or made trivial -- physically wrong runs):
+
+| option | bound | note |
+|---|---|---|
+| fewer padded slots (60 k -> 52 k, ~47.5 k alive) | 8 % (measured) | needs growth on overflow; draws are per slot |
+| cheaper inflow speed sampler (Halley, ~3.1 k candidates) | ~0.5 ms | |
+| per-step cell temperature for the majorant | 0.3-0.45 ms | certification at stake |
+| collide stage at zero attempts (scores, checksum) | ~0.5 ms | |
+| tracker bookkeeping (N-sized elapsed / score / hit / exclude fields) | ~2 ms | deep `wall_adjoint` restructure |
+| the whole body (surface search, routing, inside check) | 1.2 ms | the no-body run |
+| entrants moved inside the main move | ~0 | dropped |
+
+Against `sparta_jax` per stage (ms per step): tracker + search 4.2 vs 1.0, cell temperature +
+collide 1.05 vs ~0, inflow 0.75 vs 0.05, sort 0.90 vs 0.44.  The bounded options together are
+worth ~20 % (6.3 -> ~5 s per 1000 steps); under 5x SPARTA serial (2.6 s) would need the
+tracker-bookkeeping rewrite as well.  Not pursued (2026-10-02): diminishing returns for the
+risk to verified behaviour.  The tools: `scratch/perf/xla_ops.py` (executed-op census,
+attributed to source functions through the HLO graph), `scratch/xla_ops/jaxpr_census.py`,
+`ab.sh` / `blocks.py` (interleaved untraced timing -- single 100-step blocks vary by +-10 %).
+`jax_dsmc/fusion.py` (`materialise`) now holds the one XLA:CPU fusion workaround the code
+uses in two places.  On the GPU the step is launch-bound (5.3 ms wall, 2.1 ms of kernels,
+~440 kernels per step).
 
 One CPU seed-noise run (`noise_gate/forward_final_cpu.json`) shows the polygon body's ungated
 energy / heat tallies at ~1e-33 against 5e-34 on the GPU: for a specular wall these are pure
 round-off (the flow's energy is ~1e-17) and differ between XLA:CPU and GPU arithmetic; every
 gated observable agrees.  The scratch work of each change is archived in
 `scratch/perf/history/2026-10-01/`.
+
+## 1.10 Adjoint cost: the fits, and the two-column backward (2026-10-02)
+
+The value backwards dominate an optimiser seed (GPU profile, `scratch/perf/profile/final_seed`:
+68 of ~120 s, of which the local quadratic fits' normal equations 32 s, their LU solves 14 s,
+partner draws and tables 16 s, the nearest-node search 2 s).  Findings and the change, all
+measured in `scratch/adjoint_fit/` (README there):
+
+* **The basis is not the cost driver.**  On one 4096-query fit chunk the nearest-node
+  search and gathers take ~2 ms and the normal-matrix assembly ~2.5 ms *whatever the
+  basis* (6 or 14 columns: not flop-bound); only the solve scales with it.  End to end,
+  affine is **1.37x cheaper** than the full quadratic (a collisional seed's two backwards,
+  67.8 vs 92.9 s, interleaved) -- and moves `λ` by 73 % rms there, so it stays a data
+  point only (the quadratic is needed for energy-like rewards, review section 5.4).
+* **Collisionless runs fit for nothing.**  In the optc / opt / squash studies (Kn ~ 1e18)
+  a step makes no attempts, every partner term is weighted by zero and no velocity
+  changes at a substep boundary: `λ` is identical to 16 digits under every basis.
+  Skipping the fits when the attempts are zero would remove ~45 s per seed, and is
+  rejected: the user's standing rule is **no runtime collisionless shortcuts** -- every
+  run exercises the collisional path, so the move to lower Kn changes nothing in the code.
+* **The change: one sweep, two value columns** (PSEUDOCODE section 9.7.1).  A seed's two
+  value backwards (hit rewards, timing rewards) share record, key, partners and every
+  fit's nodes, weights and normal matrix; only the right-hand sides differ.
+  `ensemble_device.backward_virtual` now carries `λ f64[N, R]`, `field_query` solves all
+  columns from one factorisation, and the batched LU is an unrolled Cholesky
+  (`_spd_solve`, the matrices are SPD).  `examples/ensemble_mesh._backwards` makes one
+  call.  Results: a seed's two backwards 90.5 -> 43.3 s (collisional, 2.1x); the
+  optimiser seed (optc, warm) backward 65 -> 29 s, **whole seed 99 -> 64 s**.  Gates: the
+  columns equal separate sweeps to 1e-13 (new tests in `tests/test_ensemble_device.py`);
+  the optimiser's gradient terms against the 10-01 reference to 3.7e-9 relative,
+  objective bitwise (`scratch/perf/regress.py --compare final`, saved as `columns`); the
+  collisional seed's `λ` against the old code to 3e-7 of its rms (ill-conditioned fits
+  of sparse cells amplify any last-bit change to ~1e-9 per step; the same with the old
+  LU and only the summation order changed).
+
+Profiled seed after the change (`scratch/perf/profile/seed_columns`, figures in
+`examples/mesh/figures/performance/`): forward 7.7 s wall (2.3 s GPU busy), replay 2.4 (0.6),
+value backwards 30.2 (28.2; was 68.4), shape gradient 33.3 (4.2, ~7000 kernels per step).
+In the backward the normal-equation assembly is now half the GPU time (14.6 s), partner
+draws / tables 9.0, right-hand sides 1.6, top-k 0.8, the Cholesky solve 0.5.  The forward,
+replay and shape stages are launch-bound: the laptop runs with XLA command buffers off (the
+WSL driver crash), and `examples/mesh/cluster/env.sh` exports the same guard although the
+crash is WSL-specific -- enabling command buffers on the cluster (after a smoke run) is the
+cheapest remaining speed-up there.  The f64 assembly is ~4x off the f64 roofline of this
+consumer GPU; consumer and RTX-class GPUs run f64 at 1/64 rate, A100 / H200 at 1/2, so
+collisional adjoint runs belong on the A100 / H200 partitions.
+

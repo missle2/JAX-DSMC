@@ -1,10 +1,10 @@
 """Figures and a summary of the per-stage GPU profile (scratch/perf/profile/<tag>/<stage>/
 events.npz from profile_extract.py) and the regression timings (scratch/perf/regress/*.json).
 
-  examples/mesh/figures/profile_stages.png     wall time vs GPU-busy time per stage, with
+  examples/mesh/figures/performance/profile_stages.png     wall time vs GPU-busy time per stage, with
                                                kernels per step and the mean kernel length
-  examples/mesh/figures/profile_breakdown.png  GPU time per stage by code path
-  examples/mesh/figures/speedup_history.png    per-stage wall time of one steady seed across
+  examples/mesh/figures/performance/profile_breakdown.png  GPU time per stage by code path
+  examples/mesh/figures/performance/speedup_history.png    per-stage wall time of one steady seed across
                                                the speed-up changes (same seeds, same GPU)
   scratch/perf/profile/<tag>/summary.json
 
@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FIGURES = os.path.join(HERE, "..", "..", "examples", "mesh", "figures")
+FIGURES = os.path.join(HERE, "..", "..", "examples", "mesh", "figures", "performance")
 STAGES = [
     ("forward", "forward (1000 steps, captured 300)", 1000),
     ("replay", "traced replay", 300),
@@ -46,7 +46,9 @@ CATEGORIES = {
     ],
     "backward": [
         ("qki", "fit: normal equations (einsum)"),
-        ("jit(solve)", "fit: LU solve"),
+        ("jit(solve)", "fit: LU solve"),  # before 2026-10-02
+        ("spd_solve", "fit: Cholesky solve (all columns)"),
+        ("fit_rhs", "fit: right-hand sides"),
         ("top_k", "fit: k nearest (top_k)"),
         ("while/body", "partner draws, tables, gathers"),
     ],
@@ -56,6 +58,8 @@ CATEGORIES = {
         ("qki", "grad-lambda fits"),
         ("top_k", "grad-lambda fits"),
         ("jit(solve)", "grad-lambda fits"),
+        ("spd_solve", "grad-lambda fits"),
+        ("fit_rhs", "grad-lambda fits"),
         ("jvp(cond)", "linearised hit search"),
         ("while/body", "step body: linearised pass 0, cotangents"),
     ],
@@ -117,7 +121,7 @@ def fig_stages(rows, path):
     ax.set_yticklabels(names, fontsize=8)
     ax.set_xlabel("seconds (one optimiser seed, optc settings at fnum x 4, RTX 3050 Ti, float64)")
     ax.set_xlim(0, wall.max() * 1.9)
-    ax.legend(fontsize=7.5, frameon=False, loc="lower right")
+    ax.legend(fontsize=7.5, frameon=False, loc="upper right")
     if any(r["truncated"] for r in rows.values()):
         ax.set_title(
             "* the GPU tracer's ~2 M event cap truncated this stage: busy time is a lower bound",
@@ -162,6 +166,7 @@ def fig_history(path):
         ("batch_fwd", "09-28: forward\nbatch"),
         ("merged", "09-30: inflow, level\nset, compaction"),
         ("final", "10-01: tracker,\nsort, bookkeeping"),
+        ("columns", "10-02: two-column\nbackward"),
     ]
     parts = [("forward_replay", "forward + replay + host", ORANGE), ("backward", "value backwards", GREY),
              ("shape", "shape gradient", BLUE)]  # fmt: skip

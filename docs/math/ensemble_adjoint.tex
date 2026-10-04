@@ -1064,10 +1064,18 @@ computed before the projection and is therefore an upper bound on the decrease.
   $\nabla_v\lambda$ ($-0.68$) and $\nabla_x\lambda$ ($-0.11$) parts.  The coarse
   configuration on the current code reproduces the old artifact exactly with
   \code{value\_class="none"} and shows the same excess with \code{"hit\_ahead"}, so the
-  stratification~\eqref{eq:hit-ahead} is the cause.  Suspected mechanism (not yet
-  verified): the class is computed per slot, and a reflected particle's slot is refilled
-  by a newborn that later hits, so the departed particle is classed as ``hit ahead''.
-  The \code{optc} study ran with the class on.
+  stratification~\eqref{eq:hit-ahead} is the cause.  The suspected mechanism (slot
+  refills: the departed particle inherits the newborn's later hits) is real, since 30\,\%
+  of the coarse circle's hit-ahead labels come from a later occupant, but it is
+  \emph{not} the cause (2026-10-02, \code{scratch/shape\_audit/}).  With the class stopped
+  at the slot's next birth, the coarse gate's $v$ part grows from $-6.0$ to
+  $-10.8\times10^{-21}$; with no class it is $+0.4$, and the paired gradient $-$ FD is
+  $+0.007\pm0.071\times10^{-20}$ (4 seeds).  The class is biased by construction: a fit
+  within each class drops the $\nabla P\,(\lambda_1-\lambda_0)$ part of
+  $\nabla\lambda = P\nabla\lambda_1 + (1-P)\nabla\lambda_0 + \nabla P\,(\lambda_1-\lambda_0)$,
+  $P$ the probability of a later hit.  Squash runs use \code{value\_class="none"}; the
+  \code{optc} study ran with the class on.  Slides:
+  \code{docs/math/shape\_sensitivities\_slides.tex}.
 \item The diffuse circle meets the criterion against the noisy FD but is 9\,\% low
   against the precise one ($z = -2.3$; silhouette 61\,\% of the total).  More seeds
   and a band sweep are pending.

@@ -172,6 +172,8 @@ def device_backward(
     return_device=False,
     normals=None,
     host_adjoint=True,
+    collision_out=False,
+    columns_out=False,
 ):
     """The device backward under the pull-back selected by ``ensemble_backward.configure``,
     returned as the host :class:`ensemble_backward.Adjoint` (births and wall hits read off
@@ -182,7 +184,16 @@ def device_backward(
     (:func:`jax_dsmc.shape.local_normals`) switches the virtual pull-back's fits to the
     one-sided form.  ``host_adjoint=False`` skips the host bookkeeping of births and
     wall hits (:func:`ensemble_backward.from_device`) and returns ``(None, dev)`` -- the
-    shape adjoint reads only the device's ``lam``."""
+    shape adjoint reads only the device's ``lam``.
+
+    Value columns: ``phi_final`` ``f64[N, R]`` with ``hit_reward`` ``f64[M, K, N, R]``
+    (or ``phi_step`` with the trailing axis) runs ``R`` value backwards in one sweep of
+    the virtual pull-back (:func:`ensemble_device.backward_virtual`); ``dev.lam`` is then
+    ``f64[M, N, R]``, the stability check applies per column, and ``host_adjoint`` must
+    be False (the host bookkeeping is single-column).  ``collision_out`` (virtual
+    pull-back only) fills ``dev.collision`` (:class:`ensemble_device.Backward`);
+    ``columns_out`` returns ``dev.lam`` as a tuple of its value columns
+    (:func:`ensemble_device.backward_virtual`)."""
     # a lane-tracked replay's rewards (`shape.HitRewards`): the device's move pull-back
     # needs each slot's per-step total only; the host bookkeeping gets the per-event form
     dev_reward = hit_reward.totals()[:, None] if isinstance(hit_reward, HitRewards) else hit_reward
@@ -195,6 +206,10 @@ def device_backward(
     dx = (np.asarray(grid.hi) - np.asarray(grid.lo)) / np.asarray(grid.n)
     scale = jnp.concatenate((jnp.asarray(dx, dtype=jnp.float64), jnp.full(3, v_scale)))
     if ensemble_backward.VIRTUAL is None:
+        if jnp.ndim(phi_final) > 1:
+            raise ValueError("value columns need the virtual pull-back (backward_virtual)")
+        if collision_out:
+            raise ValueError("collision_out needs the virtual pull-back")
         dev = ensemble_device.backward(
             rec,
             state0.alive,
@@ -228,24 +243,35 @@ def device_backward(
             phi_step=phi_step,
             hit_reward=dev_reward,
             normals=normals,
+            collision_out=collision_out,
+            columns_out=columns_out,
         )
     # the virtual pull-back's quadrature noise feeds back through the fits; with too few
     # partners for the cell occupancy it grows geometrically over a long horizon (K = 2
     # at 40 particles/cell blew up 1e5x over 300 steps where K = 8 decayed) -- refuse
     # rather than poison the ensemble silently
     alive = np.asarray(rec.alive)
-    lam = np.asarray(dev.lam)
-    rms = np.array(
-        [
-            np.sqrt(np.mean(lam[k][alive[k]] ** 2)) if alive[k].any() else 0.0
-            for k in range(len(lam))
-        ]
-    )
-    if rms[-1] > 0 and rms.max() > GROWTH_LIMIT * rms[-1]:
-        raise RuntimeError(
-            f"unstable backward: rms lambda grew {rms.max() / rms[-1]:.3g}x over the horizon; "
-            "raise --partners (review section 5.12)"
+    columns = dev.lam if isinstance(dev.lam, tuple) else None
+    lam = None if columns is not None else np.asarray(dev.lam)
+    n_col = len(columns) if columns is not None else (lam.shape[2] if lam.ndim == 3 else 0)
+    for column in range(n_col) if n_col else (None,):
+        if columns is not None:
+            lam_c = np.asarray(columns[column])
+        else:
+            lam_c = lam if column is None else lam[..., column]
+        rms = np.array(
+            [
+                np.sqrt(np.mean(lam_c[k][alive[k]] ** 2)) if alive[k].any() else 0.0
+                for k in range(len(lam_c))
+            ]
         )
+        if rms[-1] > 0 and rms.max() > GROWTH_LIMIT * rms[-1]:
+            raise RuntimeError(
+                f"unstable backward: rms lambda grew {rms.max() / rms[-1]:.3g}x over the "
+                "horizon; raise --partners (review section 5.12)"
+            )
+    if n_col and host_adjoint:
+        raise ValueError("value columns: the host bookkeeping is single-column (host_adjoint)")
     if not host_adjoint:
         return None, dev
     adj = ensemble_backward.from_device(rec, dev, normalization, hit_reward=hit_reward)

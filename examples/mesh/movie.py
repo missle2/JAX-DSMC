@@ -14,9 +14,14 @@ steady field; the third panel is the drag history with the current iterate marke
 ``--stride s`` shows every ``s``-th iterate (the morph then spans ``s`` shape steps and
 the final iterate is always shown), which keeps a 250-iterate run's GIF to a few hundred
 frames.
-PNG frames go to ``figures/movie/<tag>/`` and the GIF to ``figures/optimize_<tag>.gif``
-(``--mp4``: an H.264 ``figures/optimize_<tag>.mp4`` through the ``ffmpeg`` executable
+PNG frames go to ``figures/movie/<tag>/`` and the GIF to ``figures/movie/optimize_<tag>.gif``
+(``--mp4``: an H.264 ``figures/movie/optimize_<tag>.mp4`` through the ``ffmpeg`` executable
 instead -- a tenth of the GIF's size, so longer runs can keep more frames).
+
+``--squash`` reads an aspect-ratio run instead (``results/optimize_squash/<tag>/``,
+``examples.mesh.optimize_squash``): its shapes are the ellipses of the iterates' ``s`` (no
+``coef_<k>.npy``), the third panel is its objective ``J = D - lam V``, and the speed colour
+range follows the flow (a Mach 10 stream is ~3000 m/s).
 """
 
 from __future__ import annotations
@@ -33,8 +38,11 @@ import numpy as np
 from matplotlib.ticker import MaxNLocator
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import forward as F
 import optimize as O  # the optimiser module: its artifacts are read here
+from figure_paths import figure_path
 
+from examples import ensemble_mesh as EM
 from jax_dsmc import viz
 from jax_dsmc.mesh import levelset as L
 
@@ -60,6 +68,45 @@ def load_run(out: Path):
     return cfg, rows, coefs, frames
 
 
+def _frames_of(out: Path, n):
+    frames = []
+    for k in range(n):
+        f = out / f"frames_{k}.npz"
+        if not f.exists():
+            break
+        z = np.load(f)
+        frames.append({key: z[key] for key in z.files})
+    return frames
+
+
+def load_squash_run(out: Path):
+    """As :func:`load_run` for an ``optimize_squash`` run: the coefficients are those of the
+    ellipse at every iterate's ``s`` and at the last ``s_next``."""
+    hist = json.loads((out / "history.json").read_text())
+    cfg, rows = hist["config"], hist["rows"]
+    grid = squash_grid(cfg)
+    values = [r["s"] for r in rows] + [rows[-1]["s_next"]]
+    coefs = [np.asarray(EM.levelset_coef(jnp.float64(v), cfg, "squash_y", grid)[0]) for v in values]
+    return cfg, rows, coefs, _frames_of(out, len(rows))
+
+
+def squash_grid(cfg):
+    grid, *_ = F.build(cfg["case"], "analytic", cfg["tracker"], "Ar", 0.0, cfg["radius_cells"])
+    return grid
+
+
+def series(rows, squash):
+    """The third panel's ``(values, standard errors, label)``."""
+    if squash:
+        return (
+            np.array([r["J"] for r in rows]),
+            np.array([r["drag_se"] for r in rows]),
+            "J = D - lam V  [N/m]",
+        )
+    j = np.array([r["objective"] for r in rows])
+    return j, np.array([r["objective_se"] for r in rows]), "windowed drag [N/m]"
+
+
 def phi_on(ls, xx, yy):
     pts = jnp.asarray(np.stack([xx.ravel(), yy.ravel()], axis=1))
     return np.asarray(L.value(ls, pts)).reshape(xx.shape)
@@ -69,15 +116,14 @@ class Renderer:
     """Draws one frame: the two field panels with the body of ``coef`` carved out and its
     zero contour, and the drag history with iterate ``k`` marked."""
 
-    def __init__(self, cfg, rows, grid, ls0, nrho_max, fine=300):
-        self.cfg, self.rows, self.grid, self.ls0 = cfg, rows, grid, ls0
+    def __init__(self, grid, ls0, limits, objective, fine=300):
+        self.grid, self.ls0 = grid, ls0
         self.lo, self.hi = np.asarray(grid.lo), np.asarray(grid.hi)
-        self.limits = {"nrho": (0.0, nrho_max), "|u|": (0.0, SPEED_MAX)}
+        self.limits = limits
         xs = np.linspace(self.lo[0], self.hi[0], fine)
         ys = np.linspace(self.lo[1], self.hi[1], fine)
         self.xx, self.yy = np.meshgrid(xs, ys, indexing="ij")
-        self.j = np.array([r["objective"] for r in rows])
-        self.se = np.array([r["objective_se"] for r in rows])
+        self.j, self.se, self.ylabel = objective
 
     def phi(self, coef):
         return phi_on(dataclasses.replace(self.ls0, coef=jnp.asarray(coef)), self.xx, self.yy)
@@ -102,7 +148,7 @@ class Renderer:
         ax.plot([k], [self.j[k]], "o", color=viz.SERIES_MEASURED, ms=7, zorder=3)
         ax.set_xlabel("iterate")
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-        ax.set_ylabel("windowed drag [N/m]")
+        ax.set_ylabel(self.ylabel)
         ax.set_title(f"J = {self.j[k]:.4g}", fontsize=10)
         fig.suptitle(title, color=viz.INK, fontsize=11)
         viz.savefig(fig, path, dpi=80)
@@ -113,15 +159,25 @@ def fields_of(frame, i):
     return {"nrho": frame["nrho"][i], "|u|": np.sqrt(np.sum(u**2, axis=1))}
 
 
-def render(out: Path, fig_dir: Path, morph: int, hold: int, every: int, stride: int = 1):
+def render(
+    out: Path, fig_dir: Path, morph: int, hold: int, every: int, stride: int = 1, squash=False
+):
     """Every PNG frame of the movie, in order; returns their paths."""
-    cfg, rows, coefs, frames = load_run(out)
+    cfg, rows, coefs, frames = (load_squash_run if squash else load_run)(out)
     if not frames:
         raise SystemExit(f"no frames_<k>.npz under {out} (frames_every was 0?)")
-    grid, ls0 = O.initial_levelset(cfg)
+    if squash:
+        grid = squash_grid(cfg)
+        ls0 = EM.levelset_coef(jnp.float64(rows[0]["s"]), cfg, "squash_y", grid)[1]
+    else:
+        grid, ls0 = O.initial_levelset(cfg)
     steady = np.concatenate([f["nrho"][-1] for f in frames])
-    nrho_max = float(np.percentile(steady, 99)) * 1.1
-    r = Renderer(cfg, rows, grid, ls0, nrho_max)
+    speed = np.concatenate([np.linalg.norm(f["u"][-1], axis=1) for f in frames])
+    limits = {
+        "nrho": (0.0, float(np.percentile(steady, 99)) * 1.1),
+        "|u|": (0.0, max(SPEED_MAX, float(np.percentile(speed, 99)) * 1.1)),
+    }
+    r = Renderer(grid, ls0, limits, series(rows, squash))
     fig_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     n_iter = min(len(frames), len(coefs) - 1)
@@ -182,16 +238,18 @@ def main(argv=None):
     ap.add_argument("--every", type=int, default=1, help="use every n-th fill frame")
     ap.add_argument("--stride", type=int, default=1, help="show every n-th iterate")
     ap.add_argument("--mp4", action="store_true", help="write an MP4 (ffmpeg) instead of a GIF")
+    ap.add_argument("--squash", action="store_true", help="an optimize_squash run")
     args = ap.parse_args(argv)
-    out = Path(O.RESULTS) / args.tag
-    fig_dir = Path(O.FIGURES) / "movie" / args.tag
-    paths = render(out, fig_dir, args.morph, args.hold, args.every, args.stride)
+    results = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "optimize_squash")
+    out = Path(results if args.squash else O.RESULTS) / args.tag
+    fig_dir = Path(figure_path("movie", args.tag))
+    paths = render(out, fig_dir, args.morph, args.hold, args.every, args.stride, args.squash)
     if args.mp4:
         movie = assemble_mp4(
-            fig_dir, len(paths), Path(O.FIGURES) / f"optimize_{args.tag}.mp4", args.fps
+            fig_dir, len(paths), Path(figure_path("movie", f"optimize_{args.tag}.mp4")), args.fps
         )
     else:
-        movie = assemble(paths, Path(O.FIGURES) / f"optimize_{args.tag}.gif", args.fps)
+        movie = assemble(paths, Path(figure_path("movie", f"optimize_{args.tag}.gif")), args.fps)
     print(f"wrote {movie} ({len(paths)} frames, {movie.stat().st_size / 1e6:.1f} MB)")
 
 

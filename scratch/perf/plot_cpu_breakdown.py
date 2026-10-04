@@ -1,5 +1,5 @@
 """Serial-CPU per-step time of the polygon forward by category (profile_forward_cpu.py)
-against SPARTA's serial step -> examples/mesh/figures/forward_step_breakdown_cpu.png"""
+against SPARTA's serial step -> examples/mesh/figures/performance/forward_step_breakdown_cpu.png"""
 
 import json
 import os
@@ -43,6 +43,6 @@ for side in ("top", "right"):
     ax.spines[side].set_visible(False)
 fig.tight_layout()
 fig.savefig(
-    os.path.join(HERE, "..", "..", "examples", "mesh", "figures", "forward_step_breakdown_cpu.png"),
+    os.path.join(HERE, "..", "..", "examples", "mesh", "figures", "performance", "forward_step_breakdown_cpu.png"),
     dpi=150,
 )

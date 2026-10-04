@@ -35,7 +35,7 @@ M 10 settings in ``examples/mesh/cluster/study.py``).
 
 Artifacts: ``results/optimize_squash/<tag>/history.json`` (per iterate ``s``, the drag and
 gradient means and SEs, Adam's moments, the reference ``D_ref``, ``dD_ref/ds`` and
-``J'_ref`` at the same ``s``); ``--plot`` draws ``figures/optimize_squash_<tag>.png``.
+``J'_ref`` at the same ``s``); ``--plot`` draws ``figures/squash/optimize_squash_<tag>.png``.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ from jax_dsmc import ensemble_backward
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RESULTS = os.path.join(HERE, "results", "optimize_squash")
-FIGURES = os.path.join(HERE, "figures")
+from figure_paths import figure_path  # noqa: E402
 
 
 def default_config():
@@ -90,9 +90,16 @@ def default_config():
             "iterations": 25,
             "seeds_per_iterate": 4,
             "seed_start": 32,
-            "variant": "along_pool",
+            # pooled one-sided fit without the nodes behind the hit's tangent plane, plus the
+            # along-flight identity (2026-10-02 gates: within 1 % of FD at s = 0.35 .. 1)
+            "variant": "along_pool_plane",
             "neighbors": 32,
-            "timing_band": 0.2,
+            # the window-edge timing term's band, in whole steps per edge (ensemble_mesh
+            # .timing_band_setting): a 0.2-step band is far noisier for the same mean
+            "timing_band": 10.0,
+            # the field movie of the first seed's forward per iterate (`frames_<k>.npz`, a
+            # snapshot every `frames_every` warm-up steps; 0: none), for examples.mesh.movie
+            "frames_every": 50,
             "tag": "",
         }
     )
@@ -119,7 +126,8 @@ def _se(a):
 
 def seed_gradient(cfg, s, seed):
     """One seed's windowed drag and ``dD/ds`` at ``s`` (the chosen variant: pathwise +
-    score + silhouette, the runner's reported gradient)."""
+    score + silhouette, the runner's reported gradient); seed 0 also records the field
+    movie of its forward (``info["frames"]``)."""
     run = dict(cfg, squash=float(s))
     all_terms, info, st = EM.shape_terms(
         run,
@@ -129,11 +137,17 @@ def seed_gradient(cfg, s, seed):
         cfg["neighbors"],
         cfg["timing_band"],
         (cfg["variant"],),
+        cfg.get("frames_every", 0) if seed == 0 else 0,
     )
+    info["frames"] = st["frames"]
     terms = all_terms[cfg["variant"]]
     pick = functools.partial(EM.control_gradient, run, "squash_y", st["grid"])
     parts = {k: pick(getattr(terms, k)) for k in ("pathwise_tally", "pathwise_x", "pathwise_v")}
-    grad = pick(terms.pathwise) + pick(terms.score) + pick(terms.silhouette)
+    parts["volume"] = 0.0 if st["volume"] is None else pick(st["volume"])
+    parts["timing"] = pick(terms.timing)
+    parts["order"] = 0.0 if terms.order is None else pick(terms.order)
+    grad = pick(terms.pathwise) + pick(terms.score) + pick(terms.silhouette) + parts["volume"]
+    grad = grad + parts["timing"] + parts["order"]
     return info["objective"], grad, parts, info
 
 
@@ -177,6 +191,8 @@ def run(cfg, out: Path):
             "stuck": float(np.sum([p[3]["stuck"] for p in per])),
             "seconds": time.time() - t0,
         }
+        if per[0][3]["frames"] is not None:
+            np.savez(out / f"frames_{row['iterate']}.npz", **per[0][3]["frames"])
         rows.append(row)
         path.write_text(
             json.dumps(
@@ -200,6 +216,54 @@ def run(cfg, out: Path):
         s = s_next
 
 
+def backfill_frames(out: Path):
+    """``frames_<k>.npz`` for every iterate of a finished history that has none: the forward
+    of the iterate's first seed (key ``seed_start``, the same as the run's) at its ``s``,
+    with a snapshot every ``frames_every`` warm-up steps -- forward only, no gradient."""
+    h = json.loads((out / "history.json").read_text())
+    cfg = h["config"]
+    every = cfg.get("frames_every") or 50
+    for row in h["rows"]:
+        path = out / f"frames_{row['iterate']}.npz"
+        if path.exists():
+            continue
+        t0 = time.time()
+        run_cfg = dict(cfg, squash=float(row["s"]))
+        key = jax.random.key(cfg["seed_start"])
+        *_, setup = EM.forward(run_cfg, "squash_y", float(row["s"]), key, False, None, every)
+        np.savez(path, **setup["frames"])
+        print(f"frames {row['iterate']}: s {row['s']:.4f}  {time.time() - t0:.0f}s", flush=True)
+
+
+def _unit(values):
+    """``(factor, label)``: the power of ten that brings ``values`` to order one (the drag is
+    ~1e-20 N/m in the deck's gas, ~1e-2 at Kn 0.5 with fnum scaled by the density)."""
+    top = max(abs(float(v)) for v in values)
+    power = math.floor(math.log10(top)) if top > 0 else 0
+    return 10.0**-power, f"1e{power}"
+
+
+def _finish(fig, axes, h, free, path_fig):
+    """Spines, title and file of :func:`plot`."""
+    import matplotlib.pyplot as plt  # noqa: PLC0415
+
+    cfg = h["config"]
+    for ax in axes:
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+    regime = f", Kn = {cfg['knudsen']:g}" if cfg.get("knudsen", 0.0) > 0.0 else ""
+    regime += f", M = {cfg['mach']:g}" if cfg.get("mach", 0.0) > 0.0 else ""
+    optimum = f", free-molecular optimum s* = {h['s_star_ref']}" if free else ""
+    fig.suptitle(
+        f"{cfg['case']} squashed in y{regime}, Adam lr {cfg['learning_rate']:g}: "
+        f"J = D - lam V{optimum}",
+        fontsize=10,
+    )
+    fig.tight_layout()
+    fig.savefig(path_fig, dpi=150)
+    plt.close(fig)
+
+
 def plot(out: Path, path_fig: str):
     import matplotlib  # noqa: PLC0415
 
@@ -212,45 +276,41 @@ def plot(out: Path, path_fig: str):
     s = np.array([r["s"] for r in rows])
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 3.9))
     blue, orange, grey = "#2a78d6", "#eb6834", "#8a8a86"
+    # the free-molecular reference describes only the collisionless runs; a collisional
+    # run's drag behaves differently and is shown on its own
+    free = cfg.get("knudsen", 0.0) <= 0.0
     ax = axes[0]
     ax.plot(it, s, "o-", color=blue, ms=4, label="iterate")
-    ax.axhline(h["s_star_ref"], color=grey, ls="--", lw=1, label="reference optimum")
+    if free:
+        ax.axhline(h["s_star_ref"], color=grey, ls="--", lw=1, label="reference optimum")
     ax.set_xlabel("iterate")
     ax.set_ylabel("y semi-axis factor s")
     ax.legend(fontsize=7, frameon=False)
     ax = axes[1]
     grid = np.linspace(min(0.15, s.min()), max(1.0, s.max()), 200)
-    ref = np.array([reference(cfg, x)[1] for x in grid])
-    ax.plot(grid, ref * 1e20, color=grey, lw=1.5, label="free-molecular reference dD/ds")
+    k, unit = _unit([r["dD_ds"] for r in rows])
+    if free:
+        ref = np.array([reference(cfg, x)[1] for x in grid])
+        ax.plot(grid, ref * k, color=grey, lw=1.5, label="free-molecular reference dD/ds")
     ax.errorbar(
-        s, [r["dD_ds"] * 1e20 for r in rows], yerr=[2 * np.nan_to_num(r["dD_ds_se"]) * 1e20 for r in rows],
+        s, [r["dD_ds"] * k for r in rows], yerr=[2 * np.nan_to_num(r["dD_ds_se"]) * k for r in rows],
         fmt="o", color=blue, ms=4, capsize=2, label="adjoint dD/ds (+-2 SE)",
     )  # fmt: skip
-    ax.axhline(lam * reference(cfg, 1.0)[3] * 1e20, color=orange, lw=1, ls=":", label="lam dV/ds")
+    ax.axhline(lam * reference(cfg, 1.0)[3] * k, color=orange, lw=1, ls=":", label="lam dV/ds")
     ax.set_xlabel("s")
-    ax.set_ylabel("dD/ds  [1e-20]")
+    ax.set_ylabel(f"dD/ds  [{unit}]")
     ax.legend(fontsize=7, frameon=False)
     ax = axes[2]
-    ax.plot(s, [r["drag"] * 1e20 for r in rows], "o", color=blue, ms=4, label="in-box drag")
-    ax.plot(
-        grid, [reference(cfg, x)[0] * 1e20 for x in grid], color=grey, lw=1.5, label="reference"
-    )
+    k, unit = _unit([r["drag"] for r in rows])
+    ax.plot(s, [r["drag"] * k for r in rows], "o", color=blue, ms=4, label="in-box drag")
+    if free:
+        ax.plot(
+            grid, [reference(cfg, x)[0] * k for x in grid], color=grey, lw=1.5, label="reference"
+        )
     ax.set_xlabel("s")
-    ax.set_ylabel("windowed drag  [1e-20 N/m]")
+    ax.set_ylabel(f"windowed drag  [{unit} N/m]")
     ax.legend(fontsize=7, frameon=False)
-    for ax in axes:
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-    regime = f", Kn = {cfg['knudsen']:g}" if cfg.get("knudsen", 0.0) > 0.0 else ""
-    regime += f", M = {cfg['mach']:g}" if cfg.get("mach", 0.0) > 0.0 else ""
-    fig.suptitle(
-        f"{cfg['case']} squashed in y{regime}, Adam lr {cfg['learning_rate']:g}: "
-        f"J = D - lam V, free-molecular optimum s* = {h['s_star_ref']}",
-        fontsize=10,
-    )
-    fig.tight_layout()
-    fig.savefig(path_fig, dpi=150)
-    plt.close(fig)
+    _finish(fig, axes, h, free, path_fig)
 
 
 def main(argv=None):
@@ -264,6 +324,9 @@ def main(argv=None):
     p.add_argument("--substeps", type=int, default=None)
     p.add_argument("--partners", type=int, default=None)
     p.add_argument("--plot", action="store_true")
+    p.add_argument(
+        "--frames", action="store_true", help="re-run the forwards of a finished run for its movie"
+    )
     args = p.parse_args(argv)
     cfg = {k: getattr(args, k) for k in cfg}
     collisional = cfg["knudsen"] > 0.0
@@ -277,7 +340,10 @@ def main(argv=None):
     )
     out = Path(RESULTS) / tag
     if args.plot:
-        plot(out, os.path.join(FIGURES, f"optimize_squash_{tag}.png"))
+        plot(out, figure_path("squash", f"optimize_squash_{tag}.png"))
+        return
+    if args.frames:
+        backfill_frames(out)
         return
     run(cfg, out)
 

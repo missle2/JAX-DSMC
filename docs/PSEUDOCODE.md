@@ -667,7 +667,7 @@ analytic path.
   selections of the refinement carry no derivative and the Newton step restores the implicit-function derivative
   `∂t/∂coef = −B_j(x_hit)/(v·∇φ)` (and `∂t/∂x`, `∂t/∂v` likewise); freezing the search's
   inputs rather than only its output keeps reverse mode from tracing the two loops.
-  Measured (LS0, `figures/mesh_levelset_checks.png`): surface and hit errors fall as
+  Measured (LS0, `figures/meshing/mesh_levelset_checks.png`): surface and hit errors fall as
   `h⁴` (circle: 2e-5 → 6e-9 in `|φ|` on the surface from h = 0.5 to 0.0625; hit
   position 1e-6 at h = 0.125), tunnelling only for chords shorter than one sample
   spacing (a fraction ~5e-5 of the circle's hits, grazing, carrying no momentum).  Tunnelling (a grazing dip shorter than the spacing) is
@@ -2310,6 +2310,82 @@ inputs and one helper; the collision pull-back is untouched):
   tally term alone reproduces `F/r` (1.28 vs 1.23 e-20, the whole fixed-hit-set
   derivative of a specular cylinder) and the total, 1.44 ± 0.09 e-20, agrees with the
   CRN FD 1.40 ± 0.01 e-20 (48 seeds, z = 0.5); the `∇_xλ` part is again the noise.
+
+#### 9.7.1 Several value fields in one sweep: the two-column backward (2026-10-02)
+
+A shape seed (`examples/ensemble_mesh.shape_terms`) needs two value fields over the same
+captured run: `λ` of the objective's hit rewards and `λ_timing` of the timing rewards (the
+along-flight identity's value).  They used to be two calls of the virtual backward.  They
+are now **one sweep carrying `λ ∈ f64[N, 2]`**.
+
+*Why it is exact.*  The value backward is linear in its rewards, and nothing it decides
+depends on the values: the cell tables (`cell_nodes`), the virtual partners and their
+draws (`_partner_pass`: `randint` / `uniform` from the step key), the VSS scatterings of
+the virtual pairs, the staged velocities, and in every fit the `k` nearest nodes, their
+weights `1/(1+(d/d_k)²)`, the design and the normal matrix `M = DᵀWD + ridge` are
+functions of the record and the query states only.  The values enter each fit as its
+right-hand side `DᵀW y` alone.  So the sweep with reward columns `(r_1, r_2)` returns
+column `j` = the backward of `r_j`, to the solve's rounding.
+
+*What is shared.*  Per fit (`field_query`, called through `cell_query` at five places per
+substep: `f_node`, the partner pair `f_i, f_j` per partner, and `f_prev, f_here` of the
+boundary move) the neighbour search (`top_k` over the cell's `P` nodes), the gathers, the
+design, `M` and its factorisation are formed once; each column costs one gather of its
+node values, one weighted sum over the `k` nodes and two triangular substitutions.  The
+partner draws and VSS kernels of a substep are made once for both columns.
+
+*Interfaces.*
+* `field_query(..., node_val f64[Q, P, R])` → `value f64[Q, R]`, `grad_x f64[Q, D, R]`,
+  `grad_v f64[Q, 3, R]`; a 2-D `node_val` keeps the single-column shapes.  `cell_query`
+  passes the trailing axis through (`_unchunk`).
+* `backward_virtual(phi_final f64[N, R], phi_step f64[M, N, R], hit_reward f64[M, K, N, R])`
+  → `Backward(lambda0 f64[N, R], lam f64[M, N, R], kernel f64[M, R])` (`four_term` has no
+  column axis: zeros under the virtual pull-back).  Per-slot masks and weights are
+  broadcast over the columns by `_per_slot`.  The sequential `backward` stays
+  single-column (`device_backward` refuses columns without the virtual pull-back).
+* `examples/ensemble_inlet_shock.device_backward` takes the stacked rewards, applies the
+  stability check (`GROWTH_LIMIT`) per column and requires `host_adjoint=False` with
+  columns (the host bookkeeping, `from_device`, is single-column).
+* `examples/ensemble_mesh._backwards` stacks `(hits.totals()[:, None], timing)` into
+  `f64[M, 1, N, 2]`, makes one call and splits the result into the two `Backward`s the
+  shape gradient reads (`_column`); under the sequential pull-back it keeps two calls.
+
+*The solve.*  The normal matrices are symmetric positive definite (a weighted Gram matrix
+plus the relative ridge `1e-8` on the slopes; an empty query gets `M[0,0] += 1`), so
+`jnp.linalg.solve`'s batched LU is replaced by `_spd_solve`: the Cholesky factor written
+out over the static `p` (14 columns for `quadratic_full` in 2-D), then the forward and
+back substitutions for all columns -- every operation elementwise over the `Q` queries,
+which XLA fuses.  A pivot rounded to `≤ 0` (a fit with fewer nodes than columns, held up
+only by the ridge) is floored at the smallest normal float instead of producing a NaN.
+The right-hand side is a weighted sum over the nodes instead of a three-operand `einsum`.
+
+*Measured* (RTX 3050 Ti laptop GPU, f64; `scratch/adjoint_fit/README.md`):
+
+| | before | after |
+|---|---|---|
+| one fit chunk (4096 queries, P 256, k 32), one field | 5.88 ms (LU) | 5.21 ms |
+| the same chunk, two fields | 2 × 5.88 ms | 5.61 ms |
+| a seed's two value backwards, collisional (Kn 0.5, virtual 1 × 2) | 90.5 s | 43.3 s |
+| optimiser seed (optc, fnum × 4, warm): backward / whole seed | 65 / 99 s | 29 / 64 s |
+
+*Agreement.*  Column `j` of one sweep equals the single-column sweep to `1e-13` relative
+(`tests/test_ensemble_device.py::test_virtual_backward_value_columns_are_separate_backwards`;
+not bit for bit: XLA fuses the one- and two-column fits differently);
+`_spd_solve` matches LU to `eps · cond(M)` (`test_spd_solve_matches_lu_...`).  Against
+the old code (LU, two calls) the collisional seed's `λ` differs by up to `3e-7` of its rms
+-- zero at the last captured step, `1e-9` one step back, then a plateau: the
+ill-conditioned fits of sparse cells turn last-bit rounding differences into `~1e-9`
+per step, and the stable recursion carries them; the same plateau appears with the old
+LU solve and only the right-hand side's summation order changed.  The optimiser's
+gradient terms (`scratch/perf/regress.py --compare final`) agree to `3.7e-9` relative,
+the objective bitwise.
+
+*Collisionless runs.*  Where a step makes no collision attempts, every partner term is
+weighted by zero and no velocity changes at a substep boundary, so the fits do not
+change `λ` at all (identical to 16 digits under every basis, 2026-10-02) -- they are
+pure cost there.  Skipping them when the attempts are zero is deliberately **not** done:
+the collisional path must be the one every run exercises (no runtime collisionless
+shortcuts; HANDOFF section 1.10).
 
 ### 9.5 Tests (`tests/test_move.py`), parametrised over `D in {1, 2, 3}`
 

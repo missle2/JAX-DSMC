@@ -1,0 +1,17 @@
+{
+ "quadratic_full": {
+  "first_incl_compile": 65.17427133102319,
+  "seconds": 64.92736399898422,
+  "lam_rms": 2.2953438079866148e-24
+ },
+ "quadratic": {
+  "first_incl_compile": 69.65978328502388,
+  "seconds": 96.97587804801879,
+  "lam_rms": 2.2953438079866148e-24
+ },
+ "affine": {
+  "first_incl_compile": 89.02510774799157,
+  "seconds": 100.13014277000912,
+  "lam_rms": 2.2953438079866148e-24
+ }
+}

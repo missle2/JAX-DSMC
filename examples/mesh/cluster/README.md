@@ -46,7 +46,7 @@ python3 -m examples.mesh.cluster.collect           # merges the seed files, figu
 | `study.py` | the job matrix by group (`--group sphere\|mode2\|opt\|optc --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |
 | `job.sbatch` | one job: resources from the `sbatch` line, the command from `CMD`; logs `nvidia-smi -L`, then the preflight, then the command |
 | `submit_curc.sh` | one `sbatch` per job line with a GPU's share of the node (H200: 32 cores, 128 GB; A100: 21 cores, 70 GB), the group's wall time; `GPU_KIND=a100\|h200\|rtx\|mi100` (`rtx`: the RTX PRO 6000 partition, gres and per-GPU sizing read from `sinfo`; `submit_curc.sh check` runs `check_env` on the chosen kind first), `PART`, `GRES_TYPE` override the partition / GPU; builds the job list with the venv's python (the login node's `python3` is 3.6; `PYTHON` overrides) |
-| `collect.py` | per-seed files → artifacts, `figures/optimize_convergence.png` / `optimize_convergence_coarse.png`, `figures/optc_drag.png`, `figures/optc_body_extent.png`, `figures/gradient_seed_convergence.png`, `figures/mode2_gate.png`, the sphere gate row, `study_results.json` |
+| `collect.py` | per-seed files → artifacts, `figures/optimize_convergence.png` / `optimize_convergence_coarse.png`, `figures/optc/optc_drag.png`, `figures/optc/optc_body_extent.png`, `figures/optc/gradient_seed_convergence.png`, `figures/mode2_gate.png`, the sphere gate row, `study_results.json` |
 
 Every command **resumes from its own artifact** (seed rows / optimiser iterates already
 written are skipped), so a job that hits its time limit is resubmitted with the same
@@ -102,7 +102,7 @@ an optimisation iterate developed a flat, cap-terminated face; the drag history 
 `coef_k.npy` sequence show whether it does.
 
 `collect.py` draws `figures/optimize_convergence.png` (J per iterate and per unit cost `S
-× iterates` for every run, the area constraint), `figures/gradient_seed_convergence.png`
+× iterates` for every run, the area constraint), `figures/optc/gradient_seed_convergence.png`
 (bootstrap SE of the `cos 2θ` gradient vs the number of seeds against 1 % of the FD), for
 `optc` `optimize_convergence_coarse.png`, `optc_drag.png` and `optc_body_extent.png`, for
 `mode2` `mode2_gate.png`, and prints the sphere gate row (all written to
@@ -137,3 +137,30 @@ there is no Hessian, it is not a Newton method.
 If a ROCm route ever becomes available (`module spider jax` showing ≥ 0.4.36, or an
 Apptainer image `rocm/jax`), `GPU_KIND=mi100 bash examples/mesh/cluster/submit_curc.sh
 <group>` switches to `ami100` / `gpu:mi100:N` with the module lines of `env.sh`.
+
+## `biasgate` (2026-10-04): the bias study's gates at production settings
+
+The local bias study (`scratch/bias/`, slides `docs/math/shape_sensitivities_slides.tex`)
+ran at fnum x2 on the 4 GB workstation GPU; these jobs repeat its open Kn 0.5 gate at
+fnum x1 with the shipped 4 x 8 pull-back, and test the horizon against the whole run
+captured.  Each job is `bash scratch/bias/cluster_job.sh <name>` (its header documents the
+settings; JSON arguments live there because `sbatch --export` splits on commas).  Copy
+`scratch/bias/` to the cluster checkout first (it is not tracked).
+
+```
+bash examples/mesh/cluster/submit_curc.sh biasgate                       # all 18 jobs, A100
+GPU_KIND=h200 ONLY='hor' bash examples/mesh/cluster/submit_curc.sh biasgate          # horizon jobs
+GPU_KIND=rtx  ONLY='^kn_(seed|fd)' bash examples/mesh/cluster/submit_curc.sh biasgate # the rest
+```
+
+| job | what | cost |
+|---|---|---|
+| `kn_seed{0..7}` | Kn 0.5 paired gate at s = 1: all grad-lambda variants, the identity with/without L* lambda, volume and collision-order terms, CRN FD (h = 0.2), frozen-volume FD | ~1 h |
+| `kn_fd{0..3}` | FD only, 16 seeds each, h = 0.1 and 0.2 (the arbiter) | ~1 h |
+| `kn_hor_seed{0..3}` | horizon: 300 captured steps vs the whole run (1000, no truncation) | ~4 h, > 24 GB likely: a100 / h200 |
+| `fm_hor_s1.0`, `fm_hor_s0.35` | the same in free-molecular flow, 8 seeds | ~3 h |
+
+Results: `scratch/bias/cluster/<job>.jsonl`; summarise with
+`cat scratch/bias/cluster/kn_seed*.jsonl > kn.jsonl; python3 scratch/bias/summarise.py kn.jsonl`
+(FD arbiter: the `fd` columns of `kn_fd*.jsonl`), and
+`python3 scratch/bias/horizon_summary.py scratch/bias/cluster/fm_hor_s1.0.jsonl`.

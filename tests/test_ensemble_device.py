@@ -181,3 +181,63 @@ def test_device_virtual_kernel_term_matches_the_host_form_in_expectation():
         host.configure()
     diffs = np.array(diffs)
     assert abs(diffs.mean()) < 3 * diffs.std(ddof=1) / np.sqrt(len(diffs)) + 1e-3
+
+
+def test_spd_solve_matches_lu_on_well_and_ill_conditioned_fits():
+    """The unrolled Cholesky of the fits' normal matrices against a batched LU, from a
+    well-conditioned weighted Gram matrix to one ridge-held at 1e-8 (fewer nodes than
+    columns), for several right-hand sides at once."""
+    rng = np.random.default_rng(0)
+    p, q = 14, 64
+    for nodes, ridge in ((40, 0.0), (6, 1e-8)):
+        a = rng.normal(size=(q, nodes, p))
+        m = np.einsum("qki,qkj->qij", a, a)
+        m += ridge * np.trace(m, axis1=1, axis2=2)[:, None, None] / p * np.eye(p)
+        rhs = rng.normal(size=(q, p, 2))
+        got = np.asarray(device._spd_solve(jnp.asarray(m), jnp.asarray(rhs)))
+        want = np.linalg.solve(m, rhs)
+        # the relative error of either solve is ~ eps * cond(m)
+        cond = np.linalg.cond(m).max()
+        np.testing.assert_allclose(got, want, rtol=0, atol=50 * 2.2e-16 * cond * np.abs(want).max())
+
+
+def test_field_query_columns_are_the_single_column_fits():
+    """``R`` value columns through one fit equal ``R`` separate fits (the same nodes,
+    weights and factorisation; each column's arithmetic is the single-column one)."""
+    key = jax.random.key(1)
+    kx, kv, kf = jax.random.split(key, 3)
+    q, p = 16, 120
+    x = jax.random.uniform(kx, (q, p, 2), dtype=jnp.float64)
+    v = jax.random.normal(kv, (q, p, 3), dtype=jnp.float64)
+    valid = jax.random.uniform(kf, (q, p)) < 0.7
+    vals = jnp.stack((jnp.sum(v**2, -1) + x[..., 0], v[..., 1] * x[..., 1] - 0.3 * v[..., 2]), -1)
+    qx, qv = x[:, 0] + 0.01, v[:, 0] * 0.9
+    scale = jnp.array([0.5, 0.5, 1.0, 1.0, 1.0])
+    both = device.field_query(x, v, valid, vals, qx, qv, scale, 32)
+    for r in range(2):
+        one = device.field_query(x, v, valid, vals[..., r], qx, qv, scale, 32)
+        for got, want in zip(both, one, strict=True):
+            np.testing.assert_allclose(
+                np.asarray(got)[..., r], np.asarray(want), rtol=1e-13, atol=0
+            )
+
+
+def test_virtual_backward_value_columns_are_separate_backwards():
+    """Two reward columns in one virtual sweep (collisional relaxation, staged nodes, two
+    partners and substeps) give each column's own backward: the sweep decides nothing
+    from the values.  Equal to rounding, not bit for bit: XLA fuses the one- and the
+    two-column fits differently (2 of 1200 values differed by 3e-13 relative)."""
+    n = 400
+    t = dict(CONTROLS)
+    state0, out, _diag, rec, grid = relaxation_run(
+        t, jax.random.key(3), n, 3, 512, 0.2, "certified", capture=True
+    )
+    rewards = jnp.stack((jnp.sum(out.v**2, axis=1) / n, out.v[:, 0] * out.v[:, 1] / n), axis=1)
+    args = (grid, jnp.ones(4), species(t), jax.random.key(0), 512, 32, "quadratic_full", 256, 2, 2)
+    both = device.backward_virtual(rec, state0.alive, out, rewards, *args, "staged", None)
+    assert both.lam.shape[-1] == 2 and both.lambda0.shape == (n, 2)
+    for r in range(2):
+        one = device.backward_virtual(rec, state0.alive, out, rewards[:, r], *args, "staged", None)
+        scale = float(jnp.sqrt(jnp.mean(one.lam**2)))
+        np.testing.assert_allclose(both.lam[..., r], one.lam, rtol=0, atol=1e-10 * scale)
+        np.testing.assert_allclose(both.lambda0[:, r], one.lambda0, rtol=0, atol=1e-10 * scale)

@@ -1,0 +1,3668 @@
+{
+ "wall_ms_per_step": 9.648990209971089,
+ "untraced_ms_per_step": 7.38861784018809,
+ "ops_per_step": 2216.59,
+ "op_ms_per_step": 8.334289810000001,
+ "median_op_us": 0.646,
+ "size_histogram": {
+  "0-1 us": {
+   "ops_per_step": 1420.01,
+   "ms_per_step": 0.6512228300000001
+  },
+  "1-2 us": {
+   "ops_per_step": 334.52,
+   "ms_per_step": 0.4852034499999999
+  },
+  "2-4 us": {
+   "ops_per_step": 192.26,
+   "ms_per_step": 0.5385141
+  },
+  "4-8 us": {
+   "ops_per_step": 106.77,
+   "ms_per_step": 0.6098374599999999
+  },
+  "8-16 us": {
+   "ops_per_step": 50.98,
+   "ms_per_step": 0.60159644
+  },
+  "16-64 us": {
+   "ops_per_step": 91.49,
+   "ms_per_step": 3.2293190000000003
+  },
+  "64-inf us": {
+   "ops_per_step": 20.56,
+   "ms_per_step": 2.2185965299999997
+  }
+ },
+ "functions": {
+  "sort.py:_partition_update": {
+   "ops_per_step": 111.0,
+   "ms_per_step": 0.7360576600000026,
+   "us_per_op": 6.631150090090114
+  },
+  "wall_adjoint.py:_advance_impl": {
+   "ops_per_step": 39.01,
+   "ms_per_step": 0.6044765299999999,
+   "us_per_op": 15.495425019225838
+  },
+  "sample.py:cell_temperature": {
+   "ops_per_step": 13.0,
+   "ms_per_step": 0.6041852200000004,
+   "us_per_op": 46.47578615384619
+  },
+  "?": {
+   "ops_per_step": 91.38,
+   "ms_per_step": 0.4526860000000004,
+   "us_per_op": 4.9538848763405605
+  },
+  "compaction.py:ranked_slots": {
+   "ops_per_step": 532.0,
+   "ms_per_step": 0.4336773100000051,
+   "us_per_op": 0.8151829135338442
+  },
+  "geometry.py:_plane_time": {
+   "ops_per_step": 17.0,
+   "ms_per_step": 0.36377808000000045,
+   "us_per_op": 21.398710588235318
+  },
+  "geometry.py:_gather_elements": {
+   "ops_per_step": 19.01,
+   "ms_per_step": 0.35995714999999995,
+   "us_per_op": 18.935147290899526
+  },
+  "ntc.py:collide": {
+   "ops_per_step": 27.03,
+   "ms_per_step": 0.28777314999999953,
+   "us_per_op": 10.646435442101351
+  },
+  "compaction.py:prefix_count": {
+   "ops_per_step": 45.0,
+   "ms_per_step": 0.2702459599999999,
+   "us_per_op": 6.005465777777776
+  },
+  "wall_adjoint.py:_near_chunk": {
+   "ops_per_step": 37.0,
+   "ms_per_step": 0.2572889600000004,
+   "us_per_op": 6.953755675675687
+  },
+  "wall_adjoint.py:_box_compact": {
+   "ops_per_step": 51.0,
+   "ms_per_step": 0.24715641999999932,
+   "us_per_op": 4.846204313725477
+  },
+  "grid.py:_cell_multi_index": {
+   "ops_per_step": 312.01,
+   "ms_per_step": 0.2277973500000001,
+   "us_per_op": 0.7300963110156728
+  },
+  "inflow.py:_flux_quantile_start": {
+   "ops_per_step": 23.08,
+   "ms_per_step": 0.19962771999999965,
+   "us_per_op": 8.649381282495652
+  },
+  "inflow.py:_flux_halley_step": {
+   "ops_per_step": 22.01,
+   "ms_per_step": 0.18966847000000012,
+   "us_per_op": 8.617377101317588
+  },
+  "sort.py:update_table": {
+   "ops_per_step": 72.0,
+   "ms_per_step": 0.1764224399999996,
+   "us_per_op": 2.450311666666661
+  },
+  "geometry.py:near_surface": {
+   "ops_per_step": 11.0,
+   "ms_per_step": 0.1698285199999998,
+   "us_per_op": 15.438956363636347
+  },
+  "inflow.py:sample_surface_velocities": {
+   "ops_per_step": 11.05,
+   "ms_per_step": 0.14333531999999974,
+   "us_per_op": 12.97152217194568
+  },
+  "wall_adjoint.py:_routing_code": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.13680588000000005,
+   "us_per_op": 68.40294000000002
+  },
+  "wall_adjoint.py:_slot_uniforms": {
+   "ops_per_step": 57.72,
+   "ms_per_step": 0.1330241099999997,
+   "us_per_op": 2.304645010395005
+  },
+  "wall_adjoint.py:_face_tally": {
+   "ops_per_step": 99.89,
+   "ms_per_step": 0.11210923999999962,
+   "us_per_op": 1.1223269596556174
+  },
+  "wall_adjoint.py:lane_slots": {
+   "ops_per_step": 7.0,
+   "ms_per_step": 0.10570114000000007,
+   "us_per_op": 15.100162857142866
+  },
+  "geometry.py:_fine_grid": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.10461466999999997,
+   "us_per_op": 52.30733499999999
+  },
+  "geometry.py:_odd_crossings": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.10249500000000006,
+   "us_per_op": 20.499000000000013
+  },
+  "inflow.py:inject": {
+   "ops_per_step": 32.02,
+   "ms_per_step": 0.09081778000000014,
+   "us_per_op": 2.836282948157406
+  },
+  "geometry.py:_segment_crosses_lines": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.08403133999999993,
+   "us_per_op": 21.007834999999982
+  },
+  "vss.py:scatter": {
+   "ops_per_step": 8.03,
+   "ms_per_step": 0.08270998999999996,
+   "us_per_op": 10.300123287671228
+  },
+  "wall_adjoint.py:_bounce": {
+   "ops_per_step": 39.0,
+   "ms_per_step": 0.08028687999999998,
+   "us_per_op": 2.0586379487179483
+  },
+  "geometry.py:_element_hit": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.07942505000000004,
+   "us_per_op": 19.856262500000007
+  },
+  "simulate.py:_step": {
+   "ops_per_step": 1.01,
+   "ms_per_step": 0.07709551000000003,
+   "us_per_op": 76.33218811881191
+  },
+  "sort.py:table_cells": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.07664602000000004,
+   "us_per_op": 76.64602000000002
+  },
+  "ntc.py:_slot": {
+   "ops_per_step": 71.0,
+   "ms_per_step": 0.06961292999999999,
+   "us_per_op": 0.9804638028169013
+  },
+  "wall_adjoint.py:_dense_pass": {
+   "ops_per_step": 15.0,
+   "ms_per_step": 0.06804721000000015,
+   "us_per_op": 4.536480666666677
+  },
+  "rng.py:_randint_at": {
+   "ops_per_step": 4.03,
+   "ms_per_step": 0.06792499999999996,
+   "us_per_op": 16.85483870967741
+  },
+  "wall_adjoint.py:_lane_passes": {
+   "ops_per_step": 37.0,
+   "ms_per_step": 0.06781822999999995,
+   "us_per_op": 1.8329251351351339
+  },
+  "geometry.py:first_hit": {
+   "ops_per_step": 11.18,
+   "ms_per_step": 0.056691449999999935,
+   "us_per_op": 5.070791592128796
+  },
+  "wall_adjoint.py:_face_tallies": {
+   "ops_per_step": 14.82,
+   "ms_per_step": 0.05143308999999999,
+   "us_per_op": 3.4705188933873132
+  },
+  "wall_adjoint.py:_lane_distance": {
+   "ops_per_step": 12.0,
+   "ms_per_step": 0.04670452000000003,
+   "us_per_op": 3.8920433333333357
+  },
+  "wall_adjoint.py:_box_rules": {
+   "ops_per_step": 16.0,
+   "ms_per_step": 0.04590191000000009,
+   "us_per_op": 2.8688693750000054
+  },
+  "geometry.py:_polygon_hit": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.04516764999999997,
+   "us_per_op": 7.527941666666661
+  },
+  "wall_adjoint.py:_box_events": {
+   "ops_per_step": 17.82,
+   "ms_per_step": 0.03964164999999998,
+   "us_per_op": 2.2245594837261495
+  },
+  "wall_adjoint.py:_inside_rows": {
+   "ops_per_step": 16.0,
+   "ms_per_step": 0.039408999999999944,
+   "us_per_op": 2.463062499999997
+  },
+  "compaction.py:_materialise": {
+   "ops_per_step": 12.0,
+   "ms_per_step": 0.038465080000000054,
+   "us_per_op": 3.2054233333333375
+  },
+  "safe.py:safe_pow": {
+   "ops_per_step": 16.04,
+   "ms_per_step": 0.03732979999999994,
+   "us_per_op": 2.327294264339148
+  },
+  "geometry.py:_elements_near": {
+   "ops_per_step": 9.37,
+   "ms_per_step": 0.03670924000000003,
+   "us_per_op": 3.9177417289220955
+  },
+  "wall_adjoint.py:_lane_from_hits": {
+   "ops_per_step": 24.0,
+   "ms_per_step": 0.03392205000000016,
+   "us_per_op": 1.4134187500000068
+  },
+  "wall_adjoint.py:_fixed_time": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.033777830000000016,
+   "us_per_op": 16.888915000000008
+  },
+  "geometry.py:_cell_corner": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.03322825999999999,
+   "us_per_op": 8.307064999999998
+  },
+  "wall_adjoint.py:_surface_tally": {
+   "ops_per_step": 9.12,
+   "ms_per_step": 0.03274602,
+   "us_per_op": 3.590572368421053
+  },
+  "ntc.py:attempt_count": {
+   "ops_per_step": 11.01,
+   "ms_per_step": 0.028923430000000003,
+   "us_per_op": 2.6270145322434155
+  },
+  "rng.py:key_for": {
+   "ops_per_step": 23.31,
+   "ms_per_step": 0.027690480000000055,
+   "us_per_op": 1.1879227799227823
+  },
+  "wall_adjoint.py:_hit_rows": {
+   "ops_per_step": 7.42,
+   "ms_per_step": 0.026902769999999996,
+   "us_per_op": 3.6257102425876004
+  },
+  "sampling.py:_tangent_frame": {
+   "ops_per_step": 9.26,
+   "ms_per_step": 0.02634422000000002,
+   "us_per_op": 2.8449481641468704
+  },
+  "rng.py:_normal_at": {
+   "ops_per_step": 2.02,
+   "ms_per_step": 0.025899039999999974,
+   "us_per_op": 12.821306930693058
+  },
+  "simulate.py:run": {
+   "ops_per_step": 28.01,
+   "ms_per_step": 0.024333219999999937,
+   "us_per_op": 0.8687333095323077
+  },
+  "sort.py:stable_cell_order": {
+   "ops_per_step": 0.06,
+   "ms_per_step": 0.023726860000000002,
+   "us_per_op": 395.4476666666667
+  },
+  "wall_adjoint.py:_compact_face_tallies": {
+   "ops_per_step": 14.0,
+   "ms_per_step": 0.022865299999999995,
+   "us_per_op": 1.6332357142857137
+  },
+  "wall_adjoint.py:_apply_events": {
+   "ops_per_step": 9.98,
+   "ms_per_step": 0.021514019999999995,
+   "us_per_op": 2.155713426853707
+  },
+  "ntc.py:_gather_rows": {
+   "ops_per_step": 12.0,
+   "ms_per_step": 0.02120216999999998,
+   "us_per_op": 1.7668474999999981
+  },
+  "inflow.py:_flux_model_step": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.020525190000000013,
+   "us_per_op": 6.841730000000004
+  },
+  "sampling.py:diffuse_draws_from_uniforms": {
+   "ops_per_step": 3.42,
+   "ms_per_step": 0.01940421000000001,
+   "us_per_op": 5.67374561403509
+  },
+  "geometry.py:inside_polygon": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.019215170000000007,
+   "us_per_op": 3.843034000000001
+  },
+  "wall_adjoint.py:_elements_dense": {
+   "ops_per_step": 1.68,
+   "ms_per_step": 0.018712869999999996,
+   "us_per_op": 11.138613095238094
+  },
+  "vss.py:collision_rate": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.016868579999999994,
+   "us_per_op": 4.217144999999999
+  },
+  "wall_adjoint.py:_elements_compact": {
+   "ops_per_step": 10.0,
+   "ms_per_step": 0.01672175999999999,
+   "us_per_op": 1.6721759999999988
+  },
+  "grid.py:cell_of": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.015362139999999995,
+   "us_per_op": 3.072427999999999
+  },
+  "safe.py:safe_norm": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.013432959999999992,
+   "us_per_op": 3.3582399999999977
+  },
+  "inflow.py:_put_at": {
+   "ops_per_step": 7.0,
+   "ms_per_step": 0.0107289,
+   "us_per_op": 1.5326999999999997
+  },
+  "geometry.py:surface_normal": {
+   "ops_per_step": 2.28,
+   "ms_per_step": 0.009356299999999998,
+   "us_per_op": 4.103640350877192
+  },
+  "wall_adjoint.py:_first_pass_routed": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00930338999999999,
+   "us_per_op": 2.3258474999999974
+  },
+  "safe.py:safe_sqrt": {
+   "ops_per_step": 9.14,
+   "ms_per_step": 0.007741620000000004,
+   "us_per_op": 0.8470043763676153
+  },
+  "geometry.py:dense_threshold": {
+   "ops_per_step": 0.06,
+   "ms_per_step": 0.00773277,
+   "us_per_op": 128.8795
+  },
+  "inflow.py:sample_face_positions": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.007515149999999998,
+   "us_per_op": 3.757574999999999
+  },
+  "wall_adjoint.py:_lane_more": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.007215080000000004,
+   "us_per_op": 0.9018850000000005
+  },
+  "levelset.py:_near_slots": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.007188210000000001,
+   "us_per_op": 3.5941050000000008
+  },
+  "grid.py:spacing": {
+   "ops_per_step": 6.02,
+   "ms_per_step": 0.006634100000000003,
+   "us_per_op": 1.1020099667774093
+  },
+  "ntc.py:pair_from_draws": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.005612209999999996,
+   "us_per_op": 0.9353683333333328
+  },
+  "sampling.py:diffuse_velocity_general": {
+   "ops_per_step": 4.56,
+   "ms_per_step": 0.005428150000000001,
+   "us_per_op": 1.190383771929825
+  },
+  "wall_adjoint.py:_element_events": {
+   "ops_per_step": 4.14,
+   "ms_per_step": 0.005263760000000003,
+   "us_per_op": 1.2714396135265709
+  },
+  "inflow.py:flux_quantile": {
+   "ops_per_step": 1.08,
+   "ms_per_step": 0.00515782,
+   "us_per_op": 4.775759259259258
+  },
+  "sampling.py:thermal_speed": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0027879700000000007,
+   "us_per_op": 2.4455877192982465
+  },
+  "vss.py:acceptance_prob": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.002641700000000002,
+   "us_per_op": 0.6604250000000005
+  },
+  "ntc.py:_unfused": {
+   "ops_per_step": 2.01,
+   "ms_per_step": 0.0025438500000000003,
+   "us_per_op": 1.2655970149253732
+  },
+  "safe.py:safe_recip_count": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00157826,
+   "us_per_op": 0.78913
+  },
+  "sort.py:_starts": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0015724899999999995,
+   "us_per_op": 1.5724899999999993
+  },
+  "wall_adjoint.py:_hit_normal": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0015617400000000003,
+   "us_per_op": 1.369947368421053
+  },
+  "geometry.py:_elements_dense": {
+   "ops_per_step": 0.07,
+   "ms_per_step": 0.00123212,
+   "us_per_op": 17.601714285714287
+  },
+  "wall_adjoint.py:_lane_step": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00100258,
+   "us_per_op": 1.00258
+  },
+  "wall_adjoint.py:_chunk_more": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00043419999999999993,
+   "us_per_op": 0.4341999999999999
+  },
+  "ntc.py:thermal_majorant": {
+   "ops_per_step": 0.05,
+   "ms_per_step": 7.335999999999999e-05,
+   "us_per_op": 1.4671999999999996
+  },
+  "inflow.py:target_count": {
+   "ops_per_step": 0.03,
+   "ms_per_step": 3.858e-05,
+   "us_per_op": 1.286
+  },
+  "safe.py:safe_log": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.5459999999999998e-05,
+   "us_per_op": 0.7729999999999999
+  },
+  "sampling.py:stochastic_round": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.074e-05,
+   "us_per_op": 0.537
+  },
+  "geometry.py:near_tables": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.449999999999999e-06,
+   "us_per_op": 0.845
+  },
+  "rng.py:_uniform_at": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 6.979999999999999e-06,
+   "us_per_op": 0.698
+  },
+  "inflow.py:tail": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 3.69e-06,
+   "us_per_op": 0.369
+  }
+ },
+ "opcodes": {
+  "reduce-window": {
+   "ops_per_step": 160.37,
+   "ms_per_step": 0.8082115200000036,
+   "us_per_op": 5.039667768285862
+  },
+  "bitcast_gather_fusion": {
+   "ops_per_step": 227.35,
+   "ms_per_step": 0.7291183500000008,
+   "us_per_op": 3.207030349681112
+  },
+  "wrapped_scatter": {
+   "ops_per_step": 90.42,
+   "ms_per_step": 0.5317730500000011,
+   "us_per_op": 5.881144105286452
+  },
+  "multiply_reduce_fusion": {
+   "ops_per_step": 37.84,
+   "ms_per_step": 0.5314123400000006,
+   "us_per_op": 14.043666490486274
+  },
+  "copy": {
+   "ops_per_step": 469.53,
+   "ms_per_step": 0.49035463000000656,
+   "us_per_op": 1.0443520754797488
+  },
+  "select_bitcast_fusion": {
+   "ops_per_step": 49.37,
+   "ms_per_step": 0.32207974000000095,
+   "us_per_op": 6.523794612112637
+  },
+  "copy_gather_fusion": {
+   "ops_per_step": 12.01,
+   "ms_per_step": 0.32105332000000003,
+   "us_per_op": 26.732166527893423
+  },
+  "broadcast": {
+   "ops_per_step": 60.92,
+   "ms_per_step": 0.30091185000000004,
+   "us_per_op": 4.939459126723572
+  },
+  "select_add_fusion": {
+   "ops_per_step": 4.21,
+   "ms_per_step": 0.28503258000000004,
+   "us_per_op": 67.70370071258908
+  },
+  "compare_select_fusion": {
+   "ops_per_step": 316.01,
+   "ms_per_step": 0.23230846999999982,
+   "us_per_op": 0.7351301224644784
+  },
+  "multiply_add_fusion": {
+   "ops_per_step": 11.02,
+   "ms_per_step": 0.2300677399999998,
+   "us_per_op": 20.87729038112521
+  },
+  "select_reduce_fusion": {
+   "ops_per_step": 9.0,
+   "ms_per_step": 0.21712783000000005,
+   "us_per_op": 24.125314444444452
+  },
+  "maximum_minimum_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.19785277999999992,
+   "us_per_op": 98.92638999999996
+  },
+  "broadcast_select_fusion": {
+   "ops_per_step": 31.43,
+   "ms_per_step": 0.1925475599999999,
+   "us_per_op": 6.126234807508746
+  },
+  "add_bitcast_fusion": {
+   "ops_per_step": 16.93,
+   "ms_per_step": 0.18566522999999965,
+   "us_per_op": 10.966640874187812
+  },
+  "sort": {
+   "ops_per_step": 2.01,
+   "ms_per_step": 0.15607580999999981,
+   "us_per_op": 77.64965671641782
+  },
+  "add": {
+   "ops_per_step": 170.7,
+   "ms_per_step": 0.14289565999999898,
+   "us_per_op": 0.8371157586408844
+  },
+  "broadcast_multiply_fusion": {
+   "ops_per_step": 1.01,
+   "ms_per_step": 0.11922904999999993,
+   "us_per_op": 118.04856435643558
+  },
+  "multiply_bitcast_fusion": {
+   "ops_per_step": 1.02,
+   "ms_per_step": 0.11844496999999991,
+   "us_per_op": 116.12251960784306
+  },
+  "subtract_bitcast_fusion": {
+   "ops_per_step": 5.15,
+   "ms_per_step": 0.1167360400000001,
+   "us_per_op": 22.66719223300973
+  },
+  "copy_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.10461466999999997,
+   "us_per_op": 52.30733499999999
+  },
+  "select_select_fusion": {
+   "ops_per_step": 3.14,
+   "ms_per_step": 0.10315745,
+   "us_per_op": 32.852691082802544
+  },
+  "broadcast_add_fusion": {
+   "ops_per_step": 18.82,
+   "ms_per_step": 0.09913978999999994,
+   "us_per_op": 5.267789054197658
+  },
+  "bitcast_concatenate_fusion": {
+   "ops_per_step": 14.57,
+   "ms_per_step": 0.09264330000000028,
+   "us_per_op": 6.358496911461927
+  },
+  "select_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.08367412000000002,
+   "us_per_op": 83.67412000000002
+  },
+  "compare_and_fusion": {
+   "ops_per_step": 17.14,
+   "ms_per_step": 0.08117631999999998,
+   "us_per_op": 4.736074679113185
+  },
+  "and_or_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.06963619,
+   "us_per_op": 23.212063333333337
+  },
+  "pad_bitcast_fusion": {
+   "ops_per_step": 34.0,
+   "ms_per_step": 0.0692672300000001,
+   "us_per_op": 2.037271470588238
+  },
+  "bitcast_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.06761584000000002,
+   "us_per_op": 67.61584000000002
+  },
+  "remainder_convert_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.06332407999999998,
+   "us_per_op": 31.662039999999987
+  },
+  "convert_multiply_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.060324829999999975,
+   "us_per_op": 30.16241499999999
+  },
+  "convert": {
+   "ops_per_step": 7.0,
+   "ms_per_step": 0.05939724999999993,
+   "us_per_op": 8.48532142857142
+  },
+  "iota_reduce_fusion": {
+   "ops_per_step": 6.14,
+   "ms_per_step": 0.05035037999999994,
+   "us_per_op": 8.200387622149828
+  },
+  "bitcast_subtract_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.04961657999999999,
+   "us_per_op": 49.61657999999999
+  },
+  "not_and_fusion": {
+   "ops_per_step": 6.14,
+   "ms_per_step": 0.04828778999999999,
+   "us_per_op": 7.864460912052115
+  },
+  "broadcast_maximum_fusion": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.03957368,
+   "us_per_op": 4.9467099999999995
+  },
+  "and_convert_fusion": {
+   "ops_per_step": 20.57,
+   "ms_per_step": 0.03925938,
+   "us_per_op": 1.9085746232377252
+  },
+  "multiply_log-plus-one_fusion": {
+   "ops_per_step": 2.14,
+   "ms_per_step": 0.03610036999999998,
+   "us_per_op": 16.869331775700925
+  },
+  "convert_bitcast_fusion": {
+   "ops_per_step": 6.14,
+   "ms_per_step": 0.03562282000000004,
+   "us_per_op": 5.801762214983721
+  },
+  "select_dynamic-update-slice_fusion": {
+   "ops_per_step": 7.7,
+   "ms_per_step": 0.03379909999999998,
+   "us_per_op": 4.389493506493504
+  },
+  "add_gather_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.03322825999999999,
+   "us_per_op": 8.307064999999998
+  },
+  "maximum_broadcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.03259723000000002,
+   "us_per_op": 32.59723000000002
+  },
+  "gather_bitcast_fusion": {
+   "ops_per_step": 11.0,
+   "ms_per_step": 0.03130731000000001,
+   "us_per_op": 2.846119090909092
+  },
+  "and_bitcast_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.028459869999999977,
+   "us_per_op": 4.743311666666663
+  },
+  "log_select_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.026517170000000007,
+   "us_per_op": 13.258585000000004
+  },
+  "iota": {
+   "ops_per_step": 17.0,
+   "ms_per_step": 0.026288160000000067,
+   "us_per_op": 1.5463623529411803
+  },
+  "reduce": {
+   "ops_per_step": 26.14,
+   "ms_per_step": 0.023962859999999968,
+   "us_per_op": 0.9167123182861503
+  },
+  "bitcast_dynamic-update-slice_fusion": {
+   "ops_per_step": 29.0,
+   "ms_per_step": 0.02377307999999997,
+   "us_per_op": 0.8197613793103439
+  },
+  "select_gather_fusion": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.023734240000000014,
+   "us_per_op": 4.746848000000003
+  },
+  "convert_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.02282146999999997,
+   "us_per_op": 7.607156666666658
+  },
+  "multiply_select_fusion": {
+   "ops_per_step": 6.7,
+   "ms_per_step": 0.022535200000000005,
+   "us_per_op": 3.3634626865671646
+  },
+  "divide_subtract_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.020525190000000013,
+   "us_per_op": 6.841730000000004
+  },
+  "add_select_fusion": {
+   "ops_per_step": 1.42,
+   "ms_per_step": 0.019383669999999992,
+   "us_per_op": 13.65047183098591
+  },
+  "multiply_divide_fusion": {
+   "ops_per_step": 11.03,
+   "ms_per_step": 0.01877263999999998,
+   "us_per_op": 1.7019619220308233
+  },
+  "and": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.018312860000000007,
+   "us_per_op": 6.1042866666666695
+  },
+  "bitcast_and_fusion": {
+   "ops_per_step": 9.0,
+   "ms_per_step": 0.018127300000000023,
+   "us_per_op": 2.014144444444447
+  },
+  "add_dynamic-update-slice_fusion": {
+   "ops_per_step": 26.24,
+   "ms_per_step": 0.017363670000000015,
+   "us_per_op": 0.6617252286585372
+  },
+  "slice": {
+   "ops_per_step": 16.14,
+   "ms_per_step": 0.016381839999999995,
+   "us_per_op": 1.0149838909541509
+  },
+  "broadcast_divide_fusion": {
+   "ops_per_step": 12.14,
+   "ms_per_step": 0.016373590000000007,
+   "us_per_op": 1.3487306425041192
+  },
+  "subtract_compare_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.016058139999999995,
+   "us_per_op": 5.352713333333332
+  },
+  "select_log_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.015965190000000008,
+   "us_per_op": 7.982595000000003
+  },
+  "negate_log-plus-one_fusion": {
+   "ops_per_step": 2.14,
+   "ms_per_step": 0.014818240000000005,
+   "us_per_op": 6.924411214953273
+  },
+  "add_maximum_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.014693350000000004,
+   "us_per_op": 4.897783333333335
+  },
+  "or_bitcast_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.01358394,
+   "us_per_op": 4.5279799999999994
+  },
+  "multiply_exponential_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.01301378999999999,
+   "us_per_op": 3.2534474999999974
+  },
+  "subtract_exponential_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.012895109999999994,
+   "us_per_op": 12.895109999999995
+  },
+  "add_concatenate_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.011843009999999996,
+   "us_per_op": 1.9738349999999996
+  },
+  "minimum_select_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.011285770000000002,
+   "us_per_op": 5.6428850000000015
+  },
+  "and_and_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.010164970000000002,
+   "us_per_op": 3.388323333333334
+  },
+  "add_exponential_fusion": {
+   "ops_per_step": 4.02,
+   "ms_per_step": 0.00951873,
+   "us_per_op": 2.3678432835820895
+  },
+  "slice_bitcast_fusion": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.008784760000000008,
+   "us_per_op": 1.098095000000001
+  },
+  "divide_sqrt_fusion": {
+   "ops_per_step": 2.15,
+   "ms_per_step": 0.008707089999999999,
+   "us_per_op": 4.049809302325581
+  },
+  "multiply_maximum_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.007896410000000003,
+   "us_per_op": 7.896410000000003
+  },
+  "broadcast_dot_fusion": {
+   "ops_per_step": 8.56,
+   "ms_per_step": 0.007880000000000005,
+   "us_per_op": 0.9205607476635519
+  },
+  "slice_add_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.007804509999999997,
+   "us_per_op": 2.601503333333332
+  },
+  "select_sqrt_fusion": {
+   "ops_per_step": 9.14,
+   "ms_per_step": 0.007741620000000004,
+   "us_per_op": 0.8470043763676153
+  },
+  "slice_pad_fusion": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.007714309999999999,
+   "us_per_op": 0.9642887499999999
+  },
+  "dynamic-update-slice_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.007650419999999996,
+   "us_per_op": 7.650419999999997
+  },
+  "multiply_log_fusion": {
+   "ops_per_step": 1.01,
+   "ms_per_step": 0.007337,
+   "us_per_op": 7.264356435643565
+  },
+  "subtract_select_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.00725096,
+   "us_per_op": 725.096
+  },
+  "add_multiply_fusion": {
+   "ops_per_step": 4.02,
+   "ms_per_step": 0.007021650000000001,
+   "us_per_op": 1.7466791044776122
+  },
+  "broadcast_dynamic-update-slice_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00696436,
+   "us_per_op": 6.96436
+  },
+  "subtract_divide_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.006607740000000002,
+   "us_per_op": 1.1012900000000003
+  },
+  "bitcast_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.006151140000000007,
+   "us_per_op": 2.0503800000000023
+  },
+  "concatenate_gather_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.006024730000000002,
+   "us_per_op": 3.012365000000001
+  },
+  "add_divide_fusion": {
+   "ops_per_step": 1.01,
+   "ms_per_step": 0.005972109999999998,
+   "us_per_op": 5.9129801980198
+  },
+  "select_divide_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.005637129999999998,
+   "us_per_op": 2.818564999999999
+  },
+  "add_add_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.005558239999999999,
+   "us_per_op": 4.875649122807016
+  },
+  "select": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.005376609999999996,
+   "us_per_op": 1.344152499999999
+  },
+  "not_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00509247,
+   "us_per_op": 5.09247
+  },
+  "broadcast_xor_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.004589130000000001,
+   "us_per_op": 4.0255526315789485
+  },
+  "multiply_remainder_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004576880000000002,
+   "us_per_op": 2.288440000000001
+  },
+  "add_remainder_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.004261450000000001,
+   "us_per_op": 1.0653625
+  },
+  "maximum_select_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00416148,
+   "us_per_op": 1.04037
+  },
+  "dynamic-update-slice_slice_fusion": {
+   "ops_per_step": 2.14,
+   "ms_per_step": 0.004078489999999999,
+   "us_per_op": 1.9058364485981305
+  },
+  "reduce_convert_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.0038654100000000023,
+   "us_per_op": 0.6442350000000003
+  },
+  "negate_sqrt_fusion": {
+   "ops_per_step": 2.14,
+   "ms_per_step": 0.0038521899999999993,
+   "us_per_op": 1.8000887850467286
+  },
+  "reduce_sqrt_fusion": {
+   "ops_per_step": 3.42,
+   "ms_per_step": 0.003687530000000001,
+   "us_per_op": 1.0782251461988308
+  },
+  "maximum_multiply_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0032204799999999995,
+   "us_per_op": 3.2204799999999993
+  },
+  "select_slice_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.003111770000000001,
+   "us_per_op": 3.111770000000001
+  },
+  "dynamic-update-slice": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.002930239999999997,
+   "us_per_op": 0.9767466666666658
+  },
+  "convert_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00264684,
+   "us_per_op": 2.64684
+  },
+  "convert_add_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0025774500000000002,
+   "us_per_op": 0.6443625000000001
+  },
+  "bitcast_pad_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0023842700000000013,
+   "us_per_op": 0.5960675000000003
+  },
+  "reduce_minimum_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0022621399999999993,
+   "us_per_op": 0.5655349999999998
+  },
+  "negate_exponential_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0022215499999999997,
+   "us_per_op": 2.2215499999999997
+  },
+  "xor_xor_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0021741099999999986,
+   "us_per_op": 1.0870549999999992
+  },
+  "maximum_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0021438299999999998,
+   "us_per_op": 2.1438299999999995
+  },
+  "add_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00211784,
+   "us_per_op": 2.1178399999999997
+  },
+  "divide_select_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0020632700000000007,
+   "us_per_op": 1.8098859649122814
+  },
+  "reduce_and_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0020224699999999997,
+   "us_per_op": 0.6741566666666666
+  },
+  "xor_bitcast_fusion": {
+   "ops_per_step": 2.01,
+   "ms_per_step": 0.0019554300000000006,
+   "us_per_op": 0.9728507462686572
+  },
+  "minimum_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0019387400000000002,
+   "us_per_op": 1.9387400000000001
+  },
+  "shift-right-arithmetic_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0018167799999999992,
+   "us_per_op": 1.8167799999999992
+  },
+  "xor_add_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.001681719999999999,
+   "us_per_op": 0.8408599999999996
+  },
+  "clamp_bitcast_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0016203900000000006,
+   "us_per_op": 0.5401300000000002
+  },
+  "maximum_divide_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00157826,
+   "us_per_op": 0.78913
+  },
+  "slice_concatenate_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0015724899999999995,
+   "us_per_op": 1.5724899999999993
+  },
+  "broadcast_compare_fusion": {
+   "ops_per_step": 2.01,
+   "ms_per_step": 0.0015668500000000003,
+   "us_per_op": 0.7795273631840798
+  },
+  "select_pad_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0015617400000000003,
+   "us_per_op": 1.369947368421053
+  },
+  "multiply_subtract_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0013205099999999998,
+   "us_per_op": 1.1583421052631577
+  },
+  "or": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.001294899999999999,
+   "us_per_op": 1.2948999999999993
+  },
+  "bitcast_maximum_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00125556,
+   "us_per_op": 1.25556
+  },
+  "dynamic-slice": {
+   "ops_per_step": 0.42,
+   "ms_per_step": 0.0011404699999999998,
+   "us_per_op": 2.715404761904761
+  },
+  "sqrt": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0011055600000000002,
+   "us_per_op": 0.9697894736842106
+  },
+  "iota_or_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.0010217,
+   "us_per_op": 102.17
+  },
+  "reduce_clamp_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009860099999999998,
+   "us_per_op": 0.9860099999999999
+  },
+  "maximum_sqrt_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00097949,
+   "us_per_op": 0.97949
+  },
+  "is-finite_not_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007935100000000002,
+   "us_per_op": 0.7935100000000002
+  },
+  "compare_reduce_fusion": {
+   "ops_per_step": 1.15,
+   "ms_per_step": 0.0007886699999999999,
+   "us_per_op": 0.6858
+  },
+  "slice_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00070935,
+   "us_per_op": 0.70935
+  },
+  "reduce_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007003700000000001,
+   "us_per_op": 0.70037
+  },
+  "multiply_sqrt_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00067188,
+   "us_per_op": 0.67188
+  },
+  "compare_convert_fusion": {
+   "ops_per_step": 1.01,
+   "ms_per_step": 0.0005221000000000001,
+   "us_per_op": 0.5169306930693071
+  },
+  "bitcast_reduce_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 0.00045145,
+   "us_per_op": 22.572499999999998
+  },
+  "multiply_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00043419999999999993,
+   "us_per_op": 0.4341999999999999
+  },
+  "broadcast_and_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.00020196000000000002,
+   "us_per_op": 20.196
+  },
+  "broadcast_shift-right-arithmetic_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.000156,
+   "us_per_op": 15.6
+  },
+  "and_reduce_fusion": {
+   "ops_per_step": 0.28,
+   "ms_per_step": 0.00012096000000000001,
+   "us_per_op": 0.432
+  },
+  "iota_convert_fusion": {
+   "ops_per_step": 0.11,
+   "ms_per_step": 0.00011831999999999999,
+   "us_per_op": 1.0756363636363635
+  },
+  "multiply": {
+   "ops_per_step": 0.04,
+   "ms_per_step": 3.4779999999999996e-05,
+   "us_per_op": 0.8694999999999999
+  },
+  "bitcast_divide_fusion": {
+   "ops_per_step": 0.03,
+   "ms_per_step": 3.236e-05,
+   "us_per_op": 1.0786666666666667
+  },
+  "subtract": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 2.804e-05,
+   "us_per_op": 1.4020000000000001
+  },
+  "select_multiply_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 2.5620000000000002e-05,
+   "us_per_op": 2.562
+  },
+  "shift-right-logical_convert_fusion": {
+   "ops_per_step": 0.04,
+   "ms_per_step": 2.175e-05,
+   "us_per_op": 0.54375
+  },
+  "compare_or_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.96e-05,
+   "us_per_op": 1.96
+  },
+  "broadcast_shift-right-logical_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.7809999999999997e-05,
+   "us_per_op": 0.8905
+  },
+  "maximum_log_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.5459999999999998e-05,
+   "us_per_op": 0.7729999999999999
+  },
+  "bitcast_multiply_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.4750000000000001e-05,
+   "us_per_op": 1.475
+  },
+  "abs_maximum_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.472e-05,
+   "us_per_op": 1.472
+  },
+  "bitcast_dot_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.386e-05,
+   "us_per_op": 1.386
+  },
+  "add_sqrt_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.34e-05,
+   "us_per_op": 1.34
+  },
+  "divide": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 9.09e-06,
+   "us_per_op": 0.909
+  },
+  "add_subtract_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.97e-06,
+   "us_per_op": 0.897
+  },
+  "iota_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.229999999999999e-06,
+   "us_per_op": 0.823
+  },
+  "floor": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 6.61e-06,
+   "us_per_op": 0.661
+  },
+  "iota_concatenate_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.4e-06,
+   "us_per_op": 0.54
+  },
+  "compare": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.2500000000000006e-06,
+   "us_per_op": 0.525
+  },
+  "add_rsqrt_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.75e-06,
+   "us_per_op": 0.475
+  },
+  "bitcast_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.27e-06,
+   "us_per_op": 0.427
+  },
+  "floor_subtract_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.129999999999999e-06,
+   "us_per_op": 0.413
+  },
+  "minimum_multiply_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.06e-06,
+   "us_per_op": 0.406
+  },
+  "maximum_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 3.91e-06,
+   "us_per_op": 0.391
+  }
+ },
+ "function_opcodes": {
+  "geometry.py:_plane_time | multiply_reduce_fusion": {
+   "ops_per_step": 15.0,
+   "ms_per_step": 0.3581409500000003,
+   "us_per_op": 23.876063333333352
+  },
+  "geometry.py:_gather_elements | copy_gather_fusion": {
+   "ops_per_step": 12.01,
+   "ms_per_step": 0.32105332000000003,
+   "us_per_op": 26.732166527893423
+  },
+  "sort.py:_partition_update | select_bitcast_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.23581746000000006,
+   "us_per_op": 58.95436500000002
+  },
+  "grid.py:_cell_multi_index | compare_select_fusion": {
+   "ops_per_step": 310.0,
+   "ms_per_step": 0.22484004000000024,
+   "us_per_op": 0.725290451612904
+  },
+  "wall_adjoint.py:_advance_impl | reduce-window": {
+   "ops_per_step": 15.0,
+   "ms_per_step": 0.19990119999999995,
+   "us_per_op": 13.326746666666663
+  },
+  "wall_adjoint.py:_advance_impl | maximum_minimum_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.19785277999999992,
+   "us_per_op": 98.92638999999996
+  },
+  "compaction.py:ranked_slots | bitcast_gather_fusion": {
+   "ops_per_step": 123.0,
+   "ms_per_step": 0.19771988000000082,
+   "us_per_op": 1.6074786991869985
+  },
+  "? | select_reduce_fusion": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.19570212,
+   "us_per_op": 39.140424
+  },
+  "sample.py:cell_temperature | reduce-window": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.18725100000000017,
+   "us_per_op": 31.20850000000003
+  },
+  "sort.py:_partition_update | wrapped_scatter": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.18043982999999975,
+   "us_per_op": 30.07330499999996
+  },
+  "? | broadcast": {
+   "ops_per_step": 13.06,
+   "ms_per_step": 0.16424777000000013,
+   "us_per_op": 12.576398928024512
+  },
+  "geometry.py:near_surface | bitcast_gather_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.1450759699999999,
+   "us_per_op": 48.35865666666663
+  },
+  "sample.py:cell_temperature | wrapped_scatter": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.14176604999999992,
+   "us_per_op": 141.76604999999995
+  },
+  "inflow.py:_flux_halley_step | multiply_add_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.13877840999999994,
+   "us_per_op": 34.69460249999998
+  },
+  "wall_adjoint.py:_routing_code | select_add_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.13680588000000005,
+   "us_per_op": 68.40294000000002
+  },
+  "sort.py:_partition_update | sort": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.13473300999999988,
+   "us_per_op": 67.36650499999993
+  },
+  "compaction.py:ranked_slots | copy": {
+   "ops_per_step": 251.0,
+   "ms_per_step": 0.12961614999999965,
+   "us_per_op": 0.5163990039840624
+  },
+  "wall_adjoint.py:_box_compact | copy": {
+   "ops_per_step": 14.0,
+   "ms_per_step": 0.12010002000000028,
+   "us_per_op": 8.578572857142877
+  },
+  "sample.py:cell_temperature | broadcast_multiply_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.11922009999999995,
+   "us_per_op": 119.22009999999995
+  },
+  "sample.py:cell_temperature | multiply_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.11842352999999992,
+   "us_per_op": 118.42352999999991
+  },
+  "ntc.py:collide | reduce-window": {
+   "ops_per_step": 7.01,
+   "ms_per_step": 0.10864383000000016,
+   "us_per_op": 15.498406562054232
+  },
+  "geometry.py:_fine_grid | copy_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.10461466999999997,
+   "us_per_op": 52.30733499999999
+  },
+  "compaction.py:prefix_count | subtract_bitcast_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.10338913999999999,
+   "us_per_op": 25.847284999999996
+  },
+  "inflow.py:_flux_quantile_start | select_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.10274184999999997,
+   "us_per_op": 34.24728333333333
+  },
+  "wall_adjoint.py:_near_chunk | wrapped_scatter": {
+   "ops_per_step": 15.0,
+   "ms_per_step": 0.09452979999999994,
+   "us_per_op": 6.301986666666663
+  },
+  "wall_adjoint.py:lane_slots | add_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.09183168000000003,
+   "us_per_op": 45.91584000000001
+  },
+  "compaction.py:prefix_count | reduce-window": {
+   "ops_per_step": 21.0,
+   "ms_per_step": 0.09164499000000026,
+   "us_per_op": 4.364047142857155
+  },
+  "wall_adjoint.py:_slot_uniforms | broadcast_add_fusion": {
+   "ops_per_step": 13.68,
+   "ms_per_step": 0.08496766000000014,
+   "us_per_op": 6.211086257309952
+  },
+  "geometry.py:_segment_crosses_lines | multiply_reduce_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.08403133999999993,
+   "us_per_op": 21.007834999999982
+  },
+  "geometry.py:_odd_crossings | select_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.08367412000000002,
+   "us_per_op": 83.67412000000002
+  },
+  "sort.py:_partition_update | bitcast_gather_fusion": {
+   "ops_per_step": 19.0,
+   "ms_per_step": 0.08295401000000002,
+   "us_per_op": 4.366000526315791
+  },
+  "vss.py:scatter | bitcast_concatenate_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.07837325,
+   "us_per_op": 19.5933125
+  },
+  "simulate.py:_step | select_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.07708841000000004,
+   "us_per_op": 77.08841000000002
+  },
+  "sort.py:table_cells | broadcast_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.07664602000000004,
+   "us_per_op": 76.64602000000002
+  },
+  "ntc.py:collide | select_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.06791893,
+   "us_per_op": 67.91893
+  },
+  "inflow.py:sample_surface_velocities | multiply_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.06790282000000002,
+   "us_per_op": 67.90282
+  },
+  "sort.py:update_table | bitcast_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.06761584000000002,
+   "us_per_op": 67.61584000000002
+  },
+  "geometry.py:_element_hit | broadcast_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.06387425000000002,
+   "us_per_op": 21.291416666666674
+  },
+  "rng.py:_randint_at | remainder_convert_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.06332407999999998,
+   "us_per_op": 31.662039999999987
+  },
+  "compaction.py:ranked_slots | add": {
+   "ops_per_step": 123.0,
+   "ms_per_step": 0.062166809999999836,
+   "us_per_op": 0.5054212195121938
+  },
+  "ntc.py:collide | convert_multiply_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.060324829999999975,
+   "us_per_op": 30.16241499999999
+  },
+  "wall_adjoint.py:_near_chunk | broadcast": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.057305829999999995,
+   "us_per_op": 19.10194333333333
+  },
+  "inflow.py:inject | reduce-window": {
+   "ops_per_step": 10.0,
+   "ms_per_step": 0.05696341000000007,
+   "us_per_op": 5.6963410000000065
+  },
+  "wall_adjoint.py:_near_chunk | bitcast_gather_fusion": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.05605678,
+   "us_per_op": 7.0070974999999995
+  },
+  "wall_adjoint.py:_box_compact | and_or_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.05489749000000001,
+   "us_per_op": 27.448745000000002
+  },
+  "inflow.py:sample_surface_velocities | compare_and_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.05229049000000001,
+   "us_per_op": 52.290490000000005
+  },
+  "? | iota_reduce_fusion": {
+   "ops_per_step": 6.14,
+   "ms_per_step": 0.05035037999999994,
+   "us_per_op": 8.200387622149828
+  },
+  "sort.py:update_table | bitcast_subtract_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.04961657999999999,
+   "us_per_op": 49.61657999999999
+  },
+  "wall_adjoint.py:_advance_impl | add": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.04912962000000001,
+   "us_per_op": 24.56481000000001
+  },
+  "wall_adjoint.py:_dense_pass | add_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.04873174999999998,
+   "us_per_op": 24.365874999999992
+  },
+  "geometry.py:_polygon_hit | bitcast_gather_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.04348442999999998,
+   "us_per_op": 10.871107499999994
+  },
+  "? | copy": {
+   "ops_per_step": 67.17,
+   "ms_per_step": 0.042347679999999964,
+   "us_per_op": 0.6304552627661153
+  },
+  "compaction.py:prefix_count | pad_bitcast_fusion": {
+   "ops_per_step": 12.0,
+   "ms_per_step": 0.04206592000000001,
+   "us_per_op": 3.505493333333334
+  },
+  "wall_adjoint.py:_advance_impl | not_and_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.04204108999999996,
+   "us_per_op": 14.013696666666656
+  },
+  "sort.py:_partition_update | copy": {
+   "ops_per_step": 36.0,
+   "ms_per_step": 0.036570620000000116,
+   "us_per_op": 1.0158505555555586
+  },
+  "sample.py:cell_temperature | convert": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.034501580000000004,
+   "us_per_op": 34.50158
+  },
+  "wall_adjoint.py:_near_chunk | copy": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.033911379999999984,
+   "us_per_op": 16.955689999999993
+  },
+  "geometry.py:_cell_corner | add_gather_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.03322825999999999,
+   "us_per_op": 8.307064999999998
+  },
+  "ntc.py:collide | copy": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.03305338999999999,
+   "us_per_op": 5.508898333333332
+  },
+  "wall_adjoint.py:_fixed_time | maximum_broadcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.03259723000000002,
+   "us_per_op": 32.59723000000002
+  },
+  "wall_adjoint.py:_slot_uniforms | copy": {
+   "ops_per_step": 34.2,
+   "ms_per_step": 0.031045400000000046,
+   "us_per_op": 0.90776023391813
+  },
+  "sort.py:update_table | copy": {
+   "ops_per_step": 34.0,
+   "ms_per_step": 0.031018969999999983,
+   "us_per_op": 0.9123226470588232
+  },
+  "wall_adjoint.py:_lane_passes | gather_bitcast_fusion": {
+   "ops_per_step": 10.0,
+   "ms_per_step": 0.03002871000000002,
+   "us_per_op": 3.002871000000002
+  },
+  "wall_adjoint.py:_advance_impl | broadcast_maximum_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.02948334,
+   "us_per_op": 14.74167
+  },
+  "wall_adjoint.py:_face_tally | reduce-window": {
+   "ops_per_step": 17.12,
+   "ms_per_step": 0.02936291000000001,
+   "us_per_op": 1.715123247663552
+  },
+  "compaction.py:prefix_count | convert_bitcast_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.02878038000000002,
+   "us_per_op": 9.593460000000006
+  },
+  "wall_adjoint.py:_box_compact | bitcast_gather_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.02742328999999997,
+   "us_per_op": 4.5705483333333286
+  },
+  "geometry.py:_elements_near | bitcast_gather_fusion": {
+   "ops_per_step": 3.72,
+   "ms_per_step": 0.027356180000000015,
+   "us_per_op": 7.353811827956993
+  },
+  "wall_adjoint.py:_lane_distance | bitcast_gather_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.02522072000000002,
+   "us_per_op": 4.203453333333337
+  },
+  "wall_adjoint.py:_face_tallies | broadcast_select_fusion": {
+   "ops_per_step": 3.42,
+   "ms_per_step": 0.024152160000000006,
+   "us_per_op": 7.062035087719299
+  },
+  "wall_adjoint.py:_advance_impl | convert": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.024142450000000003,
+   "us_per_op": 4.82849
+  },
+  "rng.py:_normal_at | multiply_log-plus-one_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.02409784999999999,
+   "us_per_op": 24.09784999999999
+  },
+  "geometry.py:_gather_elements | select_gather_fusion": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.023734240000000014,
+   "us_per_op": 4.746848000000003
+  },
+  "wall_adjoint.py:_box_compact | wrapped_scatter": {
+   "ops_per_step": 12.0,
+   "ms_per_step": 0.023721789999999993,
+   "us_per_op": 1.9768158333333326
+  },
+  "inflow.py:_flux_quantile_start | log_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.02356183000000001,
+   "us_per_op": 23.561830000000008
+  },
+  "geometry.py:first_hit | convert_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.02282146999999997,
+   "us_per_op": 7.607156666666658
+  },
+  "wall_adjoint.py:_lane_passes | wrapped_scatter": {
+   "ops_per_step": 15.0,
+   "ms_per_step": 0.022752839999999983,
+   "us_per_op": 1.5168559999999989
+  },
+  "compaction.py:_materialise | wrapped_scatter": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.021693629999999985,
+   "us_per_op": 5.423407499999996
+  },
+  "geometry.py:first_hit | select_reduce_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.021425709999999994,
+   "us_per_op": 5.356427499999999
+  },
+  "sort.py:stable_cell_order | sort": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.021342800000000006,
+   "us_per_op": 2134.28
+  },
+  "compaction.py:ranked_slots | broadcast": {
+   "ops_per_step": 17.0,
+   "ms_per_step": 0.02091742,
+   "us_per_op": 1.2304364705882354
+  },
+  "wall_adjoint.py:_advance_impl | multiply_add_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.02068689,
+   "us_per_op": 10.343445
+  },
+  "inflow.py:_flux_model_step | divide_subtract_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.020525190000000013,
+   "us_per_op": 6.841730000000004
+  },
+  "wall_adjoint.py:_box_events | reduce-window": {
+   "ops_per_step": 9.12,
+   "ms_per_step": 0.02038998999999995,
+   "us_per_op": 2.2357445175438544
+  },
+  "wall_adjoint.py:_bounce | reduce-window": {
+   "ops_per_step": 12.0,
+   "ms_per_step": 0.019984630000000017,
+   "us_per_op": 1.6653858333333347
+  },
+  "wall_adjoint.py:_advance_impl | and_convert_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.01967774999999999,
+   "us_per_op": 9.838874999999996
+  },
+  "simulate.py:run | bitcast_dynamic-update-slice_fusion": {
+   "ops_per_step": 24.0,
+   "ms_per_step": 0.01957554999999997,
+   "us_per_op": 0.8156479166666654
+  },
+  "geometry.py:_odd_crossings | bitcast_gather_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.018820879999999998,
+   "us_per_op": 4.70522
+  },
+  "ntc.py:_gather_rows | bitcast_gather_fusion": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.01827163999999999,
+   "us_per_op": 2.2839549999999984
+  },
+  "wall_adjoint.py:_face_tallies | reduce-window": {
+   "ops_per_step": 9.12,
+   "ms_per_step": 0.017856169999999994,
+   "us_per_op": 1.957913377192982
+  },
+  "wall_adjoint.py:_advance_impl | and": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.01749887,
+   "us_per_op": 8.749435
+  },
+  "wall_adjoint.py:_face_tally | add_dynamic-update-slice_fusion": {
+   "ops_per_step": 26.24,
+   "ms_per_step": 0.017363670000000015,
+   "us_per_op": 0.6617252286585372
+  },
+  "wall_adjoint.py:_face_tally | multiply_reduce_fusion": {
+   "ops_per_step": 4.28,
+   "ms_per_step": 0.01733403000000002,
+   "us_per_op": 4.0500070093458
+  },
+  "vss.py:collision_rate | multiply_reduce_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.016868579999999994,
+   "us_per_op": 4.217144999999999
+  },
+  "wall_adjoint.py:_lane_distance | broadcast": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.016716059999999998,
+   "us_per_op": 8.35803
+  },
+  "inflow.py:sample_surface_velocities | multiply_reduce_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.016097830000000004,
+   "us_per_op": 16.097830000000002
+  },
+  "inflow.py:_flux_halley_step | subtract_compare_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.016058139999999995,
+   "us_per_op": 5.352713333333332
+  },
+  "wall_adjoint.py:_bounce | and_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.015948740000000003,
+   "us_per_op": 15.94874
+  },
+  "wall_adjoint.py:_box_rules | select_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.015944779999999995,
+   "us_per_op": 15.944779999999996
+  },
+  "wall_adjoint.py:_face_tally | reduce": {
+   "ops_per_step": 17.12,
+   "ms_per_step": 0.015916629999999998,
+   "us_per_op": 0.9297096962616821
+  },
+  "wall_adjoint.py:_elements_dense | select_dynamic-update-slice_fusion": {
+   "ops_per_step": 0.42,
+   "ms_per_step": 0.015908059999999998,
+   "us_per_op": 37.876333333333335
+  },
+  "sort.py:update_table | bitcast_gather_fusion": {
+   "ops_per_step": 16.0,
+   "ms_per_step": 0.015554320000000012,
+   "us_per_op": 0.9721450000000007
+  },
+  "wall_adjoint.py:_inside_rows | bitcast_gather_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.015409530000000003,
+   "us_per_op": 7.704765000000001
+  },
+  "geometry.py:_gather_elements | bitcast_gather_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.015169590000000004,
+   "us_per_op": 7.5847950000000015
+  },
+  "wall_adjoint.py:_box_events | multiply_select_fusion": {
+   "ops_per_step": 4.56,
+   "ms_per_step": 0.01473976,
+   "us_per_op": 3.2324035087719296
+  },
+  "wall_adjoint.py:_bounce | and_or_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0147387,
+   "us_per_op": 14.738700000000001
+  },
+  "ntc.py:attempt_count | add_maximum_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.014693350000000004,
+   "us_per_op": 4.897783333333335
+  },
+  "wall_adjoint.py:_dense_pass | reduce-window": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.014059269999999988,
+   "us_per_op": 2.3432116666666647
+  },
+  "compaction.py:ranked_slots | iota": {
+   "ops_per_step": 10.0,
+   "ms_per_step": 0.014038119999999992,
+   "us_per_op": 1.4038119999999992
+  },
+  "geometry.py:_element_hit | add_bitcast_fusion": {
+   "ops_per_step": 0.93,
+   "ms_per_step": 0.01358815,
+   "us_per_op": 14.610913978494624
+  },
+  "safe.py:safe_norm | multiply_reduce_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.013432959999999992,
+   "us_per_op": 3.3582399999999977
+  },
+  "wall_adjoint.py:_surface_tally | subtract_bitcast_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.013330459999999994,
+   "us_per_op": 11.693385964912276
+  },
+  "geometry.py:near_surface | multiply_reduce_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.013078559999999996,
+   "us_per_op": 13.078559999999998
+  },
+  "safe.py:safe_pow | multiply_exponential_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.01301378999999999,
+   "us_per_op": 3.2534474999999974
+  },
+  "inflow.py:_flux_quantile_start | subtract_exponential_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.012895109999999994,
+   "us_per_op": 12.895109999999995
+  },
+  "ntc.py:_slot | wrapped_scatter": {
+   "ops_per_step": 16.0,
+   "ms_per_step": 0.012825440000000004,
+   "us_per_op": 0.8015900000000002
+  },
+  "safe.py:safe_pow | select_bitcast_fusion": {
+   "ops_per_step": 4.02,
+   "ms_per_step": 0.012797099999999999,
+   "us_per_op": 3.1833582089552235
+  },
+  "sampling.py:_tangent_frame | add_select_fusion": {
+   "ops_per_step": 0.14,
+   "ms_per_step": 0.012675169999999998,
+   "us_per_op": 90.53692857142856
+  },
+  "wall_adjoint.py:_hit_rows | add_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.012671290000000002,
+   "us_per_op": 12.67129
+  },
+  "sort.py:_partition_update | or_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.012193330000000002,
+   "us_per_op": 12.193330000000003
+  },
+  "sampling.py:diffuse_draws_from_uniforms | multiply_log-plus-one_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.012002520000000003,
+   "us_per_op": 10.528526315789478
+  },
+  "ntc.py:_slot | select_bitcast_fusion": {
+   "ops_per_step": 12.0,
+   "ms_per_step": 0.011990540000000003,
+   "us_per_op": 0.9992116666666669
+  },
+  "wall_adjoint.py:_box_rules | select_dynamic-update-slice_fusion": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.011463260000000001,
+   "us_per_op": 2.2926520000000004
+  },
+  "sort.py:_partition_update | add": {
+   "ops_per_step": 16.0,
+   "ms_per_step": 0.011319150000000045,
+   "us_per_op": 0.7074468750000028
+  },
+  "inflow.py:_flux_quantile_start | minimum_select_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.011285770000000002,
+   "us_per_op": 5.6428850000000015
+  },
+  "ntc.py:_slot | reduce-window": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.011250449999999999,
+   "us_per_op": 1.4063062499999999
+  },
+  "sort.py:_partition_update | broadcast": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.011052759999999984,
+   "us_per_op": 2.2105519999999967
+  },
+  "wall_adjoint.py:_face_tally | and_convert_fusion": {
+   "ops_per_step": 8.56,
+   "ms_per_step": 0.010967439999999997,
+   "us_per_op": 1.2812429906542053
+  },
+  "sort.py:_partition_update | reduce-window": {
+   "ops_per_step": 9.0,
+   "ms_per_step": 0.010927459999999993,
+   "us_per_op": 1.2141622222222215
+  },
+  "ntc.py:_slot | bitcast_gather_fusion": {
+   "ops_per_step": 8.0,
+   "ms_per_step": 0.01005947,
+   "us_per_op": 1.25743375
+  },
+  "wall_adjoint.py:_surface_tally | multiply_reduce_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.009819189999999998,
+   "us_per_op": 8.613324561403507
+  },
+  "geometry.py:inside_polygon | and_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00961052,
+   "us_per_op": 4.80526
+  },
+  "inflow.py:_flux_halley_step | add_exponential_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00950582,
+   "us_per_op": 2.3764549999999995
+  },
+  "inflow.py:_flux_quantile_start | negate_log-plus-one_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.009477749999999998,
+   "us_per_op": 9.477749999999999
+  },
+  "grid.py:cell_of | add_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.009245329999999998,
+   "us_per_op": 4.622664999999999
+  },
+  "sort.py:update_table | add": {
+   "ops_per_step": 16.0,
+   "ms_per_step": 0.009155460000000002,
+   "us_per_op": 0.5722162500000002
+  },
+  "geometry.py:inside_polygon | bitcast_gather_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.008957579999999996,
+   "us_per_op": 4.478789999999998
+  },
+  "inflow.py:_flux_halley_step | select_log_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00882873,
+   "us_per_op": 8.82873
+  },
+  "compaction.py:_materialise | iota": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.008485950000000003,
+   "us_per_op": 2.1214875000000006
+  },
+  "wall_adjoint.py:_first_pass_routed | and_and_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.008293039999999996,
+   "us_per_op": 4.146519999999999
+  },
+  "inflow.py:_flux_halley_step | multiply_divide_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.008275020000000001,
+   "us_per_op": 4.137510000000001
+  },
+  "wall_adjoint.py:_surface_tally | wrapped_scatter": {
+   "ops_per_step": 4.56,
+   "ms_per_step": 0.008163069999999998,
+   "us_per_op": 1.790146929824561
+  },
+  "wall_adjoint.py:_elements_compact | copy": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.007916040000000003,
+   "us_per_op": 3.9580200000000008
+  },
+  "ntc.py:collide | multiply_maximum_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.007896410000000003,
+   "us_per_op": 7.896410000000003
+  },
+  "wall_adjoint.py:_face_tally | broadcast_dot_fusion": {
+   "ops_per_step": 8.56,
+   "ms_per_step": 0.007880000000000005,
+   "us_per_op": 0.9205607476635519
+  },
+  "safe.py:safe_sqrt | select_sqrt_fusion": {
+   "ops_per_step": 9.14,
+   "ms_per_step": 0.007741620000000004,
+   "us_per_op": 0.8470043763676153
+  },
+  "wall_adjoint.py:_compact_face_tallies | select_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.007708980000000004,
+   "us_per_op": 7.708980000000004
+  },
+  "wall_adjoint.py:_box_rules | dynamic-update-slice_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.007650419999999996,
+   "us_per_op": 7.650419999999997
+  },
+  "inflow.py:_flux_quantile_start | multiply_log_fusion": {
+   "ops_per_step": 1.01,
+   "ms_per_step": 0.007337,
+   "us_per_op": 7.264356435643565
+  },
+  "geometry.py:dense_threshold | subtract_select_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.00725096,
+   "us_per_op": 725.096
+  },
+  "wall_adjoint.py:_lane_from_hits | reduce-window": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.0072368399999999874,
+   "us_per_op": 1.2061399999999978
+  },
+  "inflow.py:_flux_quantile_start | select_log_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00713646,
+   "us_per_op": 7.13646
+  },
+  "wall_adjoint.py:_hit_rows | bitcast_gather_fusion": {
+   "ops_per_step": 3.42,
+   "ms_per_step": 0.007124089999999999,
+   "us_per_op": 2.083067251461988
+  },
+  "ntc.py:_slot | add_multiply_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00700688,
+   "us_per_op": 1.75172
+  },
+  "inflow.py:sample_face_positions | broadcast_dynamic-update-slice_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00696436,
+   "us_per_op": 6.96436
+  },
+  "wall_adjoint.py:_bounce | compare_and_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.006946489999999995,
+   "us_per_op": 2.315496666666665
+  },
+  "sort.py:_partition_update | add_concatenate_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00687574,
+   "us_per_op": 6.87574
+  },
+  "inflow.py:_put_at | wrapped_scatter": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.006868190000000001,
+   "us_per_op": 1.7170475000000003
+  },
+  "wall_adjoint.py:_face_tallies | multiply_select_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.00686749,
+   "us_per_op": 6.024114035087719
+  },
+  "safe.py:safe_pow | reduce-window": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.006645470000000003,
+   "us_per_op": 1.661367500000001
+  },
+  "geometry.py:surface_normal | add_select_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.006627589999999999,
+   "us_per_op": 5.813675438596491
+  },
+  "grid.py:spacing | subtract_divide_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.006607740000000002,
+   "us_per_op": 1.1012900000000003
+  },
+  "wall_adjoint.py:_lane_passes | bitcast_and_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00656972,
+   "us_per_op": 1.64243
+  },
+  "wall_adjoint.py:_lane_from_hits | broadcast": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00649176,
+   "us_per_op": 1.6229399999999998
+  },
+  "wall_adjoint.py:_apply_events | select_dynamic-update-slice_fusion": {
+   "ops_per_step": 2.28,
+   "ms_per_step": 0.006427780000000002,
+   "us_per_op": 2.8192017543859653
+  },
+  "wall_adjoint.py:_box_compact | select_bitcast_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.006275129999999998,
+   "us_per_op": 1.5687824999999995
+  },
+  "wall_adjoint.py:lane_slots | broadcast_add_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.006094799999999995,
+   "us_per_op": 2.0315999999999983
+  },
+  "geometry.py:first_hit | concatenate_gather_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.006024730000000002,
+   "us_per_op": 3.012365000000001
+  },
+  "inflow.py:_flux_quantile_start | add_divide_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.005964309999999998,
+   "us_per_op": 5.9643099999999984
+  },
+  "inflow.py:_flux_quantile_start | divide_sqrt_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.005909010000000001,
+   "us_per_op": 5.90901
+  },
+  "sort.py:_partition_update | pad_bitcast_fusion": {
+   "ops_per_step": 6.0,
+   "ms_per_step": 0.00587747,
+   "us_per_op": 0.9795783333333334
+  },
+  "sampling.py:_tangent_frame | bitcast_concatenate_fusion": {
+   "ops_per_step": 2.28,
+   "ms_per_step": 0.005873939999999997,
+   "us_per_op": 2.5762894736842092
+  },
+  "wall_adjoint.py:_lane_from_hits | select_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.005820460000000002,
+   "us_per_op": 2.9102300000000008
+  },
+  "inflow.py:inject | convert_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00564896,
+   "us_per_op": 5.64896
+  },
+  "geometry.py:_plane_time | select_divide_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.005637129999999998,
+   "us_per_op": 2.818564999999999
+  },
+  "rng.py:key_for | add_add_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.005558239999999999,
+   "us_per_op": 4.875649122807016
+  },
+  "wall_adjoint.py:_compact_face_tallies | bitcast_gather_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.005496860000000004,
+   "us_per_op": 1.3742150000000009
+  },
+  "inflow.py:_flux_quantile_start | select": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.005376609999999996,
+   "us_per_op": 1.344152499999999
+  },
+  "sampling.py:diffuse_draws_from_uniforms | negate_log-plus-one_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.00534049,
+   "us_per_op": 4.684640350877193
+  },
+  "wall_adjoint.py:_box_compact | broadcast": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.005337410000000006,
+   "us_per_op": 1.3343525000000014
+  },
+  "wall_adjoint.py:_compact_face_tallies | reduce-window": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.005242970000000002,
+   "us_per_op": 1.3107425000000006
+  },
+  "wall_adjoint.py:_lane_more | reduce-window": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.005192609999999995,
+   "us_per_op": 1.038521999999999
+  },
+  "compaction.py:_materialise | copy": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.005183339999999998,
+   "us_per_op": 1.7277799999999994
+  },
+  "grid.py:cell_of | broadcast_divide_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00516645,
+   "us_per_op": 2.583225
+  },
+  "inflow.py:flux_quantile | compare_and_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00510054,
+   "us_per_op": 5.1005400000000005
+  },
+  "inflow.py:inject | not_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00509247,
+   "us_per_op": 5.09247
+  },
+  "wall_adjoint.py:_elements_compact | bitcast_gather_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.005002299999999998,
+   "us_per_op": 1.2505749999999993
+  },
+  "wall_adjoint.py:_slot_uniforms | broadcast_maximum_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.004993130000000002,
+   "us_per_op": 4.993130000000002
+  },
+  "geometry.py:near_surface | pad_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004985070000000003,
+   "us_per_op": 2.492535000000001
+  },
+  "rng.py:key_for | add_concatenate_fusion": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.0049672699999999985,
+   "us_per_op": 0.9934539999999996
+  },
+  "safe.py:safe_pow | broadcast_select_fusion": {
+   "ops_per_step": 4.01,
+   "ms_per_step": 0.004864469999999999,
+   "us_per_op": 1.213084788029925
+  },
+  "inflow.py:_flux_quantile_start | multiply_divide_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0047955100000000046,
+   "us_per_op": 1.5985033333333347
+  },
+  "wall_adjoint.py:_near_chunk | broadcast_select_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004687990000000002,
+   "us_per_op": 2.3439950000000014
+  },
+  "wall_adjoint.py:_slot_uniforms | broadcast_xor_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.004589130000000001,
+   "us_per_op": 4.0255526315789485
+  },
+  "rng.py:_randint_at | multiply_remainder_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004576880000000002,
+   "us_per_op": 2.288440000000001
+  },
+  "wall_adjoint.py:_lane_passes | not_and_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00441335,
+   "us_per_op": 2.2066749999999997
+  },
+  "wall_adjoint.py:_slot_uniforms | slice_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004388139999999999,
+   "us_per_op": 2.194069999999999
+  },
+  "ntc.py:attempt_count | select_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0043663500000000015,
+   "us_per_op": 4.366350000000001
+  },
+  "rng.py:key_for | broadcast_add_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.004365720000000004,
+   "us_per_op": 3.8295789473684247
+  },
+  "wall_adjoint.py:_lane_from_hits | pad_bitcast_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.004341300000000001,
+   "us_per_op": 1.0853250000000003
+  },
+  "geometry.py:near_surface | reduce-window": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.004338520000000002,
+   "us_per_op": 1.446173333333334
+  },
+  "vss.py:scatter | broadcast_divide_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00431558,
+   "us_per_op": 1.078895
+  },
+  "inflow.py:sample_surface_velocities | bitcast_concatenate_fusion": {
+   "ops_per_step": 5.0,
+   "ms_per_step": 0.004265820000000002,
+   "us_per_op": 0.8531640000000004
+  },
+  "ntc.py:pair_from_draws | add_remainder_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.004261450000000001,
+   "us_per_op": 1.0653625
+  },
+  "wall_adjoint.py:_inside_rows | wrapped_scatter": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004230609999999999,
+   "us_per_op": 2.1153049999999998
+  },
+  "wall_adjoint.py:lane_slots | compare_and_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.004226170000000001,
+   "us_per_op": 4.2261700000000015
+  },
+  "wall_adjoint.py:_face_tally | broadcast_select_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.004169409999999999,
+   "us_per_op": 1.0423525
+  },
+  "ntc.py:attempt_count | maximum_select_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00416148,
+   "us_per_op": 1.04037
+  },
+  "wall_adjoint.py:_lane_from_hits | bitcast_and_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004123039999999997,
+   "us_per_op": 2.061519999999999
+  },
+  "wall_adjoint.py:_inside_rows | broadcast": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.004119660000000001,
+   "us_per_op": 2.0598300000000003
+  },
+  "wall_adjoint.py:_inside_rows | reduce-window": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.003971600000000005,
+   "us_per_op": 1.3238666666666683
+  },
+  "wall_adjoint.py:_bounce | copy": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0038825799999999988,
+   "us_per_op": 1.2941933333333329
+  },
+  "wall_adjoint.py:_near_chunk | bitcast_and_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0038431000000000025,
+   "us_per_op": 1.9215500000000014
+  },
+  "compaction.py:ranked_slots | bitcast_select_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0038181400000000002,
+   "us_per_op": 1.90907
+  },
+  "wall_adjoint.py:_hit_rows | select_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00372644,
+   "us_per_op": 3.72644
+  },
+  "levelset.py:_near_slots | broadcast_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00371161,
+   "us_per_op": 3.71161
+  },
+  "wall_adjoint.py:_inside_rows | pad_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0037103499999999955,
+   "us_per_op": 1.8551749999999978
+  },
+  "inflow.py:_flux_halley_step | broadcast_divide_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.003661019999999999,
+   "us_per_op": 0.9152549999999998
+  },
+  "compaction.py:prefix_count | slice": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.003612309999999999,
+   "us_per_op": 0.9030774999999998
+  },
+  "wall_adjoint.py:_inside_rows | bitcast_and_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00359144,
+   "us_per_op": 3.59144
+  },
+  "wall_adjoint.py:lane_slots | slice_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00354849,
+   "us_per_op": 3.5484900000000006
+  },
+  "geometry.py:_elements_near | broadcast": {
+   "ops_per_step": 1.86,
+   "ms_per_step": 0.003547880000000001,
+   "us_per_op": 1.9074623655913985
+  },
+  "wall_adjoint.py:_compact_face_tallies | broadcast_select_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.00348854,
+   "us_per_op": 0.872135
+  },
+  "levelset.py:_near_slots | slice_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0034766,
+   "us_per_op": 3.4765999999999995
+  },
+  "wall_adjoint.py:_box_compact | compare_and_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.003474170000000001,
+   "us_per_op": 1.7370850000000004
+  },
+  "wall_adjoint.py:_elements_compact | wrapped_scatter": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0033470299999999987,
+   "us_per_op": 1.1156766666666662
+  },
+  "wall_adjoint.py:_face_tally | bitcast_dynamic-update-slice_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.003322799999999999,
+   "us_per_op": 0.8306999999999998
+  },
+  "geometry.py:_elements_near | wrapped_scatter": {
+   "ops_per_step": 1.86,
+   "ms_per_step": 0.0032992900000000003,
+   "us_per_op": 1.7738118279569894
+  },
+  "inflow.py:inject | maximum_multiply_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0032204799999999995,
+   "us_per_op": 3.2204799999999993
+  },
+  "wall_adjoint.py:_apply_events | slice": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.003215590000000001,
+   "us_per_op": 2.820692982456141
+  },
+  "rng.py:key_for | slice_bitcast_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.003124359999999997,
+   "us_per_op": 0.7810899999999993
+  },
+  "wall_adjoint.py:_lane_distance | wrapped_scatter": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.003113699999999999,
+   "us_per_op": 1.5568499999999998
+  },
+  "geometry.py:first_hit | select_slice_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.003111770000000001,
+   "us_per_op": 3.111770000000001
+  },
+  "compaction.py:_materialise | broadcast": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.003102159999999999,
+   "us_per_op": 3.1021599999999996
+  },
+  "wall_adjoint.py:_slot_uniforms | add": {
+   "ops_per_step": 5.7,
+   "ms_per_step": 0.003040650000000006,
+   "us_per_op": 0.5334473684210537
+  },
+  "wall_adjoint.py:_box_rules | add_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0030392199999999987,
+   "us_per_op": 1.5196099999999992
+  },
+  "wall_adjoint.py:_apply_events | copy": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0030331399999999984,
+   "us_per_op": 2.6606491228070164
+  },
+  "inflow.py:inject | reduce": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0030261899999999998,
+   "us_per_op": 1.00873
+  },
+  "wall_adjoint.py:_near_chunk | select_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0029943699999999984,
+   "us_per_op": 1.497184999999999
+  },
+  "wall_adjoint.py:_element_events | reduce-window": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00298335,
+   "us_per_op": 1.491675
+  },
+  "grid.py:_cell_multi_index | bitcast_concatenate_fusion": {
+   "ops_per_step": 2.01,
+   "ms_per_step": 0.0029573100000000008,
+   "us_per_op": 1.4712985074626868
+  },
+  "wall_adjoint.py:_hit_rows | log_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0029553400000000003,
+   "us_per_op": 2.95534
+  },
+  "ntc.py:_gather_rows | select_bitcast_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0029305300000000024,
+   "us_per_op": 0.7326325000000006
+  },
+  "simulate.py:run | dynamic-update-slice": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.002930239999999997,
+   "us_per_op": 0.9767466666666658
+  },
+  "compaction.py:ranked_slots | broadcast_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0029162099999999985,
+   "us_per_op": 0.9720699999999995
+  },
+  "sampling.py:_tangent_frame | reduce_sqrt_fusion": {
+   "ops_per_step": 2.28,
+   "ms_per_step": 0.0028323600000000003,
+   "us_per_op": 1.242263157894737
+  },
+  "geometry.py:first_hit | compare_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0028289000000000005,
+   "us_per_op": 2.8289000000000004
+  },
+  "sampling.py:thermal_speed | divide_sqrt_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0027879700000000007,
+   "us_per_op": 2.4455877192982465
+  },
+  "inflow.py:inject | and_convert_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0027801199999999996,
+   "us_per_op": 0.9267066666666667
+  },
+  "geometry.py:surface_normal | bitcast_gather_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.002728710000000001,
+   "us_per_op": 2.3936052631578955
+  },
+  "ntc.py:_slot | multiply_add_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0026892200000000004,
+   "us_per_op": 0.672305
+  },
+  "wall_adjoint.py:_near_chunk | broadcast_maximum_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0026811100000000004,
+   "us_per_op": 1.3405550000000002
+  },
+  "wall_adjoint.py:_box_events | compare_and_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00265526,
+   "us_per_op": 1.32763
+  },
+  "ntc.py:_slot | convert_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00264684,
+   "us_per_op": 2.64684
+  },
+  "wall_adjoint.py:_bounce | add": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00264346,
+   "us_per_op": 1.3217299999999996
+  },
+  "vss.py:acceptance_prob | multiply_divide_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.002641700000000002,
+   "us_per_op": 0.6604250000000005
+  },
+  "ntc.py:_slot | and_convert_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0026219199999999985,
+   "us_per_op": 0.6554799999999997
+  },
+  "ntc.py:collide | add": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0026187299999999997,
+   "us_per_op": 0.6546825
+  },
+  "sort.py:_partition_update | slice": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0025998800000000006,
+   "us_per_op": 0.8666266666666669
+  },
+  "wall_adjoint.py:_lane_from_hits | wrapped_scatter": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00258975,
+   "us_per_op": 1.2948750000000002
+  },
+  "wall_adjoint.py:_box_compact | reduce-window": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0025887299999999974,
+   "us_per_op": 0.8629099999999992
+  },
+  "ntc.py:_slot | convert_add_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0025774500000000002,
+   "us_per_op": 0.6443625000000001
+  },
+  "wall_adjoint.py:_bounce | pad_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0025358000000000004,
+   "us_per_op": 1.2679
+  },
+  "compaction.py:ranked_slots | compare_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.00248458,
+   "us_per_op": 0.8281933333333333
+  },
+  "rng.py:key_for | add_bitcast_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.002479649999999998,
+   "us_per_op": 0.6199124999999995
+  },
+  "sampling.py:diffuse_velocity_general | broadcast_divide_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.002437489999999999,
+   "us_per_op": 2.138149122807017
+  },
+  "wall_adjoint.py:_apply_events | broadcast_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0023977200000000008,
+   "us_per_op": 2.397720000000001
+  },
+  "wall_adjoint.py:_face_tally | bitcast_pad_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0023842700000000013,
+   "us_per_op": 0.5960675000000003
+  },
+  "wall_adjoint.py:_face_tallies | bitcast_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0023329999999999996,
+   "us_per_op": 2.3329999999999997
+  },
+  "wall_adjoint.py:_apply_events | dynamic-update-slice_slice_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0023329899999999996,
+   "us_per_op": 2.0464824561403505
+  },
+  "inflow.py:_flux_halley_step | broadcast_select_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.002330179999999999,
+   "us_per_op": 0.7767266666666663
+  },
+  "inflow.py:_put_at | broadcast": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.002323860000000001,
+   "us_per_op": 1.1619300000000004
+  },
+  "wall_adjoint.py:_bounce | and_convert_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0023024399999999993,
+   "us_per_op": 1.1512199999999995
+  },
+  "ntc.py:_slot | reduce_minimum_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0022621399999999993,
+   "us_per_op": 0.5655349999999998
+  },
+  "wall_adjoint.py:_inside_rows | select_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0022290800000000005,
+   "us_per_op": 1.1145400000000003
+  },
+  "inflow.py:_flux_halley_step | negate_exponential_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0022215499999999997,
+   "us_per_op": 2.2215499999999997
+  },
+  "rng.py:key_for | xor_xor_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0021741099999999986,
+   "us_per_op": 1.0870549999999992
+  },
+  "ntc.py:collide | maximum_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0021438299999999998,
+   "us_per_op": 2.1438299999999995
+  },
+  "ntc.py:attempt_count | add_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00211784,
+   "us_per_op": 2.1178399999999997
+  },
+  "wall_adjoint.py:_advance_impl | reduce": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0021155300000000004,
+   "us_per_op": 0.7051766666666669
+  },
+  "wall_adjoint.py:_bounce | add_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.002102439999999999,
+   "us_per_op": 1.0512199999999996
+  },
+  "inflow.py:inject | pad_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0020853400000000006,
+   "us_per_op": 1.0426700000000002
+  },
+  "sampling.py:_tangent_frame | divide_select_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0020632700000000007,
+   "us_per_op": 1.8098859649122814
+  },
+  "sampling.py:diffuse_draws_from_uniforms | negate_sqrt_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0020612000000000004,
+   "us_per_op": 1.808070175438597
+  },
+  "wall_adjoint.py:_lane_more | reduce_and_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0020224699999999997,
+   "us_per_op": 0.6741566666666666
+  },
+  "ntc.py:_slot | compare_and_fusion": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0019998300000000006,
+   "us_per_op": 0.49995750000000017
+  },
+  "inflow.py:inject | add_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0019757200000000003,
+   "us_per_op": 1.9757200000000004
+  },
+  "geometry.py:_element_hit | select_add_fusion": {
+   "ops_per_step": 0.07,
+   "ms_per_step": 0.0019626500000000002,
+   "us_per_op": 28.037857142857145
+  },
+  "rng.py:key_for | xor_bitcast_fusion": {
+   "ops_per_step": 2.01,
+   "ms_per_step": 0.0019554300000000006,
+   "us_per_op": 0.9728507462686572
+  },
+  "wall_adjoint.py:_advance_impl | minimum_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0019387400000000002,
+   "us_per_op": 1.9387400000000001
+  },
+  "wall_adjoint.py:_face_tally | copy": {
+   "ops_per_step": 4.0,
+   "ms_per_step": 0.0019235999999999995,
+   "us_per_op": 0.4808999999999999
+  },
+  "inflow.py:inject | and_and_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0018719299999999995,
+   "us_per_op": 1.8719299999999996
+  },
+  "wall_adjoint.py:_bounce | reduce_convert_fusion": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0018681599999999998,
+   "us_per_op": 0.6227199999999999
+  },
+  "wall_adjoint.py:_box_rules | copy": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0018530300000000003,
+   "us_per_op": 0.9265150000000001
+  },
+  "inflow.py:inject | copy": {
+   "ops_per_step": 3.0,
+   "ms_per_step": 0.0018458799999999992,
+   "us_per_op": 0.615293333333333
+  },
+  "wall_adjoint.py:_dense_pass | pad_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0018377599999999997,
+   "us_per_op": 0.9188799999999998
+  },
+  "wall_adjoint.py:_box_rules | and_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00183365,
+   "us_per_op": 0.916825
+  },
+  "wall_adjoint.py:_apply_events | not_and_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0018333499999999988,
+   "us_per_op": 1.608201754385964
+  },
+  "wall_adjoint.py:_box_compact | pad_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0018282200000000004,
+   "us_per_op": 0.9141100000000002
+  },
+  "sample.py:cell_temperature | reduce": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0018240700000000008,
+   "us_per_op": 0.9120350000000004
+  },
+  "simulate.py:run | add": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0018192,
+   "us_per_op": 1.8192
+  },
+  "sort.py:_partition_update | shift-right-arithmetic_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0018167799999999992,
+   "us_per_op": 1.8167799999999992
+  },
+  "sort.py:_partition_update | iota": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0018132,
+   "us_per_op": 1.8132000000000001
+  },
+  "ntc.py:attempt_count | multiply_divide_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0017951400000000006,
+   "us_per_op": 1.7951400000000006
+  },
+  "sampling.py:_tangent_frame | multiply_reduce_fusion": {
+   "ops_per_step": 2.28,
+   "ms_per_step": 0.0017939200000000007,
+   "us_per_op": 0.78680701754386
+  },
+  "rng.py:_normal_at | negate_sqrt_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0017909900000000003,
+   "us_per_op": 1.7909900000000005
+  },
+  "ntc.py:attempt_count | reduce-window": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0017761200000000004,
+   "us_per_op": 1.7761200000000006
+  },
+  "wall_adjoint.py:_lane_from_hits | slice_pad_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0017653200000000008,
+   "us_per_op": 0.8826600000000003
+  },
+  "wall_adjoint.py:_box_rules | dynamic-update-slice_slice_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0017454999999999997,
+   "us_per_op": 1.7454999999999996
+  },
+  "rng.py:key_for | xor_add_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.001681719999999999,
+   "us_per_op": 0.8408599999999996
+  },
+  "wall_adjoint.py:_lane_distance | select_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0016540400000000012,
+   "us_per_op": 0.8270200000000005
+  },
+  "safe.py:safe_recip_count | maximum_divide_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.00157826,
+   "us_per_op": 0.78913
+  },
+  "sort.py:_starts | slice_concatenate_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0015724899999999995,
+   "us_per_op": 1.5724899999999993
+  },
+  "wall_adjoint.py:_hit_normal | select_pad_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0015617400000000003,
+   "us_per_op": 1.369947368421053
+  },
+  "wall_adjoint.py:_lane_from_hits | slice": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0015535799999999997,
+   "us_per_op": 0.7767899999999999
+  },
+  "inflow.py:_put_at | select_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0015368500000000002,
+   "us_per_op": 1.53685
+  },
+  "wall_adjoint.py:_lane_passes | copy": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0015330000000000005,
+   "us_per_op": 0.7665000000000002
+  },
+  "wall_adjoint.py:_element_events | compare_and_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.001525310000000001,
+   "us_per_op": 1.3379912280701765
+  },
+  "wall_adjoint.py:_apply_events | compare_and_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0015228299999999998,
+   "us_per_op": 1.52283
+  },
+  "wall_adjoint.py:_box_rules | compare_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0014973200000000006,
+   "us_per_op": 1.4973200000000007
+  },
+  "sort.py:update_table | broadcast": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0014794099999999998,
+   "us_per_op": 0.7397050000000001
+  },
+  "wall_adjoint.py:_face_tally | select_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0014731399999999997,
+   "us_per_op": 0.7365699999999998
+  },
+  "inflow.py:sample_surface_velocities | copy": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00146354,
+   "us_per_op": 1.4635399999999998
+  },
+  "inflow.py:inject | compare_and_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0014352299999999998,
+   "us_per_op": 1.43523
+  },
+  "ntc.py:_unfused | wrapped_scatter": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0013963499999999998,
+   "us_per_op": 1.39635
+  },
+  "wall_adjoint.py:_bounce | or_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0013906100000000007,
+   "us_per_op": 0.6953050000000003
+  },
+  "rng.py:key_for | copy": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0013661699999999999,
+   "us_per_op": 0.6830849999999999
+  },
+  "geometry.py:_elements_near | broadcast_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00136604,
+   "us_per_op": 1.3660400000000001
+  },
+  "geometry.py:near_surface | slice_pad_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0013600700000000001,
+   "us_per_op": 1.3600700000000001
+  },
+  "sampling.py:diffuse_velocity_general | multiply_subtract_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0013205099999999998,
+   "us_per_op": 1.1583421052631577
+  },
+  "wall_adjoint.py:_bounce | or": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.001294899999999999,
+   "us_per_op": 1.2948999999999993
+  },
+  "wall_adjoint.py:_lane_passes | select_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0012851099999999992,
+   "us_per_op": 0.6425549999999997
+  },
+  "wall_adjoint.py:_near_chunk | gather_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0012785999999999997,
+   "us_per_op": 1.2785999999999997
+  },
+  "inflow.py:sample_surface_velocities | slice_bitcast_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0012722599999999999,
+   "us_per_op": 0.6361299999999999
+  },
+  "wall_adjoint.py:_elements_dense | select_add_fusion": {
+   "ops_per_step": 0.14,
+   "ms_per_step": 0.0012567100000000003,
+   "us_per_op": 8.976500000000001
+  },
+  "ntc.py:collide | bitcast_maximum_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00125556,
+   "us_per_op": 1.25556
+  },
+  "wall_adjoint.py:_dense_pass | reduce_convert_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0012421499999999996,
+   "us_per_op": 0.6210749999999997
+  },
+  "ntc.py:collide | multiply_divide_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0012411999999999996,
+   "us_per_op": 1.2411999999999996
+  },
+  "wall_adjoint.py:_lane_passes | broadcast_maximum_fusion": {
+   "ops_per_step": 2.0,
+   "ms_per_step": 0.0012354999999999998,
+   "us_per_op": 0.6177499999999999
+  },
+  "geometry.py:_elements_dense | bitcast_gather_fusion": {
+   "ops_per_step": 0.07,
+   "ms_per_step": 0.00123212,
+   "us_per_op": 17.601714285714287
+  },
+  "sample.py:cell_temperature | broadcast": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0011988900000000002,
+   "us_per_op": 1.1988900000000002
+  },
+  "wall_adjoint.py:_fixed_time | broadcast_maximum_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0011805999999999997,
+   "us_per_op": 1.1805999999999999
+  },
+  "wall_adjoint.py:_inside_rows | slice_pad_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0011624299999999999,
+   "us_per_op": 1.1624299999999999
+  },
+  "inflow.py:inject | slice_pad_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0011475900000000002,
+   "us_per_op": 1.1475900000000003
+  },
+  "wall_adjoint.py:_bounce | slice_pad_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0011475500000000002,
+   "us_per_op": 1.1475500000000003
+  },
+  "wall_adjoint.py:_elements_dense | dynamic-slice": {
+   "ops_per_step": 0.42,
+   "ms_per_step": 0.0011404699999999998,
+   "us_per_op": 2.715404761904761
+  },
+  "geometry.py:_elements_near | select_bitcast_fusion": {
+   "ops_per_step": 0.93,
+   "ms_per_step": 0.00113985,
+   "us_per_op": 1.2256451612903225
+  },
+  "ntc.py:_unfused | broadcast": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0011367500000000002,
+   "us_per_op": 1.1367500000000001
+  },
+  "geometry.py:_polygon_hit | copy": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0011355099999999997,
+   "us_per_op": 1.1355099999999998
+  },
+  "sampling.py:_tangent_frame | sqrt": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0011055600000000002,
+   "us_per_op": 0.9697894736842106
+  },
+  "sort.py:_partition_update | and_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0010669599999999996,
+   "us_per_op": 1.0669599999999997
+  },
+  "wall_adjoint.py:_bounce | reduce": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0010587700000000001,
+   "us_per_op": 1.05877
+  },
+  "inflow.py:inject | wrapped_scatter": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0010356800000000002,
+   "us_per_op": 1.0356800000000002
+  },
+  "sort.py:stable_cell_order | iota_or_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.0010217,
+   "us_per_op": 102.17
+  },
+  "sort.py:stable_cell_order | copy": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 0.0010044,
+   "us_per_op": 50.22
+  },
+  "wall_adjoint.py:_lane_step | add": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00100258,
+   "us_per_op": 1.00258
+  },
+  "sort.py:update_table | iota": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009958500000000002,
+   "us_per_op": 0.9958500000000002
+  },
+  "geometry.py:near_surface | slice": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009903300000000004,
+   "us_per_op": 0.9903300000000006
+  },
+  "sort.py:update_table | reduce_clamp_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009860099999999998,
+   "us_per_op": 0.9860099999999999
+  },
+  "wall_adjoint.py:_inside_rows | slice": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009843,
+   "us_per_op": 0.9843000000000001
+  },
+  "inflow.py:inject | broadcast": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00098387,
+   "us_per_op": 0.98387
+  },
+  "wall_adjoint.py:_box_compact | slice": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009833599999999997,
+   "us_per_op": 0.9833599999999997
+  },
+  "inflow.py:_flux_quantile_start | maximum_sqrt_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00097949,
+   "us_per_op": 0.97949
+  },
+  "ntc.py:_slot | broadcast_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009733999999999997,
+   "us_per_op": 0.9733999999999997
+  },
+  "wall_adjoint.py:_box_events | select_bitcast_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0009725300000000001,
+   "us_per_op": 0.8530964912280702
+  },
+  "inflow.py:inject | bitcast_concatenate_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009672200000000003,
+   "us_per_op": 0.9672200000000004
+  },
+  "ntc.py:collide | iota": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009550400000000006,
+   "us_per_op": 0.9550400000000007
+  },
+  "grid.py:cell_of | broadcast": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009503599999999999,
+   "us_per_op": 0.95036
+  },
+  "wall_adjoint.py:_compact_face_tallies | multiply_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009279500000000002,
+   "us_per_op": 0.9279500000000002
+  },
+  "wall_adjoint.py:_bounce | slice": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00092725,
+   "us_per_op": 0.9272500000000001
+  },
+  "ntc.py:collide | and_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0009026099999999997,
+   "us_per_op": 0.9026099999999997
+  },
+  "wall_adjoint.py:_box_events | broadcast_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0008841099999999994,
+   "us_per_op": 0.8841099999999993
+  },
+  "wall_adjoint.py:_box_rules | bitcast_dynamic-update-slice_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0008747300000000001,
+   "us_per_op": 0.8747300000000001
+  },
+  "sampling.py:diffuse_velocity_general | reduce_sqrt_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0008551699999999998,
+   "us_per_op": 0.7501491228070174
+  },
+  "sampling.py:diffuse_velocity_general | multiply_reduce_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.00081498,
+   "us_per_op": 0.7148947368421052
+  },
+  "wall_adjoint.py:_bounce | and": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0008139899999999999,
+   "us_per_op": 0.8139899999999999
+  },
+  "ntc.py:collide | is-finite_not_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007935100000000002,
+   "us_per_op": 0.7935100000000002
+  },
+  "inflow.py:_flux_quantile_start | broadcast_divide_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007930499999999999,
+   "us_per_op": 0.7930499999999999
+  },
+  "wall_adjoint.py:_dense_pass | slice": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007923200000000001,
+   "us_per_op": 0.7923200000000001
+  },
+  "wall_adjoint.py:_dense_pass | slice_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00077942,
+   "us_per_op": 0.7794199999999999
+  },
+  "ntc.py:pair_from_draws | broadcast_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00077046,
+   "us_per_op": 0.77046
+  },
+  "wall_adjoint.py:_element_events | reduce_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007551000000000002,
+   "us_per_op": 0.7551000000000002
+  },
+  "compaction.py:prefix_count | convert": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007532199999999999,
+   "us_per_op": 0.7532199999999999
+  },
+  "wall_adjoint.py:_apply_events | compare_reduce_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0007506199999999999,
+   "us_per_op": 0.6584385964912279
+  },
+  "wall_adjoint.py:_surface_tally | select_bitcast_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.0007363399999999995,
+   "us_per_op": 0.6459122807017539
+  },
+  "inflow.py:inject | slice": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007229199999999998,
+   "us_per_op": 0.7229199999999999
+  },
+  "ntc.py:_slot | slice_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00070935,
+   "us_per_op": 0.70935
+  },
+  "wall_adjoint.py:_bounce | reduce_add_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0007003700000000001,
+   "us_per_op": 0.70037
+  },
+  "wall_adjoint.py:_surface_tally | convert_bitcast_fusion": {
+   "ops_per_step": 1.14,
+   "ms_per_step": 0.00069696,
+   "us_per_op": 0.6113684210526317
+  },
+  "inflow.py:_flux_quantile_start | multiply_sqrt_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00067188,
+   "us_per_op": 0.67188
+  },
+  "inflow.py:_flux_quantile_start | compare_select_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0006486600000000001,
+   "us_per_op": 0.6486600000000001
+  },
+  "geometry.py:inside_polygon | clamp_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0006470700000000002,
+   "us_per_op": 0.6470700000000003
+  },
+  "wall_adjoint.py:_dense_pass | slice_pad_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0006045400000000003,
+   "us_per_op": 0.6045400000000003
+  },
+  "ntc.py:pair_from_draws | broadcast_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0005803000000000001,
+   "us_per_op": 0.5803
+  },
+  "inflow.py:sample_face_positions | copy": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0005507899999999998,
+   "us_per_op": 0.5507899999999998
+  },
+  "geometry.py:_polygon_hit | clamp_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00054771,
+   "us_per_op": 0.54771
+  },
+  "wall_adjoint.py:_box_compact | slice_pad_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00052681,
+   "us_per_op": 0.5268099999999999
+  },
+  "wall_adjoint.py:_first_pass_routed | compare_convert_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.0005138300000000002,
+   "us_per_op": 0.5138300000000001
+  },
+  "wall_adjoint.py:_first_pass_routed | convert_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00049652,
+   "us_per_op": 0.49652
+  },
+  "wall_adjoint.py:_elements_compact | select_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00045639000000000015,
+   "us_per_op": 0.4563900000000001
+  },
+  "geometry.py:dense_threshold | bitcast_reduce_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 0.00045145,
+   "us_per_op": 22.572499999999998
+  },
+  "wall_adjoint.py:_chunk_more | multiply_compare_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00043419999999999993,
+   "us_per_op": 0.4341999999999999
+  },
+  "wall_adjoint.py:_hit_rows | clamp_bitcast_fusion": {
+   "ops_per_step": 1.0,
+   "ms_per_step": 0.00042561000000000004,
+   "us_per_op": 0.42561
+  },
+  "geometry.py:first_hit | select_select_fusion": {
+   "ops_per_step": 0.14,
+   "ms_per_step": 0.0004155999999999999,
+   "us_per_op": 2.9685714285714284
+  },
+  "wall_adjoint.py:_face_tallies | select_bitcast_fusion": {
+   "ops_per_step": 0.14,
+   "ms_per_step": 0.00022427,
+   "us_per_op": 1.6019285714285714
+  },
+  "wall_adjoint.py:_elements_dense | bitcast_concatenate_fusion": {
+   "ops_per_step": 0.28,
+   "ms_per_step": 0.00020576,
+   "us_per_op": 0.7348571428571429
+  },
+  "sort.py:stable_cell_order | broadcast_and_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.00020196000000000002,
+   "us_per_op": 20.196
+  },
+  "sort.py:stable_cell_order | broadcast_shift-right-arithmetic_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 0.000156,
+   "us_per_op": 15.6
+  },
+  "wall_adjoint.py:_elements_dense | and_reduce_fusion": {
+   "ops_per_step": 0.28,
+   "ms_per_step": 0.00012096000000000001,
+   "us_per_op": 0.432
+  },
+  "wall_adjoint.py:_elements_dense | add_select_fusion": {
+   "ops_per_step": 0.14,
+   "ms_per_step": 8.091e-05,
+   "us_per_op": 0.5779285714285713
+  },
+  "geometry.py:first_hit | iota_convert_fusion": {
+   "ops_per_step": 0.04,
+   "ms_per_step": 6.327e-05,
+   "us_per_op": 1.58175
+  },
+  "? | compare_reduce_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 3.805e-05,
+   "us_per_op": 3.805
+  },
+  "inflow.py:target_count | bitcast_divide_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 2.8470000000000007e-05,
+   "us_per_op": 1.4235000000000002
+  },
+  "ntc.py:thermal_majorant | select_multiply_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 2.5620000000000002e-05,
+   "us_per_op": 2.562
+  },
+  "ntc.py:collide | compare_or_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.96e-05,
+   "us_per_op": 1.96
+  },
+  "rng.py:key_for | broadcast_shift-right-logical_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.7809999999999997e-05,
+   "us_per_op": 0.8905
+  },
+  "grid.py:spacing | subtract": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.741e-05,
+   "us_per_op": 1.741
+  },
+  "ntc.py:thermal_majorant | subtract_bitcast_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.644e-05,
+   "us_per_op": 1.644
+  },
+  "rng.py:_randint_at | iota_convert_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.636e-05,
+   "us_per_op": 0.8180000000000001
+  },
+  "geometry.py:dense_threshold | reduce": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.599e-05,
+   "us_per_op": 1.599
+  },
+  "safe.py:safe_log | maximum_log_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.5459999999999998e-05,
+   "us_per_op": 0.7729999999999999
+  },
+  "inflow.py:_flux_quantile_start | multiply": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.526e-05,
+   "us_per_op": 0.763
+  },
+  "inflow.py:_flux_quantile_start | add_multiply_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.4769999999999997e-05,
+   "us_per_op": 0.7384999999999999
+  },
+  "inflow.py:sample_surface_velocities | bitcast_multiply_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.4750000000000001e-05,
+   "us_per_op": 1.475
+  },
+  "inflow.py:flux_quantile | abs_maximum_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.472e-05,
+   "us_per_op": 1.472
+  },
+  "inflow.py:sample_surface_velocities | bitcast_dot_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.386e-05,
+   "us_per_op": 1.386
+  },
+  "inflow.py:_flux_quantile_start | add_sqrt_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.34e-05,
+   "us_per_op": 1.34
+  },
+  "ntc.py:attempt_count | broadcast_compare_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.315e-05,
+   "us_per_op": 1.315
+  },
+  "inflow.py:flux_quantile | add_exponential_fusion": {
+   "ops_per_step": 0.02,
+   "ms_per_step": 1.2909999999999998e-05,
+   "us_per_op": 0.6455
+  },
+  "wall_adjoint.py:_face_tally | multiply_bitcast_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.1339999999999998e-05,
+   "us_per_op": 1.134
+  },
+  "inflow.py:inject | iota_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.1069999999999999e-05,
+   "us_per_op": 1.107
+  },
+  "ntc.py:_unfused | iota_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.075e-05,
+   "us_per_op": 1.075
+  },
+  "ntc.py:thermal_majorant | subtract": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.063e-05,
+   "us_per_op": 1.063
+  },
+  "ntc.py:thermal_majorant | multiply_divide_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.057e-05,
+   "us_per_op": 1.057
+  },
+  "inflow.py:target_count | divide_sqrt_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.011e-05,
+   "us_per_op": 1.011
+  },
+  "ntc.py:thermal_majorant | multiply_bitcast_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 1.01e-05,
+   "us_per_op": 1.01
+  },
+  "inflow.py:flux_quantile | multiply": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 9.92e-06,
+   "us_per_op": 0.992
+  },
+  "inflow.py:_flux_halley_step | multiply": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 9.6e-06,
+   "us_per_op": 0.96
+  },
+  "vss.py:scatter | divide": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 9.09e-06,
+   "us_per_op": 0.909
+  },
+  "safe.py:safe_pow | compare_select_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.97e-06,
+   "us_per_op": 0.897
+  },
+  "geometry.py:dense_threshold | add_subtract_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.97e-06,
+   "us_per_op": 0.897
+  },
+  "grid.py:spacing | broadcast_multiply_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.95e-06,
+   "us_per_op": 0.895
+  },
+  "geometry.py:near_tables | multiply_divide_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.449999999999999e-06,
+   "us_per_op": 0.845
+  },
+  "wall_adjoint.py:_advance_impl | compare_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.269999999999999e-06,
+   "us_per_op": 0.827
+  },
+  "simulate.py:run | iota_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 8.229999999999999e-06,
+   "us_per_op": 0.823
+  },
+  "vss.py:scatter | add_divide_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 7.8e-06,
+   "us_per_op": 0.78
+  },
+  "rng.py:_randint_at | shift-right-logical_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 7.680000000000001e-06,
+   "us_per_op": 0.768
+  },
+  "simulate.py:_step | and_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 7.099999999999999e-06,
+   "us_per_op": 0.71
+  },
+  "rng.py:_uniform_at | iota_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 6.979999999999999e-06,
+   "us_per_op": 0.698
+  },
+  "inflow.py:flux_quantile | multiply_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 6.71e-06,
+   "us_per_op": 0.671
+  },
+  "sampling.py:stochastic_round | floor": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 6.61e-06,
+   "us_per_op": 0.661
+  },
+  "ntc.py:collide | reduce": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.679999999999999e-06,
+   "us_per_op": 0.568
+  },
+  "geometry.py:dense_threshold | iota_concatenate_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.4e-06,
+   "us_per_op": 0.54
+  },
+  "inflow.py:sample_surface_velocities | shift-right-logical_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.27e-06,
+   "us_per_op": 0.527
+  },
+  "inflow.py:_flux_quantile_start | compare": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.2500000000000006e-06,
+   "us_per_op": 0.525
+  },
+  "rng.py:_normal_at | iota_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.1e-06,
+   "us_per_op": 0.51
+  },
+  "rng.py:_normal_at | shift-right-logical_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.1e-06,
+   "us_per_op": 0.51
+  },
+  "inflow.py:flux_quantile | multiply_divide_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 5.05e-06,
+   "us_per_op": 0.505
+  },
+  "inflow.py:sample_surface_velocities | iota_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.79e-06,
+   "us_per_op": 0.479
+  },
+  "inflow.py:_flux_quantile_start | add_rsqrt_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.75e-06,
+   "us_per_op": 0.475
+  },
+  "vss.py:scatter | bitcast_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.27e-06,
+   "us_per_op": 0.427
+  },
+  "sampling.py:stochastic_round | floor_subtract_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.129999999999999e-06,
+   "us_per_op": 0.413
+  },
+  "inflow.py:flux_quantile | minimum_multiply_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 4.06e-06,
+   "us_per_op": 0.406
+  },
+  "inflow.py:flux_quantile | maximum_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 3.91e-06,
+   "us_per_op": 0.391
+  },
+  "inflow.py:sample_surface_velocities | bitcast_divide_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 3.89e-06,
+   "us_per_op": 0.389
+  },
+  "inflow.py:inject | shift-right-logical_convert_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 3.7e-06,
+   "us_per_op": 0.37
+  },
+  "inflow.py:tail | multiply_add_fusion": {
+   "ops_per_step": 0.01,
+   "ms_per_step": 3.69e-06,
+   "us_per_op": 0.369
+  }
+ }
+}

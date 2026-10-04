@@ -33,6 +33,12 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
   free-molecular reference), ``kn0.5_S{S}`` at the deck's stream and ``kn0.5_M10_S{S}`` at
   M 10 (:data:`KN05_M10`), ``S`` in :data:`SQUASH_KN_SEEDS` (no 8-seed runs: these cost more), the shipped
   ``4 x 8`` virtual pull-back.
+* ``biasgate``: the 2026-10-03 bias study's gates at production settings, which do not fit
+  the 4 GB workstation GPU (``scratch/bias/``; the jobs are ``bash scratch/bias/cluster_job.sh
+  <name>``, whose header documents each): the Kn 0.5 paired gate (``kn_seed{i}``, 8 jobs),
+  its FD-only arbiter (``kn_fd{j}``, 4 x 16 seeds), the Kn 0.5 and free-molecular horizon
+  tests against the whole run captured (``kn_hor_seed{i}``, ``fm_hor_s{s}``).  Results in
+  ``scratch/bias/cluster/<name>.jsonl``.
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, 250
   iterates (``--iterations 250``, resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -136,6 +142,10 @@ def jobs(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, str]:
                     f"--iterations {SQUASH_ITERATIONS} {extra}"
                 )
         return out
+    if group == "biasgate":
+        names = [f"kn_seed{i}" for i in range(8)] + [f"kn_fd{j}" for j in range(4)]
+        names += [f"kn_hor_seed{i}" for i in range(4)] + ["fm_hor_s1.0", "fm_hor_s0.35"]
+        return {name: f"bash scratch/bias/cluster_job.sh {name}" for name in names}
     if group in OPT_GROUPS:
         label, settings = OPT_GROUPS[group]
         out = {}
@@ -161,7 +171,9 @@ def gpus(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, int]:
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
-        "--group", choices=("sphere", "mode2", "squash", "squashkn", *OPT_GROUPS), required=True
+        "--group",
+        choices=("sphere", "mode2", "squash", "squashkn", "biasgate", *OPT_GROUPS),
+        required=True,
     )
     ap.add_argument("--list", action="store_true", help="print the job commands, one per line")
     ap.add_argument("--names", action="store_true", help="print the job names")

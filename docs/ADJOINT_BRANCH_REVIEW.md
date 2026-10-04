@@ -1459,7 +1459,7 @@ linear in the knot values, so `∂coef/∂points` exists); `reinitialise` by cli
 closest-point projection in a band plus a KD-tree distance to the projected cloud
 outside it (an unclipped projection diverged where `∇phi ≈ 0`).
 
-**LS0** (20 CPU tests + `geometry_checks.py`, `figures/mesh_levelset_checks.png`):
+**LS0** (20 CPU tests + `geometry_checks.py`, `figures/meshing/mesh_levelset_checks.png`):
 interpolation exact at interior knots; `|phi|` on the analytic surface and the hit
 position error fall as `h⁴` (circle 2.2e-5 → 6.4e-9 and 9.5e-4 → 3.2e-8 from h = 0.5 to
 0.0625; sphere 2.6e-5 → 9.8e-8 at h = 0.2 → 0.05); hit sets identical to the analytic
@@ -1521,7 +1521,7 @@ is far better conditioned on shape modes than on the radius, which is what the
 optimiser uses.
 
 **First optimisation** (`examples/mesh/optimize.py`, `results/optimize/circle/`,
-`figures/optimize_circle.png`): minimum windowed drag of the level-set circle at fixed
+`figures/optc/optimize_circle.png`): minimum windowed drag of the level-set circle at fixed
 area, 8 iterates × 2 CRN seeds (55 min on the GPU; resumable from `coef_k.npy`), step =
 largest normal displacement 0.05 per iterate, H1 smoothing σ = 2 knots, band 1.0 + h_φ,
 exact area projection by a uniform shift of φ after reinitialisation:

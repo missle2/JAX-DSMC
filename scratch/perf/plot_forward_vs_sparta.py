@@ -1,7 +1,7 @@
 """Bar chart: forward throughput (particle moves per second) of the SPARTA circle case --
 SPARTA on this laptop's CPUs (scratch/perf/bench_sparta.txt, best of 3 per rank count, and
 the reference logs of examples/mesh/results/sparta) against this code on the GPU and the
-CPU (scratch/perf/bench_forward_{gpu,cpu}.json).  -> examples/mesh/figures/forward_vs_sparta.png
+CPU (scratch/perf/bench_forward_{gpu,cpu}.json).  -> examples/mesh/figures/performance/forward_vs_sparta.png
 
     python3 scratch/perf/plot_forward_vs_sparta.py
 """
@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..")
-OUT = os.path.join(ROOT, "examples", "mesh", "figures", "forward_vs_sparta.png")
+OUT = os.path.join(ROOT, "examples", "mesh", "figures", "performance", "forward_vs_sparta.png")
 
 
 def sparta_rows():

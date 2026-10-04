@@ -34,6 +34,7 @@ from jax_dsmc.collide.vss import (
     vr2_clamp,
 )
 from jax_dsmc.constants import EPS, K_BOLTZ
+from jax_dsmc.fusion import materialise
 from jax_dsmc.grid import cell_volume
 from jax_dsmc.rng import (
     STAGE_ACCEPT,
@@ -137,15 +138,6 @@ def certified_majorant(state, table, sp):
     bound = sp.prefactor[0, 0] * upper2 ** (1 - sp.omega[0, 0])
     valid = (sp.omega[0, 0] >= 0.5) & (sp.omega[0, 0] <= 1.0)
     return jnp.where(valid, bound * (1 + 1e-12), jnp.nan)
-
-
-def _unfused(x):
-    """``x`` itself, through an identity scatter-add onto zeros (exact: ``0 + x = x``, and
-    ``logP`` is never ``-0``).  XLA fuses a per-cell producer into a per-particle gather of
-    it, evaluating the producer -- here ``logP``'s logarithms -- once per particle
-    (measured 1 ms per step on one CPU core at N = 6e4); a scatter is not fused into its
-    consumers, and an ``optimization_barrier`` is removed before fusion."""
-    return jnp.zeros_like(x).at[jnp.arange(x.shape[0])].add(x)
 
 
 def attempt_count(counts, vremax, volume, dt, fnum, key):
@@ -552,7 +544,9 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     if score_mode == "trajectory":
         logh = logh + jnp.sum(logP)
     else:
-        logh = logh + jnp.where(state.alive, _unfused(logP)[table.cell], 0.0)
+        # materialised: fused into the per-particle gather, logP's logarithms would be
+        # evaluated once per particle instead of once per cell (1 ms per step, N = 6e4)
+        logh = logh + jnp.where(state.alive, materialise(logP)[table.cell], 0.0)
 
     # Cell membership and the attempt count are decided once per step, outside the
     # slot scan, so they are folded in here rather than per slot.

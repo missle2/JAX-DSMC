@@ -1,0 +1,66 @@
+{
+ "forward": {
+  "label": "forward (1000 steps, captured 300)",
+  "wall": 7.72782326999004,
+  "gpu_busy": 2.253042159,
+  "kernels": 512916,
+  "kernels_per_step": 512.916,
+  "mean_kernel_us": 4.39261430526636,
+  "truncated": false,
+  "categories": {
+   "step body: pass 0, collide, inject, tallies": 1.7476030050000937,
+   "other": 0.20604899499993543,
+   "hit search (cull branches)": 0.18093180800000974,
+   "lane passes 1..K (while loop)": 0.11845835099999014
+  }
+ },
+ "replay": {
+  "label": "traced replay",
+  "wall": 2.4380331779830158,
+  "gpu_busy": 0.616628692,
+  "kernels": 130274,
+  "kernels_per_step": 434.24666666666667,
+  "mean_kernel_us": 4.733321245989223,
+  "truncated": false,
+  "categories": {
+   "step body: pass 0, rewards, checks": 0.4386154550000247,
+   "other": 0.08116069500000463,
+   "hit search (cull branches)": 0.0731593929999991,
+   "lane passes 1..K (fixed trip count)": 0.02369314899999694
+  }
+ },
+ "backward": {
+  "label": "value backwards (x2)",
+  "wall": 30.20818303700071,
+  "gpu_busy": 28.228803783,
+  "kernels": 277566,
+  "kernels_per_step": 462.61,
+  "mean_kernel_us": 101.70123063703767,
+  "truncated": false,
+  "categories": {
+   "fit: normal equations (einsum)": 14.606005081999978,
+   "partner draws, tables, gathers": 9.038441204999838,
+   "other": 1.6834957830001123,
+   "fit: right-hand sides": 1.5495783120000062,
+   "fit: k nearest (top_k)": 0.813835658,
+   "fit: Cholesky solve (all columns)": 0.5374477429999931
+  }
+ },
+ "shape": {
+  "label": "shape gradient",
+  "wall": 33.33710556899314,
+  "gpu_busy": 4.17892814,
+  "kernels": 2085403,
+  "kernels_per_step": 6951.343333333333,
+  "mean_kernel_us": 2.003894757991621,
+  "truncated": true,
+  "categories": {
+   "other": 1.3258458929986463,
+   "linearised lane passes 1..K": 1.2239800780019967,
+   "step body: linearised pass 0, cotangents": 0.8795678009998347,
+   "pull-back (one batched transpose)": 0.4172614610000923,
+   "grad-lambda fits": 0.250413078,
+   "linearised hit search": 0.08185982899999932
+  }
+ }
+}

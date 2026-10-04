@@ -28,11 +28,11 @@ from jax_dsmc.state import GridSpec
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+from figure_paths import FIGURES, figure_path, forward_folder  # noqa: E402
 from forward import CASES, SPARTA  # noqa: E402
 from sparta_io import read_grid_dump, read_log_stats, read_surf_dump, surf_columns  # noqa: E402
 
 RESULTS = os.path.join(HERE, "results")
-FIGURES = os.path.join(HERE, "figures")
 SPARTA_RESULTS = os.path.join(RESULTS, "sparta")
 
 
@@ -1502,14 +1502,16 @@ def main() -> int:  # noqa: PLR0912, PLR0915 -- one report pass, kept whole
             case,
             curves,
             next(iter(air.values())) if air else None,
-            os.path.join(FIGURES, f"{case}_fill.png"),
+            figure_path(forward_folder(case), f"{case}_fill.png"),
         )
         sp = sparta_surface(case, seeds)
         g["FG3_surface"], stats = gate_surface(case, runs, sp)
         rate = g["FG3_surface"]["hits_per_step_ours"] / g["FG3_surface"]["hits_per_step_sparta"] - 1
         g["FG2_fill"]["hit_rate_rel_diff"] = rate
         g["FG2_fill"]["pass"] = bool(g["FG2_fill"]["pass"] and abs(rate) <= 0.02)
-        figure_surface(case, runs, sp, stats, os.path.join(FIGURES, f"{case}_surface_pressure.png"))
+        figure_surface(
+            case, runs, sp, stats, figure_path(forward_folder(case), f"{case}_surface_pressure.png")
+        )
         fields = gate_fields(case, runs, sparta_fields(case, seeds, grid))
         g["FG4_fields"] = {
             k: {kk: vv for kk, vv in v.items() if kk not in ("ours", "sparta", "z")}
@@ -1529,8 +1531,8 @@ def main() -> int:  # noqa: PLR0912, PLR0915 -- one report pass, kept whole
             grid,
             fields,
             overlay,
-            os.path.join(FIGURES, f"{case}_fields_sparta_t1000.png"),
-            os.path.join(FIGURES, f"{case}_fields_difference.png"),
+            figure_path(forward_folder(case), f"{case}_fields_sparta_t1000.png"),
+            figure_path(forward_folder(case), f"{case}_fields_difference.png"),
             mask=mask,
         )
         g["FG7_polygon_vs_analytic"] = compare_variants(

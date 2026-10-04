@@ -28,11 +28,14 @@
 # `check` on them first.  The group `check` submits check_env.sbatch on the chosen kind.
 # The nodes are MIG-partitioned (a 1g.24gb slice = a quarter card) and gpu-normal allows one
 # slice per job, so rtx jobs get 1 GPU.  Jobs whose name is already in squeue are skipped.
+# ONLY=<regex> submits just the group's jobs whose name matches (e.g. the biasgate group:
+#   GPU_KIND=rtx  ONLY='^kn_(seed|fd)' bash examples/mesh/cluster/submit_curc.sh biasgate
+#   GPU_KIND=h200 ONLY='hor'           bash examples/mesh/cluster/submit_curc.sh biasgate).
 # PART / GRES_TYPE override the partition / gres name
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|all|check"; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|all|check"; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 GPU_KIND="${GPU_KIND:-a100}"
@@ -78,13 +81,15 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
     squash|squashkn) HOURS=24 ;;
+    biasgate) HOURS=12 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
   # the finer circle (240 k slots x 300 captured steps) peaks above a 24 GB MIG slice: the
   # captured forward alone is 18.7 GB after rematerialisation and ran out of memory on every
   # rtx opt job (2026-09-23).  The sphere (50 k slots) fits.
   if [ "${GPU_KIND}" = "rtx" ] && [ "${group}" != "sphere" ] && [ "${group}" != "optc" ] \
-      && [ "${group}" != "squash" ] && [ "${group}" != "squashkn" ]; then
+      && [ "${group}" != "squash" ] && [ "${group}" != "squashkn" ] \
+      && [ "${group}" != "biasgate" ]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi
@@ -96,6 +101,8 @@ for group in "${GROUPS_TO_RUN[@]}"; do
   # a job of the same name already queued or running writes the same artifact: skip it
   QUEUED="$(squeue -h -u "${USER}" -o "%j" 2>/dev/null || true)"
   for i in "${!NAMES[@]}"; do
+    # ONLY=<regex>: submit just the matching jobs of the group (slot parts onto free queues)
+    if [ -n "${ONLY:-}" ] && ! grep -Eq "${ONLY}" <<< "${NAMES[$i]}"; then continue; fi
     if grep -qx "${group}_${NAMES[$i]}" <<< "${QUEUED}"; then
       echo "skip ${group}_${NAMES[$i]}: already queued"; continue
     fi

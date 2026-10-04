@@ -2,18 +2,23 @@
 
     python3 -m examples.mesh.cluster.collect
 
-* ``figures/optimize_convergence.png`` (``opt``) and ``optimize_convergence_coarse.png``
+* ``figures/optc/optimize_convergence.png`` (``opt``) and ``optimize_convergence_coarse.png``
   (``optc``): drag vs iterate and vs cost (``S x iterate`` seeds evaluated) for every
   ``(S, optimiser)`` run, area check.
-* ``figures/optc_drag.png``: the optc drag histories with the first shapes crossing the
+* ``figures/optc/optc_drag.png``: the optc drag histories with the first shapes crossing the
   inflow / outflow face and the held-out drag (``results/optimize/heldout_drag.json``, if
-  present); ``figures/optc_body_extent.png``: the body's gaps to those faces per iterate
+  present); ``figures/optc/optc_body_extent.png``: the body's gaps to those faces per iterate
   (per-run cache ``results/optimize/<tag>/contact.json``; this part imports jax for
   :func:`jax_dsmc.mesh.levelset.value`).
-* ``figures/gradient_seed_convergence.png``: the ``cos 2 theta`` gradient's standard error
+* ``figures/optc/gradient_seed_convergence.png``: the ``cos 2 theta`` gradient's standard error
   vs number of seeds (bootstrap over the 32-seed artifact) against the CRN FD;
   ``figures/mode2_gate.png``: that artifact's per-term, per-seed and per-variant gate.
 * the sphere gate row (ensemble vs FD, z) if its artifact exists.
+* ``squash`` / ``squashkn``: ``figures/squash/squash_gradient_gate.png`` (``dD/ds`` of every
+  ``grad_s`` artifact against its CRN FD and the free-molecular reference, per estimator) and
+  ``figures/squash/squash_optimisation.png`` (the completed ``optimize_squash`` runs: ``s``
+  per iterate, and the slope ratio ``(dD/ds) / (lam dV/ds)`` whose crossing of 1 is the
+  optimum); the per-run panels are ``optimize_squash.py --plot``.
 The per-seed files of the seed jobs (``..._dev_seed{i}.json``) are merged into the usual
 artifacts first; the report (incl. the optc run accounting from the Slurm logs) goes to
 ``study_results.json``.  Everything comes from the artifacts; nothing is typed in.
@@ -25,6 +30,7 @@ import glob
 import json
 import math
 import os
+import sys
 
 import numpy as np
 
@@ -32,6 +38,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MESH = os.path.dirname(HERE)
 RESULTS_OPT = os.path.join(MESH, "results", "optimize")
 FIGURES = os.path.join(MESH, "figures")
+sys.path.insert(0, MESH)
+from figure_paths import figure_path  # noqa: E402
+
 GRADIENT_RESULTS = os.path.join(os.path.dirname(MESH), "gradient_bench", "results")
 SEED_START = 32
 
@@ -654,6 +663,291 @@ def _mode2_variants(ax, summary):
     ax.set_title("(c) grad-lambda estimators", fontsize=9, loc="left", color=INK)
 
 
+SQUASH_RESULTS = os.path.join(MESH, "results", "optimize_squash")
+SQUASH_VARIANTS = {  # the four grad-lambda estimators, colour and label
+    "one": ("#1baf7a", "one-sided"),
+    "along": ("#eda100", "along-flight"),
+    "one_pool": ("#eb6834", "pooled"),
+    "along_pool": ("#2a78d6", "pooled + along-flight (used by the optimiser)"),
+}
+
+
+def _squash_module():
+    """``optimize_squash`` (its free-molecular ``reference``; imports jax via ensemble_mesh)."""
+    import optimize_squash  # noqa: PLC0415
+
+    return optimize_squash
+
+
+def squash_gate():
+    """The ``grad_s`` artifacts (ellipse, ``squash_y``): per ``s``, the CRN FD, the reference
+    ``dD/ds``, and per estimator the adjoint and its paired difference from the FD."""
+    paths = [
+        p for p in glob.glob(os.path.join(GRADIENT_RESULTS, "ensemble_mesh_ellipse_*_squash_y_*_dev.json"))
+        if "_dev_seed" not in p
+    ]  # fmt: skip
+    if not paths:
+        return None
+    osq = _squash_module()
+    out = []
+    for path in paths:
+        with open(path) as fh:
+            art = json.load(fh)
+        rows, cfg = art["rows"], art["config"]
+        s = float(cfg["squash"])
+        fd = np.array([np.mean(r["fd"]) for r in rows])
+        tally = np.array([r["pathwise_tally"] for r in rows])
+        ref_cfg = dict(
+            osq.default_config(), knudsen=cfg.get("knudsen", 0.0), mach=cfg.get("mach", 0.0)
+        )
+        entry = {
+            "s": s,
+            "seeds": len(rows),
+            "complete": art.get("complete", False),
+            "fd": _stat(fd),
+            "reference": float(osq.reference(ref_cfg, s)[1]),
+            "tally_minus_fd": _stat(tally - fd),
+            "variants": {},
+        }
+        for name in rows[0]["variants"]:
+            g = np.array([r["variants"][name]["gradient"] for r in rows])
+            d = _stat(g - fd)
+            entry["variants"][name] = {
+                "gradient": _stat(g),
+                "minus_fd": {**d, "z": d["mean"] / d["se"]},
+            }
+        out.append(entry)
+    return sorted(out, key=lambda e: e["s"])
+
+
+def figure_squash_gate(gate, path_fig):
+    """(a) ``dD/ds`` against ``s``: the free-molecular reference, the CRN FD and every
+    estimator (+-2 SE, offset in ``s`` for legibility); (b) each estimator's paired
+    difference from the FD per ``s``."""
+    import matplotlib  # noqa: PLC0415
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # noqa: PLC0415
+
+    osq = _squash_module()
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 4.4))
+    for ax in axes:
+        _style(ax)
+    ax = axes[0]
+    grid = np.linspace(0.2, 1.05, 120)
+    cfg = osq.default_config()
+    ax.plot(grid, [osq.reference(cfg, x)[1] * 1e20 for x in grid], color=REFERENCE, lw=1.5,
+            label="free-molecular reference")  # fmt: skip
+    s = np.array([e["s"] for e in gate])
+    ax.errorbar(s, [e["fd"]["mean"] * 1e20 for e in gate], yerr=[2 * e["fd"]["se"] * 1e20 for e in gate],
+                fmt="s", color=INK, ms=6, capsize=3, label="CRN finite difference")  # fmt: skip
+    for j, (name, (colour, label)) in enumerate(SQUASH_VARIANTS.items()):
+        dx = (j - 1.5) * 0.012
+        g = [e["variants"][name]["gradient"] for e in gate]
+        ax.errorbar(s + dx, [x["mean"] * 1e20 for x in g], yerr=[2 * x["se"] * 1e20 for x in g],
+                    fmt="o", color=colour, ms=4, capsize=2, label=f"adjoint, {label}")  # fmt: skip
+    ax.set_xlabel("y semi-axis factor s", fontsize=9, color=INK)
+    ax.set_ylabel("dD/ds  [1e-20 N/m]  (+-2 SE)", fontsize=9, color=INK)
+    ax.set_title(
+        f"(a) dD/ds, {gate[0]['seeds']} CRN seeds per point", fontsize=9, loc="left", color=INK
+    )
+    ax.legend(fontsize=7, frameon=False, loc="lower right")
+    ax = axes[1]
+    for j, (name, (colour, label)) in enumerate(SQUASH_VARIANTS.items()):
+        dx = (j - 1.5) * 0.012
+        d = [e["variants"][name]["minus_fd"] for e in gate]
+        ax.errorbar(s + dx, [x["mean"] * 1e21 for x in d], yerr=[2 * x["se"] * 1e21 for x in d],
+                    fmt="o", color=colour, ms=5, capsize=2, label=label)  # fmt: skip
+    d = [e["tally_minus_fd"] for e in gate]
+    ax.errorbar(s + 0.035, [x["mean"] * 1e21 for x in d], yerr=[2 * x["se"] * 1e21 for x in d],
+                fmt="D", mfc="none", color=INK_SECONDARY, ms=5, capsize=2, label="tally term alone")  # fmt: skip
+    ax.axhline(0.0, color=REFERENCE, lw=0.8)
+    ax.set_xlabel("y semi-axis factor s", fontsize=9, color=INK)
+    ax.set_ylabel("adjoint - FD  [1e-21 N/m]  (paired, +-2 SE)", fontsize=9, color=INK)
+    ax.set_title("(b) paired error of each estimator", fontsize=9, loc="left", color=INK)
+    ax.legend(fontsize=7, frameon=False, loc="lower right")
+    fig.tight_layout()
+    fig.savefig(path_fig, dpi=150)
+    plt.close(fig)
+
+
+def load_squash_histories():
+    """``{tag: history}`` of the ``optimize_squash`` runs."""
+    out = {}
+    for path in sorted(glob.glob(os.path.join(SQUASH_RESULTS, "*", "history.json"))):
+        with open(path) as fh:
+            out[os.path.basename(os.path.dirname(path))] = json.load(fh)
+    return out
+
+
+def _squash_label(h):
+    c = h["config"]
+    regime = "free-molecular"
+    if c.get("knudsen", 0.0) > 0.0:
+        regime = f"Kn {c['knudsen']:g}"
+        regime += f", M {c['mach']:g}" if c.get("mach", 0.0) > 0.0 else ", M 0.32"
+    return f"{regime}, S = {c['seeds_per_iterate']}"
+
+
+def _run_label(h):
+    """``S = n``, with the progress when the run is not finished."""
+    n, target = len(h["rows"]), h["config"]["iterations"]
+    label = f"S = {h['config']['seeds_per_iterate']}"
+    return label if n >= target else f"{label} (running, {n}/{target})"
+
+
+def _iterate_panel(ax, h, key, key_se=None, factor=1.0, marker="o"):
+    """One run's ``key`` per iterate (+- 1 SE when the run has several seeds)."""
+    rows = h["rows"]
+    it = [r["iterate"] for r in rows]
+    y = np.array([r[key] for r in rows]) * factor
+    colour = SEED_COLOURS[h["config"]["seeds_per_iterate"]]
+    ax.plot(it, y, "-", marker=marker, color=colour, ms=3.5, lw=1.4, label=_run_label(h))
+    if key_se is not None:
+        se = np.nan_to_num(np.array([r[key_se] for r in rows])) * factor
+        ax.fill_between(it, y - se, y + se, color=colour, alpha=0.18, lw=0)
+
+
+def _power(values):
+    top = max(abs(float(v)) for v in values)
+    return math.floor(math.log10(top)) if top > 0 else 0
+
+
+def _slope_panel(ax, osq, c, lam_dv, gate):
+    """Panel (c) of :func:`figure_squash_optimisation`: the reference and the gate's FD."""
+    grid = np.linspace(0.2, 1.05, 120)
+    ax.plot(grid, [osq.reference(c, x)[1] / lam_dv for x in grid], color=REFERENCE, lw=1.5,
+            label="free-molecular reference")  # fmt: skip
+    if gate:
+        ax.errorbar([e["s"] for e in gate], [e["fd"]["mean"] / lam_dv for e in gate],
+                    yerr=[2 * e["fd"]["se"] / lam_dv for e in gate], fmt="s", color=INK, ms=6,
+                    capsize=3, label="CRN FD (gradient gate, 8 seeds, +-2 SE)")  # fmt: skip
+    ax.axhline(1.0, color=INK_SECONDARY, lw=0.8)
+    ax.set_xlabel("y semi-axis factor s", fontsize=9, color=INK)
+    ax.set_ylabel("(dD/ds) / (lam dV/ds)", fontsize=9, color=INK)
+    ax.set_title("(c) slope ratio: the optimum is where it is 1", fontsize=9, loc="left", color=INK)
+    ax.legend(fontsize=7, frameon=False, loc="lower right")
+
+
+def figure_squash_optimisation(hists, gate, path_fig):
+    """The free-molecular squash optimisations (the analytic reference holds): (a) the
+    objective ``J = D - lam V`` per iterate against the reference's ``J`` at the same ``s``;
+    (b) ``s`` per iterate; (c) the slope ratio ``(dD/ds) / (lam dV/ds)`` at each iterate
+    (1 = the optimum), with the reference and the FD of the gradient gate."""
+    import matplotlib  # noqa: PLC0415
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # noqa: PLC0415
+
+    osq = _squash_module()
+    fig, axes = plt.subplots(1, 3, figsize=(15.5, 4.4))
+    for ax in axes:
+        _style(ax)
+    power = _power([r["J"] for h in hists.values() for r in h["rows"]])
+    lam_dv = None
+    for h in hists.values():
+        c, rows = h["config"], h["rows"]
+        colour = SEED_COLOURS[c["seeds_per_iterate"]]
+        lam_dv = h["lam"] * osq.reference(c, 1.0)[3]
+        _iterate_panel(axes[0], h, "J", "drag_se", 10.0**-power)
+        j_ref = [(r["D_ref"] - lam_dv * r["s"]) * 10.0**-power for r in rows]
+        axes[0].plot([r["iterate"] for r in rows], j_ref, ":", color=colour, lw=1.2,
+                     label=f"reference J at the same s ({_run_label(h)})")  # fmt: skip
+        _iterate_panel(axes[1], h, "s")
+        s = np.array([r["s"] for r in rows])
+        ratio = np.array([r["dD_ds"] for r in rows]) / lam_dv
+        axes[2].plot(s, ratio, ls="none", marker="o", color=colour, ms=4, label=_run_label(h))
+    axes[0].set_xlabel("iterate", fontsize=9, color=INK)
+    axes[0].set_ylabel(f"J = D - lam V  [1e{power} N/m]  (+-1 SE)", fontsize=9, color=INK)
+    axes[0].set_title("(a) objective (common random numbers)", fontsize=9, loc="left", color=INK)
+    axes[0].legend(fontsize=7, frameon=False)
+    axes[1].axhline(0.35, color=REFERENCE, ls=":", lw=1.2, label="reference optimum s* = 0.35")
+    axes[1].set_xlabel("iterate", fontsize=9, color=INK)
+    axes[1].set_ylabel("y semi-axis factor s", fontsize=9, color=INK)
+    axes[1].set_title("(b) Adam iterates (lr 0.05, from s = 1)", fontsize=9, loc="left", color=INK)
+    axes[1].legend(fontsize=7, frameon=False)
+    _slope_panel(axes[2], osq, next(iter(hists.values()))["config"], lam_dv, gate)
+    fig.suptitle("Squash, free-molecular (Kn ~ 1e18, M 0.32)", fontsize=10, color=INK)
+    fig.tight_layout()
+    fig.savefig(path_fig, dpi=150)
+    plt.close(fig)
+
+
+def figure_squash_set(hists, title, path_fig):
+    """One set of squash runs in the same flow (no analytic reference): (a) the objective
+    ``J = D - lam V`` per iterate, (b) ``s`` per iterate, (c) the adjoint ``J' = dD/ds -
+    lam dV/ds`` per iterate (0 at the optimum)."""
+    import matplotlib  # noqa: PLC0415
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # noqa: PLC0415
+
+    fig, axes = plt.subplots(1, 3, figsize=(15.5, 4.4))
+    for ax in axes:
+        _style(ax)
+    pj = _power([r["J"] for h in hists.values() for r in h["rows"]])
+    pg = _power([r["J_prime"] for h in hists.values() for r in h["rows"]])
+    for h in hists.values():
+        _iterate_panel(axes[0], h, "J", "drag_se", 10.0**-pj)
+        _iterate_panel(axes[1], h, "s")
+        _iterate_panel(axes[2], h, "J_prime", "dD_ds_se", 10.0**-pg)
+    axes[2].axhline(0.0, color=INK_SECONDARY, lw=0.8)
+    labels = (
+        ("(a) objective (common random numbers)", f"J = D - lam V  [1e{pj} N/m]  (+-1 SE)"),
+        ("(b) Adam iterates (lr 0.05, from s = 1)", "y semi-axis factor s"),
+        ("(c) adjoint gradient of J", f"J' = dD/ds - lam dV/ds  [1e{pg} N/m]  (+-1 SE)"),
+    )
+    for ax, (t, y) in zip(axes, labels, strict=True):
+        ax.set_xlabel("iterate", fontsize=9, color=INK)
+        ax.set_ylabel(y, fontsize=9, color=INK)
+        ax.set_title(t, fontsize=9, loc="left", color=INK)
+        ax.legend(fontsize=7, frameon=False)
+    fig.suptitle(title, fontsize=10, color=INK)
+    fig.tight_layout()
+    fig.savefig(path_fig, dpi=150)
+    plt.close(fig)
+
+
+def squash_outputs():
+    """The squash figures and report entries: the gradient gate, the free-molecular runs
+    (completed ones, against the reference) and one figure per collisional set of runs."""
+    report = {}
+    gate = squash_gate()
+    if gate:
+        figure_squash_gate(gate, figure_path("squash", "squash_gradient_gate.png"))
+        report["squash_gate"] = gate
+        for e in gate:
+            v = e["variants"]
+            print(
+                f"squash s={e['s']:g}: FD {e['fd']['mean']:.4g} ± {e['fd']['se']:.2g}, reference "
+                f"{e['reference']:.4g}; adjoint - FD z: "
+                + ", ".join(f"{n} {v[n]['minus_fd']['z']:+.1f}" for n in v)
+            )
+    hists = {t: h for t, h in load_squash_histories().items() if t.startswith("ellipse_")}
+    report["squash_runs"] = {
+        t: {"iterates": len(h["rows"]), "target": h["config"]["iterations"],
+            "s_last": h["rows"][-1]["s_next"] if h["rows"] else None,
+            "hours_per_iterate": float(np.mean([r["seconds"] for r in h["rows"]])) / 3600 if h["rows"] else None}
+        for t, h in hists.items()
+    }  # fmt: skip
+    sets = {}
+    for t, h in hists.items():
+        c = h["config"]
+        sets.setdefault((c.get("knudsen", 0.0), c.get("mach", 0.0)), {})[t] = h
+    for (kn, mach), runs in sorted(sets.items()):
+        if kn == 0.0:
+            done = {t: h for t, h in runs.items() if len(h["rows"]) >= h["config"]["iterations"]}
+            if done:
+                figure_squash_optimisation(
+                    done, gate, figure_path("squash", "squash_optimisation.png")
+                )
+            continue
+        regime = f"Kn {kn:g}, M {mach:g}" if mach > 0.0 else f"Kn {kn:g}, M 0.32"
+        name = f"squashkn_kn{kn:g}" + (f"_M{mach:g}" if mach > 0.0 else "") + "_optimisation.png"
+        figure_squash_set(runs, f"Squash, {regime}", figure_path("squash", name))
+    return report
+
+
 def optc_outputs(hist):
     """The optc drag figure (with the held-out drag if ``heldout_drag.json`` exists) and the
     per-run accounting; returns the report entries."""
@@ -662,8 +956,8 @@ def optc_outputs(hist):
     if os.path.exists(path_heldout):
         with open(path_heldout) as fh:
             heldout = json.load(fh)
-    figure_drag_optc(hist, os.path.join(FIGURES, "optc_drag.png"), heldout)
-    final = figure_extent_optc(hist, os.path.join(FIGURES, "optc_body_extent.png"))
+    figure_drag_optc(hist, figure_path("optc", "optc_drag.png"), heldout)
+    final = figure_extent_optc(hist, figure_path("optc", "optc_body_extent.png"))
     return {"optc_runs": run_accounting(hist), "optc_heldout": heldout, "optc_extent": final}
 
 
@@ -679,7 +973,7 @@ def main():
         hist = load_histories(label)
         if not hist:
             continue
-        figure_optimize(hist, os.path.join(FIGURES, f"optimize_convergence{suffix}.png"))
+        figure_optimize(hist, figure_path("optc", f"optimize_convergence{suffix}.png"))
         if label == "coarse":
             report.update(optc_outputs(hist))
         runs = {
@@ -700,7 +994,7 @@ def main():
             print(
                 f"| {tag} | {r['seeds_per_iterate']} | {r['optimizer']} | {r['iterates']} | {r['J_first']:.4g} | {r['J_last']:.4g} | {(r['J_last'] / r['J_first'] - 1) * 100:+.2f} % | {r['seconds']:.0f} |"
             )
-    gs = gradient_seed_convergence(os.path.join(FIGURES, "gradient_seed_convergence.png"))
+    gs = gradient_seed_convergence(figure_path("optc", "gradient_seed_convergence.png"))
     if gs:
         report["gradient_seed_convergence"] = gs
         print(
@@ -718,6 +1012,7 @@ def main():
             f"FD {summary['fd'][0]['mean']:.4g} / {summary['fd'][1]['mean']:.4g}; "
             f"adjoint - FD z = {summary['gradient_minus_fd']['z']:+.1f}"
         )
+    report.update(squash_outputs())
     sg = sphere_gate()
     if sg:
         report["sphere"] = sg

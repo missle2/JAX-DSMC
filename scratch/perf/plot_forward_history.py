@@ -1,6 +1,6 @@
 """Forward time of the SPARTA circle case (1000 steps from empty) across the speed-up
 changes, against SPARTA serial, sparta_jax and the 5x-SPARTA target.
--> examples/mesh/figures/forward_speedup_history.png
+-> examples/mesh/figures/performance/forward_speedup_history.png
 
 Milestones (all on this laptop, best of 2-3 timed runs of scratch/perf/bench_forward.py):
   2026-09-28  before        bench_forward_*_polygon.json / the 2026-09-28 summary
@@ -25,7 +25,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "..", "examples", "mesh", "figures", "forward_speedup_history.png")
+OUT = os.path.join(
+    HERE, "..", "..", "examples", "mesh", "figures", "performance", "forward_speedup_history.png"
+)
 
 MILESTONES = ["09-28\nbefore", "09-28\nbatch", "09-30\nmerge 1", "10-01\nmerge 2", "10-01\nsort"]
 # seconds per 1000 steps; the last column is read from the current benchmark files

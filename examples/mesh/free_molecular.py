@@ -34,7 +34,8 @@ jax.config.update("jax_enable_x64", True)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from forward import BLOCK, CASES, DT, FIGURES, NRHO, RESULTS, TEMP, VSTREAM, build  # noqa: E402
+from figure_paths import figure_path, forward_folder  # noqa: E402
+from forward import BLOCK, CASES, DT, NRHO, RESULTS, TEMP, VSTREAM, build  # noqa: E402
 
 from jax_dsmc import initialize, simulate, viz  # noqa: E402
 from jax_dsmc import species_data as sd  # noqa: E402
@@ -328,7 +329,7 @@ def main(argv=None) -> int:  # noqa: PLR0915 -- one sweep, kept whole
     os.makedirs(RESULTS, exist_ok=True)
     with open(path, "w") as fh:
         json.dump(out, fh, indent=1)
-    figure(out, os.path.join(FIGURES, f"free_molecular_drag_{args.case}.png"))
+    figure(out, figure_path(forward_folder(args.case), f"free_molecular_drag_{args.case}.png"))
     print("wrote", path)
     return 0
 

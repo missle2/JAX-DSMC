@@ -48,7 +48,8 @@ from jax_dsmc.state import FlowParams, GridSpec, SimParams, SimStatic  # noqa: E
 HERE = os.path.dirname(os.path.abspath(__file__))
 SPARTA = os.path.join(HERE, "sparta")
 RESULTS = os.path.join(HERE, "results")
-FIGURES = os.path.join(HERE, "figures")
+sys.path.insert(0, HERE)
+from figure_paths import figure_path, forward_folder  # noqa: E402
 
 CASES = {
     "circle": {
@@ -395,7 +396,7 @@ def run(args) -> dict:  # noqa: PLR0915 -- one run, kept whole so the bookkeepin
     if series is not None:
         series.close()
     if snapshots:
-        _write_snapshots(tag, grid, snapshots, overlay, mask, fields, D)
+        _write_snapshots(tag, args.case, grid, snapshots, overlay, mask, fields, D)
     return result
 
 
@@ -538,17 +539,16 @@ def _write_vtk(tag, grid, mesh, mask, fields, loads):
         )
 
 
-def _write_snapshots(tag, grid, snapshots, overlay, mask, steady, D):
+def _write_snapshots(tag, case, grid, snapshots, overlay, mask, steady, D):
     """Field PNGs with the body carved out (``mask``) and the surface overlaid; 3-D runs
-    are shown on the z = 0 plane."""
-    os.makedirs(FIGURES, exist_ok=True)
+    are shown on the z = 0 plane.  Written to ``figures/<case>_forward/``."""
     vmax_n = float(np.percentile(steady["nrho"], 99)) * 1.1
     limits = {"nrho": (0.0, vmax_n), "|u|": (0.0, 400.0), "temp": (0.0, 400.0)}
     plane = viz.Plane(2, fraction=0.5) if D == 3 else None
     for step, snap in sorted(snapshots.items()):
         speed = np.sqrt(np.sum(snap["u"] ** 2, axis=1))
         viz.field_snapshot(
-            os.path.join(FIGURES, f"{tag}_t{step:04d}.png"),
+            figure_path(forward_folder(case), f"{tag}_t{step:04d}.png"),
             {"nrho": snap["nrho"], "|u|": speed, "temp": snap["temp"]},
             grid.n,
             grid.lo,

@@ -35,9 +35,12 @@ cotangents the ensemble backward provides (plan section 2, item 4):
 
 The geometry is the body's traced pytree: ``AnalyticBody`` (centre, radius) or the
 ``points`` of a ``Surface``; :func:`with_geometry` rebuilds the metric tables (normals,
-areas) from it.  Cut volumes are NOT re-derived (the cut-volume term of the collision
-step is deferred to gate G5) and the cell tables are fixed by design (no membership
-term).  What the VJP cannot see -- the element-assignment jumps of a flat-normal
+areas) from it.  Cut volumes are not re-derived by the replay; their dependence -- the
+NTC attempt count carries ``1 / V_c`` -- is the separate **cut-volume term**
+(:func:`volume_weights`, :func:`volume_cotangent`: ``-sum_k sum_c (dV_c / V_c) C_kc``
+with ``C_kc`` the expected change of the objective by cell ``c``'s collisions at step
+``k``, from the virtual pull-back's collision increments).  The cell tables are fixed by
+design (no membership term).  What the VJP cannot see -- the element-assignment jumps of a flat-normal
 polygon and the silhouette of a diffuse body -- is the edge-band score of plan
 section 2, item 5: the polygon's is not built; the level set's silhouette band term is
 :func:`silhouette_cotangent` (``gradient(silhouette_band=)``, 2026-09-21).
@@ -50,6 +53,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import warnings
 from typing import NamedTuple
 
 import jax
@@ -59,6 +63,7 @@ from jax import lax
 from jax_dsmc import boundary, ensemble_device, sampling
 from jax_dsmc.collide.ntc import step_v_post
 from jax_dsmc.ensemble_device import node_gradients
+from jax_dsmc.grid import collision_cell, spacing
 from jax_dsmc.mesh import geometry as mesh_geometry
 from jax_dsmc.mesh import levelset as levelset_mod
 from jax_dsmc.mesh import surface as surface_mod
@@ -209,6 +214,11 @@ class ShapeTerms(NamedTuple):
     anything above ``REPLAY_TOL = 1e-9``."""
     surface_hits: jax.Array
     """``i32[M]`` element hits per replayed step."""
+    order: object = None
+    """Geometry-shaped: the collision-order term (:func:`order_jump`): a body hit that slips
+    from the end of step ``k`` into step ``k + 1`` collides in step ``k`` as the incoming
+    particle instead of as the reflected one.  Zero without collisions; ``None`` unless
+    ``gradient`` was given the collision increments."""
 
 
 def geometry(mesh: Mesh | None):
@@ -498,7 +508,14 @@ def along_flight(gx, v, lam_timing):
     ``s``, so ``v . grad_x V = -T`` with ``T`` the expected change of the objective per
     unit delay of the trajectory (``lam_timing``: the value of the timing rewards, carried
     by a second backward).  ``gx`` (``N, D``), ``v`` (``N, 3``): the perpendicular part
-    stays fitted."""
+    stays fitted.
+
+    In a collisional gas the backward equation ``d_t V + v . grad_x V + L* V + r = 0``
+    gives ``v . grad_x V = -T - L* V``: the extra flight time ``s`` is spent where the
+    particle collides at the rate of its state.  The caller adds ``L* V`` to
+    ``lam_timing`` (:func:`gradient_variants` ``collision=``: the virtual pull-back's
+    per-slot increment ``dt L* lam``, :attr:`ensemble_device.Backward.collision`, over
+    ``dt``); without it the identity holds only in free flight."""
     d = gx.shape[1]
     vd = v[:, :d]
     v2 = jnp.maximum(jnp.sum(vd * vd, axis=1), 1e-300)
@@ -658,6 +675,46 @@ def _pullbacks(vjp, cotangents):
     return [jax.tree.map(lambda a, j=j: a[j], batched) for j in range(len(cotangents))]
 
 
+ORDER_FIT = {"k": 32, "pool": 0}
+"""Fit of the collision-increment field for :func:`order_jump`: the hit's own cell only
+(no pooled block, which reaches across a thin body; the position half-space of the pooled
+shape fits would drop every flow node for the approaching side's query)."""
+
+
+def order_jump(events, survivors, rec_k, coll_k, grid, npc_max, scale, chunk):
+    """Per pass-0 body hit, ``J = c(x_w, v_in) - c(x_w, v_out)`` (``f64[N]``, zero off the
+    hits): the change of the objective when the hit moves from the end of this step to the
+    start of the next.  The move precedes the step's collisions, so the hit that slips
+    collides here as the incoming particle (``v_in``) and hits at the start of the next
+    step, instead of hitting now and colliding as the reflected particle (``v_out``).
+    Both futures are the same after the next step's move, so the difference is the step's
+    expected collision effect, ``c = dt L* lambda`` -- the backward's per-slot increment
+    ``coll_k`` (:attr:`ensemble_device.Backward.collision`) fitted at the hit point on the
+    approaching (``v . n < 0``) and leaving sides.  Without collisions ``c = 0``: the
+    hit-timing band term (:func:`timing_cotangent`) is then the whole hit-step dependence;
+    with them this is its collisional part, at every step boundary, not only at the
+    window's edges."""
+    dim = rec_k.x.shape[1]
+    head = as_split(events).head
+    body = (head.face[0] >= 2 * dim) & survivors
+    slots, _lost = lane_slots(body, as_split(events).slot.shape[0])
+    used = slots >= 0
+    q = jnp.where(used, slots, 0)
+    n = head.normal[0][q]
+    x_w = head.x_hit[0][q]
+    lam = coll_k.astype(jnp.float64)
+    fit = {"npc_max": npc_max, "scale": scale, "chunk": chunk, **ORDER_FIT}
+    c_in = ensemble_device.value_query(
+        rec_k.x, rec_k.v, rec_k.alive, lam, grid, x_w, head.v_in[0][q], direction=-n, **fit
+    )
+    c_out = ensemble_device.value_query(
+        rec_k.x, rec_k.v, rec_k.alive, lam, grid, x_w, head.v_out[0][q], direction=n, **fit
+    )
+    n_slots = rec_k.x.shape[0]
+    target = jnp.where(used, slots, n_slots)
+    return jnp.zeros(n_slots).at[target].set(jnp.where(used, c_in - c_out, 0.0), mode="drop")
+
+
 def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     carry,
     xs,
@@ -674,8 +731,8 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     """One step of the shape VJP (module-level ``scan`` body).  ``fits`` is a tuple of
     ``grad lambda`` estimators (the fit settings plus ``"along"``); the per-estimator
     carries ``g_x``, ``g_v``, ``g_sil`` are tuples over it, the rest is shared."""
-    x, v, alive, g_x, g_v, g_tally, g_score, g_time, g_sil, err = carry
-    rec_k, lam_k, step, r_k, tally_weight, lam_timing_k, klass_k = xs
+    x, v, alive, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err = carry
+    rec_k, lam_k, step, r_k, tally_weight, lam_timing_k, klass_k, coll_k = xs
     key = key_for(setup["base_key"], step, STAGE_MOVE)
     f = functools.partial(wall_map, x=x, v=v, alive=alive, key=key, **setup["map"])
     _floats, vjp, primal = jax.vjp(functools.partial(_inexact_outputs, f), geom, has_aux=True)
@@ -710,7 +767,9 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
             **_fit_settings(fit),
         )
         if fit["along"]:
-            gx = along_flight(gx, rec_k.v, lam_timing_k)
+            # v . grad_x V = -T - L* V: the collision increment dt L* lam over dt
+            t_k = lam_timing_k if coll_k is None else lam_timing_k + coll_k / setup["map"]["dt"]
+            gx = along_flight(gx, rec_k.v, t_k)
         gx = jnp.where(survivors[:, None], gx, 0.0)
         gv = jnp.where(survivors[:, None], gv, 0.0)
         cotangents.append((gx, zeros[1], zeros[2], zeros[3], zeros[4], zeros[5]))
@@ -756,6 +815,21 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
             ),
         )
         cotangents.append((zeros[0], zeros[1], zeros[2], zeros[3], zeros[4], cot_time))
+    if coll_k is not None:
+        # the collisional part of the hit-step dependence (order_jump), whole-step band:
+        # the hit times of a stationary flow are uniform within the step
+        fit0 = fits[0]
+        jump_o = order_jump(
+            events, survivors, rec_k, coll_k, setup["map"]["grid"], fit0["npc_max"],
+            fit0["scale"], fit0["chunk"],
+        )  # fmt: skip
+        # timing_cotangent takes the objective's loss (before - after) when the hit slips
+        head_o = timing_cotangent(split.head, -jump_o[None, :], setup["map"]["dt"], 1.0)
+        head_o = jnp.where(split.head.face >= 2 * dim, head_o, 0.0)
+        cot_order = _cotangent_field(
+            events, "time", EventArray(head_o, jnp.zeros_like(split.tail.time))
+        )
+        cotangents.append((zeros[0], zeros[1], zeros[2], zeros[3], zeros[4], cot_order))
     pulled = _pullbacks(vjp, cotangents)
     n_fit = 2 * len(fits)
     g_x = tuple(jax.tree.map(jnp.add, g, d) for g, d in zip(g_x, pulled[0:n_fit:2], strict=True))
@@ -766,6 +840,8 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         g_tally = jax.tree.map(jnp.add, g_tally, rest.pop(0))
     if timing_jump is not None:
         g_time = jax.tree.map(jnp.add, g_time, rest.pop(0))
+    if coll_k is not None:
+        g_order = jax.tree.map(jnp.add, g_order, rest.pop(0))
     if silhouette_band > 0.0:
         mesh_g = with_geometry(setup["map"]["mesh"], geom)
         sil = []
@@ -803,6 +879,7 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         g_score,
         g_time,
         g_sil,
+        g_order,
         err,
     ), n_hits
 
@@ -921,8 +998,9 @@ def _gradient(
     lam_timing=None,
     silhouette_band=0.0,
     reward=None,
-    value_class="hit_ahead",
+    value_class="none",
     hit_fits=False,
+    collision=None,
 ):
     """:func:`gradient` for several ``grad lambda`` estimators ``(pool, k, along)`` at once
     (a tuple of :class:`ShapeTerms`, one per estimator): one wall-map replay and one
@@ -933,10 +1011,11 @@ def _gradient(
     geom = geometry(mesh)
     fits = tuple(
         {"npc_max": npc_max, "scale": scale, "k": k_e, "basis": basis, "chunk": chunk,
-         "pool": pool, "along": along}
-        for pool, k_e, along in estimators
+         "pool": pool, "along": along, "halfspace": e[3] if len(e) > 3 else None}
+        for e in estimators
+        for pool, k_e, along in (e[:3],)
     )  # fmt: skip
-    if any(along for _p, _k, along in estimators) and lam_timing is None:
+    if any(e[2] for e in estimators) and lam_timing is None:
         raise ValueError("an along-flight estimator needs lam_timing")
     body = functools.partial(
         _gradient_step,
@@ -966,10 +1045,11 @@ def _gradient(
         zero_g,
         zero_g,
         per,
+        zero_g,
         jnp.float64(0.0),
     )
-    (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, err), hits = lax.scan(
-        body, init, (records, lam, steps, hit_reward, tally_weight, lam_timing, klass)
+    (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err), hits = lax.scan(
+        body, init, (records, lam, steps, hit_reward, tally_weight, lam_timing, klass, collision)
     )
     return tuple(
         ShapeTerms(
@@ -982,6 +1062,7 @@ def _gradient(
             gs,
             err,
             hits,
+            None if collision is None else g_order,
         )
         for gx, gv, gs in zip(g_x, g_v, g_sil, strict=True)
     )
@@ -1016,7 +1097,7 @@ def gradient(
     lam_timing=None,
     silhouette_band=0.0,
     reward=None,
-    value_class="hit_ahead",
+    value_class="none",
     hit_fits=False,
 ):
     """The shape gradient of the captured window: :class:`ShapeTerms` shaped like
@@ -1037,9 +1118,17 @@ def gradient(
     ``grad_x lambda`` to the identity of :func:`along_flight`.
 
     ``value_class`` stratifies the ``grad lambda`` fits (:func:`node_gradients`):
-    ``"hit_ahead"`` (default) fits a particle's value from the particles of its own class,
-    class = a body hit at a later captured step; ``"none"`` is the mixed pool of the
-    phase-D artifacts.
+    ``"none"`` (default) fits from the mixed pool.  ``"hit_ahead"`` is **diagnostic only,
+    never a correct estimator**: it fits a particle's value from the particles of its own
+    class, class = a body hit at a later captured step -- a property of the particle's
+    FUTURE, not of its state.  With ``lambda = P lam_1 + (1 - P) lam_0`` (``P`` the
+    probability of a later hit) a fit within the class estimates ``P grad lam_1 + (1 - P)
+    grad lam_0`` and drops ``grad P (lam_1 - lam_0)``; restoring it needs ``grad P`` from
+    the same local regression, which turns the estimator back into the mixed-pool fit with
+    more variance.  Measured: coarse ``cos 2 theta`` +40 %, free-molecular squash +4..20 %
+    (2026-10-02/03, slides Finding 1).  Stratification is legitimate only by a function of
+    the current state (the one-sided ``v . n`` rule, the ``halfspace`` plane), which is
+    what the fits use.
 
     ``hit_fits=True`` fits ``grad lambda`` only at the slots with a body event in the step
     (:func:`_body_hit_slots`) instead of every slot -- the same gradient (to the last bit)
@@ -1048,6 +1137,7 @@ def gradient(
     set, and the restriction would drop those terms.  (``epsilon`` is traced, so this is
     the caller's declaration; ``examples.ensemble_mesh.shape_terms`` runs at 0.)
     """
+    _warn_value_class(value_class)
     (terms,) = _gradient(
         records,
         lam,
@@ -1119,19 +1209,112 @@ VARIANTS = {
     "one_pool": (1, 96, False),
     "along": (0, 32, True),
     "along_pool": (1, 96, True),
+    # the pooled fits without the nodes more than a quarter cell behind the hit's tangent
+    # plane: a body thinner than the 3^D block puts its far side's particles in the pool
+    # (2026-10-02 bias study)
+    "one_pool_plane": (1, 96, False, 0.25),
+    "along_pool_plane": (1, 96, True, 0.25),
 }
 
 
-def gradient_variants(lam_timing, names=None, **kwargs):
+def _warn_value_class(value_class):
+    if value_class == "hit_ahead":
+        warnings.warn(
+            'value_class="hit_ahead" is biased by construction (it conditions the fits on '
+            "the particle's future); diagnostic use only -- see shape.gradient",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+
+
+def gradient_variants(lam_timing, names=None, collision=None, **kwargs):
     """:func:`gradient` for every entry of :data:`VARIANTS` (the same records, cotangents
     and rewards; only the estimate of ``grad_x lambda`` differs): ``{name: ShapeTerms}``.
     ``lam_timing`` is the timing-reward value of the along-flight variants; ``names``
     restricts the set.  One scan serves all of them (:func:`_gradient`): the wall-map
-    replay, its pull-back and the shared terms are computed once per step."""
+    replay, its pull-back and the shared terms are computed once per step.
+
+    ``collision`` ``f64[M, N]`` (:attr:`ensemble_device.Backward.collision` of the
+    objective's value column, ``dt L* lam``) adds the collision term of the along-flight
+    identity, ``v . grad_x V = -T - L* V`` (:func:`along_flight`); required for a
+    collisional run, a no-op (zeros) without collisions."""
+    _warn_value_class(kwargs.get("value_class", "none"))
     chosen = [name for name in VARIANTS if names is None or name in names]
     estimators = tuple(VARIANTS[name] for name in chosen)
-    along = any(a for _p, _k, a in estimators)
+    along = any(e[2] for e in estimators)
     for name in ("pool", "k", "lam_timing"):
         kwargs.pop(name, None)
-    terms = _gradient(**kwargs, estimators=estimators, lam_timing=lam_timing if along else None)
+    terms = _gradient(
+        **kwargs,
+        estimators=estimators,
+        lam_timing=lam_timing if along else None,
+        collision=collision,
+    )
     return dict(zip(chosen, terms, strict=True))
+
+
+# --- the cut-volume term ------------------------------------------------------------------
+
+
+def volume_weights(cell_collision, grid):
+    """``g_c = -sum_k C_kc / V_c`` (``f64[C]``, ``C`` the collision cells): the cut-volume
+    term's weight on each cell's flow volume, ``dJ/dtheta |_V = sum_c g_c dV_c/dtheta``.
+
+    NTC attempts ``N_c (N_c - 1) F (sigma g)_max dt / (2 V_c)`` pairs per step, so every
+    collision probability of cell ``c`` scales as ``1 / V_c``, and the expected objective
+    changes by ``-(dV_c / V_c) C_kc`` per step with ``C_kc`` the expected change of the
+    objective by the cell's collisions -- the same form as the kernel-parameter term with
+    ``d log q`` replaced by ``-d log V_c``.  ``cell_collision`` ``f64[M, C]`` is
+    :attr:`ensemble_device.Backward.cell_collision`: ``C_kc = 1/2 sum_{i in c}
+    collision_ki``, each slot's increment being ``sum_j P_ij Phi_ij`` and every pair seen
+    from both ends."""
+    total = jnp.sum(cell_collision, axis=0)
+    volume = grid.volume
+    return jnp.where(volume > 0.0, -total / jnp.where(volume > 0.0, volume, 1.0), 0.0)
+
+
+def _cell_samples(grid, sub):
+    """Centred ``sub^D`` sample points of every Cartesian cell, ``f64[C0 sub^D, D]``, the
+    collision cell each lies in (a split cell's sub-cell by its region raster) and the
+    volume each stands for (with ``grid.transverse``)."""
+    d = len(grid.n)
+    dx = spacing(grid)
+    # row-major, the last axis fastest: grid.cell_of's order
+    idx = jnp.stack(jnp.meshgrid(*[jnp.arange(n) for n in grid.n], indexing="ij"), axis=-1)
+    offs = jnp.stack(jnp.meshgrid(*[(jnp.arange(sub) + 0.5) / sub] * d, indexing="ij"), axis=-1)
+    x = grid.lo + (idx.reshape(-1, 1, d) + offs.reshape(1, -1, d)) * dx
+    x = x.reshape(-1, d)
+    return x, collision_cell(x, grid), jnp.prod(dx) / sub**d * grid.transverse
+
+
+def _weighted_flow_volume(coef, ls, x, w_sample, width):
+    """``sum_c weights_c V_c`` with ``V_c`` the smoothed flow volume of collision cell
+    ``c``: its samples' ``1 - H_w(-phi)`` (``phi < 0`` is the body), ``w_sample`` the
+    weight of each sample's cell times its volume."""
+    phi = levelset_mod.value(dataclasses.replace(ls, coef=coef), x)
+    flow = 0.5 * (1.0 + jnp.tanh(phi / width))
+    return jnp.sum(w_sample * flow)
+
+
+def volume_cotangent(geom, mesh, grid, weights, sub=32, width=None):
+    """The cut-volume term as a cotangent on the level-set coefficients ``geom``:
+    ``sum_c weights_c dV_c / dcoef`` with ``V_c`` the smoothed flow volume of each
+    collision cell (``sub^D`` centred samples per Cartesian cell, each assigned to its
+    collision cell -- a split cell's samples to their sub-cells by the region raster --
+    Heaviside half-width ``width``, default a quarter of the knot spacing), i.e.
+    ``int_c delta(phi) B_j`` -- the shape derivative of the cut volume,
+    ``int_{Gamma cap c} B_j / |grad phi|``.  ``weights`` from :func:`volume_weights`.  The
+    sample spacing must resolve ``width`` (the default ``sub = 32`` gives 4 samples per
+    ``width`` on a cell of 8 knots)."""
+    if mesh.kind != "levelset":
+        raise ValueError("the cut-volume term is built for level-set bodies")
+    ls = mesh.body
+    width = ls.h / 4.0 if width is None else float(width)
+    x, cell, area = _cell_samples(grid, sub)
+    w_sample = weights[cell] * area
+    _v, vjp = jax.vjp(
+        functools.partial(_weighted_flow_volume, ls=ls, x=x, w_sample=w_sample, width=width),
+        geom,
+    )
+    (cot,) = vjp(jnp.float64(1.0))
+    return cot

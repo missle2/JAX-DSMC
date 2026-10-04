@@ -1,0 +1,29 @@
+Coarse circle, level-set body, \code{mode2} ($\cos2\theta$), 4 CRN seeds (32--35), the same
+records for every row; FD $= -1.594\pm0.043$, tally term $-1.596$ ($\times10^{-20}$), so the
+$\nabla\lambda$ parts should sum to FD$-$tally $= +0.01\pm0.68\times10^{-21}$.
+
+\medskip
+\footnotesize
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+fit class & $x$ part & $v$ part & gradient & gradient $-$ FD (paired)\\
+ & $10^{-21}$ & $10^{-21}$ & $10^{-20}$ & $10^{-20}$\\
+\midrule
+no class (\code{none}) & $-0.28$ & $+0.36\pm0.15$ & $-1.587\pm0.030$ & $+0.007\pm0.071$\\
+hit-ahead, current & $-0.72$ & $-6.02\pm0.34$ & $-2.269\pm0.036$ & $-0.675\pm0.057$\\
+hit-ahead, stopped at the next birth & $-0.80$ & $-10.82\pm0.62$ & $-2.758\pm0.069$ & $-1.164\pm0.091$\\
+\bottomrule
+\end{tabular}
+\normalsize
+
+\medskip
+\textbf{Refilling is not the cause.}  A purer class makes the bias \emph{larger}.  The
+stratified fit estimates $\nabla\lambda_\kappa$ within each class, while
+\[
+\lambda = P\lambda_1 + (1-P)\lambda_0 \;\Rightarrow\;
+\nabla\lambda = P\nabla\lambda_1 + (1-P)\nabla\lambda_0 + \underbrace{\nabla P\,(\lambda_1 - \lambda_0)}_{\text{dropped}},
+\]
+with $P(z)$ = probability of a later body hit.  A reflected particle can come back, most likely
+after a specular $y$-wall bounce (not checked), so $\nabla_v P\ne0$, and $\lambda_1 - \lambda_0\approx$ the next hit's
+drag.  Neither the silhouette nor the timing term carries this.  On the capsule,
+$P\approx0$ after a reflection, so the class was harmless there.

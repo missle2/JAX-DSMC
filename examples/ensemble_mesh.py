@@ -36,6 +36,7 @@ import json
 import os
 import sys
 import time
+import warnings
 from pathlib import Path
 
 os.environ.setdefault("XLA_FLAGS", "--xla_gpu_enable_command_buffer=")
@@ -84,7 +85,13 @@ def default_config():
         "silhouette_band": 0.0,
         "grazing": 0.0,
         "grid_scale": 1,
-        "value_class": "hit_ahead",
+        # "hit_ahead" (stratified grad-lambda fits) is DIAGNOSTIC ONLY, biased by
+        # construction: the class is the particle's future, the fit drops grad P (lam_1 -
+        # lam_0) (shape.gradient; slides Finding 1) and warns when used
+        "value_class": "none",
+        # one-sided fits in the backward next to the body (shape.local_normals): the
+        # virtual pull-back's four-term values in the cut cells
+        "backward_normals": False,
         # the y semi-axis factor s of the `ellipse` / `spheroid` cases (semi-axes R, s R[, R]):
         # the evaluation point of the control `squash_y`
         "squash": 1.0,
@@ -411,14 +418,17 @@ NPC_BUCKET = 64
 
 
 @functools.lru_cache(maxsize=16)
-def drag_rewards(mass: float, dim: int, first: int, last: int, scale: float):
+def drag_rewards(mass: float, dim: int, first: int, last: int, scale: float, width: int = 1):
     """The windowed-drag per-hit reward and its window-edge jump as ``functools.partial``
     objects, one pair per distinct setting.  They are static arguments of the jitted
     ``shape.replay`` and ``shape.gradient``, and a partial hashes by identity: building new
     ones for every seed recompiled both (~40 s per seed, 2026-09-28), so they are cached
-    on the (hashable) values that define them."""
+    on the (hashable) values that define them.  ``width`` spreads each window edge's jump
+    over that many whole steps (:func:`timing_band_setting`)."""
     reward = functools.partial(_drag_reward, mass=mass, dim=dim, first=first, scale=scale)
-    jump = functools.partial(_drag_jump, mass=mass, dim=dim, first=first, last=last, scale=scale)
+    jump = functools.partial(
+        _drag_jump, mass=mass, dim=dim, first=first, last=last, scale=scale, width=width
+    )
     return reward, jump
 
 
@@ -429,12 +439,41 @@ def _drag_reward(events, tallies, rec_k, step, mass, dim, first, scale):
     return jnp.where((events.face >= 2 * dim) & (step >= first), r * scale, 0.0)
 
 
-def _drag_jump(events, rec_k, step, mass, dim, first, last, scale):
-    """Window-edge jumps of the per-hit drag reward (see ``ensemble_plane._shear_jump``)."""
+def _drag_jump(events, rec_k, step, mass, dim, first, last, scale, width=1):
+    """Window-edge jumps of the per-hit drag reward (see ``ensemble_plane._shear_jump``):
+    ``+r`` on the window's last step, ``-r`` on the step before the window -- or, with
+    ``width > 1``, ``+-r / width`` on the ``width`` steps ending there (the edge's hit-time
+    density from all their hits instead of a fraction of one step's)."""
     del rec_k
     r = mass * (events.v_in[..., 0] - events.v_out[..., 0]) * scale
-    sign = jnp.where(step == last, 1.0, jnp.where(step == first - 1, -1.0, 0.0))
+    at_end = (step > last - width) & (step <= last)
+    at_start = (step >= first - width) & (step < first)
+    sign = jnp.where(at_end, 1.0, jnp.where(at_start, -1.0, 0.0)) / width
     return jnp.where(events.face >= 2 * dim, r * sign, 0.0)
+
+
+def _drag_setup(cfg, mass, dim, first, scale_r, timing_band):
+    """The windowed drag's reward, its edge jump and the step-fraction band of
+    :func:`timing_band_setting` for the captured steps of ``cfg``."""
+    band, width = timing_band_setting(timing_band)
+    if first - width < cfg["warmup"]:
+        raise ValueError(f"timing band of {width} steps reaches before the captured steps")
+    last = cfg["warmup"] + cfg["steps"] - 1
+    reward, jump = drag_rewards(mass, dim, first, last, scale_r, width)
+    return reward, jump, band
+
+
+def timing_band_setting(value):
+    """``(band, width)`` of a ``timing_band`` setting: below 1 a fraction of the step end
+    (the hit-timing band of ``shape.timing_cotangent`` on one step per window edge); 1 or
+    more a whole number of steps per edge, each counted whole.  The edge term rests on the
+    hits in the band: at 0.2 of one step that is ~10 hits per seed on the squash case, and
+    a diffuse body's per-hit reward does not vanish at grazing incidence -- the term was
+    -35 % of dD/ds on one seed (2026-10-03).  A band of 10 steps uses ~50x the hits at an
+    O(10 dt) smoothing of the edge's hit-time density."""
+    if value >= 1.0:
+        return 1.0, round(value)
+    return float(value), 1
 
 
 def objective_value(cfg, tallies, dim, scale):
@@ -456,31 +495,95 @@ def _check(diag):
             raise RuntimeError(f"{name} fired")
 
 
-def _backwards(rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hits, timing):
+def _backwards(
+    rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hits, timing, sided=None
+):
     """The two value-form device backwards of :func:`shape_terms`: the objective's hit
     rewards (``lam``) and the timing rewards (``lam_timing``, the along-flight identity's
-    value); the host bookkeeping is skipped (only the device's ``lam`` is used)."""
+    value); the host bookkeeping is skipped (only the device's ``lam`` is used).
+
+    Under the virtual pull-back (the default) both run as ONE sweep with two value columns
+    (:func:`ensemble_device.backward_virtual`): the same record, key, partners and fit
+    nodes, every fit factorised once for both right-hand sides -- column ``r`` is the
+    separate backward of reward ``r`` to the solve's rounding, at about half the cost
+    (PSEUDOCODE section 9.7.1).  The returned pair of :class:`ensemble_device.Backward` is
+    the two columns, exactly what two calls return.  The sequential pull-back keeps two
+    calls."""
     n = rec.x.shape[1]
-    out = []
-    for rewards in (hits, timing):
-        _, dev = device_backward(
-            rec,
-            state0,
-            final,
-            jnp.zeros(n),
-            1.0,
-            grid,
-            v_scale,
-            sp,
-            jax.random.fold_in(key, 12345),
-            neighbors,
-            npc_max=npc_max,
-            hit_reward=rewards,
-            return_device=True,
-            host_adjoint=False,
+    head = (rec, state0, final)
+    tail = (1.0, grid, v_scale, sp, jax.random.fold_in(key, 12345), neighbors)
+    options = {"npc_max": npc_max, "return_device": True, "host_adjoint": False}
+    if sided is not None:
+        # (mesh, faces): the nearest surface normal per slot and step, f32 to save memory
+        options["normals"] = shape.local_normals(rec, grid, *sided).astype(jnp.float32)
+    if ensemble_backward.VIRTUAL is not None:
+        # each slot's collision increment dt L* lam: the along-flight identity's collision
+        # term and the cut-volume term (shape.volume_weights)
+        options["collision_out"] = True
+        options["columns_out"] = True
+    if ensemble_backward.VIRTUAL is None:
+        return tuple(
+            device_backward(*head, jnp.zeros(n), *tail, hit_reward=rewards, **options)[1]
+            for rewards in (hits, timing)
         )
-        out.append(dev)
-    return tuple(out)
+    # the hit rewards' per-step totals (what the device's move pull-back reads) beside the
+    # timing totals: f64[M, 1, N, 2]
+    columns = jnp.stack((hits.totals()[:, None], timing), axis=-1)
+    _, dev = device_backward(*head, jnp.zeros((n, 2)), *tail, hit_reward=columns, **options)
+    return tuple(_column(dev, r) for r in range(2))
+
+
+def _column(dev, r):
+    """Value column ``r`` of a two-column :class:`ensemble_device.Backward` (``four_term``
+    has no column axis: zeros under the virtual pull-back)."""
+    return dev._replace(
+        lambda0=dev.lambda0[..., r],
+        lam=dev.lam[r],
+        kernel=dev.kernel[..., r],
+        collision=dev.collision if r == 0 else None,
+        cell_collision=dev.cell_collision if r == 0 else None,
+    )
+
+
+NEWBORN_HIT_MAX = 1e-3
+"""Largest share of the windowed drag that may come from hits the adjoint does not see
+(entrants' birth-step hits, hits by particles leaving the box in the same step): above it
+the gradient misses their dependence on the shape (slides Finding 4) and a warning says so."""
+
+
+def _newborn_share(check, value):
+    """``(D_tally - sum r) / D_tally``, warned about above :data:`NEWBORN_HIT_MAX`."""
+    share = (check - value) / max(abs(check), 1e-300)
+    if abs(share) > NEWBORN_HIT_MAX:
+        warnings.warn(
+            f"{share:.2%} of the drag is from hits the adjoint does not differentiate "
+            "(birth-step or same-step-exit hits): the body is within a step of a box face",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return share
+
+
+def _drag_tally_cotangent(tallies, dim, mesh, scale_r):
+    """``dJ/d tally`` of the windowed drag: ``scale_r`` on the body's ``x`` momentum."""
+    n_surf = 2 * dim + mesh.n_elements
+    return tallies.__class__(
+        None,
+        jnp.zeros((n_surf, 3)).at[2 * dim :, 0].set(scale_r),
+        jnp.zeros(n_surf),
+        jnp.zeros(n_surf),
+    )
+
+
+def _volume_term(dev, rec, grid, mesh):
+    """The cut-volume term's geometry cotangent (``shape.volume_cotangent``): NTC's
+    ``1 / V_c`` in the collision probabilities of the cut cells, weighted by the cells'
+    collision increments; ``None`` under the sequential pull-back (no increments) or for
+    the analytic body (exact volumes, no level set)."""
+    if dev.cell_collision is None or mesh.kind != "levelset":
+        return None
+    weights = shape.volume_weights(dev.cell_collision, grid)
+    return shape.volume_cotangent(shape.geometry(mesh), mesh, grid, weights)
 
 
 def shape_terms(
@@ -511,12 +614,11 @@ def shape_terms(
         s["params"],
     )
     dim, m, w = static.D, cfg["steps"], cfg["window"]
-    mass = sp.mass[0]
-    dt = params.dt
+    mass, dt = sp.mass[0], params.dt
     scale_r = float(params.fnum[0]) / (w * float(dt))
     first = cfg["warmup"] + m - w
     steps = cfg["warmup"] + jnp.arange(m, dtype=jnp.int32)
-    reward, jump = drag_rewards(float(mass), dim, first, cfg["warmup"] + m - 1, scale_r)
+    reward, jump, timing_band = _drag_setup(cfg, float(mass), dim, first, scale_r, timing_band)
     rep = shape.replay(
         rec,
         steps,
@@ -545,14 +647,8 @@ def shape_terms(
     timing_total = rep.timing_total[:, None]
     del rep
     check = objective_value(cfg, tallies, dim, scale_r)
-    newborn_share = (check - value) / max(abs(check), 1e-300)
-    n_surf = 2 * dim + mesh.n_elements
-    tally_cot = tallies.__class__(
-        None,
-        jnp.zeros((n_surf, 3)).at[2 * dim :, 0].set(scale_r),
-        jnp.zeros(n_surf),
-        jnp.zeros(n_surf),
-    )
+    newborn_share = _newborn_share(check, value)
+    tally_cot = _drag_tally_cotangent(tallies, dim, mesh, scale_r)
     dx = (np.asarray(grid.hi) - np.asarray(grid.lo)) / np.asarray(grid.n)
     v_scale = float(np.sqrt(K_BOLTZ * F.TEMP / float(mass)))
     fit_scale = jnp.concatenate((jnp.asarray(dx), jnp.full(3, v_scale)))
@@ -564,15 +660,21 @@ def shape_terms(
     npc_max = int(ensemble_backward.max_occupancy(rec, grid)) + 8
     npc_max = -(-npc_max // NPC_BUCKET) * NPC_BUCKET
     t0 = time.time()
+    # one-sided fits next to the body in the backward (the virtual pull-back's four-term
+    # values): lam jumps across v . n = 0 there (about to hit / just left)
+    sided = (mesh, s["faces"]) if cfg.get("backward_normals", False) else None
     dev, dev_t = _backwards(
-        rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hit_reward, timing_total
-    )
+        rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hit_reward,
+        timing_total, sided,
+    )  # fmt: skip
     del timing_total
     t_backward = time.time() - t0
     t0 = time.time()
     all_terms = shape.gradient_variants(
         dev_t.lam,
         names=variants,
+        # v . grad_x lambda = -T - L* lambda: the collision term of the along-flight identity
+        collision=dev.collision,
         records=rec,
         lam=dev.lam,
         steps=steps,
@@ -596,11 +698,12 @@ def shape_terms(
         timing_band=timing_band,
         silhouette_band=float(cfg["silhouette_band"]),
         reward=reward if cfg["silhouette_band"] > 0.0 else None,
-        value_class=cfg.get("value_class", "hit_ahead"),
+        value_class=cfg.get("value_class", "none"),
         # epsilon = 0 above: only the slots with a body hit have a geometry-dependent
         # post-move state, so the grad-lambda fits run there only (shape.gradient)
         hit_fits=True,
     )
+    s["volume"] = _volume_term(dev, rec, grid, mesh)
     t_shape = time.time() - t0
     for t in all_terms.values():
         if float(t.replay_error) > REPLAY_TOL:
@@ -620,7 +723,9 @@ def shape_terms(
     return all_terms, info, s
 
 
-def ensemble_gradient(cfg, parameter, key, neighbors=32, timing_band=0.2, variant="along_pool"):
+def ensemble_gradient(
+    cfg, parameter, key, neighbors=32, timing_band=0.2, variant="along_pool_plane"
+):
     """One seed's scalar gradient of the control ``parameter`` (``shape_terms`` reduced by
     :func:`control_gradient`), in the artifact row format."""
     all_terms, info, s = shape_terms(cfg, key, None, parameter, neighbors, timing_band)
@@ -630,26 +735,34 @@ def ensemble_gradient(cfg, parameter, key, neighbors=32, timing_band=0.2, varian
     pick = functools.partial(control_gradient, cfg, parameter, grid)
     pathwise, score, timing = pick(terms.pathwise), pick(terms.score), pick(terms.timing)
     silhouette = pick(terms.silhouette)
+    volume = 0.0 if s["volume"] is None else pick(s["volume"])
+    # the collision-order term (shape.order_jump; zero without collisions)
+    order = 0.0 if terms.order is None else pick(terms.order)
     parts = {k: pick(getattr(terms, k)) for k in ("pathwise_x", "pathwise_v", "pathwise_tally")}
     variants = {
         name: {
             "pathwise": pick(t.pathwise),
             "pathwise_x": pick(t.pathwise_x),
             "pathwise_v": pick(t.pathwise_v),
-            "gradient": pick(t.pathwise) + score + silhouette,
+            "gradient": pick(t.pathwise) + score + silhouette + volume + timing + order,
         }
         for name, t in all_terms.items()
     }
     return {
         **info,
         # the hit-timing term of a per-hit reward lives at the window's two edges and has
-        # zero mean on a steady window (G3a); it is reported, and left out of the estimate
-        "gradient": pathwise + score + silhouette,
-        "gradient_with_timing": pathwise + score + silhouette + timing,
+        # zero mean only on a steady window; it is part of the windowed objective's
+        # derivative, so it is in the estimate -- with a band of whole steps (--timing-band
+        # 10) its variance is negligible (squash s = 1: +0.03 +- 0.25 % of dD/ds, where the
+        # 0.2-step band read +2.8 +- 1.2 % on the same seeds: noise)
+        "gradient": pathwise + score + silhouette + volume + timing + order,
+        "gradient_without_timing": pathwise + score + silhouette + volume + order,
         "pathwise": pathwise,
         **parts,
         "score": score,
         "silhouette": silhouette,
+        "volume": volume,
+        "order": order,
         "timing": timing,
         "variants": variants,
         "analytic_F_over_r": check / value0 if parameter == "radius" else 0.0,
@@ -700,10 +813,15 @@ def main(argv=None):
         p.add_argument(f"--{k.replace('_', '-')}", type=type(v), default=v)
     p.add_argument("--parameter", default="radius", choices=PARAMETERS)
     p.add_argument("--neighbors", type=int, default=32)
-    p.add_argument("--timing-band", type=float, default=0.2, help="hit-timing band, x dt")
+    p.add_argument(
+        "--timing-band",
+        type=float,
+        default=10.0,
+        help="hit-timing band: below 1 a fraction of dt, else whole steps per window edge",
+    )
     p.add_argument(
         "--variant",
-        default="along_pool",
+        default="along_pool_plane",
         choices=list(shape.VARIANTS),
         help="estimator of grad_x lambda reported at the top level (all four are stored)",
     )

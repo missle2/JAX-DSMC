@@ -1,7 +1,7 @@
 """Per-step GPU time of the polygon forward (scratch/perf/profile/forward_polygon, from
 profile_forward.py) by what the work is, each kernel attributed through the optimised HLO
 dump's source metadata (XLA_FLAGS=--xla_dump_to=/tmp/hlo_poly, scratch/perf/dump_run.py),
-against SPARTA's whole step on one core -> examples/mesh/figures/forward_step_breakdown.png
+against SPARTA's whole step on one core -> examples/mesh/figures/performance/forward_step_breakdown.png
 and scratch/perf/profile/forward_breakdown.json.
 
     python3 scratch/perf/forward_breakdown.py /tmp/hlo_poly
@@ -151,7 +151,7 @@ def main(dump):
         ax.spines[side].set_visible(False)
     fig.tight_layout()
     fig.savefig(
-        os.path.join(ROOT, "examples", "mesh", "figures", "forward_step_breakdown.png"), dpi=150
+        os.path.join(ROOT, "examples", "mesh", "figures", "performance", "forward_step_breakdown.png"), dpi=150
     )
     for c, v in order:
         print(f"{v:6.3f} ms  {c}")

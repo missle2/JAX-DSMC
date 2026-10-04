@@ -1,0 +1,25 @@
+[
+ {
+  "basis": "quadratic_full",
+  "seconds": 93.41016276698792,
+  "lam_rms": 9.618813139163896e-07
+ },
+ {
+  "basis": "affine",
+  "seconds": 67.70569340500515,
+  "lam_rms": 1.0345909180171716e-06,
+  "lam_rel_diff_vs_first": 0.7286807333399834
+ },
+ {
+  "basis": "quadratic_full",
+  "seconds": 92.42191401700256,
+  "lam_rms": 9.618813139163896e-07,
+  "lam_rel_diff_vs_first": 0.0
+ },
+ {
+  "basis": "affine",
+  "seconds": 67.85480718797771,
+  "lam_rms": 1.0345909180171716e-06,
+  "lam_rel_diff_vs_first": 0.7286807333399834
+ }
+]

@@ -921,3 +921,61 @@ def test_replay_mismatch_separates_discrete_divergence_from_roundoff():
     reborn = _Rec(x, v, jnp.array([True, True, True]), jnp.array([-1, 0, -1]))
     surv2 = alive & reborn.alive & (reborn.born_face < 0)
     assert float(shape._mismatch(x, v, alive, flip, reborn, surv2, grid)) == 0.0
+
+
+# --- cut-volume term -----------------------------------------------------------------------
+
+
+def test_volume_weights_sum_the_cell_collision_terms_over_the_volume():
+    grid = GridSpec(
+        lo=jnp.array([0.0, 0.0]), hi=jnp.array([3.0, 1.0]), n=(3, 1),
+        volume=jnp.array([0.5, 2.0, 0.0]),
+    )  # fmt: skip
+    cells = jnp.array([[2.0, 1.0, 0.0], [2.0, 1.0, 0.0]])
+    w = np.asarray(shape.volume_weights(cells, grid))
+    np.testing.assert_allclose(w, [-8.0, -1.0, 0.0])
+
+
+def test_volume_cotangent_of_unit_weights_is_the_flow_area_derivative():
+    """Unit weights sum the flow volumes: a circle of radius r grown by dr (every
+    coefficient lowered by dr) loses ``2 pi r dr`` of flow area."""
+    grid = _grid2()
+    lo, shp = levelset.grid_for_box(grid.lo, grid.hi, 0.125)
+    ls = levelset.from_analytic(jnp.array([5.0, 5.0]), 3.0, lo, 0.125, shp, n_sample=8)
+    mesh = cut.build_mesh(ls, grid, radius=1)
+    grid = cut.with_volume(grid, mesh)
+    w = jnp.ones(grid.volume.shape[0]) / float(grid.transverse)
+    cot = shape.volume_cotangent(ls.coef, mesh, grid, w)
+    np.testing.assert_allclose(-float(jnp.sum(cot)), -2.0 * np.pi * 3.0, rtol=2e-3)
+
+
+def test_halfspace_drops_the_nodes_behind_the_query_plane():
+    """A thin body's far side: nodes with y < 0.5 carry an unrelated field.  Queries above
+    the plane y = 0.5 with normal +y fit the near field exactly once the half-space drops
+    the far nodes; without it the pooled fit mixes the two."""
+    key = jax.random.PRNGKey(5)
+    n, dim = 1200, 2
+    grid = GridSpec(jnp.zeros(dim), jnp.ones(dim), (4, 4))
+    x = jax.random.uniform(key, (n, dim))
+    v = jax.random.normal(jax.random.fold_in(key, 1), (n, 3))
+    near = 1.0 + 2.0 * x[:, 0] - 0.5 * x[:, 1] + 0.3 * v[:, 1]
+    lam = jnp.where(x[:, 1] >= 0.5, near, 5.0 - 7.0 * x[:, 1] + 2.0 * v[:, 0])
+    alive = jnp.ones(n, bool)
+    scale = jnp.array([0.25, 0.25, 1.0, 1.0, 1.0])
+    above = (x[:, 1] > 0.5) & (x[:, 1] < 0.6) & (v[:, 1] > 0.0)
+    queries = jnp.where(above, jnp.arange(n), -1)
+    direction = jnp.zeros((n, 3)).at[:, 1].set(1.0)
+    # halfspace 0: only the nodes at or above each query's own y, all of them near-side
+    gx, gv = ensemble_device.node_gradients(
+        x, v, alive, lam, grid, 256, scale, 48, pool=1, direction=direction,
+        queries=queries, halfspace=0.0,
+    )  # fmt: skip
+    rows = np.asarray(above)
+    np.testing.assert_allclose(np.asarray(gx)[rows], np.tile([2.0, -0.5], (rows.sum(), 1)),
+                               atol=1e-6)  # fmt: skip
+    np.testing.assert_allclose(np.asarray(gv)[rows], np.tile([0.0, 0.3, 0.0], (rows.sum(), 1)),
+                               atol=1e-6)  # fmt: skip
+    gx0, _ = ensemble_device.node_gradients(
+        x, v, alive, lam, grid, 256, scale, 48, pool=1, direction=direction, queries=queries
+    )
+    assert np.max(np.abs(np.asarray(gx0)[rows] - [2.0, -0.5])) > 0.1

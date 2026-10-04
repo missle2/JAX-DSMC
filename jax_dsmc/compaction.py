@@ -16,6 +16,8 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
+from jax_dsmc.fusion import materialise
+
 jax.config.update("jax_enable_x64", True)
 
 
@@ -54,13 +56,5 @@ def prefix_count(mask: jax.Array) -> jax.Array:
         return jnp.cumsum(m, dtype=jnp.int32)
     inner = jnp.cumsum(m.reshape(-1, block), axis=1, dtype=jnp.int32)
     total = inner[:, -1]
-    offset = _materialise(prefix_count(total) - total)
+    offset = materialise(prefix_count(total) - total)  # once per block, not per element
     return (inner + offset[:, None]).reshape(n)
-
-
-def _materialise(t: jax.Array) -> jax.Array:
-    """``t`` stored as its own array: XLA:CPU fuses a small computed table into each
-    consumer and an ``N``-sized consumer then recomputes it per element; a scatter is
-    always the root of its fusion (``optimization_barrier`` is expanded away before
-    fusion on XLA:CPU)."""
-    return jnp.zeros_like(t).at[jnp.arange(t.shape[0], dtype=jnp.int32)].set(t)

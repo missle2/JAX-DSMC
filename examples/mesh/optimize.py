@@ -5,8 +5,8 @@
 The first optimisation case of the plan (phase E): the body is a C1 level set
 (:mod:`jax_dsmc.mesh.levelset`) started from the circle; each iterate averages the
 ensemble-adjoint shape terms of ``examples.ensemble_mesh.shape_terms`` over a few seeds
-(``dJ/dcoef`` on the B-spline coefficients, pathwise + kernel score, the ``along_pool``
-variant), smooths them on the coefficient grid (a Gaussian of ``--smooth`` knots: the
+(``dJ/dcoef`` on the B-spline coefficients, pathwise + kernel score + silhouette +
+window-edge timing + cut-volume, the ``along_pool_plane`` variant), smooths them on the coefficient grid (a Gaussian of ``--smooth`` knots: the
 Sobolev / H1 gradient), restricts them to the band of coefficients whose knot lies within
 ``--band`` of the surface, and steps ``phi <- phi - eta g`` with ``eta`` chosen so that the
 largest coefficient change -- the largest normal displacement, since ``|grad phi| = 1`` --
@@ -25,7 +25,7 @@ iterate: objective mean and SE over the seeds, area, step, gradient norms, secon
 ``coef_<k>.npy`` and ``frames_<k>.npz`` (the field movie of the first seed's forward at
 iterate ``k``: per-cell ``nrho``, ``u``, ``temp`` every ``--frames-every`` warm-up steps
 and at the end, float32 -- ~1 MB per iterate on the finer circle; ``0`` disables);
-``--plot`` draws ``figures/optimize_<tag>.png`` (shape sequence, drag and area
+``--plot`` draws ``figures/optc/optimize_<tag>.png`` (shape sequence, drag and area
 histories) from them and ``examples.mesh.movie`` strings the frames into a GIF or an MP4
 (fill of the flow around every iterate, then the shape change).
 """
@@ -58,7 +58,7 @@ from jax_dsmc.mesh import levelset as L
 from jax_dsmc.mesh.types import LevelSet
 
 RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "optimize")
-FIGURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "figures")
+from figure_paths import figure_path  # noqa: E402
 
 
 def default_config():
@@ -72,9 +72,11 @@ def default_config():
             "step": 0.05,
             "smooth": 2.0,
             "band": 1.0,
-            "variant": "along_pool",
+            "variant": "along_pool_plane",
             "neighbors": 32,
-            "timing_band": 0.2,
+            # the window-edge timing term's band, in whole steps per edge (ensemble_mesh
+            # .timing_band_setting): a 0.2-step band is far noisier for the same mean
+            "timing_band": 10.0,
             "tag": "circle",
             "optimizer": "gd",
             "adam_beta1": 0.9,
@@ -151,7 +153,13 @@ def seed_terms(cfg, ls, seeds, frames_for=None):
             cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],), every
         )
         terms = all_terms[cfg["variant"]]
-        grads.append(np.asarray(terms.pathwise + terms.score + terms.silhouette))
+        # the window-edge timing term is part of the windowed objective's derivative
+        grad = terms.pathwise + terms.score + terms.silhouette + terms.timing
+        if terms.order is not None:
+            grad = grad + terms.order  # the collision-order term (zero without collisions)
+        if s["volume"] is not None:
+            grad = grad + s["volume"]  # the cut-volume term (zero without collisions)
+        grads.append(np.asarray(grad))
         objs.append(info["objective"])
         hits.append(info["hits"])
         stuck.append(info["stuck"])
@@ -461,8 +469,7 @@ def main(argv=None):
         evaluate_worker(cfg, args.eval_coef, args.eval_seeds, args.eval_out, args.eval_frames_for)
         return
     if args.plot:
-        os.makedirs(FIGURES, exist_ok=True)
-        plot(cfg, out, os.path.join(FIGURES, f"optimize_{cfg['tag']}.png"))
+        plot(cfg, out, figure_path("optc", f"optimize_{cfg['tag']}.png"))
         return
     run(cfg, out, argv)
 

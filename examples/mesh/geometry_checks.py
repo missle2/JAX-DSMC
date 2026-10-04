@@ -37,7 +37,7 @@ from sparta_io import read_grid_dump  # noqa: E402
 
 SPARTA = os.path.join(HERE, "sparta")
 RESULTS = os.path.join(HERE, "results")
-FIGURES = os.path.join(HERE, "figures")
+from figure_paths import FIGURES, figure_path, forward_folder  # noqa: E402
 
 # SPARTA log values (examples/mesh/results/sparta/log.*_ar.12345): outside / inside / overlap
 SPARTA_COUNTS = {"circle": (264, 88, 48), "sphere": (7256, 304, 440)}
@@ -467,13 +467,15 @@ def main(argv=None) -> int:
         meshes["circle"],
         grids["circle"],
         refs["circle"],
-        os.path.join(FIGURES, "mesh_cells_circle.png"),
+        figure_path(forward_folder("circle"), "mesh_cells_circle.png"),
     )
     figure_cells_3d_slice(
-        meshes["sphere"], grids["sphere"], os.path.join(FIGURES, "mesh_cells_sphere_slice.png")
+        meshes["sphere"],
+        grids["sphere"],
+        figure_path(forward_folder("sphere"), "mesh_cells_sphere_slice.png"),
     )
-    figure_volume_error(meshes, grids, refs, os.path.join(FIGURES, "mesh_volume_error.png"))
-    figure_convergence(report["convergence"], os.path.join(FIGURES, "mesh_volume_convergence.png"))
+    figure_volume_error(meshes, grids, refs, figure_path("meshing", "mesh_volume_error.png"))
+    figure_convergence(report["convergence"], figure_path("meshing", "mesh_volume_convergence.png"))
     report["levelset"] = {
         "circle": levelset_check("circle", grids["circle"], (0.5, 0.25, 0.125, 0.0625)),
         "sphere": levelset_check("sphere", grids["sphere"], (0.2, 0.1, 0.05)),
@@ -482,7 +484,7 @@ def main(argv=None) -> int:
         surf = [f"{e:.2e}" for e in chk["surface_error"]]
         hit = [f"{e:.2e}" for e in chk["hit_error"]]
         print(f"{case} level set: h {chk['h']}, surface error {surf}, hit error {hit}")
-    figure_levelset(report["levelset"], os.path.join(FIGURES, "mesh_levelset_checks.png"))
+    figure_levelset(report["levelset"], figure_path("meshing", "mesh_levelset_checks.png"))
     with open(os.path.join(RESULTS, "geometry_checks.json"), "w") as fh:
         json.dump(report, fh, indent=1)
     print("wrote", os.path.join(RESULTS, "geometry_checks.json"))
