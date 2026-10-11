@@ -1,0 +1,20 @@
+[Sun Oct  4 12:23:43 MDT 2026] biasgate_kn_seed2 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+    MIG 1g.24gb     Device  0: (UUID: MIG-c02c5970-4d01-58ea-92d0-7a66e72a70ce)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/bias/cluster_job.sh kn_seed2
+Traceback (most recent call last):
+  File "/projects/aaja8389/JAX-DSMC/scratch/bias/kn_gate.py", line 23, in <module>
+    import optimize_squash as OS  # noqa: E402
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/optimize_squash.py", line 58, in <module>
+    import ellipsoid_reference as E
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/ellipsoid_reference.py", line 58, in <module>
+    from free_molecular import element_fluxes, reference_drag_halfrange  # noqa: E402
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/free_molecular.py", line 38, in <module>
+    from forward import BLOCK, CASES, DT, NRHO, RESULTS, TEMP, VSTREAM, build  # noqa: E402
+  File "/projects/aaja8389/JAX-DSMC/examples/mesh/forward.py", line 37, in <module>
+    from jax_dsmc import inflow, initialize, output, simulate, viz  # noqa: E402
+ModuleNotFoundError: No module named 'jax_dsmc'
