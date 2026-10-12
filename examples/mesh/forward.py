@@ -68,8 +68,11 @@ CASES = {
         # stream ahead of its centre and 15 m of wake, the same 0.5 m cells, y faces
         # unchanged (specular).  The optc shape optimisations in the 10 m box elongated the
         # body until it crossed the outflow face (and once reached the inflow face); here an
-        # elongated body keeps its distance either way.  3x the cells and slots of `circle`
-        # at the same fnum.
+        # elongated body keeps its distance either way.  3x the cells of `circle`; 4x its
+        # slots at the same fnum: 3x (180 k) ran out at Kn 0.5 (2026-10-12, optckn's first
+        # iterate at fnum x2: 90 241 of 90 256 alive at step 3100 and still filling, 94 286 at
+        # 6000; the free-molecular optc2 S4 at iterate 45, as the body grew), so 120 k at
+        # fnum x2 (scratch/cellfit/shortfall_check.py)
         "dim": 2,
         "lo": [-10.0, 0.0],
         "hi": [20.0, 10.0],
@@ -78,7 +81,7 @@ CASES = {
         "centre": [5.0, 5.0],
         "radius": 3.0,
         "fnum": 1.0e-3,
-        "capacity": 180_000,
+        "capacity": 240_000,
     },
     "ellipse": {
         # the aspect-ratio test: the circle box with a smaller circle (blockage ~3 % at s = 1,

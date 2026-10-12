@@ -110,7 +110,7 @@ KN05_M10 = f"--knudsen 0.5 {MACH10} --a-max 256"
 OPTC_SHAPES = ("c0", "a50", "a100", "a200", "s8a30", "g200")
 KEEPOUT = 1.0  # m: two DSMC cells between the body and every box face
 # optckn / optc2 run in the 3x longer box centred on the body (forward.CASES["circle_long"]:
-# 15 m each side of the body centre) at fnum x2 (90 k slots, ~60 particles a cell), with a
+# 15 m each side of the body centre) at fnum x2 (120 k slots for ~95 k particles at Kn 0.5), with a
 # longer empty-box warm-up: with the inflow 10 m from the centre the windowed drag was steady
 # from 1400 steps (700 read 2 % low free-molecular, 5 % at Kn 0.5;
 # scratch/cellfit/warmup_check.py); centred (15 m of inflow) 2100 / 2800 / 3500 steps read
