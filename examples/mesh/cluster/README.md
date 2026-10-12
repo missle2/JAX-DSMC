@@ -43,7 +43,7 @@ python3 -m examples.mesh.cluster.collect           # merges the seed files, figu
 | `env.sh` | the job environment: the CUDA venv at `/projects/$USER/jax-env` (`GPU_KIND=a100`, default, or `h200`; `JAX_VENV` overrides the path), `JAX_PLATFORMS` pinned so a CPU fallback is an error or `module load rocm/5.3.0; module load jax` (`GPU_KIND=mi100`, jax 0.4.7 today — unusable), `JAX_ENABLE_X64=1`, no preallocation, the persistent compilation cache `/projects/$USER/jax-cache` (`JAX_COMPILATION_CACHE_DIR`; a toy job 264 s → 104 s warm; clear after a jax upgrade) |
 | `bad_nodes.txt` | nodes whose preflight failed (one per line); `submit_curc.sh` excludes them.  Seeded 2026-09-22 with `c3gpu-g5-u5` |
 | `check_env.sbatch` / `check_env.py` | asserts JAX ≥ 0.4.36 (the code uses `jax.tree.map`, `jax.random.key`, `register_dataclass(data_fields, meta_fields)`), an accelerator, float64; runs a 40-step level-set circle with its shape terms; `--quick` stops after the device checks and is every job's preflight.  `gpu-normal` on one A100 (on `gpu-testing` only a MIG slice `a100_3g.20gb` is given) |
-| `study.py` | the job matrix by group (`--group sphere\|mode2\|opt\|optc\|squash\|squashkn\|biasgate\|cellgate\|optckn\|optc2\|squashkn2 --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |
+| `study.py` | the job matrix by group (`--group sphere\|mode2\|opt\|optc\|squash\|squashkn\|biasgate\|cellgate\|gapgate\|optckn\|optc2\|squashkn2 --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |
 | `preflight.sh` | local end-to-end check of a group before submission (one toy job per kind, as `job.sbatch` runs it) |
 | `job.sbatch` | one job: resources from the `sbatch` line, the command from `CMD`; logs `nvidia-smi -L`, then the preflight, then the command |
 | `submit_curc.sh` | one `sbatch` per job line with a GPU's share of the node (H200: 32 cores, 128 GB; A100: 21 cores, 70 GB), the group's wall time; `GPU_KIND=a100\|h200\|rtx\|mi100` (`rtx`: the RTX PRO 6000 partition, gres and per-GPU sizing read from `sinfo`; `submit_curc.sh check` runs `check_env` on the chosen kind first), `PART`, `GRES_TYPE` override the partition / GPU; builds the job list with the venv's python (the login node's `python3` is 3.6; `PYTHON` overrides) |
@@ -92,8 +92,13 @@ collisional seed), so collisional optimisations can afford ~10× the iterates.  
 | `cellgate` | `sq_s1_seed{0..15}`, `sq_s0.6_seed{0..7}` | Kn 0.5 squash at production density (`fnum × 1`, 4 × 8): per-query k = 32, `CELL_BASIS`, `cell:cubicv:adapt1.5`, unguarded `cell:quad`, paired, + CRN FD h = 0.2 | ~1 h / seed (k = 32 most of it), 12 h limit |
 | | `optc_{c0,a50,a100,a200,s8a30,g200}_kn_b{0..3}` | six optc iterates at Kn 0.5, 4 seeds a job: two-sided k = 32, two-sided and split `CELL_BASIS` (block 0 also the one-sided k = 32), FDs along the uniform shift and the cos 2θ mode | ~1–1.5 h / seed |
 | | `optc_{…}_fm_b{0,1}` | the same shapes free-molecular, 8 seeds a job | ~20 min / seed |
-| `optckn` | `opt_S{2,4,8}_adam`, `opt_S4_gd` | `optc` at Kn 0.5 with the per-cell fit, 200 iterates, in the **3× longer box** `circle_long` (x ∈ [−10, 20] m, centred on the body: 15 m each side; `fnum × 2`, 120 k slots (90 k ran out at Kn 0.5 on the first iterate, 2026-10-12); warm-up 2800 steps) **and** the bodies kept 1 m from every face (`--keepout 1.0`): the FM Adam runs grew through the outflow face of the 10 m box, S8 died on `inflow_shortfall`; tags `circle_long_kn0.5_S{S}_{opt}` | ~10 min / seed at 90 k slots (now 2× the slots of `optc`: expect ~1.3× that), collisions → S = 4: ~35 iterates / day (resubmit) |
-| `optc2` | `opt_S{4,8}_adam` | the free-molecular `optc` Adam runs again in the long box with the margin, 250 iterates; tags `circle_long_S{S}_adam` | ~7 min / seed |
+| `gapgate` | `sqh_t{1000,2000}_seed{0..15}` | the Kn 0.5 gap: squash `s = 1`, `fnum × 1`, the same forward captured for its last 300 and 1000 steps, `CELL_BASIS` and `cell:cubicv:adapt1.5:align0.9:both` paired, in the production run (1000 steps) and a filled box (2000); CRN FD h = 0.2 | ~10–15 min / seed |
+| | `circh_t{1000,2000}_b{0..3}` | the circle (optc iterate 0) the same way, 4 seeds a job, FD along the shift and cos 2θ | ~15 min / seed |
+| | `cub_{a50,a100,a200,s8a30,g200}_b{0,1}` | the cubic fit (split, as it would ship) paired with `CELL_BASIS` on the optc iterates at Kn 0.5, 4 seeds a job | ~5 min / seed |
+| | `fmgz_{c0,…,g200}_b{0,1}`, `sqfm_s{0.35,1}_b{0,1}` | free-molecular grazing cut-off 0.05 / 0.01 / 0.2 / 0 paired (derivative-only), every term's projection, FD h = 0.025 / 0.05 / 0.1; optc iterates and the squash; 8 seeds a job | ~5–8 min / seed |
+| | `fmsm_{a50,a100,a200,g200}_b{0,1}` | the elongated iterates smoothed (σ = 2 knots, same area): do the heavy-tailed gradients go with the sub-cell features? | ~3 min / seed |
+| `optckn` | `opt_S{1,2,4,8}_adam`, `opt_S4_gd` | `optc` at Kn 0.5 with the per-cell fit, 250 iterates, in the **3× longer box** `circle_long` (x ∈ [−10, 20] m, centred on the body: 15 m each side; `fnum × 2`, 120 k slots (90 k ran out at Kn 0.5 on the first iterate, 2026-10-12); warm-up 2800 steps) **and** the bodies kept 1 m from every face (`--keepout 1.0`): the FM Adam runs grew through the outflow face of the 10 m box, S8 died on `inflow_shortfall`; the area in the differentiated objective (`--area-mode lagrangian`: augmented Lagrangian started from the squash runs' area price, 2026-10-12) instead of the projection; tags `circle_long_kn0.5_S{S}_{opt}_al` | ~10 min / seed at 90 k slots (now 2× the slots of `optc`: expect ~1.3× that), collisions → S = 4: ~35 iterates / day (resubmit) |
+| `optc2` | `opt_S{4,8}_adam` | the free-molecular `optc` Adam runs again in the long box with the margin and `--area-mode lagrangian`, 250 iterates; tags `circle_long_S{S}_adam_al` (the projection runs `circle_long_S{S}_adam` stay as they are) | ~7 min / seed |
 | `squashkn2` | `kn0.5_S{4,8}`, `kn0.5_M10_S{2,4}` | `squashkn` with the per-cell fit: 80 iterates at Kn 0.5, 60 with M 10 (the 2026-10-01 runs managed 10 and 3 iterates at S = 4 in 24 h); tags carry the basis, so they never resume the per-query runs | Kn 0.5: ~200 s / seed; M 10: ~400 s / seed |
 
 Formulation checks behind them (2026-10-11): with the inflow 10 m from the body centre the
@@ -105,8 +110,9 @@ of inflow): free-molecular 3.631 / 3.682 / 3.692 e-20 after 2100 / 2800 / 3500 (
 on the optc shapes (circle, S1-adam 100 and the protruding 200) never clips even at
 `a_max 32` (`scratch/cellfit/attempts_check.py`), so 64 has ≥ 2× margin; `keep_inside` +
 `project_area` alternated (`optimize.constrain`) hold the margin and the area exactly on a
-shape that had crossed a face.  Suggested order: `cellgate` (the gates; results in
-`scratch/cellfit/cluster/`), then `squashkn2` and `optckn`, `optc2`; of `biasgate` only
+shape that had crossed a face.  Suggested order (2026-10-12): `gapgate` (results in
+`scratch/gapgate/cluster/`; the default basis is chosen from it), then `squashkn2` and
+`optckn`, `optc2`; of `biasgate` only
 `ONLY='^kn_fd|hor'` (the FD arbiter and horizons; `kn_seed*` is superseded by `cellgate`).
 
 Sizing: `submit_curc.sh` gives every job a GPU's share of its node (A100: 21 cores and

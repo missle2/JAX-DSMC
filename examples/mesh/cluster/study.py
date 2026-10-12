@@ -56,6 +56,13 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
   :data:`OPTCKN_ITERATIONS` iterates (resumed across jobs).
 * ``optc2``: the free-molecular ``optc`` Adam runs again in the long box with the margin,
   S = 4, 8.
+* ``gapgate`` (2026-10-12): the hypothesis gates after ``cellgate`` (``bash
+  scratch/gapgate/cluster_job.sh <name>``, whose header documents each; results in
+  ``scratch/gapgate/cluster/<name>.jsonl``): the Kn 0.5 gap (cubic-in-``v`` fit and the
+  whole-run horizon paired, in the production run and a filled box, squash ``sqh_*`` and
+  circle ``circh_*``; the cubic fit on the optc iterates ``cub_*``), the free-molecular
+  remainder and the S8 ``cos 2 theta`` bias (grazing cut-off sweeps ``fmgz_*`` / ``sqfm_*``),
+  the elongated iterates' heavy-tailed gradients (smoothed iterates ``fmsm_*``).
 * ``squashkn2``: ``squashkn`` with the per-cell fit at ~10x the iterates per hour: Kn 0.5 at
   S = 4, 8 (:data:`SQUASH_KN2_ITERATIONS` iterates), Kn 0.5 + M 10 at S = 2, 4 (fewer).
   Its tags carry the basis (``optimize_squash``), so they never resume the per-query runs.
@@ -150,6 +157,17 @@ def _cellgate_jobs(gpus_per_node: int) -> dict[str, str]:
     return {name: f"bash scratch/cellfit/cluster_job.sh {name}" for name in names}
 
 
+def _gapgate_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    names = [f"sqh_t{t}_seed{i}" for t in (1000, 2000) for i in range(16)]
+    names += [f"circh_t{t}_b{j}" for t in (1000, 2000) for j in range(4)]
+    names += [f"cub_{shape}_b{j}" for shape in OPTC_SHAPES[1:] for j in range(2)]
+    names += [f"fmgz_{shape}_b{j}" for shape in OPTC_SHAPES for j in range(2)]
+    names += [f"fmsm_{shape}_b{j}" for shape in ("a50", "a100", "a200", "g200") for j in range(2)]
+    names += [f"sqfm_s{s}_b{j}" for s in ("0.35", "1") for j in range(2)]
+    return {name: f"bash scratch/gapgate/cluster_job.sh {name}" for name in names}
+
+
 def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     out = {}
@@ -167,7 +185,9 @@ def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
 
 def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     """``optckn`` (``collisional``) / ``optc2``: the circle's optimisations in the long box
-    (:data:`LONG`) with the face margin, tags ``circle_long_[kn0.5_]S{S}_{opt}``."""
+    (:data:`LONG`) with the face margin and the area in the differentiated objective
+    (``--area-mode lagrangian``, 2026-10-12: the projection's step was never seen by the
+    gradient), tags ``circle_long_[kn0.5_]S{S}_{opt}_al`` (the projection runs keep theirs)."""
     if collisional:
         runs = [(s, "adam") for s in OPTCKN_SEEDS] + [(4, "gd")]
         regime, extra, iters = "kn0.5_", f"{KN05} {KNPULLBACK}", OPTCKN_ITERATIONS
@@ -176,16 +196,17 @@ def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     out = {}
     for s, opt in runs:
         out[f"opt_S{s}_{opt}"] = (
-            f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt} "
+            f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt}_al "
             f"--optimizer {opt} --iterations {iters} --seeds-per-iterate {s} "
             f"--workers {min(s, gpus_per_node)} {COARSE} {LONG} --step 0.05 --smooth 2 "
-            f"--band 1.0 --keepout {KEEPOUT} {extra}"
+            f"--band 1.0 --keepout {KEEPOUT} --area-mode lagrangian {extra}"
         )
     return out
 
 
 NEW_GROUPS = {
     "cellgate": _cellgate_jobs,
+    "gapgate": _gapgate_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

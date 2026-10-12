@@ -488,7 +488,10 @@ noise that the backward recursion compounds; without the guard one seed in twelv
 $+97\,\%$.
 
 \emph{Measured} (validation deck, section V): Kn 0.5 squash, 12 seeds, against the per-seed CRN FD:
-guarded per-cell $-1.9\pm2.3\,\%$, per-query $k = 64$ $-2.0\pm2.0\,\%$, $k = 32$ $-3.5\pm1.8\,\%$; a seed
+guarded per-cell $-1.9\pm2.3\,\%$, per-query $k = 64$ $-2.0\pm2.0\,\%$, $k = 32$ $-3.5\pm1.8\,\%$
+($f_{\mathrm{num}}\times4$); at production density ($f_{\mathrm{num}}\times1$, 16 seeds, 2026-10-12) the guarded
+per-cell fit reads $-3.7\pm0.8\,\%$, the same as the per-query $k = 32$ ($-3.4\pm0.8\,\%$), and the
+cubic-in-$v$ basis \code{cell:cubicv:adapt1.5} $-0.7\pm0.8\,\%$ (paired $+3.1\pm0.2\,\%$ over the quadratic); a seed
 985\,s $\to$ 95\,s (the backward 897\,s $\to$ 13\,s); every stored collisional gate within its paired
 error of the per-query runs; stable on the optimiser's complicated shapes where the per-query
 one-sided fit diverged.  Shipped: \code{ensemble\_backward.CELL\_BASIS} $=$
@@ -1109,6 +1112,28 @@ Two consequences:
 \end{itemize}
 The predicted first-order change $-\eta\, g\cdot d$ is recorded as well.  It is
 computed before the projection and is therefore an upper bound on the decrease.
+
+\paragraph{The differentiated alternative (\code{--area-mode lagrangian}, 2026-10-12).}
+The projection removes, after the fact, a component the step was sized for: in the
+long-box free-molecular Adam runs the shift was $\gamma\approx-0.010$ to $-0.016$ per
+iterate against $s_{\max} = 0.05$, a quarter of the step, and the Adam moments accumulate
+that removed component.  The Lagrangian mode puts the area into the objective,
+\[
+\mathcal L = D + \nu\,(A - A_0) + \tfrac{\mu}{2}(A - A_0)^2,\qquad
+\nabla_c\mathcal L = \nabla_c D + \big(\nu + \mu(A - A_0)\big)\nabla_c A,
+\]
+with $\nabla_c A$ the exact gradient of \code{body\_volume} (smoothed Heaviside;
+$\sum_j\partial A/\partial c_j = -$ perimeter, checked to $10^{-9}$ on the circle), so
+smoothing, band restriction and Adam act on the full gradient; only the face margin
+(\code{keep\_inside}) stays a post-step constraint.  The multiplier is updated after each
+step, $\nu \leftarrow \nu + \mu(A_{k+1} - A_0)$ (augmented Lagrangian), from
+$\nu_0 = -p$ with $p$ the squash runs' area price ($\mathrm dD_{\rm ref}/\mathrm ds\,/\,\mathrm dV/\mathrm ds$
+of the free-molecular ellipse at $s = 0.35$, at the run's density), and
+$\mu = 100\,p/A_0$ (a 1\,\% area error pulls as hard as $p$).  The squash cost
+$D - pA$ alone (fixed $\nu$, $\mu = 0$) is unusable for a free shape: $p = 2.4\times10^{-21}$
+is $4\times$ the circle's own $\mathrm dD/\mathrm dA = 6.0\times10^{-22}$ under uniform growth
+($R = 3$), and with $D\propto R$ against $A\propto R^2$ the body would grow without bound;
+the quadratic term and the multiplier update hold $A$ at $A_0$.
 
 \subsection{Status of the shape work (2026-09-24)}
 \label{sec:status}

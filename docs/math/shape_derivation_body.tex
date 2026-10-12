@@ -267,8 +267,8 @@ Tests \code{tests/test\_cell\_fit.py}; record docs/PSEUDOCODE.md 9.7.2.}
   backward recursion compounds it: the unguarded per-cell quadratic is unstable (one seed in 12: $+97\,\%$).
   The guard bounds the columns by the nodes.
 \end{itemize}
-\textbf{Measured} (Kn 0.5 squash, 12 seeds vs CRN FD): guarded per-cell $-1.9\pm2.3\,\%$, per-query $k = 64$
-$-2.0\pm2.0\,\%$, $k = 32$ $-3.5\pm1.8\,\%$; a seed $985\to95$\,s.  Stable on the optimiser's complicated shapes, where
+\textbf{Measured} (Kn 0.5 squash vs CRN FD): at production density (16 seeds) guarded per-cell $-3.7\pm0.8\,\%$,
+per-query $k = 32$ $-3.4\pm0.8\,\%$, a cubic-in-$v$ guarded fit $-0.7\pm0.8\,\%$; a seed $1100\to46$\,s.  Stable on the optimiser's complicated shapes, where
 the per-query one-sided fit diverged.
 \codenote{Evaluation of every interpolant tried (\code{mean}, \code{lin}, \code{quad}, \code{quadfull}, \code{cubicv},
 \code{cubic}, \code{adapt}, \code{loo}, \code{pool}, \code{rb}, split rules, fallbacks): validation deck section V;
@@ -641,7 +641,7 @@ piece & approximation & size / control\\
 \midrule
 wall-map VJP, tally, scores & exact given the record & ---\\
 collision pull-back & $S$ substeps, $K$ virtual partners & $O(\Delta t/S)$; $(S,K)=(4,8)$\\
-value field of the pull-back & one guarded quadratic per cell (split at surfaces) & $-1.9\pm2.3\,\%$ (Kn 0.5)\\
+value field of the pull-back & one guarded quadratic per cell (split at surfaces) & $-3.7\pm0.8\,\%$ (Kn 0.5)\\
 fitted slopes $\nabla\lambda$ & local quadratic, state-based node sets & fit bias; $k$, pool, half-space\\
 along-flight $\Lstar$ part & continuous identity in a discrete scheme & $O(\nu\Delta t)$\\
 grazing floor & $1/(v\cdot n)$ floored in the derivative & $O(\epsilon)$; $\epsilon = 0.05$\\

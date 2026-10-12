@@ -37,7 +37,7 @@
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|optckn|optc2|squashkn2|all|check"; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|optckn|optc2|squashkn2|all|check"; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 GPU_KIND="${GPU_KIND:-a100}"
@@ -83,7 +83,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
     squash|squashkn|squashkn2|optckn|optc2) HOURS=24 ;;
-    biasgate|cellgate) HOURS=12 ;;
+    biasgate|cellgate|gapgate) HOURS=12 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
   # the finer circle (240 k slots x 300 captured steps) peaks above a 24 GB MIG slice: the
@@ -92,6 +92,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
   if [ "${GPU_KIND}" = "rtx" ] && [ "${group}" != "sphere" ] && [ "${group}" != "optc" ] \
       && [ "${group}" != "squash" ] && [ "${group}" != "squashkn" ] \
       && [ "${group}" != "biasgate" ] && [ "${group}" != "cellgate" ] \
+      && [ "${group}" != "gapgate" ] \
       && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] \
       && [ "${group}" != "squashkn2" ]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"

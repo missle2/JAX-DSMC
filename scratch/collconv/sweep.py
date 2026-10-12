@@ -3,9 +3,13 @@ setting runs on the same seed's forward (the forward and replay are identical ac
 settings; only the backward / fits differ), so differences between settings carry none of
 the forward's noise.
 
-Settings: ``{"S": .., "K": .., "k": .., ["basis": ..]}`` -- virtual pull-back substeps and
-partners, the backward fit's neighbour count (``shape_terms(neighbors=)``) and its basis
-(``ensemble_backward.VIRTUAL_BASIS``: a ``"cell:..."`` per-cell fit ignores ``k``).  Every run records every
+Settings: ``{"S": .., "K": .., "k": .., ["basis": ..], ["grazing": ..], ["horizon": M]}`` --
+virtual pull-back substeps and partners, the backward fit's neighbour count
+(``shape_terms(neighbors=)``) and its basis (``ensemble_backward.VIRTUAL_BASIS``: a
+``"cell:..."`` per-cell fit ignores ``k``), the grazing cut-off of the hit derivative (the
+forward does not depend on it: paired), and the captured horizon ``M`` (the same forward --
+absolute step indices -- captured for its last ``M`` of ``warmup + steps`` steps; the FD is
+the configured run's).  Every run records every
 ``shape.VARIANTS`` entry, extended here by the shape fit's own neighbour counts (unpooled
 16 / 64, pooled 48 / 192), and the tally / timing / volume / order terms.  One CRN FD at
 ``fd_steps`` per seed (shared by the settings).
@@ -40,8 +44,22 @@ EXTRA = {
 DEFAULT_SETTINGS = [{"S": 4, "K": 8, "k": 32}]
 
 
+def setting_tag(st):
+    tag = f"S{st['S']}K{st['K']}" + (st["basis"] if "basis" in st else f"k{st['k']}")
+    if "grazing" in st:
+        tag += f"_gz{st['grazing']:g}"
+    if "horizon" in st:
+        tag += f"_h{st['horizon']}"
+    return tag
+
+
 def terms_row(cfg, key, setting, tband):
     basis = setting.get("basis", "quadratic_full")
+    if "grazing" in setting:
+        cfg = dict(cfg, grazing=float(setting["grazing"]))
+    if "horizon" in setting:
+        total = cfg["warmup"] + cfg["steps"]
+        cfg = dict(cfg, warmup=total - int(setting["horizon"]), steps=int(setting["horizon"]))
     ensemble_backward.configure("virtual", setting["S"], setting["K"], "staged", basis)
     t0 = time.time()
     terms, info, st = EM.shape_terms(
@@ -84,10 +102,7 @@ def main():
         row = {"s": s, "seed": i, "config": over, "timing_band": tband, "runs": {}}
         t0 = time.time()
         for st in settings:
-            tag = f"S{st['S']}K{st['K']}k{st['k']}"
-            if "basis" in st:
-                tag = f"S{st['S']}K{st['K']}{st['basis']}"
-            row["runs"][tag] = terms_row(cfg, key, st, tband)
+            row["runs"][setting_tag(st)] = terms_row(cfg, key, st, tband)
         row["fd"] = EM.finite_differences(cfg, "squash_y", key, hs) if hs else []
         row["fd_steps"] = hs
         row["seconds"] = time.time() - t0

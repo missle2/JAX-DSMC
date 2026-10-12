@@ -9,10 +9,15 @@ coefficients, so poor signal-to-noise) and ``mode2`` (the ``cos 2 theta`` mode a
 case centre, ensemble_mesh's ``mode2`` control: a smooth, localised direction).
 
     PYTHONPATH=. python3 scratch/cellfit/geom_gate.py OUT.jsonl RUN_DIR ITER SEED0 SEED1 '{..}'
-overrides: settings [{"basis": .., "k": .., ["sided": bool]}] (sided: one-sided backward fits,
-default the config's backward_normals), fd_h [h, ..] ([] = none), directions [shift, mode2],
-virtual [S, K] (default [4, 8])
-and cfg keys (knudsen 0: free-molecular, the regime the optc runs optimised in).
+overrides: settings [{"basis": .., "k": .., ["sided": bool], ["grazing": eps], ["horizon": M]}]
+(sided: one-sided backward fits, default the config's backward_normals; grazing: the hit
+derivative's cut-off -- derivative only, the forward is unchanged, so paired; horizon: the
+same forward captured for its last M of warmup + steps steps), fd_h [h, ..] ([] = none),
+directions [shift, mode2], virtual [S, K] (default [4, 8]), smooth_shape sigma (knots; 0 =
+off: the iterate's coefficients Gaussian-filtered, reinitialised and shifted back to its
+area -- the sub-cell features removed, FD and adjoint both on the smoothed body) and cfg
+keys (knudsen 0: free-molecular, the regime the optc runs optimised in).  Each run also
+records every term's projection on the directions (``terms``).
 """
 
 import dataclasses
@@ -42,9 +47,43 @@ def config(over):
     return cfg
 
 
-def gradient(cfg, ls, key, setting, virtual):
-    ensemble_backward.configure("virtual", *virtual, "staged", setting["basis"])
+TERMS = ("pathwise_tally", "pathwise_x", "pathwise_v", "score", "silhouette", "timing", "order")
+
+
+def setting_cfg(cfg, setting):
     cfg = dict(cfg, backward_normals=setting.get("sided", cfg["backward_normals"]))
+    if "grazing" in setting:
+        cfg["grazing"] = float(setting["grazing"])
+    if "horizon" in setting:
+        total = cfg["warmup"] + cfg["steps"]
+        cfg.update(warmup=total - int(setting["horizon"]), steps=int(setting["horizon"]))
+    return cfg
+
+
+def setting_tag(st):
+    tag = f"{st['basis']}_k{st['k']}" + ("" if st.get("sided", True) else "_twosided")
+    if "grazing" in st:
+        tag += f"_gz{st['grazing']:g}"
+    if "horizon" in st:
+        tag += f"_h{st['horizon']}"
+    return tag
+
+
+def smoothed(ls, cfg, sigma):
+    """The iterate without its sub-``sigma`` features, at its own area."""
+    from scipy.ndimage import gaussian_filter  # noqa: PLC0415
+
+    grid, _ = OPT.initial_levelset(cfg)
+    lo, hi = np.asarray(grid.lo), np.asarray(grid.hi)
+    area = float(L.body_volume(ls, lo, hi, 4))
+    coef = jnp.asarray(gaussian_filter(np.asarray(ls.coef), sigma, mode="nearest"))
+    out, _ = OPT.project_area(L.reinitialise(dataclasses.replace(ls, coef=coef)), area, lo, hi)
+    return out
+
+
+def gradient(cfg, ls, key, setting, virtual, dirs):
+    ensemble_backward.configure("virtual", *virtual, "staged", setting["basis"])
+    cfg = setting_cfg(cfg, setting)
     t0 = time.time()
     all_terms, info, s = EM.shape_terms(
         cfg, key, ls, "radius", setting["k"], cfg["timing_band"], (cfg["variant"],)
@@ -55,7 +94,11 @@ def gradient(cfg, ls, key, setting, virtual):
         g = g + t.order
     if s["volume"] is not None:
         g = g + s["volume"]
-    return np.asarray(g), info, time.time() - t0
+    parts = {n: getattr(t, n) for n in TERMS if getattr(t, n, None) is not None}
+    if s["volume"] is not None:
+        parts["volume"] = s["volume"]
+    terms = {n: {d: float(jnp.sum(v * dv)) for d, dv in dirs.items()} for n, v in parts.items()}
+    return np.asarray(g), info, time.time() - t0, terms
 
 
 def direction(name, cfg, ls):
@@ -85,17 +128,22 @@ def main():
     hs = over.pop("fd_h", [0.05])
     names = over.pop("directions", ["shift", "mode2"])
     virtual = over.pop("virtual", [4, 8])
+    sigma = over.pop("smooth_shape", 0)
     cfg = config(over)
     _grid, ls = OPT.initial_levelset(cfg)
     ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(f"{run}/coef_{it}.npy")))
+    if sigma:
+        ls = smoothed(ls, cfg, sigma)
     dirs = {n: direction(n, cfg, ls) for n in names}
     for i in range(seed0, seed1):
         key = jax.random.key(cfg["seed_start"] + i)
-        row = {"run": run, "iterate": it, "seed": i, "config": over, "runs": {}}
+        row = {"run": run, "iterate": it, "seed": i, "config": over, "smooth_shape": sigma,
+               "runs": {}}
         for st in settings:
-            g, info, secs = gradient(cfg, ls, key, st, virtual)
-            tag = f"{st['basis']}_k{st['k']}" + ("" if st.get("sided", True) else "_twosided")
+            g, info, secs, terms = gradient(cfg, ls, key, st, virtual, dirs)
+            tag = setting_tag(st)
             row["runs"][tag] = {
+                "terms": terms,
                 "gradient": g.tolist(),
                 "directional": {n: float(jnp.sum(g * d)) for n, d in dirs.items()},
                 "objective": info["objective"], "seconds": secs,

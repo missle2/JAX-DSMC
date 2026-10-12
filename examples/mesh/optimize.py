@@ -15,6 +15,20 @@ is ``--step``.  The area constraint is enforced exactly by a uniform shift of ``
 distance; the cut-cell tables are rebuilt on the host at every iterate.  Common random numbers across
 iterates (the same seeds every iterate) make the objective history comparable.
 
+``--area-mode lagrangian`` replaces the projection (a step the gradient never saw) by an
+augmented Lagrangian that is differentiated with the drag:
+
+    L = D + nu (A - A0) + mu / 2 (A - A0)^2,   grad L = grad D + (nu + mu (A - A0)) grad A
+
+(``A`` :func:`levelset.body_volume`, differentiable in ``coef``), the multiplier updated after
+each step, ``nu <- nu + mu (A_new - A0)``.  ``nu`` starts at minus the area price of the
+squash runs (:func:`area_price`: ``dD_ref/ds / dV/ds`` of the free-molecular ellipse at
+``s = 0.35``, at this run's density and stream speed) and ``mu = --area-penalty * price / A0``
+(a 1 % area error pulls as hard as the price at the default 100).  The squash cost
+``D - price V`` alone (``mu = 0``, fixed ``nu``) is not usable here: the price is 4x the
+circle's own ``dD/dA`` under uniform growth (2.4e-21 vs 6.0e-22 at R = 3, free-molecular),
+and with ``D ~ R`` against ``A ~ R^2`` the body would grow without bound.
+
 ``--workers W`` (cluster) evaluates the seeds of an iterate in ``W`` subprocesses, one
 per visible GPU (``ROCR_VISIBLE_DEVICES`` / ``CUDA_VISIBLE_DEVICES`` round-robin), each a
 re-invocation of this script in worker mode (``--eval-coef`` ...); the combination is the
@@ -49,6 +63,7 @@ import jax.numpy as jnp
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ellipsoid_reference as E
 import forward as F
 
 from examples import ensemble_mesh as EM
@@ -86,9 +101,37 @@ def default_config():
             # the body's smallest distance to the box faces (keep_inside; 0 = unbounded,
             # the optc runs of 2026-09-23 which grew through the outflow face)
             "keepout": 0.0,
+            # the area constraint: "projection" (uniform shift after the step, the runs up to
+            # 2026-10-12) or "lagrangian" (differentiated augmented Lagrangian, module doc)
+            "area_mode": "projection",
+            "area_penalty": 100.0,
         }
     )
     return cfg
+
+
+SQUASH_TARGET = 0.35  # optimize_squash's default s_target: where its area price is set
+
+
+def area_price(cfg):
+    """The squash runs' price of area (drag per unit area): ``dD_ref/ds / dV/ds`` of the
+    free-molecular specular ellipse (``F.CASES["ellipse"]``) at ``s = SQUASH_TARGET``, at this
+    run's gas density (``knudsen``) and stream speed (``mach``) -- ``optimize_squash.run``'s
+    ``lam``, for any case.  2-D only."""
+    c = F.CASES["ellipse"]
+    nrho = F.NRHO * EM.knudsen_density(cfg)
+    _d, dd = E.drag_2d(SQUASH_TARGET, c["radius"], nrho, E.MASS_AR, F.TEMP, EM.stream_speed(cfg))
+    return float(dd / E.area_2d(SQUASH_TARGET, c["radius"])[1])
+
+
+def _area_of_coef(coef, ls, lo, hi):
+    return L.body_volume(dataclasses.replace(ls, coef=coef), lo, hi, 4)
+
+
+def area_and_gradient(ls, lo, hi):
+    """``(A, dA/dcoef)`` of :func:`levelset.body_volume` (the measure the constraint uses)."""
+    a, g = jax.value_and_grad(_area_of_coef)(ls.coef, ls, lo, hi)
+    return float(a), np.asarray(g)
 
 
 def initial_levelset(cfg):
@@ -331,6 +374,24 @@ def constrain(ls, area0, lo, hi, margin, shift, passes: int = 12):
     return ls, shift, first
 
 
+def after_step(stepped, mode, area0, lo, hi, keepout):
+    """Reinitialise the stepped level set, then the constraints: ``projection`` restores the
+    area by a uniform shift (with the face margin, :func:`constrain`); ``lagrangian`` only
+    applies the face margin (the area is in the differentiated objective).  Returns
+    ``(ls, area shift, knots the face floor moved)``."""
+    # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1
+    new = L.reinitialise(stepped)
+    if mode == "lagrangian":
+        clipped = 0
+        if keepout > 0.0:
+            new, clipped = keep_inside(new, lo, hi, keepout)
+        return new, 0.0, clipped
+    new, shift = project_area(new, area0, lo, hi)
+    if keepout > 0.0:
+        return constrain(new, area0, lo, hi, keepout, shift)
+    return new, shift, 0
+
+
 def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept whole
     out.mkdir(parents=True, exist_ok=True)
     hist_path = out / "history.json"
@@ -351,6 +412,14 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
     if history and cfg["optimizer"] == "adam" and (out / "adam_state.npz").exists():
         z = np.load(out / "adam_state.npz")
         adam_state = (z["m"], z["v"])
+    mode = cfg["area_mode"]
+    if saved and saved["config"].get("area_mode", "projection") != mode:
+        raise ValueError(f"{out} was run with area_mode {saved['config'].get('area_mode')}")
+    if mode not in ("projection", "lagrangian"):
+        raise ValueError(f"area_mode {mode}")
+    price = area_price(cfg)
+    mu = cfg["area_penalty"] * price / area0
+    nu = history[-1]["area_multiplier_next"] if history and mode == "lagrangian" else -price
     while k < cfg["iterations"]:
         t0 = time.time()
         # the mesh of the current iterate (an uncovered box raises here; split cells get
@@ -363,6 +432,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
         else:
             avg = averaged_terms(cfg, ls, seeds)
         g = avg["gradient"]
+        area_err = 0.0
+        if mode == "lagrangian":
+            area_now, g_area = area_and_gradient(ls, lo, hi)
+            area_err = area_now - area0
+            g = g + (nu + mu * area_err) * g_area
         direction = smoothed_direction(g, ls, cfg["smooth"], cfg["band"] + ls.h)
         if cfg["optimizer"] == "adam":
             # Adam's elementwise-normalised step has unit scale: `step` is its learning
@@ -379,12 +453,9 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
         scale = float(np.abs(direction).max())
         eta = cfg["step"] / max(scale, 1e-300)
         stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
-        # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1
-        new, shift = project_area(L.reinitialise(stepped), area0, lo, hi)
-        clipped = 0
-        if cfg["keepout"] > 0.0:
-            new, shift, clipped = constrain(new, area0, lo, hi, cfg["keepout"], shift)
+        new, shift, clipped = after_step(stepped, mode, area0, lo, hi, cfg["keepout"])
         area = float(L.body_volume(new, lo, hi, 4))
+        nu_next = nu + mu * (area - area0) if mode == "lagrangian" else nu
         # predicted first-order decrease: g . delta coef (before the area projection)
         predicted = float(-eta * np.sum(g * direction))
         row = {
@@ -405,6 +476,14 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
             "predicted_decrease": predicted,
             "seconds": time.time() - t0,
         }
+        if mode == "lagrangian":
+            row.update(
+                area_multiplier=nu,
+                area_multiplier_next=nu_next,
+                area_penalty_mu=mu,
+                area_error=area_err,
+                lagrangian=avg["objective"] + nu * area_err + 0.5 * mu * area_err**2,
+            )
         history.append(row)
         np.save(out / f"coef_{k + 1}.npy", np.asarray(new.coef))
         if avg["frames"] is not None:
@@ -427,7 +506,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
             f"hits {row['hits']:.0f}  stuck {row['stuck']:.0f}  {row['seconds']:.0f}s",
             flush=True,
         )
-        ls = new
+        ls, nu = new, nu_next
         k += 1
 
 

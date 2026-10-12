@@ -711,8 +711,10 @@ tally alone, $f_{\mathrm{num}}\times1$ (cluster gate) & $-2.6$ & $-2.4$ & $-2.4$
   $f_{\mathrm{num}}\times4$, 8 seeds): $+0.8\pm0.25\,\%$ at $s = 1$, $+1.1\pm0.3\,\%$ at $s = 0.35$.
 \end{itemize}
 Most of the $-2\,\%$ is truncation, not a code error; it grows with the box's memory (reflective walls,
-trapping bodies).  Gates at the 1\,\% level: $\ge600$ captured steps or open $y$ faces.  Cluster jobs
-\code{fm\_hor\_s*} capture the whole run to close the remainder.
+trapping bodies).  Gates at the 1\,\% level: $\ge600$ captured steps or open $y$ faces.  \textbf{Cluster}
+(\code{fm\_hor\_s*}, $f_{\mathrm{num}}\times1$, 8 seeds, the whole 1000-step run captured): $+0.3\pm0.2\,\%$ ($s = 1$),
+$+0.6\pm0.1\,\%$ ($s = 0.35$); the whole run still reads $-1.0\pm1.2$ / $-1.8\pm0.6\,\%$: at this density the horizon is a
+third of the remainder.
 \end{frame}
 
 \begin{frame}{Kn $= 0.5$: the remaining gap, and what it is not}
@@ -732,8 +734,10 @@ $0.01605\pm0.00010$; Richardson $\mathbf{0.01665\pm0.00026}$.
 \item one-sided fits in the backward next to the body: $<1\,\%$; timing band: $+0.15\,\%$;
 \item the sequential (exact) pull-back as referee: $50\times$ noisier at this collision rate --- useless.
 \end{itemize}
-\textbf{Open}: tally $+$ volume alone $\approx$ the FD; the fitted $v$ part ($-10\,\%$ of $\dd D/\dd s$) is the
-prime suspect.  Cluster \code{biasgate} jobs: $f_{\mathrm{num}}\times1$, $4\times8$, 64-seed FD, whole-run horizon.
+\textbf{Update 2026-10-12} (cluster, $f_{\mathrm{num}}\times1$, section V): the 64-seed FD has no curvature ($h = 0.1$ vs $0.2$:
+$+0.14\pm0.67\,\%$), so the Richardson value above was noise; against it the gap is $-3.7\pm0.8\,\%$, the same for
+the per-query and per-cell fits.  The whole-run horizon ($+2.8\pm0.8\,\%$, 4 seeds) and a cubic-in-$v$ fit
+($+3.1\pm0.2\,\%$) are each of its size.
 \end{frame}
 
 \begin{frame}{What the week's changes do to the squashkn result}
@@ -982,18 +986,51 @@ a gate --- the cluster \code{cellgate} runs six shapes $\times$ 16 seeds.
 \item one quadratic per cell, its columns capped at count$/1.5$ (else plane, else mean);
 \item with surface normals: split at $v\cdot n_c = 0$ (each side guarded), empty sides and cells with
   $R < 0.9$ two-sided;
-\item matches the 64-nearest fit ($+0.05\pm1.5\,\%$) and FD ($-1.9\pm2.3\,\%$); seed-to-seed SE unchanged;
-  every stored gate; stable on the optc shapes where the per-query fits failed;
+\item matches the 64-nearest fit ($+0.05\pm1.5\,\%$) and, at $f_{\mathrm{num}}\times1$, the per-query $k = 32$
+  ($-3.7$ vs $-3.4\pm0.8\,\%$ against FD); seed-to-seed SE unchanged; every stored gate; stable on all six
+  optc shapes $\times$ 16 seeds, where the per-query one-sided fit failed;
 \item \textbf{a squash seed $985\to95$\,s} (backward $897\to13$\,s): $\sim10\times$ more optimisation iterates per GPU-hour.
 \end{itemize}
 \textbf{Rejected}: unguarded \code{quad}, \code{rb} (heavy tails); \code{pool1} (reads low, 3 seeds); the per-query
-fallback (unstable one-sided fit).  \textbf{Kept as options}: \code{cubicv:adapt1.5} ($+3\,\%$ vs $k = 64$, $+0.9\,\%$
-vs FD: not distinguishable at 12 seeds), \code{rb}, \code{loo}, \code{pool}, \code{own}, \code{quadratic\_full}.
+fallback (unstable one-sided fit).  \textbf{Kept as options}: \code{cubicv:adapt1.5} ($+3.1\pm0.2\,\%$ over the shipped
+fit, $-0.7\pm0.8\,\%$ vs FD at $f_{\mathrm{num}}\times1$: the candidate default, next frames), \code{rb}, \code{loo},
+\code{pool}, \code{own}, \code{quadratic\_full}.
 The shape gradient's \emph{slope} fits (pooled, one-sided, $k = 96$) are unchanged.
 
-\medskip
-\textbf{Open}: \code{cellgate} on the cluster at production density ($f_{\mathrm{num}}\times1$): 16 + 8 squash seeds
-(all fits paired with FD), six optc shapes at Kn 0.5 and free-molecular, two FD directions.
+\end{frame}
+
+\begin{frame}{Cluster gates at production density (2026-10-12)}
+\scriptsize
+\code{cellgate} / \code{biasgate}, $f_{\mathrm{num}}\times1$, $4\times8$, Kn 0.5 squash; every fit paired on the same forward
+and against the seed's CRN FD ($h = 0.2$); \code{scratch/cellfit/cluster\_analysis.py}.
+\begin{center}
+\fig{0.74}{mesh/figures/bias_gate_cluster.png}
+\end{center}
+\begin{itemize}
+\item \textbf{FD} (64 seeds): $h = 0.1$ / $0.2$: $0.01633\pm0.00010$ / $0.01631\pm0.00006$, paired difference $+0.14\pm0.67\,\%$.
+\item $s = 1$ / $0.6$: shipped $-3.7\pm0.8$ / $-2.8\pm1.2\,\%$; per-query $k = 32$ $-3.4$ / $-2.3$; unguarded \code{quad} $-3.2$ / $-2.8$
+  (stable at this density); \textbf{\code{cubicv:adapt1.5} $-0.7\pm0.8$ / $+0.1\pm1.1\,\%$} (paired $+3.1\pm0.2$ / $+3.0\pm0.3\,\%$
+  over the shipped fit; 50 vs 46\,s a seed; the per-query fit 1100\,s).
+\item \textbf{Horizon}: the whole run captured adds $+2.8\pm0.8\,\%$ at Kn 0.5 (4 seeds; 300$\to$450 gave $+0.1\,\%$: the
+  fill transient), $+0.3$ / $+0.6\,\%$ free-molecular.  Basis order and horizon are each the gap's size; additivity unmeasured.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Cluster gates: the optc shapes (16 seeds each)}
+\scriptsize
+$g\cdot d$ vs CRN FD ($h = 0.05$) along the uniform shift and $\cos2\theta$, in units of $|$FD along the shift$|$:
+\begin{center}
+\fig{0.6}{mesh/figures/cellgate_optc.png}
+\end{center}
+\begin{itemize}
+\item \textbf{Stable}: every per-cell setting on every shape ($\lambda$ rms $\le3.2\times10^{-7}$); the per-query one-sided fit
+  diverged again on GD 200 ($\lambda$ rms $1.2\times10^{-6}$).
+\item \textbf{Circle}: Kn 0.5 shift $-0.14\pm0.03$ (split), $-0.10\pm0.03$ (two-sided), $-0.12\pm0.03$ (per-query); free-molecular
+  $+0.01\pm0.02$.  S8 it 30: $\cos2\theta$ $+0.08\pm0.03$ (Kn) and $+0.14\pm0.03$ \emph{free-molecular}: a shape-dependent
+  bias with no collision fit involved.
+\item \textbf{Elongated iterates}: the adjoint's per-seed sd is $3$--$13\times$ the FD's in \emph{both} regimes (heavy-tailed
+  seeds); means within $\sim2$ se.  Split vs two-sided: indistinguishable.
+\end{itemize}
 \end{frame}
 
 \begin{frame}{Validation status of the current estimator}
@@ -1008,29 +1045,31 @@ level-set circle radius; sphere radius & $z = -1.4$; $z = -1.71$ & free-mol.\\
 $\cos2\theta$ coarse, state-based fits & paired $+0.007\pm0.071$ & free-mol.\\
 diffuse plate (silhouette + hybrid normal) & $z = +0.19$ ($|z|\le1.6$ at 5 steps) & free-mol.\\
 \midrule
-squash specular, $s = 0.35 / 0.6 / 1$ & $-1.7 / -2.5 / -1.5\,\%$ ($\pm1.5$); $\approx-1\,\%$ is horizon & free-mol.\\
+squash specular, $s = 0.35 / 0.6 / 1$ & $-1.7 / -2.5 / -1.5\,\%$ ($\pm1.5$); $\le1\,\%$ is horizon & free-mol.\\
 squash $s = 1$, diffuse & $-1.4\pm3.3\,\%$ & free-mol.\\
 cut-volume machinery & $z = -1.2$ (all cells), $+0.8$ (cut cells) & Kn 0.5\\
-squash $s = 1$, Kn $= 0.5$ (2026-10-03, $f_{\mathrm{num}}\times2$, $k = 32$) & $-6.5$ to $-8.3\pm1.8\,\%$ & superseded\\
-squash $s = 1$, Kn $= 0.5$, 12 seeds: per-cell \code{adapt1.5} / $k = 64$ & $-1.9\pm2.3$ / $-2.0\pm2.0\,\%$ & Kn 0.5\\
+squash Kn 0.5, $f_{\mathrm{num}}\times2$ (vs Richardson FD) / $\times4$ (12 seeds) & $-7.5$ / $-1.9\pm2.3\,\%$ & superseded\\
+squash $s = 1$, Kn $= 0.5$, 16 seeds, $f_{\mathrm{num}}\times1$: shipped / \code{cubicv} & $-3.7\pm0.8$ / $-0.7\pm0.8\,\%$ & Kn 0.5\\
+optc circle, uniform shift, Kn 0.5 / free-mol. (16 seeds) & $-12\pm3\,\%$ / $+1\pm2\,\%$ & both\\
 \bottomrule
 \end{tabular}
 
 \medskip
 \small
-Free-molecular shape gradients, specular and diffuse, agree with FD to $\sim$2\,\%, and most of that
-is the captured horizon.  The collisional gradient was 7--8\,\% low (8 seeds, $f_{\mathrm{num}}\times2$); over 12 seeds at $f_{\mathrm{num}}\times4$
-the per-query $k = 32$ reads $-3.5\pm1.8\,\%$, $k = 64$ and the shipped per-cell fit $-2\,\%$ ($\pm2$).  Parameter
-gradients on collisional flows are validated to $\le1\,\%$, with either field fit.
+Free-molecular shape gradients agree with FD to $\sim$2\,\% (the horizon $\le1\,\%$ of it).  Kn 0.5 at production
+density: $-3.7\pm0.8\,\%$, shipped and per-query fits alike; a cubic-in-$v$ fit $-0.7\pm0.8\,\%$.  Parameter
+gradients on collisional flows: $\le1\,\%$, either fit.
 \end{frame}
 
 \begin{frame}{Open items}
 \small
 \begin{enumerate}
-\item \textbf{Kn 0.5 gap} (now $\approx2\pm2\,\%$): cluster \code{cellgate} (squash at $f_{\mathrm{num}}\times1$, every fit
-  paired with FD, 16 + 8 seeds; six optc shapes) and \code{biasgate} (\code{kn\_fd*} 64-seed FD, horizons; its
-  2026-10-04 jobs all died on \code{import jax\_dsmc}: fixed in \code{env.sh}, preflight added).
-\item \textbf{Free-molecular remainder} ($\sim$1\,\% after 600 captured steps): \code{fm\_hor\_s*}.
+\item \textbf{Kn 0.5 gap} ($-3.7\pm0.8\,\%$, shipped fit, $f_{\mathrm{num}}\times1$): \code{cubicv} closes it ($-0.7\pm0.8\,\%$), the
+  whole-run horizon adds $+2.8\pm0.8\,\%$ (4 seeds).  Next: both bases at the whole-run horizon, paired, 16 seeds --- do
+  they add?  Then the default basis.  The circle's Kn 0.5 shift ($-12\pm3\,\%$) after that.
+\item \textbf{Free-molecular remainder}: $-1.0\pm1.2$ / $-1.8\pm0.6\,\%$ with the whole run captured (the horizon $+0.3$ / $+0.6$);
+  and the S8 it 30 $\cos2\theta$ bias ($+0.14\pm0.03$ of the shift derivative).
+\item \textbf{Shape-gradient noise} on the elongated optc iterates: per-seed sd $3$--$13\times$ the FD's, free-molecular too.
 \item \textbf{Re-runs}: free-molecular squash and \code{optc} can be re-run now (the old runs used
   \code{along\_pool}, $-9\,\%$ at $s = 0.35$, and \code{optc} the future class); squashkn after item 1.
 \item \textbf{optc} bodies need a body-to-face clearance constraint before their drag reductions are quoted:

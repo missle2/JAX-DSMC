@@ -2535,9 +2535,57 @@ k = 64 and +0.9 % above FD -- not distinguishable from `quad` at 12 seeds, at 1.
 backward cost; kept as an option.  Unguarded `quad` and `rb` are rejected (heavy-tailed,
 unstable); `pool1` smooths across cells and read low (3 seeds).  With normals the split
 adds `align0.9:both` (two-sided in the <= 6 % of complicated cells) instead of the
-per-query fallback, whose one-sided fit is the unstable piece.  Open: the cluster gates
-(`study.py --group cellgate`) at production density (fnum x1), 16 squash seeds and six
-optc shapes x 16 seeds against FD.
+per-query fallback, whose one-sided fit is the unstable piece.
+
+*Cluster gates at production density* (2026-10-12; `study.py --group cellgate` and
+`biasgate`, fnum x1, 4 x 8; `scratch/cellfit/cluster_analysis.py`, figures
+`examples/mesh/figures/bias_gate_cluster.png`, `cellgate_optc.png`).  The precise Kn 0.5 FD
+(64 CRN seeds, s = 1): h = 0.1 0.01633 +- 0.00010, h = 0.2 0.01631 +- 0.00006, their paired
+difference +0.14 +- 0.67 % -- no curvature, so the 2026-10-03 Richardson value 0.01665 (and the
+"7-9 % gap" measured against it) was the h = 0.1 FD's noise.  Squash, every fit paired on the
+same forward and against the same seed's CRN FD (h = 0.2):
+
+| backward fit | s = 1 (16 seeds) | s = 0.6 (8 seeds) | seed |
+|---|---|---|---|
+| shipped `cell:quad:adapt1.5:align0.9:both` | -3.7 +- 0.8 % | -2.8 +- 1.2 % | 46 s |
+| per-query k = 32 | -3.4 +- 0.8 % | -2.3 +- 1.2 % | 1100 s |
+| `cell:quad` (unguarded; stable at fnum x1, worst seed 9 %) | -3.2 +- 0.8 % | -2.8 +- 1.2 % | 47 s |
+| `cell:cubicv:adapt1.5` | **-0.7 +- 0.8 %** | **+0.1 +- 1.1 %** | 50 s |
+
+`cubicv` - shipped, paired: +3.12 +- 0.18 % (s = 1), +2.99 +- 0.32 % (s = 0.6).  The Kn 0.5
+gap is therefore **not closed** by the shipped fit: -3.7 +- 0.8 % (z ~ 5), the same as the
+per-query fit's (the per-cell switch neither made nor removed it; the -1.9 +- 2.3 % at
+fnum x4 was within its noise of this).  Two candidates of the gap's size: the fit's
+truncation in `v` (the cubic-in-`v` columns add +3.1 % with a tight paired error) and the
+captured horizon -- Kn 0.5, 4 seeds, the same forward captured for its last 300 steps and for
+the whole 1000-step run: +2.8 +- 0.8 % (the 2026-10-03 300 -> 450 test saw +0.1 +- 0.4 %;
+the difference lies in the fill transient).  Whether they add (cubicv + whole run would read
+~+2 %) is not measured.  Free-molecular horizon (8 seeds each): whole run - 300 =
++0.3 +- 0.2 % (s = 1), +0.6 +- 0.1 % (s = 0.35); the whole run still reads -1.0 +- 1.2 % /
+-1.8 +- 0.6 % against FD, so the free-molecular remainder (~1.5 %) is mostly not the horizon.
+
+optc shapes (16 seeds each, `g . d` vs CRN FD h = 0.05, in units of |FD along the shift|):
+every per-cell setting stable on every shape (lambda rms <= 3.2e-7; the per-query one-sided
+fit diverged again on the GD iterate, lambda rms 1.2e-6).  Circle at Kn 0.5: shift
+-0.14 +- 0.03 (split), -0.10 +- 0.03 (two-sided), -0.12 +- 0.03 (per-query) -- the squash's
+low reading, larger; free-molecular +0.01 +- 0.02.  S8 iterate 30: shift 0.00 +- 0.02 but
+cos 2 theta +0.08 +- 0.03 at Kn 0.5 and **+0.14 +- 0.03 free-molecular** (a shape-dependent
+bias without any collision fit).  The elongated iterates (S1 50/100/200, GD 200): the
+adjoint's per-seed sd is 3-13x the FD's in both regimes (heavy-tailed seeds), means within
+~2 se of the FD; the optimiser's gradient on those shapes is dominated by this noise.
+
+*Where that noise comes from* (`scratch/variance/where.py`, `spikes.py`, `curvature.py`, on the
+stored per-seed gradient vectors): the per-coefficient noise is similar on every shape (rms
+deviation 4e-21 circle, 6-8e-21 elongated, free-molecular), but on the elongated iterates
+single seeds put up to 85 % of their deviation into ~20 coefficients (circle: <= 46 %), at
+the same spots in both regimes and across seeds -- sub-cell surface features: radius of
+curvature 3.5-14 cm (|kappa| 7-28 /m, mostly concave), against 6.25 cm knots and 50 cm
+DSMC cells.  Surface with radius < 12.5 cm: S1-adam 50 / 100 / 200 8-13 %, S2-gd 200 22 %
+(max |kappa| 50-68 /m), S8-adam 30 1.2 %, circle 0 -- the shapes whose `g . d` sd is 3-13x
+the FD's are exactly those.  The few-seed runs imprint their gradient noise as wiggles,
+which then amplify it.  The long-box free-molecular S8 run has 2.8 % at iterate 88 (max
+41 /m).  Gates: `study.py --group gapgate` (`fmsm_*`: the same iterates smoothed; `fmgz_*`:
+the grazing cut-off).
 
 *Tests*: `tests/test_cell_fit.py` (polynomial reproduction for every basis, the
 least-squares solution and exact slopes, the order guard's column caps, finite empty
