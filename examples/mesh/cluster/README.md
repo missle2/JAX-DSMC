@@ -40,7 +40,7 @@ python3 -m examples.mesh.cluster.collect           # merges the seed files, figu
 
 | file | role |
 |---|---|
-| `env.sh` | the job environment: the CUDA venv at `/projects/$USER/jax-env` (`GPU_KIND=a100`, default, or `h200`; `JAX_VENV` overrides the path), `JAX_PLATFORMS` pinned so a CPU fallback is an error or `module load rocm/5.3.0; module load jax` (`GPU_KIND=mi100`, jax 0.4.7 today — unusable), `JAX_ENABLE_X64=1`, no preallocation |
+| `env.sh` | the job environment: the CUDA venv at `/projects/$USER/jax-env` (`GPU_KIND=a100`, default, or `h200`; `JAX_VENV` overrides the path), `JAX_PLATFORMS` pinned so a CPU fallback is an error or `module load rocm/5.3.0; module load jax` (`GPU_KIND=mi100`, jax 0.4.7 today — unusable), `JAX_ENABLE_X64=1`, no preallocation, the persistent compilation cache `/projects/$USER/jax-cache` (`JAX_COMPILATION_CACHE_DIR`; a toy job 264 s → 104 s warm; clear after a jax upgrade) |
 | `bad_nodes.txt` | nodes whose preflight failed (one per line); `submit_curc.sh` excludes them.  Seeded 2026-09-22 with `c3gpu-g5-u5` |
 | `check_env.sbatch` / `check_env.py` | asserts JAX ≥ 0.4.36 (the code uses `jax.tree.map`, `jax.random.key`, `register_dataclass(data_fields, meta_fields)`), an accelerator, float64; runs a 40-step level-set circle with its shape terms; `--quick` stops after the device checks and is every job's preflight.  `gpu-normal` on one A100 (on `gpu-testing` only a MIG slice `a100_3g.20gb` is given) |
 | `study.py` | the job matrix by group (`--group sphere\|mode2\|opt\|optc\|squash\|squashkn\|biasgate\|cellgate\|optckn\|optc2\|squashkn2 --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |

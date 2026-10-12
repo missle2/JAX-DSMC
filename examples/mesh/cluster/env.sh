@@ -39,6 +39,16 @@ if [ "${GPU_KIND}" = "mi100" ]; then export JAX_PLATFORMS=rocm; else export JAX_
 export XLA_PYTHON_CLIENT_PREALLOCATE=false   # several seed workers may share a GPU
 export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_enable_command_buffer=}"  # the WSL crash guard; harmless here
 export PYTHONUNBUFFERED=1
+# Persistent compilation cache, shared by every job on the shared /projects filesystem: a
+# job whose programs were compiled before (same shapes, flags, jax version and device kind --
+# all in the cache key, so H200 / A100 / RTX entries never mix) loads them instead of
+# compiling (2026-10-11: ~25 min to the first output on rtx, much of it compiling).  Seeds of
+# one setting, resubmitted optimisers and later queue waves hit; jobs starting together all
+# compile.  No size limit, so no lock file (a limit makes JAX lock every access, and a job
+# killed holding the lock blocks the cache); a torn entry from two concurrent writers fails
+# to decompress, which JAX reports as a warning and compiles instead.  Clear it after a jax
+# upgrade: rm -r /projects/$USER/jax-cache.
+export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/projects/${USER}/jax-cache}"
 # The repository root on the import path.  `python3 -m examples...` puts the working
 # directory there itself, but a plain `python3 scratch/<dir>/<script>.py` puts only the
 # script's own directory: every biasgate job of 2026-10-04 died on `import jax_dsmc`

@@ -23,6 +23,15 @@ ROOT="$(pwd)"
 [ -f "${ROOT}/jax_dsmc/__init__.py" ] || { echo "run from the repository root"; exit 2; }
 LOCK=/home/aakash/jax_dsmc/run_locked.sh
 [ -x "${LOCK}" ] || LOCK=""
+# The jobs' environment (the venv, X64, ...) where there is one: on the cluster `module`
+# exists and env.sh activates the venv (without it `import jax` fails); env.sh pins
+# JAX_PLATFORMS=cuda, which clean() overrides -- the preflight runs on a CPU node.
+if type module > /dev/null 2>&1; then
+  set +u
+  # shellcheck disable=SC1091
+  source examples/mesh/cluster/env.sh
+  set -u
+fi
 TOY_OPT="--iterations 1 --fnum-scale 16 --warmup 30 --steps 30 --window 20 --frames-every 0"
 TOY_OPT="${TOY_OPT} --seeds-per-iterate 2"
 mkdir -p /tmp/preflight
