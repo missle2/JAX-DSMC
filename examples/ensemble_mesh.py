@@ -87,7 +87,7 @@ def default_config():
         "grid_scale": 1,
         # "hit_ahead" (stratified grad-lambda fits) is DIAGNOSTIC ONLY, biased by
         # construction: the class is the particle's future, the fit drops grad P (lam_1 -
-        # lam_0) (shape.gradient; slides Finding 1) and warns when used
+        # lam_0) (shape.gradient; shape_validation.tex Finding 1) and warns when used
         "value_class": "none",
         # one-sided fits in the backward next to the body (shape.local_normals): the
         # virtual pull-back's four-term values in the cut cells
@@ -548,7 +548,8 @@ def _column(dev, r):
 NEWBORN_HIT_MAX = 1e-3
 """Largest share of the windowed drag that may come from hits the adjoint does not see
 (entrants' birth-step hits, hits by particles leaving the box in the same step): above it
-the gradient misses their dependence on the shape (slides Finding 4) and a warning says so."""
+the gradient misses their dependence on the shape (docs/math/shape_validation.tex,
+Finding 4) and a warning says so."""
 
 
 def _newborn_share(check, value):
@@ -828,6 +829,11 @@ def main(argv=None):
     p.add_argument("--pullback", default="virtual", choices=("virtual", "sequential"))
     p.add_argument("--substeps", type=int, default=4)
     p.add_argument("--partners", type=int, default=8)
+    p.add_argument(
+        "--backward-basis",
+        default=ensemble_backward.CELL_BASIS,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+    )
     p.add_argument("--fd-steps", type=float, nargs="+", default=[0.1, 0.05])
     p.add_argument("--seeds", type=int, default=16)
     p.add_argument("--seed-start", type=int, default=32)
@@ -836,7 +842,9 @@ def main(argv=None):
     cfg = {k: getattr(args, k) for k in cfg}
     if cfg["body"] not in BODIES:
         raise SystemExit(f"--body must be one of {BODIES}")
-    tag = ensemble_backward.configure(args.pullback, args.substeps, args.partners, "staged")
+    tag = ensemble_backward.configure(
+        args.pullback, args.substeps, args.partners, "staged", args.backward_basis
+    )
     body_tag = artifact_tag(cfg)
     out = args.output or Path(RESULTS) / (
         f"ensemble_mesh_{cfg['case']}{body_tag}_{args.parameter}_f{cfg['fnum_scale']:g}"

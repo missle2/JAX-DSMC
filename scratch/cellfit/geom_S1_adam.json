@@ -1,0 +1,317 @@
+{
+ "run": "examples/mesh/results/optimize/circle_coarse_S1_adam",
+ "iterates": {
+  "0": {
+   "cells_near_surface": 84,
+   "split_subcells": 0,
+   "flow_share_near_surface": 0.20519027791226882,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    },
+    "0.95": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    },
+    "0.9": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    },
+    "0.8": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    },
+    "0.7": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    },
+    "0.5": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    }
+   },
+   "worst_cos_below_0": 0,
+   "r_min": 0.9988694868558086
+  },
+  "25": {
+   "cells_near_surface": 111,
+   "split_subcells": 0,
+   "flow_share_near_surface": 0.2889577382969453,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 37,
+     "flow_share_of_near": 0.3246984419500754,
+     "flow_share_of_all": 0.09382412741443578
+    },
+    "0.95": {
+     "cells": 17,
+     "flow_share_of_near": 0.1621712179594572,
+     "flow_share_of_all": 0.046860628358425714
+    },
+    "0.9": {
+     "cells": 7,
+     "flow_share_of_near": 0.08049924610487519,
+     "flow_share_of_all": 0.023260880089073923
+    },
+    "0.8": {
+     "cells": 3,
+     "flow_share_of_near": 0.03618696599095326,
+     "flow_share_of_all": 0.010456503848574333
+    },
+    "0.7": {
+     "cells": 1,
+     "flow_share_of_near": 0.01206232199698442,
+     "flow_share_of_all": 0.003485501282858111
+    },
+    "0.5": {
+     "cells": 1,
+     "flow_share_of_near": 0.01206232199698442,
+     "flow_share_of_all": 0.003485501282858111
+    }
+   },
+   "worst_cos_below_0": 6,
+   "r_min": 0.33367076980846155
+  },
+  "50": {
+   "cells_near_surface": 123,
+   "split_subcells": 4,
+   "flow_share_near_surface": 0.33097402950944627,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 42,
+     "flow_share_of_near": 0.3020781926852004,
+     "flow_share_of_all": 0.09998003665995173
+    },
+    "0.95": {
+     "cells": 30,
+     "flow_share_of_near": 0.23063003783517025,
+     "flow_share_of_all": 0.07633255294822236
+    },
+    "0.9": {
+     "cells": 23,
+     "flow_share_of_near": 0.18014658843742576,
+     "flow_share_of_all": 0.059623842277514626
+    },
+    "0.8": {
+     "cells": 13,
+     "flow_share_of_near": 0.11637513479921771,
+     "flow_share_of_all": 0.038517147299202074
+    },
+    "0.7": {
+     "cells": 5,
+     "flow_share_of_near": 0.04633437517135494,
+     "flow_share_of_all": 0.015335474855265785
+    },
+    "0.5": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    }
+   },
+   "worst_cos_below_0": 19,
+   "r_min": 0.5426898820437439
+  },
+  "75": {
+   "cells_near_surface": 121,
+   "split_subcells": 4,
+   "flow_share_near_surface": 0.3203478134587108,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 43,
+     "flow_share_of_near": 0.30601990895525205,
+     "flow_share_of_all": 0.09803280870864875
+    },
+    "0.95": {
+     "cells": 33,
+     "flow_share_of_near": 0.25025972308796585,
+     "flow_share_of_all": 0.0801701550880123
+    },
+    "0.9": {
+     "cells": 23,
+     "flow_share_of_near": 0.1794072646908823,
+     "flow_share_of_all": 0.057472724962332314
+    },
+    "0.8": {
+     "cells": 20,
+     "flow_share_of_near": 0.15475718252394174,
+     "flow_share_of_all": 0.04957612503857534
+    },
+    "0.7": {
+     "cells": 13,
+     "flow_share_of_near": 0.10564590770858125,
+     "flow_share_of_all": 0.03384343553530476
+    },
+    "0.5": {
+     "cells": 8,
+     "flow_share_of_near": 0.07293024310081034,
+     "flow_share_of_all": 0.02336304391235682
+    }
+   },
+   "worst_cos_below_0": 23,
+   "r_min": 0.16781133433823914
+  },
+  "100": {
+   "cells_near_surface": 122,
+   "split_subcells": 4,
+   "flow_share_near_surface": 0.30291239811447485,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 43,
+     "flow_share_of_near": 0.2917357518128608,
+     "flow_share_of_all": 0.08837037619736293
+    },
+    "0.95": {
+     "cells": 30,
+     "flow_share_of_near": 0.1912143670468847,
+     "flow_share_of_all": 0.05792120247611325
+    },
+    "0.9": {
+     "cells": 25,
+     "flow_share_of_near": 0.14896422221778302,
+     "flow_share_of_all": 0.04512310978524619
+    },
+    "0.8": {
+     "cells": 17,
+     "flow_share_of_near": 0.08845562236560858,
+     "flow_share_of_all": 0.026794304697474874
+    },
+    "0.7": {
+     "cells": 15,
+     "flow_share_of_near": 0.0757705907029705,
+     "flow_share_of_all": 0.022951851336387125
+    },
+    "0.5": {
+     "cells": 12,
+     "flow_share_of_near": 0.062246549072094925,
+     "flow_share_of_all": 0.018855251453778615
+    }
+   },
+   "worst_cos_below_0": 24,
+   "r_min": 0.06372390349648095
+  },
+  "150": {
+   "cells_near_surface": 107,
+   "split_subcells": 0,
+   "flow_share_near_surface": 0.27845320584586525,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 26,
+     "flow_share_of_near": 0.23402082020298612,
+     "flow_share_of_all": 0.0651638476202003
+    },
+    "0.95": {
+     "cells": 18,
+     "flow_share_of_near": 0.1610414448090757,
+     "flow_share_of_all": 0.0448425065811371
+    },
+    "0.9": {
+     "cells": 12,
+     "flow_share_of_near": 0.10053680481603025,
+     "flow_share_of_all": 0.027994795606523647
+    },
+    "0.8": {
+     "cells": 9,
+     "flow_share_of_near": 0.0720013909112642,
+     "flow_share_of_all": 0.02004901812460286
+    },
+    "0.7": {
+     "cells": 6,
+     "flow_share_of_near": 0.036533153673961705,
+     "flow_share_of_all": 0.010172773760174286
+    },
+    "0.5": {
+     "cells": 4,
+     "flow_share_of_near": 0.014995762067241866,
+     "flow_share_of_all": 0.004175618021725317
+    }
+   },
+   "worst_cos_below_0": 12,
+   "r_min": 0.15519267504547957
+  },
+  "200": {
+   "cells_near_surface": 109,
+   "split_subcells": 4,
+   "flow_share_near_surface": 0.26110949753122276,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 28,
+     "flow_share_of_near": 0.25013904338153503,
+     "flow_share_of_all": 0.06531367993029336
+    },
+    "0.95": {
+     "cells": 21,
+     "flow_share_of_near": 0.1639553207267334,
+     "flow_share_of_all": 0.04281029141252783
+    },
+    "0.9": {
+     "cells": 14,
+     "flow_share_of_near": 0.08794493882091213,
+     "flow_share_of_all": 0.022963258785942492
+    },
+    "0.8": {
+     "cells": 7,
+     "flow_share_of_near": 0.04685761957730812,
+     "flow_share_of_all": 0.012234969503340111
+    },
+    "0.7": {
+     "cells": 7,
+     "flow_share_of_near": 0.04685761957730812,
+     "flow_share_of_all": 0.012234969503340111
+    },
+    "0.5": {
+     "cells": 3,
+     "flow_share_of_near": 0.019744160177975527,
+     "flow_share_of_all": 0.005155387743247168
+    }
+   },
+   "worst_cos_below_0": 13,
+   "r_min": 0.041370190684432
+  },
+  "250": {
+   "cells_near_surface": 111,
+   "split_subcells": 4,
+   "flow_share_near_surface": 0.26449246857620085,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 25,
+     "flow_share_of_near": 0.18585974144834688,
+     "flow_share_of_all": 0.049158501824607695
+    },
+    "0.95": {
+     "cells": 18,
+     "flow_share_of_near": 0.12399039011554742,
+     "flow_share_of_all": 0.03279452436138731
+    },
+    "0.9": {
+     "cells": 12,
+     "flow_share_of_near": 0.0846127445372383,
+     "flow_share_of_all": 0.02237943367566161
+    },
+    "0.8": {
+     "cells": 9,
+     "flow_share_of_near": 0.04566983182702208,
+     "flow_share_of_all": 0.012079326559389014
+    },
+    "0.7": {
+     "cells": 5,
+     "flow_share_of_near": 0.030065209930213933,
+     "flow_share_of_all": 0.00795202159270399
+    },
+    "0.5": {
+     "cells": 2,
+     "flow_share_of_near": 0.01061663425237387,
+     "flow_share_of_all": 0.0028080198013810133
+    }
+   },
+   "worst_cos_below_0": 11,
+   "r_min": 0.09561734186217519
+  }
+ }
+}

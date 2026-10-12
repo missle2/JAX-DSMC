@@ -1,0 +1,20 @@
+% docs/math/shape_derivation.tex
+% Presentation deck: the shape gradient of JAX-DSMC derived from the Boltzmann problem,
+% as implemented on main (2026-10-09), without code references.  The documentation deck
+% shape_derivation_code.tex has the same frames plus the code of each.  Frames:
+% shape_derivation_body.tex.  Build: see docs/math/README.md.
+\documentclass[10pt,aspectratio=169]{beamer}
+\newif\ifcodedeck
+\codedeckfalse
+\input{shape_slides_style}
+
+\title{Shape sensitivities of a DSMC flow}
+\subtitle{The ensemble adjoint and the seven terms of the shape gradient}
+\date{2026-10-09}
+
+\begin{document}
+\begin{frame}
+\titlepage
+\end{frame}
+\input{shape_derivation_body}
+\end{document}

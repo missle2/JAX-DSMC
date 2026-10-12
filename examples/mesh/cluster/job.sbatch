@@ -24,6 +24,12 @@ if ! python3 -m examples.mesh.cluster.check_env --quick; then
   echo "[$(date)] no usable GPU on $(hostname): recorded in bad_nodes.txt, resubmit"
   exit 1
 fi
+# the package must import from anywhere a job's script lives (env.sh's PYTHONPATH): fail
+# here in seconds rather than at the job's own first import (the 2026-10-04 biasgate jobs)
+if ! (cd /tmp && python3 -c "import jax_dsmc, examples.ensemble_mesh"); then
+  echo "[$(date)] jax_dsmc does not import with PYTHONPATH=${PYTHONPATH:-}"
+  exit 1
+fi
 echo "${CMD}"
 eval "${CMD}"
 echo "[$(date)] done"

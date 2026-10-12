@@ -28,6 +28,7 @@ def main():
     hs = over.pop("fd_steps", [0.05])
     sk = over.pop("virtual", [1, 2])
     horizons = over.pop("horizons", [300, 600])
+    total = over.pop("total", TOTAL)  # warm-up + captured steps of every horizon
     tband = over.pop("timing_band", 10)
     base = dict(OS.default_config(), squash=s, **over)
     ensemble_backward.configure("virtual", sk[0], sk[1], "staged")
@@ -37,7 +38,7 @@ def main():
         row = {"s": s, "seed": i, "config": over, "virtual": sk, "horizons": {}}
         t0 = time.time()
         for m in horizons:
-            cfg = dict(base, warmup=TOTAL - m, steps=m)
+            cfg = dict(base, warmup=total - m, steps=m)
             terms, info, st = EM.shape_terms(cfg, key, None, "squash_y", 32, tband, variants)
             pick = functools.partial(EM.control_gradient, cfg, "squash_y", st["grid"])
             vol = 0.0 if st["volume"] is None else pick(st["volume"])
@@ -52,7 +53,9 @@ def main():
                              for n, t in terms.items()},
             }
             del terms, st
-        row["fd"] = EM.finite_differences(dict(base, warmup=TOTAL - 300, steps=300), "squash_y",
+        # the FD at the shortest horizon (300 in every production job)
+        m0 = horizons[0]
+        row["fd"] = EM.finite_differences(dict(base, warmup=total - m0, steps=m0), "squash_y",
                                           key, hs)
         row["seconds"] = time.time() - t0
         print(json.dumps(row), flush=True)

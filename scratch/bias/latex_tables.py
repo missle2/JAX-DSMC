@@ -1,4 +1,4 @@
-"""LaTeX tables of the bias-study gates for docs/math/shape_sensitivities_slides.tex:
+"""LaTeX tables of the bias-study gates for docs/math/shape_validation.tex:
 per s, every grad_x-lambda variant's paired (adjoint - FD) / FD in percent, without and
 with the window-edge timing term.
 

@@ -323,6 +323,11 @@ def main(argv=None):
     # optimize.py), the shipped 4 x 8 with --knudsen
     p.add_argument("--substeps", type=int, default=None)
     p.add_argument("--partners", type=int, default=None)
+    p.add_argument(
+        "--backward-basis",
+        default=ensemble_backward.CELL_BASIS,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+    )
     p.add_argument("--plot", action="store_true")
     p.add_argument(
         "--frames", action="store_true", help="re-run the forwards of a finished run for its movie"
@@ -332,9 +337,13 @@ def main(argv=None):
     collisional = cfg["knudsen"] > 0.0
     substeps = args.substeps or (4 if collisional else 1)
     partners = args.partners or (8 if collisional else 2)
-    ensemble_backward.configure(args.pullback, substeps, partners, "staged")
+    ensemble_backward.configure(args.pullback, substeps, partners, "staged", args.backward_basis)
     regime = f"_kn{cfg['knudsen']:g}" if cfg["knudsen"] > 0.0 else ""
     regime += f"_M{cfg['mach']:g}" if cfg["mach"] > 0.0 else ""
+    # the collisional runs depend on the backward's field fit (the free-molecular ones do
+    # not: no collision term): its tag keeps a per-cell run out of a per-query run's
+    # directory (the kn0.5 runs of 2026-10-01 are the per-query fit's)
+    regime += ensemble_backward.basis_tag(args.backward_basis) if collisional else ""
     tag = cfg["tag"] or (
         f"{cfg['case']}{regime}_S{cfg['seeds_per_iterate']}_st{cfg['s_target']:g}_adam"
     )

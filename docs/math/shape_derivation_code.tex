@@ -1,0 +1,22 @@
+% docs/math/shape_derivation_code.tex
+% Documentation deck: the frames of shape_derivation.tex, frame for frame, each with the
+% code that implements it (\codenote), plus an appendix of settings.  Frames:
+% shape_derivation_body.tex.  Build: see docs/math/README.md.
+\documentclass[10pt,aspectratio=169]{beamer}
+\newif\ifcodedeck
+\codedecktrue
+\input{shape_slides_style}
+
+\title{Shape sensitivities of a DSMC flow}
+\subtitle{The derivation with its implementation: frame for frame with the presentation
+deck, plus the code of each step}
+\date{main, 2026-10-09}
+
+\begin{document}
+\begin{frame}
+\titlepage
+\end{frame}
+\input{shape_derivation_body}
+\appendix
+\input{shape_derivation_appendix}
+\end{document}

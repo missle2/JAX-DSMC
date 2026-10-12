@@ -246,7 +246,8 @@ def test_virtual_pullback_carries_an_invariant_exactly(monkeypatch, nodes, ridge
     )
     tag = eb.configure("virtual", 3, 4, nodes)
     try:
-        assert tag == "_virt3x4" + ("st" if nodes == "staged" else "")
+        assert tag == "_virt3x4" + ("st" if nodes == "staged" else "") + eb.basis_tag(eb.CELL_BASIS)
+        assert eb.basis_tag("quadratic_full") == ""
         adj = eb.backward(
             rec, state0, out, lambda x, v: jnp.sum(v**2, axis=1), n, grid, 1.0, 32, sp=species(t)
         )

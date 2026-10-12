@@ -1,0 +1,1 @@
+{"seed": 0, "config": {"control": "tx", "particles": 2000, "steps": 40, "attempts": 2048, "dt": 0.2}, "objective": 1.0553622421506619, "adjoint": {"4x8_cell:quad_seconds": 3.797736167907715, "4x8_cell:quad_k32": 1.28577099933468, "4x8_cell:cubicv_seconds": 4.304418325424194, "4x8_cell:cubicv_k32": 1.2899533557832012}, "fd": [], "fd_steps": [], "seconds": 19.02702260017395}

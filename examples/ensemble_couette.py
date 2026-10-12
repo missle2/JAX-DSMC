@@ -262,6 +262,11 @@ def main(argv=None):
     p.add_argument("--pullback", default="virtual", choices=("virtual", "sequential", "linearised"))
     p.add_argument("--substeps", type=int, default=4)
     p.add_argument("--partners", type=int, default=8)
+    p.add_argument(
+        "--backward-basis",
+        default=ensemble_backward.CELL_BASIS,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+    )
     p.add_argument("--nodes", default="staged", choices=("staged", "post"))
     p.add_argument("--device", action="store_true", help="backward on the device (JIT)")
     p.add_argument("--objective", default="energy", choices=OBJECTIVES)
@@ -273,7 +278,9 @@ def main(argv=None):
     p.add_argument("--seed-start", type=int, default=32)
     p.add_argument("--output", type=Path, default=None)
     args = p.parse_args(argv)
-    tag = ensemble_backward.configure(args.pullback, args.substeps, args.partners, args.nodes)
+    tag = ensemble_backward.configure(
+        args.pullback, args.substeps, args.partners, args.nodes, args.backward_basis
+    )
     cfg = {
         k: getattr(args, k)
         for k in ("particles", "cells", "steps", "attempts", "dt", "epsilon", "majorant")

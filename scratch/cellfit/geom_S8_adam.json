@@ -1,0 +1,161 @@
+{
+ "run": "examples/mesh/results/optimize/circle_coarse_S8_adam",
+ "iterates": {
+  "10": {
+   "cells_near_surface": 94,
+   "split_subcells": 0,
+   "flow_share_near_surface": 0.25756127080181546,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 17,
+     "flow_share_of_near": 0.1841783750763592,
+     "flow_share_of_all": 0.047437216338880484
+    },
+    "0.95": {
+     "cells": 4,
+     "flow_share_of_near": 0.0351017339410742,
+     "flow_share_of_all": 0.009040847201210287
+    },
+    "0.9": {
+     "cells": 3,
+     "flow_share_of_near": 0.026831445890700623,
+     "flow_share_of_all": 0.006910741301059001
+    },
+    "0.8": {
+     "cells": 1,
+     "flow_share_of_near": 0.012311451529533387,
+     "flow_share_of_all": 0.0031709531013615734
+    },
+    "0.7": {
+     "cells": 1,
+     "flow_share_of_near": 0.012311451529533387,
+     "flow_share_of_all": 0.0031709531013615734
+    },
+    "0.5": {
+     "cells": 0,
+     "flow_share_of_near": 0.0,
+     "flow_share_of_all": 0.0
+    }
+   },
+   "worst_cos_below_0": 1,
+   "r_min": 0.6268049283863346
+  },
+  "20": {
+   "cells_near_surface": 108,
+   "split_subcells": 0,
+   "flow_share_near_surface": 0.29231905197092484,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 24,
+     "flow_share_of_near": 0.2422617445495766,
+     "flow_share_of_all": 0.0708177234955546
+    },
+    "0.95": {
+     "cells": 6,
+     "flow_share_of_near": 0.06356239259612,
+     "flow_share_of_all": 0.018580498344701532
+    },
+    "0.9": {
+     "cells": 5,
+     "flow_share_of_near": 0.05163667984844407,
+     "flow_share_of_all": 0.015094385300223329
+    },
+    "0.8": {
+     "cells": 4,
+     "flow_share_of_near": 0.04184351642891157,
+     "flow_share_of_all": 0.01223165705362925
+    },
+    "0.7": {
+     "cells": 4,
+     "flow_share_of_near": 0.04184351642891157,
+     "flow_share_of_all": 0.01223165705362925
+    },
+    "0.5": {
+     "cells": 2,
+     "flow_share_of_near": 0.02385142549535187,
+     "flow_share_of_all": 0.006972226088956405
+    }
+   },
+   "worst_cos_below_0": 5,
+   "r_min": 0.29022759298297174
+  },
+  "30": {
+   "cells_near_surface": 107,
+   "split_subcells": 0,
+   "flow_share_near_surface": 0.2679960059305879,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 30,
+     "flow_share_of_near": 0.318143841029694,
+     "flow_share_of_all": 0.0852612787073739
+    },
+    "0.95": {
+     "cells": 10,
+     "flow_share_of_near": 0.11335666704301682,
+     "flow_share_of_all": 0.030379134013132015
+    },
+    "0.9": {
+     "cells": 7,
+     "flow_share_of_near": 0.08445297504798464,
+     "flow_share_of_all": 0.022633060001815485
+    },
+    "0.8": {
+     "cells": 4,
+     "flow_share_of_near": 0.045432990854691206,
+     "flow_share_of_all": 0.012175860086538171
+    },
+    "0.7": {
+     "cells": 4,
+     "flow_share_of_near": 0.045432990854691206,
+     "flow_share_of_all": 0.012175860086538171
+    },
+    "0.5": {
+     "cells": 1,
+     "flow_share_of_near": 0.01300666139776448,
+     "flow_share_of_all": 0.0034857333050924387
+    }
+   },
+   "worst_cos_below_0": 4,
+   "r_min": 0.134266763982105
+  },
+  "37": {
+   "cells_near_surface": 116,
+   "split_subcells": 4,
+   "flow_share_near_surface": 0.2785667176939693,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 25,
+     "flow_share_of_near": 0.2300658137665892,
+     "flow_share_of_all": 0.06408867859455077
+    },
+    "0.95": {
+     "cells": 8,
+     "flow_share_of_near": 0.09096635461239384,
+     "flow_share_of_all": 0.025340198824960216
+    },
+    "0.9": {
+     "cells": 7,
+     "flow_share_of_near": 0.08351614935163666,
+     "flow_share_of_all": 0.023264819599324745
+    },
+    "0.8": {
+     "cells": 3,
+     "flow_share_of_near": 0.03753339559938313,
+     "flow_share_of_all": 0.01045555481602943
+    },
+    "0.7": {
+     "cells": 3,
+     "flow_share_of_near": 0.03753339559938313,
+     "flow_share_of_all": 0.01045555481602943
+    },
+    "0.5": {
+     "cells": 2,
+     "flow_share_of_near": 0.025022263732922087,
+     "flow_share_of_all": 0.006970369877352954
+    }
+   },
+   "worst_cos_below_0": 3,
+   "r_min": 0.15794692172279495
+  }
+ }
+}

@@ -39,6 +39,26 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
   its FD-only arbiter (``kn_fd{j}``, 4 x 16 seeds), the Kn 0.5 and free-molecular horizon
   tests against the whole run captured (``kn_hor_seed{i}``, ``fm_hor_s{s}``).  Results in
   ``scratch/bias/cluster/<name>.jsonl``.
+* ``cellgate`` (2026-10-11): FD gates of the per-cell backward fit (the shipped
+  ``ensemble_backward.CELL_BASIS``), ``bash scratch/cellfit/cluster_job.sh <name>`` (its
+  header documents each; results in ``scratch/cellfit/cluster/<name>.jsonl``): the Kn 0.5
+  squash at production density, every fit paired with the CRN FD (``sq_s1_seed{i}``, 16
+  seeds; ``sq_s0.6_seed{i}``, 8), and six optc iterates (:data:`OPTC_SHAPES`) with 16 seeds
+  each at Kn 0.5 (``optc_{shape}_kn_b{j}``, 4 seeds a job) and free-molecular
+  (``optc_{shape}_fm_b{j}``, 8 a job), FDs along the uniform shift and the cos 2 theta
+  mode.
+* ``optckn`` (2026-10-11): ``optc`` in the transitional regime (``--knudsen 0.5``, the 4 x 8
+  pull-back, the per-cell fit that makes it affordable) in a 3x longer box (:data:`LONG`:
+  15 m each side of the body; the free-molecular Adam runs grew through the outflow face
+  of the 10 m box and one
+  reached the inflow face) with the bodies also kept :data:`KEEPOUT` from every face
+  (``optimize.keep_inside``), Adam at ``S in OPTCKN_SEEDS`` and GD at 4,
+  :data:`OPTCKN_ITERATIONS` iterates (resumed across jobs).
+* ``optc2``: the free-molecular ``optc`` Adam runs again in the long box with the margin,
+  S = 4, 8.
+* ``squashkn2``: ``squashkn`` with the per-cell fit at ~10x the iterates per hour: Kn 0.5 at
+  S = 4, 8 (:data:`SQUASH_KN2_ITERATIONS` iterates), Kn 0.5 + M 10 at S = 2, 4 (fewer).
+  Its tags carry the basis (``optimize_squash``), so they never resume the per-query runs.
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, 250
   iterates (``--iterations 250``, resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -56,6 +76,7 @@ diffuse normal term and the silhouette term are not exercised.
 from __future__ import annotations
 
 import argparse
+import functools
 
 SEED_COUNTS = (1, 2, 4, 8)
 OPTIMIZERS = ("gd", "adam")
@@ -83,6 +104,22 @@ KN05 = "--knudsen 0.5 --a-max 64"
 # when exceeded (attempts_clipped / inflow_shortfall stop the job) -- nothing regrows them
 MACH10 = "--mach 10 --dt 2.5e-5 --slots 160000"
 KN05_M10 = f"--knudsen 0.5 {MACH10} --a-max 256"
+# cellgate: the optc iterates whose gradients are FD-checked (cluster_job.sh SHAPE): the
+# circle (control), S1-adam 50 / 100 / 200 (complex cut cells, 200 protrudes through the
+# outflow face), S8-adam 30 (before its inflow failure) and S2-gd 200
+OPTC_SHAPES = ("c0", "a50", "a100", "a200", "s8a30", "g200")
+KEEPOUT = 1.0  # m: two DSMC cells between the body and every box face
+# optckn / optc2 run in the 3x longer box centred on the body (forward.CASES["circle_long"]:
+# 15 m each side of the body centre) at fnum x2 (90 k slots, ~60 particles a cell), with a
+# longer empty-box warm-up: with the inflow 10 m from the centre the windowed drag was steady
+# from 1400 steps (700 read 2 % low free-molecular, 5 % at Kn 0.5;
+# scratch/cellfit/warmup_check.py); centred (15 m of inflow) 2100 / 2800 / 3500 steps read
+# 3.631 / 3.682 / 3.692 e-20 free-molecular: 2800
+LONG = "--case circle_long --fnum-scale 2 --warmup 2800"
+OPTCKN_SEEDS = (2, 4, 8)
+OPTCKN_ITERATIONS = 200
+SQUASH_KN2_ITERATIONS = 80
+KNPULLBACK = "--substeps 4 --partners 8"
 SPHERE_ARTIFACT = "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev"
 MODE2_ARTIFACT = (
     "ensemble_mesh_circle_levelset0.0625_gz0.05_grid2_mode2_f1_H700_M300_W200_virt1x2st_dev"
@@ -104,7 +141,65 @@ def seed_jobs(base: str, artifact: str, n_seeds: int) -> dict[str, str]:
 OPT_GROUPS = {"opt": ("fine", FINE), "optc": ("coarse", COARSE)}
 
 
+def _cellgate_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    names = [f"sq_s1_seed{i}" for i in range(16)] + [f"sq_s0.6_seed{i}" for i in range(8)]
+    for shape in OPTC_SHAPES:
+        names += [f"optc_{shape}_kn_b{j}" for j in range(4)]
+        names += [f"optc_{shape}_fm_b{j}" for j in range(2)]
+    return {name: f"bash scratch/cellfit/cluster_job.sh {name}" for name in names}
+
+
+def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    out = {}
+    for label, extra, seeds, iters in (
+        ("kn0.5", KN05, (4, 8), SQUASH_KN2_ITERATIONS),
+        ("kn0.5_M10", KN05_M10, (2, 4), SQUASH_KN2_ITERATIONS * 3 // 4),
+    ):
+        for s in seeds:
+            out[f"{label}_S{s}"] = (
+                f"python3 -m examples.mesh.optimize_squash --seeds-per-iterate {s} "
+                f"--iterations {iters} {extra}"
+            )
+    return out
+
+
+def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
+    """``optckn`` (``collisional``) / ``optc2``: the circle's optimisations in the long box
+    (:data:`LONG`) with the face margin, tags ``circle_long_[kn0.5_]S{S}_{opt}``."""
+    if collisional:
+        runs = [(s, "adam") for s in OPTCKN_SEEDS] + [(4, "gd")]
+        regime, extra, iters = "kn0.5_", f"{KN05} {KNPULLBACK}", OPTCKN_ITERATIONS
+    else:
+        runs, regime, extra, iters = [(4, "adam"), (8, "adam")], "", PULLBACK, 250
+    out = {}
+    for s, opt in runs:
+        out[f"opt_S{s}_{opt}"] = (
+            f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt} "
+            f"--optimizer {opt} --iterations {iters} --seeds-per-iterate {s} "
+            f"--workers {min(s, gpus_per_node)} {COARSE} {LONG} --step 0.05 --smooth 2 "
+            f"--band 1.0 --keepout {KEEPOUT} {extra}"
+        )
+    return out
+
+
+NEW_GROUPS = {
+    "cellgate": _cellgate_jobs,
+    "squashkn2": _squashkn2_jobs,
+    "optckn": functools.partial(_keepout_jobs, collisional=True),
+    "optc2": functools.partial(_keepout_jobs, collisional=False),
+}
+
+
 def jobs(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, str]:
+    """``{job name: command}`` of a group."""
+    if group in NEW_GROUPS:
+        return NEW_GROUPS[group](gpus_per_node)
+    return _jobs(group, gpus_per_node)
+
+
+def _jobs(group: str, gpus_per_node: int) -> dict[str, str]:
     if group == "sphere":
         base = (
             "python3 -m examples.ensemble_mesh --case sphere --body levelset --parameter radius "
@@ -163,6 +258,11 @@ def jobs(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, str]:
 
 def gpus(group: str, gpus_per_node: int = GPUS_PER_NODE) -> dict[str, int]:
     """GPUs per job: one per seed job; ``min(S, gpus_per_node)`` per optimisation."""
+    if group in ("optckn", "optc2"):
+        return {
+            name: min(int(name.split("_S")[1].split("_")[0]), gpus_per_node)
+            for name in jobs(group, gpus_per_node)
+        }
     if group not in OPT_GROUPS:
         return dict.fromkeys(jobs(group), 1)
     return {f"opt_S{s}_{opt}": min(s, gpus_per_node) for s in SEED_COUNTS for opt in OPTIMIZERS}
@@ -172,7 +272,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--group",
-        choices=("sphere", "mode2", "squash", "squashkn", "biasgate", *OPT_GROUPS),
+        choices=("sphere", "mode2", "squash", "squashkn", "biasgate", *NEW_GROUPS, *OPT_GROUPS),
         required=True,
     )
     ap.add_argument("--list", action="store_true", help="print the job commands, one per line")

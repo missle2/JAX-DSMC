@@ -39,4 +39,9 @@ if [ "${GPU_KIND}" = "mi100" ]; then export JAX_PLATFORMS=rocm; else export JAX_
 export XLA_PYTHON_CLIENT_PREALLOCATE=false   # several seed workers may share a GPU
 export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_enable_command_buffer=}"  # the WSL crash guard; harmless here
 export PYTHONUNBUFFERED=1
+# The repository root on the import path.  `python3 -m examples...` puts the working
+# directory there itself, but a plain `python3 scratch/<dir>/<script>.py` puts only the
+# script's own directory: every biasgate job of 2026-10-04 died on `import jax_dsmc`
+# (ModuleNotFoundError) for that reason.  job.sbatch runs from the repository root.
+export PYTHONPATH="${SLURM_SUBMIT_DIR:-${PWD}}${PYTHONPATH:+:${PYTHONPATH}}"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"

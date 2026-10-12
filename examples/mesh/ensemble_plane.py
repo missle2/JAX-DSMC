@@ -408,12 +408,19 @@ def main(argv=None):
     p.add_argument("--pullback", default="virtual", choices=("virtual", "sequential"))
     p.add_argument("--substeps", type=int, default=4)
     p.add_argument("--partners", type=int, default=8)
+    p.add_argument(
+        "--backward-basis",
+        default=ensemble_backward.CELL_BASIS,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+    )
     p.add_argument("--seeds", type=int, default=32)
     p.add_argument("--seed-start", type=int, default=32)
     p.add_argument("--output", type=Path, default=None)
     args = p.parse_args(argv)
     cfg = {k: getattr(args, k) for k in cfg}
-    tag = ensemble_backward.configure(args.pullback, args.substeps, args.partners, "staged")
+    tag = ensemble_backward.configure(
+        args.pullback, args.substeps, args.partners, "staged", args.backward_basis
+    )
     out = args.output or Path(RESULTS) / (
         f"ensemble_mesh_plane_{args.objective}{cfg['window']}_N{cfg['particles']}"
         f"_H{cfg['warmup']}_M{cfg['steps']}_d{cfg['diameter']:g}{tag}_dev.json"

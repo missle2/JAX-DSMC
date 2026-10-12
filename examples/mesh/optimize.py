@@ -83,6 +83,9 @@ def default_config():
             "adam_beta2": 0.999,
             "workers": 1,
             "frames_every": 50,
+            # the body's smallest distance to the box faces (keep_inside; 0 = unbounded,
+            # the optc runs of 2026-09-23 which grew through the outflow face)
+            "keepout": 0.0,
         }
     )
     return cfg
@@ -293,6 +296,41 @@ def surface_polyline(ls: LevelSet, lo, hi, n: int = 400):
     return paths
 
 
+def keep_inside(ls: LevelSet, lo, hi, margin: float) -> tuple[LevelSet, int]:
+    """The level set with the body kept ``margin`` away from every box face: ``phi`` at the
+    knots floored at ``margin - d_face`` (``d_face`` the distance to the nearest face,
+    negative outside the box), so the zero set cannot come nearer a face than ``margin``.
+    The optc runs of 2026-09-23 had no such bound: the Adam bodies grew through the outflow
+    face and one reached the inflow face (``inflow_shortfall``, S8 iterate 37).  Returns
+    the new level set and the number of knots the floor moved (0: inactive)."""
+    x = L.knots(ls)
+    d_face = jnp.min(jnp.minimum(x - jnp.asarray(lo), jnp.asarray(hi) - x), axis=1)
+    values = L.value(ls, x)
+    floored = jnp.maximum(values, margin - d_face)
+    moved = int(jnp.sum(floored > values))
+    if not moved:
+        return ls, 0
+    coef = L.interpolate(floored.reshape(ls.coef.shape))
+    return dataclasses.replace(ls, coef=coef), moved
+
+
+def constrain(ls, area0, lo, hi, margin, shift, passes: int = 12):
+    """Area and face margin together: alternate :func:`keep_inside` and
+    :func:`project_area` (the floor removes area next to a face, the uniform shift restores
+    it elsewhere) until the floor no longer moves a knot, ending on the floor (the margin is
+    exact, the area to the last pass's residual).  Returns ``(ls, total shift, knots the
+    first floor moved)``."""
+    ls, first = keep_inside(ls, lo, hi, margin)
+    moved = first
+    for _ in range(passes):
+        if not moved:
+            break
+        ls, extra = project_area(ls, area0, lo, hi)
+        shift += extra
+        ls, moved = keep_inside(ls, lo, hi, margin)
+    return ls, shift, first
+
+
 def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept whole
     out.mkdir(parents=True, exist_ok=True)
     hist_path = out / "history.json"
@@ -343,6 +381,9 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
         stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
         # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1
         new, shift = project_area(L.reinitialise(stepped), area0, lo, hi)
+        clipped = 0
+        if cfg["keepout"] > 0.0:
+            new, shift, clipped = constrain(new, area0, lo, hi, cfg["keepout"], shift)
         area = float(L.body_volume(new, lo, hi, 4))
         # predicted first-order decrease: g . delta coef (before the area projection)
         predicted = float(-eta * np.sum(g * direction))
@@ -360,6 +401,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
             "direction_max": scale,
             "eta": eta,
             "area_shift": shift,
+            "keepout_knots": clipped,
             "predicted_decrease": predicted,
             "seconds": time.time() - t0,
         }
@@ -454,6 +496,11 @@ def main(argv=None):
     # work there, so the cheap setting of the phase-D artifacts (1 x 2) is the default
     p.add_argument("--substeps", type=int, default=1)
     p.add_argument("--partners", type=int, default=2)
+    p.add_argument(
+        "--backward-basis",
+        default=ensemble_backward.CELL_BASIS,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+    )
     p.add_argument("--plot", action="store_true", help="only draw the figure from the artifacts")
     # worker mode of `parallel_terms` (internal): evaluate one level set on some seeds
     p.add_argument("--eval-coef", default=None, help=argparse.SUPPRESS)
@@ -463,7 +510,9 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     args = p.parse_args(argv)
     cfg = {k: getattr(args, k) for k in cfg}
-    ensemble_backward.configure(args.pullback, args.substeps, args.partners, "staged")
+    ensemble_backward.configure(
+        args.pullback, args.substeps, args.partners, "staged", args.backward_basis
+    )
     out = Path(RESULTS) / cfg["tag"]
     if args.eval_coef is not None:
         evaluate_worker(cfg, args.eval_coef, args.eval_seeds, args.eval_out, args.eval_frames_for)

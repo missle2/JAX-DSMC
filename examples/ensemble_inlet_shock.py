@@ -235,7 +235,7 @@ def device_backward(
             key,
             npc_max,
             neighbors,
-            "quadratic_full",
+            ensemble_backward.VIRTUAL_BASIS,
             chunk,
             substeps,
             partners,
@@ -245,6 +245,9 @@ def device_backward(
             normals=normals,
             collision_out=collision_out,
             columns_out=columns_out,
+            fallback_capacity=ensemble_device.fallback_capacity(
+                rec, normals, grid, npc_max, ensemble_backward.VIRTUAL_BASIS
+            ),
         )
     # the virtual pull-back's quadrature noise feeds back through the fits; with too few
     # partners for the cell occupancy it grows geometrically over a long horizon (K = 2
@@ -437,6 +440,11 @@ def main(argv=None):  # noqa: PLR0915 -- one CLI
     p.add_argument("--pullback", default="virtual", choices=("virtual", "sequential", "linearised"))
     p.add_argument("--substeps", type=int, default=4)
     p.add_argument("--partners", type=int, default=8)
+    p.add_argument(
+        "--backward-basis",
+        default=ensemble_backward.CELL_BASIS,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+    )
     p.add_argument("--nodes", default="staged", choices=("staged", "post"))
     p.add_argument("--device", action="store_true", help="backward on the device (JIT)")
     p.add_argument(
@@ -451,7 +459,9 @@ def main(argv=None):  # noqa: PLR0915 -- one CLI
     )
     p.add_argument("--output", type=Path, default=None)
     args = p.parse_args(argv)
-    tag = ensemble_backward.configure(args.pullback, args.substeps, args.partners, args.nodes)
+    tag = ensemble_backward.configure(
+        args.pullback, args.substeps, args.partners, args.nodes, args.backward_basis
+    )
     geometry = inlet_shock_geometry(args.particles, args.cells, args.dt)
     out = args.output or Path(RESULTS) / (
         f"ensemble_{args.parameter}_N{args.particles}_M{args.steps}"

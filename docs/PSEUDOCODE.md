@@ -2387,6 +2387,163 @@ pure cost there.  Skipping them when the attempts are zero is deliberately **not
 the collisional path must be the one every run exercises (no runtime collisionless
 shortcuts; HANDOFF section 1.10).
 
+#### 9.7.2 The per-cell field fit: one polynomial per collision cell (2026-10-11)
+
+**What it replaces.**  Every field value the virtual pull-back needs -- the node's own
+value `f_node`, the two post-collision ghosts `f_i, f_j` of each of the `K` virtual
+partners, and `f_prev, f_here` of the boundary move: `(3 + 2K) N` queries per substep,
+`19 N` at the shipped `4 x 8` -- used to be a **per-query** weighted fit
+(`field_query`): the `k` nearest nodes of the query's cell in the scaled `(x, v)` metric,
+weights `1 / (1 + (d / d_k)^2)`, a 14-column `quadratic_full` design centred on the query,
+a Cholesky solve per query.  Its cost is linear in `k` (Kn 0.5 squash, fnum x4, one seed:
+~300 s fixed + ~10.7 s per unit of `k`; k = 32 640 s, k = 64 965 s, k = 128 1660 s) and
+its answer depended on `k` (k = 32 -> 64: +1.6 +- 0.7 % of the shape gradient over 12
+seeds, flat from k = 64 on: k = 64, 96, 128 within 0.14 %; at k >= occupancy the fit uses
+the whole cell, its weights then only spanning `[1/2, 1]`).
+
+The per-cell fit forms **one** least-squares polynomial per collision cell per substep
+(`C` fits instead of `19 N`) and answers every query in the cell by evaluating it.  Module
+`jax_dsmc/cell_fit.py`; selected by `ensemble_backward.configure(..., basis=...)`
+(`VIRTUAL_BASIS`, read by `device_backward` and the relaxation example), the CLI flag
+`--backward-basis` of every example, default `ensemble_backward.CELL_BASIS`:
+
+    CELL_BASIS = "cell:quad:adapt1.5:align0.9:both"
+
+```
+# ---- fit (cell_fit.fit), once per cell per substep (and per field evaluation of the
+#      boundary move); node tables (C, P, .) from cell_nodes, values with R columns
+z      = concat(node_x, node_v) / scale           # scaled: cell widths, thermal speeds
+w      = valid                                    # unweighted (pool: x tricube, below)
+centre = sum(w z) / sum(w)                        # per cell (C, D+3)
+A      = features(z - centre, poly)               # (C, P, p) monomials, order <= 2|3
+keep_j = order(j) <= max order g with  cols(g) * adapt <= count     # the ORDER GUARD
+M      = A_kept^T diag(w) A_kept + ridge * tr(M)/#kept * I(non-intercept) + I(dropped)
+M      = I                      if the cell (or side) has no node   # value 0, finite
+beta   = solve(M, A_kept^T diag(w) y)             # batched LU, C solves; R columns at once
+# ---- evaluate (cell_fit.evaluate), every query: O(p) per query
+value(q) = features((z_q - centre[c_q]), poly) . beta[c_q]
+grad(q)  = d features / d z  . beta / scale       # jacfwd of the monomials (exact)
+```
+
+*Bases* (`"cell:<poly>[:opt]..."`): `mean` (1 column), `lin` (1 + D + 3), `quad` (the
+per-query fit's `quadratic_full`: `lin` + `v (x) v` + `x_d^2`, 14 in 2-D), `quadfull`
+(every product, 21), `cubicv` (`quad` + the 10 cubic monomials of `v`, 24), `cubic` (every
+monomial to order 3, 56).  Options: `adapt<a>` (the order guard above), `loo` (per cell
+the order 0..max of least leave-one-out residual sum `sum w (r_i / (1 - h_ii))^2`, the hat
+diagonal from `M^-1 A^T`), `pool<r>` (fit the `(2r+1)^D` block of cells, weights a tricube
+in each position offset from the cell's node mean with support `r + 1` cells, evaluated
+only in the cell), `ridge<e>` (default `1e-8`, relative), `rb` (below), and the surface
+options below.
+
+**Rao-Blackwellised partners (`rb`).**  With a polynomial field the expectation of a
+ghost over the VSS scattering angle is computable: the post-collision relative direction
+`n` has mean `E[cos chi] g_hat` and covariance
+`var(cos chi) g_hat g_hat^T + (1 - E[cos^2 chi]) / 2 (I - g_hat g_hat^T)` with
+`E[cos chi] = (alpha - 1)/(alpha + 1)`, `E[cos^2 chi] = 1 - 4 alpha / ((alpha + 1)(alpha + 2))`
+(`cos chi = 2 u^(1/alpha) - 1`), so six symmetric sigma points `mean +- sqrt(3) L_k`
+(`_scatter_sigma`) average any quadratic exactly (any `alpha`; cubics only at
+`alpha = 1`).  Measured against a 4e5-sample Monte Carlo of `vss.scatter` (within 1.3 se
+for quadratics at `alpha = 1, 1.4`).
+
+**Next to surfaces (the one-sided form).**  With `normals` (`shape.local_normals`: each
+slot's nearest surface normal within a cell width, zero elsewhere; any `D`, normals and
+velocities are 3-vectors) the carried value jumps across `v . n = 0` (about to hit / just
+left), which no polynomial in `v` represents.  `fit_split` fits each cell three times:
+```
+n_c, R_c   = unit mean of the cell's node normals, |sum n_i| / #(n_i != 0)
+complex_c  = R_c < align                          # one normal does not describe the cell
+ahead      = fit(nodes with v . n_c > 0,  adapt >= 1)      # `own`: v_i . n_i > 0
+behind     = fit(nodes with v . n_c <= 0, adapt >= 1)
+both       = fit(all nodes)
+value(q)   = both                    if n_q = 0 (no surface near: the per-query rule)
+           = both                    if q's side is empty, or (option `both`) complex_c
+           = ahead / behind          by the sign of v_q . n_c      (`own`: v_q . n_q)
+```
+A side holds about half the nodes, so its order is always guarded (`adapt` floor 1); an
+empty side's matrix is the identity (finite) and defers to `both` -- without this a
+partner ghost landing on an empty side read a singular fit (NaN on the optc shapes).
+`align<r>` marks the complex cells: by default their queries go to the per-query
+one-sided fit (`_Hybrid`: the queries of complex cells compacted into a static buffer of
+`fallback_capacity` = the largest per-step count from `complex_load`, sized on the host by
+`ensemble_device.fallback_capacity`, bucketed to 256); `nofallback` keeps the split fit
+there, `both` the two-sided fit (the shipped choice -- see the measurements: the
+per-query one-sided fit is unstable on complicated geometry, so the fallback inherits
+its failure).  With every cell complex the hybrid **is** the per-query one-sided backward
+(`tests/test_cell_fit.py`, and `scratch/cellfit/check_split_nd.py` in 1, 2 and 3-D:
+relative difference 0).
+
+**Why one polynomial per cell is the right object.**  The collision operator only sees
+the part of `lambda` that is not a collision invariant: a field in the span of
+`(1, v, |v|^2)` gives `four = f_i + f_j - f_node_i - f_node_j = 0` for every pair.  What
+the pull-back needs is the cell's `v`-dependence beyond the invariants, which is a
+property of the cell's population, not of a neighbourhood of each query -- so the
+per-query weights add nothing but cost, and their variation with `k` was a bias.  But a
+cell's ~40 nodes carry values that are mostly noise: on a squash snapshot (k = 64
+backward) the cell mean predicts held-out nodes at the noise floor (CV mse 3.0e-12 vs the
+values' variance 3.1e-12) while every unguarded quadratic (per query k = 32 / 64, or per
+cell) overfits to 3x it (9.7 / 8.9 / 9.3e-12), mostly in cells of < 20 nodes.  An
+underdetermined quadratic in a sparse cell answers the partners' ghosts with
+extrapolated noise, and the backward recursion compounds it.  The order guard bounds the
+columns by the nodes.  (Value cross-validation cannot rank the bases for the backward:
+the cell mean wins it and has no collision term at all.  The gradients against FD do.)
+
+**Measured** (scripts and data `scratch/cellfit/`, `scratch/collconv/`; FD = per-seed
+CRN central difference, h = 0.2; paired = same forward per seed):
+
+*Kn 0.5 squash, s = 1, fnum x4, 4 x 8, 12 seeds (FD 0.01597 +- 0.00026):*
+
+| backward fit | gradient | vs FD | vs k = 64, sd per seed (max) | seed / backward |
+|---|---|---|---|---|
+| per-query k = 32 | 0.01541 +- 0.00025 | -3.5 +- 1.8 % | 2.5 % (6.0) | 670 s / ~550 s |
+| per-query k = 64 | 0.01565 +- 0.00030 | -2.0 +- 2.0 % | -- | 985 / 897 s |
+| `cell:quad` (unguarded) | 0.01665 +- 0.00107 | +4.3 +- 7.9 % | 28 % (95: seed 11 +97 %) | 98 / 13 s |
+| `cell:quad:rb` | 0.01544 +- 0.00057 | -3.3 +- 4.0 % | 11 % (34) | 112 / 27 s |
+| **`cell:quad:adapt1.5`** | **0.01566 +- 0.00024** | **-1.9 +- 2.3 %** | 5.3 % (13) | **95 / 13 s** |
+| `cell:cubicv:adapt1.5` | 0.01611 +- 0.00019 | +0.9 +- 1.8 % | 5.5 % (15) | 103 / 20 s |
+| `cell:quad:pool1` (3 seeds) | 0.01452 +- 0.00030 | (3 seeds: -10.9 +- 4.4 %) | 3.8 % | 131 / 53 s |
+
+*`rb` and backward noise* (0-D relaxation, 8 forwards x 8 partner keys): the backward's
+own Monte Carlo sd falls 1.37 -> 0.91 % of the gradient at 4 x 8 and 2.95 -> 1.85 % at
+4 x 2 (variance / 2.2) -- real, but it does not cure the sparse-cell instability (seed 10
+-40 %).
+
+*The stored collisional gates* (`examples/gradient_bench/results`, re-run with the
+per-cell bases, paired with their per-query k = 32 runs; `scratch/cellfit/gates*.jsonl`):
+0-D relaxation `t_x` (24 seeds) `cell:quad` +0.0 % vs FD, +0.3 +- 0.7 % vs k = 32; Couette
+speed / energy / shear windows (8 artifacts incl. the one-sided wall fits, 32 seeds)
+within 0.2 % of k = 32; Couette wall temperature +0.3 +- 1.3 % (the one-sided shear
+windows +4.5 +- 7 %, their FD is +- 280 %); inlet `nrho` / `temp` +0.7 +- 0.3 / +2.0 +-
+1.1 %; relaxation kernel `diameter` / `omega` +1.2 +- 0.3 / -0.3 +- 0.6 %.  These cells
+hold <= ~40 nodes, so the order guard rarely engages there.
+
+*Complicated geometry* (`scratch/cellfit/geometry_survey.py`, `geom_gate.py`): over the
+optc iterates (S1-adam 0..250, S8-adam 10..37, S2-gd 100/200) the cells whose normals do
+not agree (`R < 0.9`) hold at most 6 % of the flow (`R < 0.8`: 5 %), and up to 24 cells
+contain opposed normals.  On S1-adam iterate 100 at Kn 0.5 (fnum x4) the per-query
+**one-sided** backward diverges (lambda rms x150, `g . 1` +0.11 vs the FD -0.005), and so
+does every per-cell variant that falls back to it; on seed 2 the two-sided per-query k = 32
+also failed (+0.018 vs FD -0.0055) and the unguarded `cell:quad` (-0.027).  Only the
+guarded per-cell fits stayed stable: `g . 1` two-sided -0.0049 / -0.0044, split with
+complex cells two-sided -0.0035 / -0.0038 (FD -0.0046 / -0.0055); the split everywhere
+flipped sign on seed 2.  The circle at the same settings: every fit sane.
+
+**Selection and why.**  `cell:quad:adapt1.5` is the cheapest basis that is stable,
+unbiased within the measurements' resolution (matches k = 64 to 0.05 +- 1.5 % and the FD
+to -1.9 +- 2.3 %) and no noisier across seeds than the per-query fit, at a tenth of a
+seed's time (the backward 13 s of a 95 s seed).  `cubicv:adapt1.5` sits +3 % above
+k = 64 and +0.9 % above FD -- not distinguishable from `quad` at 12 seeds, at 1.5x the
+backward cost; kept as an option.  Unguarded `quad` and `rb` are rejected (heavy-tailed,
+unstable); `pool1` smooths across cells and read low (3 seeds).  With normals the split
+adds `align0.9:both` (two-sided in the <= 6 % of complicated cells) instead of the
+per-query fallback, whose one-sided fit is the unstable piece.  Open: the cluster gates
+(`study.py --group cellgate`) at production density (fnum x1), 16 squash seeds and six
+optc shapes x 16 seeds against FD.
+
+*Tests*: `tests/test_cell_fit.py` (polynomial reproduction for every basis, the
+least-squares solution and exact slopes, the order guard's column caps, finite empty
+sides deferring to `both`, sigma points vs Monte Carlo, the all-complex hybrid equal to
+the per-query one-sided backward).
+
 ### 9.5 Tests (`tests/test_move.py`), parametrised over `D in {1, 2, 3}`
 
 - periodic: particle count and total energy exactly conserved over 1e4 steps; a particle pushed

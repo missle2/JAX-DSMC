@@ -417,7 +417,92 @@ over the horizon.
 \label{sec:field}
 
 P3 uses a weighted local \emph{affine} fit in $(x, v_1, v_2, v_3)$ on retained
-particles (section~5.4 there).  Here the interpolant is cell-local and quadratic.
+particles (section~5.4 there).  Here the interpolant is cell-local and quadratic, in two
+forms: since 2026-10-11 the collision pull-back's value field is \textbf{one polynomial per
+collision cell} (this section's first part); the slopes of the shape adjoint and the host
+backward keep the per-query fit of the second part, which was also the device pull-back's
+until then.
+
+\paragraph{The per-cell fit (the device virtual pull-back).}
+\label{sec:field-cell}
+The virtual pull-back evaluates the field at $(3+2K)N$ queries per substep: each node at its
+own state, the two post-collision ghosts of each of its $K$ virtual partners, and the two
+states of the boundary move.  Each collision cell $c$ holds $n_c$ alive nodes at scaled
+states $\tilde p_n = (x_n/\Delta x,\; v_n/v_{\mathrm{scale}})$ with carried values $\lambda_n$.  With
+the node mean $\bar p_c = n_c^{-1}\sum_{n\in c}\tilde p_n$ and the offsets $o = \tilde p - \bar p_c$, the
+cell's coefficients solve the unweighted least-squares problem
+\begin{equation}
+\label{eq:cell-fit}
+\Big(\textstyle\sum_{n \in c} \phi_n^{\mathcal K} \phi_n^{\mathcal K\top} + \rho\,\bar d\,\operatorname{diag}(0, 1, \dots, 1)
+ + I_{\bar{\mathcal K}}\Big)\beta_c = \sum_{n\in c} \phi_n^{\mathcal K} \lambda_n ,
+\qquad \phi_n^{\mathcal K} = \phi(o_n)\big|_{\mathcal K_c},
+\end{equation}
+with the design $\phi$ of~\eqref{eq:design} (\code{cell\_fit.features(.., "quad")}, the same
+14 columns in 2-D) restricted to the kept columns $\mathcal K_c$, the dropped columns
+$\bar{\mathcal K}$ masked to an identity block (their coefficients are $0$), and every query in
+$c$ reads
+\begin{equation}
+\label{eq:cell-value}
+\Lam(x_q, v_q) = \phi(\tilde p_q - \bar p_c)\cdot\beta_c, \qquad
+\nabla \Lam = \partial_o\phi(\tilde p_q - \bar p_c)\cdot\beta_c \,/\, \mathrm{scale}.
+\end{equation}
+\emph{The order guard.}  Group the columns by polynomial order $g = 0, 1, 2$ with cumulative
+counts $m_0 = 1$, $m_1 = 1 + D + 3$, $m_2 = 14$ (2-D); keep the orders $g \le g_c$ with
+$g_c = \max\{g : 1.5\, m_g \le n_c\}$ (\code{adapt1.5}): a cell of fewer than 21 nodes fits a
+plane, fewer than 9 its mean, an empty cell nothing (value $0$; its matrix the identity).
+
+\emph{Next to a surface.}  With the nearest-surface normals $n_i$ of the slots (within a
+cell width, else $0$) the carried value jumps across $v\cdot n = 0$ (a particle about to
+hit carries its imminent reward, one that just left does not), which no polynomial in $v$
+represents.  Per cell: $n_c = \sum_i n_i / |\sum_i n_i|$ and the resultant
+$R_c = |\sum_i n_i| / \#\{i : n_i \ne 0\}$.  Three fits~\eqref{eq:cell-fit} over the nodes with
+$v\cdot n_c > 0$ (\emph{ahead}), $v \cdot n_c \le 0$ (\emph{behind}) and all (\emph{both}), the
+sides always guarded at $1.0\,m_g \le n$; a query with normal $n_q$ reads
+\begin{equation}
+\label{eq:cell-split}
+\Lam(x_q, v_q) = \begin{cases}
+\Lam_{\mathrm{both}} & n_q = 0,\ \text{or its side is empty, or } R_c < 0.9,\\
+\Lam_{\mathrm{ahead}} & v_q\cdot n_c > 0,\\
+\Lam_{\mathrm{behind}} & \text{otherwise.}
+\end{cases}
+\end{equation}
+The cells with $R_c < 0.9$ (normals that disagree: corners, opposed faces, curvature at the cell
+scale; $\le 6\,\%$ of the flow on the optimiser's shapes) stay two-sided (\code{both}); the
+alternative of answering their queries with the per-query one-sided fit (the default without
+\code{both}: a static buffer of the complex cells' queries, \code{\_Hybrid},
+\code{ensemble\_device.fallback\_capacity}) is exact in the limit of every cell complex
+but inherits that fit's divergence on complicated geometry.
+
+\emph{Why this form.}  The collision operator only sees the part of $\lambda$ outside the
+collision invariants: for $\lambda \in \operatorname{span}(1, v, |v|^2)$ every four-term
+$\Lam(v_i') + \Lam(v_j') - \Lam(v_i) - \Lam(v_j)$ of~\eqref{eq:virtual} vanishes.  What the pull-back
+needs is the cell population's velocity structure beyond the invariants, a property of the
+cell rather than of a neighbourhood of each query; the per-query weights added cost
+($\propto k$) and a dependence on $k$ (Kn 0.5 squash: $k = 32 \to 64$ moved $\dd D/\dd s$ by
+$+1.6\pm0.7\,\%$ over 12 seeds, flat from $k = 64$, where the fit spans the cell and its weights
+only range over $[\tfrac12, 1]$).  The per-cell fit has no $k$ and costs $C$ solves per substep
+instead of $(3+2K)N$.  The guard is what makes it stable: a cell's values are mostly noise (on a
+squash snapshot the cell mean predicts held-out nodes at the noise floor), and an
+underdetermined quadratic in a sparse cell answers the partner ghosts with extrapolated
+noise that the backward recursion compounds; without the guard one seed in twelve read
+$+97\,\%$.
+
+\emph{Measured} (validation deck, section V): Kn 0.5 squash, 12 seeds, against the per-seed CRN FD:
+guarded per-cell $-1.9\pm2.3\,\%$, per-query $k = 64$ $-2.0\pm2.0\,\%$, $k = 32$ $-3.5\pm1.8\,\%$; a seed
+985\,s $\to$ 95\,s (the backward 897\,s $\to$ 13\,s); every stored collisional gate within its paired
+error of the per-query runs; stable on the optimiser's complicated shapes where the per-query
+one-sided fit diverged.  Shipped: \code{ensemble\_backward.CELL\_BASIS} $=$
+\code{"cell:quad:adapt1.5:align0.9:both"} (\code{jax\_dsmc/cell\_fit.py}); \code{"quadratic\_full"}
+selects the per-query fit below.  Options (evaluated, not shipped): other polynomial
+bases, leave-one-out order selection, pooled fits, and the Rao--Blackwellised partners,
+whose ghosts are the field's expectation over the VSS angle --- the post-collision direction
+has mean $\E[\cos\chi]\,\hat g$ and covariance
+$\operatorname{var}(\cos\chi)\,\hat g\hat g^\top + \tfrac12(1 - \E[\cos^2\chi])(I - \hat g\hat g^\top)$,
+$\E[\cos\chi] = \frac{\alpha - 1}{\alpha + 1}$, $\E[\cos^2\chi] = 1 - \frac{4\alpha}{(\alpha+1)(\alpha+2)}$, and six
+symmetric sigma points average any quadratic exactly.
+
+\paragraph{The per-query fit (slopes of the shape adjoint; the host backward).}
+\label{sec:field-knn}
 For a query $(x_q, v_q)$ in cell $c$, the nodes are the alive particles of $c$ with
 the current node velocities, in the scaled coordinates
 $\tilde p = (x/\Delta x,\; v/v_{\mathrm{scale}})$ (cell width per axis; a thermal speed).
@@ -829,7 +914,7 @@ next hit's reward, and the fitted $\partial\lambda/\partial v_x$ reads the mixtu
 $d(2 m v_x)/dv$ times the hit probability.  On the specular capsule (review
 section~7.9) this is a $-27\,\%$ bias of the total against the CRN FD, entirely in the
 $\nabla_x\lambda$, $\nabla_v\lambda$ parts, whose true value is zero: for a convex body
-in a collisionless flow a reflected particle never re-hits, and the own-reward (tally)
+in a collisionless flow a reflected particle never re-hits, and the hit-reward (tally)
 term alone reproduces the FD seed by seed.  The record holds every particle's future,
 so the class is exact: the nodes of a query are the particles of its own class,
 \begin{equation}
@@ -1075,7 +1160,7 @@ computed before the projection and is therefore an upper bound on the decrease.
   $\nabla\lambda = P\nabla\lambda_1 + (1-P)\nabla\lambda_0 + \nabla P\,(\lambda_1-\lambda_0)$,
   $P$ the probability of a later hit.  Squash runs use \code{value\_class="none"}; the
   \code{optc} study ran with the class on.  Slides:
-  \code{docs/math/shape\_sensitivities\_slides.tex}.
+  \code{docs/math/shape\_validation.tex}.
 \item The diffuse circle meets the criterion against the noisy FD but is 9\,\% low
   against the precise one ($z = -2.3$; silhouette 61\,\% of the total).  More seeds
   and a band sweep are pending.

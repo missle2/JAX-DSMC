@@ -1,0 +1,666 @@
+% docs/math/shape_derivation_body.tex
+% The frames of the shape-sensitivity derivation, shared by the presentation deck
+% (shape_derivation.tex) and the documentation deck (shape_derivation_code.tex): the two
+% decks match frame for frame; \codenote{...} is shown in the documentation deck only.
+% Describes the estimator as implemented on main (2026-10-09).
+
+% ---------------------------------------------------------------------------------------
+\section{Problem}
+
+\begin{frame}{Outline}
+\begin{enumerate}
+\item The problem: the Boltzmann equation on a body-dependent domain; a windowed drag objective
+\item DSMC as a Markov chain, and every place the geometry enters it
+\item The value function (adjoint), carried on the particles and pulled back through
+  moves and collisions
+\item The first variation of one step: pathwise, hit-reward, score, boundary and operator terms
+\item The seven terms of the shape gradient, one by one
+\item Assembly, the optimiser, and what is exact and what is approximate
+\end{enumerate}
+\vspace{1em}
+Notation: step $k$, time step $\Delta t$, $F_{\mathrm{num}}$ molecules per simulator
+particle, superscript $m$ = the state after the move of step $k$ (before its collisions).
+\codenote{Mathematical reference note \code{docs/math/ensemble\_adjoint.tex}; validation
+history and findings: \code{docs/math/shape\_validation.tex}.  Entry points:
+\code{examples/ensemble\_mesh.py} (one seed's gradient), \code{examples/mesh/optimize.py},
+\code{examples/mesh/optimize\_squash.py} (optimisers).  Library: \code{jax\_dsmc/shape.py}
+(shape terms), \code{jax\_dsmc/ensemble\_device.py} (value backward, fits),
+\code{jax\_dsmc/mesh/levelset.py} (body).}
+\end{frame}
+
+\begin{frame}{The kinetic problem}
+Flow domain $\Omega(\theta) = \text{box}\setminus B(\theta)$; the body is a $C^1$ level set
+\[
+B = \{x : \phi(x; c) < 0\},\qquad \phi(x;c) = \sum_j c_j B_j(x),\qquad n = \nabla\phi/|\nabla\phi| ,
+\]
+$B_j$ cubic B-splines on knots of spacing $h_\phi$, $n$ pointing into the flow.
+Boltzmann equation for the one-particle density $f(t,x,v)$ in $\Omega(\theta)$:
+\[
+\partial_t f + v\cdot\nabla_x f = Q(f,f),
+\]
+inflow (drifting Maxwellian flux) at $x = 0$, outflow at $x = L$, specular $y$ walls, and on
+the body, for $v\cdot n > 0$,
+\[
+|v\cdot n|\, f(x, v) = \int_{v'\cdot n<0} K(v' \to v;\, n)\, |v'\cdot n|\, f(x, v')\,\dd v',
+\quad K = (1-a)\,\delta(v - R_n v') + a\, q_w(v\mid n),
+\]
+$R_n v' = v' - 2(v'\cdot n)\,n$; $q_w$ the diffuse half-Maxwellian of the wall.
+A coefficient change moves the surface along its normal by
+$V_n = -\delta\phi/|\nabla\phi| = -\sum_j \delta c_j B_j/|\nabla\phi|$: every control is a
+normal displacement, chained through $c(\theta)$.
+\codenote{\code{mesh/levelset.py} (\code{LevelSet}, \code{value}, \code{hit\_body};
+\code{levelset\_h} $= 0.0625$, 16 samples).  Controls: \code{ensemble\_mesh.levelset\_coef},
+\code{PARAMETERS} (\code{radius}, \code{centre\_x}, \code{mode2}, \code{width},
+\code{squash\_y}), or all coefficients (\code{optimize.py}).  Config \code{acc} $= a$.  Cases:
+\code{examples/mesh/forward.py::CASES}.}
+\end{frame}
+
+\begin{frame}{The objective: windowed drag}
+Mean $x$-force on the body over a window of $W$ steps:
+\[
+D(\theta) = \frac{1}{W\Delta t}\int_{t_1}^{t_2}\!\!\int_{\partial B}\int_{v\cdot n<0}
+m\,\big(v - \vout(v)\big)_x\,|v\cdot n|\, f\,\dd v\,\dd S\,\dd t .
+\]
+In DSMC it is the expectation of a sum of \emph{per-hit rewards}:
+\[
+D = \E\Big[\sum_{k\in\text{window}}\ \sum_{\text{body hits } j \text{ of step } k} r_{k,j}\Big],
+\qquad
+r_{k,j} = \frac{F_{\mathrm{num}}}{W\Delta t}\, m\,\big(\vin_{k,j} - \vout_{k,j}\big)_x .
+\]
+For a diffuse hit $\vout$ is the drawn re-emission velocity.
+
+\medskip
+Squash study: $J(s) = D(s) - \lambda_A\,A(s)$, an ellipse with semi-axes $R$ and $sR$,
+$A(s) = \pi R^2 s$ exact, $\lambda_A$ fixed so that the free-molecular optimum is $s^* = 0.35$.
+Only $\dd D/\dd s$ needs the adjoint.  No state reward, no terminal reward.
+\codenote{\code{ensemble\_mesh.\_drag\_reward} (per hit; window = the last \code{window}
+$= 200$ of \code{steps} $= 300$ captured steps after \code{warmup} $= 700$),
+\code{objective\_value} (the same sum from the surface tallies: the reported $D$).
+\code{optimize\_squash.reference} (free-molecular $D$, $\dd D/\dd s$, $\dd A/\dd s$),
+\code{seed\_gradient}; history rows \code{dD\_ds}, \code{J\_prime}.}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\section{DSMC}
+
+\begin{frame}{DSMC as a Markov chain}
+State $Z_k = \{(x_i, v_i, a_i)\}_{i=1}^N$ over fixed slots ($a$ = alive).  One step:
+\begin{center}
+\begin{tikzpicture}[node distance=4mm, every node/.style={font=\small},
+  box/.style={draw, rounded corners=2pt, inner sep=3pt, fill=gray!8}]
+\node[box] (z) {$Z_k$};
+\node[box, right=of z] (m) {move + walls $\mathcal W_\theta$};
+\node[box, right=of m] (i) {inject};
+\node[box, right=of i] (s) {sort to cells};
+\node[box, right=of s] (c) {collide (NTC/VSS) $\mathcal C_\theta$};
+\node[box, right=of c] (z1) {$Z_{k+1}$};
+\draw[-{Stealth}] (z) -- (m); \draw[-{Stealth}] (m) -- (i); \draw[-{Stealth}] (i) -- (s);
+\draw[-{Stealth}] (s) -- (c); \draw[-{Stealth}] (c) -- (z1);
+\node[below=1mm of m, font=\scriptsize] {$Z_k^m$: post-move};
+\end{tikzpicture}
+\end{center}
+\textbf{Common random numbers.} Every stage draws from a key fixed by (seed, step, stage),
+so with the key fixed each stage is a deterministic function of its input: a run can be
+recorded and replayed exactly, and two geometries see the same random numbers.
+
+\medskip
+\textbf{Where $\theta$ enters the forward}
+\begin{enumerate}
+\item[(a)] the move: hit times, hit points, normals, specular $\vout = R_n\vin$, bounce chains;
+\item[(b)] the per-hit reward itself, through $\vout(n)$;
+\item[(c)] the diffuse re-emission law $q_w(\cdot\mid n)$;
+\item[(d)] the hit set: which particles hit, and in which step;
+\item[(e)] the collisions: NTC's attempt count carries the cut-cell flow volume $V_c(\theta)$.
+\end{enumerate}
+\codenote{\code{simulate.\_step}; \code{simulate.run(capture=True)} $\to$ \code{EventRecord}
+(post-move \code{x}, \code{v}, \code{alive}, \code{born\_face}, \code{PairRecord} per attempt
+slot, \code{WallEvents}); \code{rng.key\_for}$(\kappa, k, \text{stage})$; config
+\code{record="lean"}.}
+\end{frame}
+
+\begin{frame}{NTC collisions and the cut-cell volume}
+In cell $c$ with $N_c$ particles and flow volume $V_c$, the attempt count is a stochastic
+rounding of
+\[
+\bar n_{\mathrm{att},c} = \tfrac12\,N_c(N_c-1)\,\Sigma_c\,\Delta t\,F_{\mathrm{num}}/V_c ,
+\]
+each attempt draws a pair uniformly and accepts it with probability $q(g)/\Sigma_c$,
+$q(g) = \sigma_T(g)\,g$ the VSS rate, $\Sigma_c$ a majorant; an accepted pair scatters
+with the VSS law.  Hence
+\[
+\Pr\{\text{pair } (i,j) \text{ collides in step } k\} \approx \frac{q(g_{ij})\,\Delta t\,F_{\mathrm{num}}}{V_c}
+\quad\propto\quad \frac{1}{V_c(\theta)},
+\]
+and a particle's expected collisions per step are
+$\nu\Delta t \approx (2\bar n_{\mathrm{att},c}/N_c)\,\E[q/\Sigma_c]$.
+
+\medskip
+$V_c(\theta) = |c\cap\Omega(\theta)|$: a cut cell's collision probabilities depend on the shape.
+A cell that the body splits into disconnected flow regions gets one collision cell per region.
+
+\medskip
+Kn $= \lambda_{\mathrm{mfp}}/2R = 0.5$ on the squash case: $\nu\Delta t\approx 2.5\,\%$ per step; free-molecular: $0$.
+\codenote{\code{collide/ntc.py}: \code{attempt\_count} (stochastic rounding),
+\code{certified\_majorant}; \code{collide/vss.py}: \code{collision\_rate}, \code{scatter}.
+Cut volumes by stratified sub-sampling (\code{GridSpec.volume}); split cells
+(\code{collision\_cell}, PSEUDOCODE 4.5).  Config \code{knudsen} (\code{knudsen\_density}),
+\code{a\_max} (attempt slots per cell and step; 64 at Kn 0.5).}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\section{Adjoint}
+
+\begin{frame}{The value function}
+Value of one particle at the post-move instant of step $k$:
+\[
+\lambda_k(x, v) = \frac{\delta D}{\delta f^m_k(x,v)}
+= \E\big[\text{rewards collected from } t^m_k \text{ on} \;\big|\; \text{one particle at } (x,v)\big].
+\]
+For a Boltzmann gas it solves the adjoint equation, backward in time,
+\[
+-\partial_t\lambda - v\cdot\nabla_x\lambda = \Lstar_f\lambda + r,\qquad
+(\Lstar_f\psi)(v) = \!\int\! f(w)\!\int\! q\,\big[\psi(v') + \psi(w') - \psi(v) - \psi(w)\big]\,\dd\sigma\,\dd w ,
+\]
+with, at a specular wall, $\lambda(x_w, \vin) = r(\vin) + \lambda(x_w, R_n\vin)$, and at a
+diffuse wall the expectation over the re-emission.
+
+\medskip
+\textbf{Particle-carried form.}  The PDE is never solved.  One value per particle, at that
+particle's own state, is carried backward through the recorded run:
+\[
+\mu_{k+1}\ \xrightarrow{\ \text{collision pull-back}\ }\ \lambda^m_k\
+\xrightarrow{\ \text{move pull-back}\ }\ \mu_k ,
+\]
+$\mu_k$ the values at the start of step $k$, $\lambda^m_k$ at its post-move state.
+\codenote{\code{ensemble\_device.backward\_virtual} $\to$ \code{Backward.lam} ($M\times N$:
+$\lambda^m_k$ per captured step and slot).  The objective's value and the timing-reward
+value (along-flight identity) run as one two-column sweep: \code{ensemble\_mesh.\_backwards}
+(\code{columns\_out=True}).}
+\end{frame}
+
+\begin{frame}{Backward through the move}
+A particle that survives the move of step $k$ keeps its value and collects the rewards of
+the hits it made during the move:
+\[
+\mu_{k,i} = \ind\big[a^m_{k,i}\wedge\neg\,\mathrm{born}_{k,i}\big]
+\Big(\lambda^m_{k,i} + \sum_j r_{k,j,i}\Big).
+\]
+\begin{itemize}
+\item Specular walls are deterministic maps: the value moves with the particle.
+\item A diffuse wall is a Markov kernel; its realised re-emission is a sample of it, so the one
+  carried value estimates $\E[\lambda(\text{after})\mid\text{before}]$ without bias
+  (tower property), however many bounces the step has.
+\item Particles absorbed or leaving the box carry $0$; a particle born in step $k$ carries
+  nothing to $t_k$ (it did not exist).
+\end{itemize}
+\codenote{\code{ensemble\_device.\_move\_pullback}, \code{\_step\_pullback\_virtual};
+survivors \code{alive \& (born\_face < 0)}; per-hit rewards from \code{shape.replay}
+(\code{HitRewards.totals()}, one total per slot and step).}
+\end{frame}
+
+\begin{frame}{Backward through the collisions: virtual partners}
+The collision step applies $e^{\Delta t\,\Lstar}$ to the values; it is applied in $S$ substeps.
+In each, every particle $i$ of cell $c$ draws $K$ partners $j_\kappa$ uniformly from the
+other particles of $c$, and fresh VSS angles:
+\[
+\lambda_i \mathrel{+}= \sum_{\kappa=1}^K w_{i\kappa}\big[\Lam(v_i') + \Lam(v_{j_\kappa}') - \Lam(v_i) - \Lam(v_{j_\kappa})\big],
+\qquad
+w_{i\kappa} = \frac{q(g_{i\kappa})}{\Sigma_c}\,\frac{2\,n_{\mathrm{att},c}}{N_c}\,\frac{1}{KS},
+\]
+$\Lam$ one smooth fit of the current values in the cell (next frames).  The weight is the
+expected number of collisions of $i$ in the step (attempts per particle $\times$ acceptance)
+spread over $KS$ samples; all four values come from one fit, so their errors cancel.
+\begin{itemize}
+\item Substep $s$ fits on the velocities as they stood at that point of the NTC sweep
+  (``staged'' nodes, reconstructed from the record's slot order); a particle whose
+  velocity changed across a substep boundary moves its value through the fit.
+\item Splitting error $O(\Delta t/S)$; noise far below one realised pair per collision.
+\end{itemize}
+\textbf{The collision increment} of slot $i$ in step $k$,
+$\;c_{k,i} = \sum_{\text{substeps}}\sum_\kappa w_{i\kappa}\Phi_{i\kappa} \approx \Delta t\,(\Lstar\lambda)_i$,
+is kept: the along-flight, order and cut-volume terms use it.
+\codenote{\code{ensemble\_device.\_substep}, \code{\_partner\_pass}, \code{staged\_velocities},
+\code{\_boundary\_move}; \code{ensemble\_backward.configure("virtual", S, K, "staged")},
+default $(S,K) = (4,8)$, collisionless runs $(1,2)$.  \code{backward\_virtual(collision\_out=True)}
+$\to$ \code{Backward.collision} ($c_{k,i}$, f32, objective column) and
+\code{Backward.cell\_collision} (per-cell sums, f64).  Stability guard: rms $\lambda$ growth
+$\le$ \code{GROWTH\_LIMIT} $= 100$ (\code{ensemble\_inlet\_shock.device\_backward}).}
+\end{frame}
+
+\begin{frame}{The value field of the collision pull-back: one polynomial per cell}
+The pull-back needs $(3+2K)N$ field values per substep (the node, two ghosts per virtual partner, the
+boundary move).  In the scaled coordinates $\tilde p = (x/\Delta x,\ v/v_{\mathrm{s}})$, $v_{\mathrm{s}} = \sqrt{kT/m}$,
+each collision cell $c$ gets \textbf{one} least-squares fit of its nodes' carried values, at offsets
+$o = \tilde p - \bar p_c$ from the node mean:
+\[
+\phi(o) = \big(1,\ o_x,\ o_v,\ \{o_{v,a}o_{v,b}\}_{a\le b},\ o_x^{2}\big),\qquad
+\Big(\sum_{n\in c}\phi_n\phi_n^\top + \rho\,\bar d\,\mathrm{diag}(0,1,\dots,1)\Big)\beta_c = \sum_{n\in c}\phi_n\lambda_n ,
+\]
+and every query in $c$ reads $\Lam(x_q, v_q) = \phi(\tilde p_q - \bar p_c)\cdot\beta_c$.
+\begin{itemize}
+\item \textbf{Order guard}: only the columns of the orders whose cumulative count is $\le n_c/1.5$
+  (14 columns in 2-D need 21 nodes; else a plane, else the cell mean).
+\item \textbf{Next to a surface} ($\lambda$ jumps across $v\cdot n = 0$): three fits per cell -- nodes leaving,
+  approaching ($v\cdot n_c \gtrless 0$, $n_c$ the cell's mean nearest-surface normal) and all; a query takes
+  its side's fit, the unsplit one when no surface is near, its side is empty, or the cell's normals
+  disagree ($|\sum n_i|/\#n_i < 0.9$: corners, opposed faces).
+\item Exact for any field quadratic in $v$ (the per-cell fit reproduces its own monomials).
+\end{itemize}
+\codenote{\code{jax\_dsmc/cell\_fit.py}: \code{fit}, \code{fit\_split}, \code{cell\_normals},
+\code{evaluate}; \code{ensemble\_device.\_field} / \code{\_query} (\code{\_Hybrid} for the optional per-query
+fallback).  \code{ensemble\_backward.CELL\_BASIS} = \code{"cell:quad:adapt1.5:align0.9:both"} (default of
+\code{configure} and every example's \code{--backward-basis}; \code{quadratic\_full} = the per-query fit).
+Tests \code{tests/test\_cell\_fit.py}; record docs/PSEUDOCODE.md 9.7.2.}
+\end{frame}
+
+\begin{frame}{Why one fit per cell, and why the guard}
+\begin{itemize}
+\item \textbf{The collision term sees only the non-invariant part of $\lambda$}: for
+  $\lambda\in\mathrm{span}(1, v, |v|^2)$ every four-term $\Lam(v_i')+\Lam(v_j')-\Lam(v_i)-\Lam(v_j)$ vanishes.  What the
+  pull-back needs is the cell population's $v$-structure beyond the invariants -- a property of the
+  cell, not of a neighbourhood of each query.
+\item The per-query fit over the $k$ nearest nodes depended on $k$ ($k = 32\to64$: $+1.6\pm0.7\,\%$ of $\dd D/\dd s$,
+  12 seeds; flat from $k = 64$, where it spans the whole cell and its weights only range over $[\frac12, 1]$)
+  and cost $\propto k$.  The per-cell fit has no $k$: $C$ fits instead of $19N$.
+\item A cell's values are mostly noise (the cell mean predicts held-out nodes at the noise floor).  An
+  \emph{underdetermined} quadratic in a sparse cell answers the partner ghosts with extrapolated noise, and the
+  backward recursion compounds it: the unguarded per-cell quadratic is unstable (one seed in 12: $+97\,\%$).
+  The guard bounds the columns by the nodes.
+\end{itemize}
+\textbf{Measured} (Kn 0.5 squash, 12 seeds vs CRN FD): guarded per-cell $-1.9\pm2.3\,\%$, per-query $k = 64$
+$-2.0\pm2.0\,\%$, $k = 32$ $-3.5\pm1.8\,\%$; a seed $985\to95$\,s.  Stable on the optimiser's complicated shapes, where
+the per-query one-sided fit diverged.
+\codenote{Evaluation of every interpolant tried (\code{mean}, \code{lin}, \code{quad}, \code{quadfull}, \code{cubicv},
+\code{cubic}, \code{adapt}, \code{loo}, \code{pool}, \code{rb}, split rules, fallbacks): validation deck section V;
+\code{scratch/cellfit/}.}
+\end{frame}
+
+\begin{frame}{The per-query fit: the shape gradient's slopes}
+The shape terms need the slopes $\nabla_x\lambda$, $\nabla_v\lambda$ at reflected states, with node sets chosen
+per query (next frame).  For a query $(x_q, v_q)$: the $k$ nearest admissible nodes in $\tilde p$, weights
+$\omega_n = 1/\big(1 + (d_n/d_k)^2\big)$, the same quadratic design at $\delta = \tilde p_n - \tilde p_q$:
+\[
+\Big(\sum_n\omega_n\phi_n\phi_n^\top + \rho\,\bar d\,\mathrm{diag}(0,1,\dots,1)\Big)\beta
+= \sum_n\omega_n\phi_n\lambda_n\qquad(\bar d\text{: mean diagonal; } \rho = 10^{-8}),
+\]
+\[
+\Lam = \beta_0,\qquad \nabla_x\Lam = \beta_{1:1+D}/\Delta x,\qquad \nabla_v\Lam = \beta_{1+D:4+D}/v_{\mathrm{s}} .
+\]
+\begin{itemize}
+\item Pooled over the $3^D$ block ($k = 96$): the slopes need more nodes than a value.
+\item The slopes are the weak link: the value field is discontinuous next to a body (next frame).
+\end{itemize}
+\codenote{\code{ensemble\_device.node\_gradients} $\to$ \code{cell\_query} $\to$ \code{field\_query}
+(value, $\nabla_x$, $\nabla_v$), \code{\_design} (\code{basis="quadratic\_full"}: 14 columns in 2-D),
+\code{\_spd\_solve} (unrolled Cholesky), \code{RIDGE\_REL} $= \rho = 10^{-8}$; \code{cell\_nodes} (\code{npc\_max}).
+Until 2026-10-11 this fit ($k = 32$) was also the collision pull-back's value field.}
+\end{frame}
+
+\begin{frame}{Which nodes: functions of the current state only}
+Next to a body the post-move population splits: particles about to hit carry their
+imminent hit's reward, particles that just left do not.  $\lambda$ jumps across that
+boundary, and a polynomial fitted across it has a wrong slope.  The shape-gradient fits
+therefore use, for a query whose last hit had normal $n$ at $x_q$:
+\begin{enumerate}
+\item \textbf{one-sided}: only nodes leaving that surface, $v\cdot n > 0$;
+\item \textbf{pooled}: the $k = 96$ nearest such nodes from the $3^D$ block of cells around
+  the query's cell (variance);
+\item \textbf{half-space}: only nodes with $(x_{\mathrm{node}} - x_q)\cdot n \ge -\tfrac14\Delta x$
+  (a body thinner than the block would otherwise put its far side in the pool).
+\end{enumerate}
+\textbf{Rule: stratify by the current state, never by the future.}  With
+$\lambda = P\lambda_1 + (1-P)\lambda_0$ ($P$ the probability of some future event),
+\[
+\nabla\lambda = P\nabla\lambda_1 + (1-P)\nabla\lambda_0 + \nabla P\,(\lambda_1-\lambda_0);
+\]
+a fit inside classes defined by the future event estimates the first two terms only.
+Classes defined by the present state ($v\cdot n$, position) keep all three.
+\codenote{\code{ensemble\_device.node\_gradients(direction=, pool=, halfspace=)},
+\code{pooled\_tables}, \code{\_halfspace\_length}.  \code{shape.VARIANTS}: the default
+\code{along\_pool\_plane} = (pool 1, $k = 96$, along-flight, half-space $0.25$ cells), in
+\code{ensemble\_gradient}, \code{optimize.py}, \code{optimize\_squash.py}.  Config
+\code{value\_class="none"} (the future-class option \code{"hit\_ahead"} is kept for
+diagnostics only and warns).}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\section{First variation}
+
+\begin{frame}{The first variation of one step}
+Write one step as $Z' = G_\theta(Z,\omega)$, randomness $\omega\sim p_\theta$, $R_\theta(Z,\omega)$
+the rewards paid at the wall during the move, $V(Z')$ the value of what follows.  Then
+\begin{align*}
+\frac{\dd}{\dd\theta}\E\big[R + V(Z')\big]
+&= \underbrace{\E\big[\nabla V\cdot\partial_\theta G\big]}_{\text{pathwise (frozen }\omega)}
++ \underbrace{\E\big[\partial_\theta R_\theta\big]}_{\text{hit reward (frozen }\omega)}
++ \underbrace{\E\big[(R + V)\,\partial_\theta\log p_\theta(\omega)\big]}_{\text{score}}\\[-2pt]
+&\quad + \underbrace{\int_{\Sigma_\theta}\jump{R + V}\, u_\Sigma\,\dd\sigma}_{\text{boundary}}
+\;+\; \underbrace{\E\big[\partial_\theta(\text{collision law})\text{ at fixed particles}\big]}_{\text{operator}} ,
+\end{align*}
+$\Sigma_\theta$: where $G_\theta$ jumps (hit $\to$ miss; hit into the next step), $\jump{\cdot}$ the jump,
+$u_\Sigma$ its speed in $\theta$.  Summed over steps with $V = \lambda$, this gives the seven terms:
+
+\smallskip
+\begin{tabular}{@{}ll@{}}
+pathwise: & 1 transport of the perturbed state (with the along-flight identity)\\
+hit reward, score: & 2 hit reward (tally);\quad 3 diffuse normal\\
+boundary: & 4 hit $\leftrightarrow$ miss;\quad 5 window edges;\quad 6 hit/collision order\\
+operator: & 7 cut-cell volume\\
+\end{tabular}
+\codenote{\code{shape.gradient\_variants} $\to$ \code{\_gradient} (a \code{lax.scan} over the
+captured steps) $\to$ \code{\_gradient\_step}: one \code{jax.vjp} of the replayed wall map per
+step, every cotangent pulled back in one batched transpose (\code{\_pullbacks}); output
+\code{ShapeTerms}.  The value $\lambda$ is a cotangent, never differentiated.}
+\end{frame}
+
+\begin{frame}{The replayed wall map}
+Under the fixed keys the move of step $k$ is a pure function of the geometry:
+\[
+(x^\pth_k,\ v^\pth_k,\ T_k,\ \mathcal E_k) = \mathcal W_\theta(x_k, v_k;\ \kappa_k),
+\]
+$T_k$ surface tallies, $\mathcal E_k$ the traced events ($x^h$, $\vin$, $\vout$, $n$, $t^h$ per hit).
+It is re-run from the record and differentiated by reverse-mode AD:
+\begin{itemize}
+\item hit time: $\phi(x + t v; c) = 0$, so $\partial t^h/\partial c_j = -B_j(x^h)/(v\cdot\nabla\phi(x^h))$
+  (bisection for the root, one Newton step that carries the derivative);
+\item then $x^h = x + t^h v$, $n(x^h; c)$, $\vout = R_n \vin$,
+  $x^\pth = x^h + \vout(\Delta t - t^h)$, repeated for every bounce of the step;
+\item grazing hits: $1/(v\cdot\nabla\phi)$ is floored at $\epsilon\,|v|\,|\nabla\phi|$ in the
+  derivative only (the primal hit is exact): bounded per-hit weights, bias $O(\epsilon)$.
+\end{itemize}
+The replay must reproduce the record: any flipped discrete outcome is an error.
+\codenote{\code{shape.replay} (per-hit and timing rewards, replay check; \code{REPLAY\_TOL}
+$= 10^{-9}$ in \code{ensemble\_mesh}), \code{shape.wall\_map}, \code{wall\_adjoint.advance(trace=True)},
+\code{levelset.hit\_body}, \code{levelset.regularised\_quotient} (config \code{grazing} $= \epsilon = 0.05$).}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\section{Terms}
+
+\begin{frame}{Term 1: transport of the perturbed state (pathwise)}
+\[
+\text{pathwise}_k = \sum_{i\in\text{surv}}
+\nabla_x\lambda^m_k(x^\pth_i, v^\pth_i)\cdot\partial_\theta x^\pth_i
++ \nabla_v\lambda^m_k(x^\pth_i, v^\pth_i)\cdot\partial_\theta v^\pth_i .
+\]
+\begin{itemize}
+\item $\partial_\theta x^\pth$, $\partial_\theta v^\pth$: the VJP of the wall map; nonzero only
+  for particles that hit the body in step $k$, so the slopes are fitted at those states only.
+\item $\nabla_v\lambda$: reflected velocities.  On a specular body $\partial_\theta\vout$ is
+  $O(1)$ per hit; the slope says how the particle's future depends on where it goes.
+\item $\nabla_x\lambda$: shifted hit points and hit times.  Its component along the
+  particle's own velocity comes from an identity, not from the fit (next frame).
+\item Only the survivors of the step contribute
+  ($a_k\wedge a^m_k\wedge\neg\,\mathrm{born}_k$).
+\end{itemize}
+\presonly{\medskip For a convex body in free-molecular flow a reflected particle never
+re-hits, so this term is the blockage (flow-field) feedback; with collisions it carries the
+gas's response to the deflected particles.}
+\codenote{Cotangents from \code{node\_gradients} on \code{(x\_post, v\_post)} in
+\code{\_gradient\_step}; \code{hit\_fits=True} (\code{\_body\_hit\_slots}; the same result to
+the last bit at $\sim$1/200 of the fitting); rows \code{ShapeTerms.pathwise\_x},
+\code{pathwise\_v}.}
+\end{frame}
+
+\begin{frame}{$\nabla_x\lambda$ along the flight: the along-flight identity}
+Free flight carries $(x - s v, v)$ at time $t$ to $(x, v)$ at $t + s$.  So
+\[
+\lambda_t(x - s v, v) = \lambda_{t+s}(x, v) + s\,(\Lstar\lambda)(x,v) + O(s^2),
+\qquad
+\lambda_{t+s}(x,v) = \lambda_t(x,v) + s\,T(x,v) + O(s^2),
+\]
+$T$ = the change of the objective per unit delay of the particle's whole future (the hits
+that cross the window edges), and $s\,\Lstar\lambda$ = the collisions during the extra time.
+Hence
+\[
+v\cdot\nabla_x\lambda = -T - \Lstar\lambda .
+\]
+\begin{itemize}
+\item $T$ is the value of the \emph{timing rewards} (Term 5's band rewards), carried by a
+  second value column; $\Lstar\lambda \approx c_{k,i}/\Delta t$ from the collision pull-back.
+\item The fitted $\nabla_x\lambda$ keeps its perpendicular part; its component along $v$ is replaced:
+\[
+\nabla_x\lambda \leftarrow \nabla_x\lambda - \frac{v\cdot\nabla_x\lambda + T + c_{k}/\Delta t}{|v|^2}\,v .
+\]
+\item Accuracy: NTC gives a particle one collision chance per step wherever it sits in its
+  cell, so in the discrete scheme the $\Lstar$ part holds to $O(\nu\Delta t)$; exact without collisions.
+\end{itemize}
+\codenote{\code{shape.along\_flight(gx, v, t)} with \code{t = lam\_timing + collision / dt}
+in \code{\_gradient\_step}; \code{lam\_timing} = the second value column (timing rewards
+\code{Replay.timing\_reward}); \code{collision} = \code{Backward.collision}
+(\code{gradient\_variants(collision=)}; omitting it in a collisional run drops $\Lstar\lambda$).}
+\end{frame}
+
+\begin{frame}{Term 2: the hit reward (tally)}
+The value $\lambda^m_k$ starts \emph{after} the move, so the rewards the move itself pays --- the
+body hits of step $k$ --- enter the backward by hand, $\mu_k = \lambda^m_k + \sum_j r_{k,j}$; their
+derivative is this term, the value's is Term 1.
+The reward $r = \frac{F_{\mathrm{num}}}{W\Delta t}\,m(\vin - \vout)_x$ depends on $\theta$
+through $\vout = R_n\vin$ (and through $\vin$ of later bounces in the same step).  The
+surface tallies are outputs of the wall map, so this is one more cotangent:
+\[
+\text{hit}_k = \frac{\partial D}{\partial T_k}\cdot\partial_\theta T_k,\qquad
+\frac{\partial D}{\partial T_k} = \frac{F_{\mathrm{num}}}{W\Delta t}\,\ind[k\in\text{window}]
+\ \text{on the body's } x\text{-momentum}.
+\]
+Exact given the hits; it needs no fitted field.
+
+\medskip
+\textbf{Example}: specular cylinder of radius $r$, free-molecular.  With impact parameter
+$b$, $F \propto \int_{-r}^{r}\cos^2\varphi\,\dd b = 4r/3$; differentiating at fixed rays gives
+$\int 2b^2/r^3\,\dd b = 4/3$, so this term alone is $F/r$ --- the whole derivative of an
+isolated body, since the new grazing rays carry $\cos^2\varphi = 0$.  The other terms carry
+the response of the flow (blockage, collisions).
+\codenote{\code{ensemble\_mesh.\_drag\_tally\_cotangent} $\times$ \code{tally\_weight} in
+\code{\_gradient\_step}; row \code{ShapeTerms.pathwise\_tally}.}
+\end{frame}
+
+\begin{frame}{Term 3: diffuse walls, the normal of the re-emission law}
+A diffuse hit re-emits from $q_w(v\mid n) = \frac{v_n}{s^2}e^{-v_n^2/2s^2}\,\frac{e^{-|v_t-u|^2/2s^2}}{2\pi s^2}$,
+$s^2 = kT_w/m$.  Its normal moves with $\theta$.  Split the hit's future into its reward and
+the value after it:
+\[
+\frac{\dd}{\dd n}\E\big[r(\vout) + V(\vout)\big]
+= \underbrace{\E\Big[\frac{\partial r}{\partial \vout}\cdot\frac{\partial \vout}{\partial n}\Big]}_{\text{pathwise, reparameterised}}
++ \underbrace{\E\big[V(\vout)\,\partial_n\log q_w(\vout\mid n)\big]}_{\text{score, value after the hit}} .
+\]
+\begin{itemize}
+\item Pathwise part: $\vout = s\,(\rho\, n + z_1 t_1(n) + z_2 t_2(n)) + u$ at fixed draws;
+  the tangent frame is parallel-transported from the primal one (bounded derivative), and
+  the reward enters through the tally (Term 2).
+\item Score part: weighted by the value-to-go \emph{after} the hit; no fitted slope.
+  $1/v_n$ is floored at $\epsilon|\vout|$ (bias $\approx\epsilon/2$ of the $v_t/v_n$ part).
+\item Specular bodies: zero.
+\end{itemize}
+\codenote{\code{wall\_adjoint.\_element\_events} (tally from the traced sample),
+\code{sampling.diffuse\_velocity\_general} (parallel-transported frame),
+\code{shape.normal\_score}, \code{sampling.log\_diffuse\_density(floor=)}; weights
+\code{to\_go.post} when a tally cotangent is given; row \code{ShapeTerms.score}.}
+\end{frame}
+
+\begin{frame}{Term 4: hit $\leftrightarrow$ miss (silhouette band)}
+Along a particle's undeflected line, $\phi_{\min} = \min_s\phi(x + s\hat v)$: $<0$ it hits,
+$>0$ it misses.  A surface displacement flips the outcome where $|\phi_{\min}| < |\delta\phi|$:
+\[
+\frac{\dd D}{\dd\theta}\Big|_{\mathrm{sil}} = -\E\Big[\rho(0)\,(V_{\mathrm{hit}} - V_{\mathrm{miss}})\,\frac{\partial\phi_{\min}}{\partial\theta}\Big]
+\approx -\frac{1}{2\varepsilon_b}\sum_{|\phi_{\min,i}|<\varepsilon_b}(V_{\mathrm{hit},i} - V_{\mathrm{miss},i})\,B_j(x^*_i)\,\frac{\partial c_j}{\partial\theta},
+\]
+$\partial\phi_{\min}/\partial c_j = B_j(x^*)$ at the closest point (envelope theorem).
+\begin{itemize}
+\item Realised outcome: its reward-to-go.  Virtual outcome: the fitted value at the virtual
+  post-move state plus the virtual hit's reward, valued from the leaving population.
+\item Each passing counted once per trajectory (a band wider than one move would otherwise
+  count it several times).
+\item Specular: $V_{\mathrm{hit}}\to V_{\mathrm{miss}}$ at grazing incidence, the term is $O(\varepsilon_b)$
+  and is left out.  Diffuse: $O(1)$ --- about half of a diffuse body's derivative.
+\end{itemize}
+\codenote{\code{shape.silhouette\_cotangent}, \code{levelset.closest\_approach},
+\code{ensemble\_device.value\_query}; config \code{silhouette\_band} $=\varepsilon_b$ (0 for
+specular bodies, 0.03 on the diffuse squash); row \code{ShapeTerms.silhouette}.}
+\end{frame}
+
+\begin{frame}{Term 5: hits that cross a window edge}
+The VJP differentiates a fixed assignment of hits to steps.  A surface displacement shifts
+hit times, and a hit at the end of step $k$ can slip into step $k+1$.  For the per-hit drag
+this changes the objective only at the window's edges:
+\[
+\Delta J_{k,j} = +r_{k,j}\ \text{(last window step)},\qquad -r_{k,j}\ \text{(step before the window)} .
+\]
+Boundary term: (density of hit times at the step end) $\times(-\Delta J)$, the density estimated
+over the hits of the $w$ whole steps ending at each edge:
+\[
+\text{cotangent on } t^h_{k,j}:\qquad -\frac{\pm r_{k,j}/w}{\Delta t}
+\quad\text{for every body hit of those steps.}
+\]
+\begin{itemize}
+\item Zero in expectation on a steady window, but part of the windowed objective's derivative;
+  it is included.  $w = 10$ steps: $\sim$50$\times$ the hits of a fraction-of-a-step band, at an
+  $O(w\Delta t)$ smoothing of the edge's hit-time density.
+\item The same per-hit band rewards are the \emph{timing rewards} whose value $T$ enters the
+  along-flight identity.
+\end{itemize}
+\codenote{\code{ensemble\_mesh.\_drag\_jump(width=w)}, \code{timing\_band\_setting} (a value
+$\ge 1$ = whole steps per edge; default \code{timing\_band} $= 10$),
+\code{shape.timing\_cotangent}; row \code{ShapeTerms.timing}.}
+\end{frame}
+
+\begin{frame}{Term 6: the order of a hit and the step's collisions}
+NTC collides once per step, after the move.  A body hit at the end of step $k$ that slips into
+step $k+1$ is, during step $k$'s collisions, the \emph{incoming} particle $(x_w, \vin)$
+instead of the \emph{reflected} one $(x_w, \vout)$.  Both futures coincide after the next
+move, so the objective changes by
+\[
+J_{c} = c(x_w, \vin) - c(x_w, \vout),\qquad c = \Delta t\,\Lstar\lambda ,
+\]
+at \emph{every} step boundary, not only at the window's edges.  The hit times of a steady flow
+are uniform within the step, so the density at the step end is $1/\Delta t$ and
+\[
+\text{cotangent on } t^h:\qquad +\frac{J_c}{\Delta t}\quad\text{for every body hit.}
+\]
+\begin{itemize}
+\item $c$ at the hit point: fitted from the collision increments $c_{k,i}$ of the hit's
+  cell, on the approaching side ($v\cdot n<0$) for $\vin$ and the leaving side for $\vout$.
+\item Without collisions $c\equiv0$; then Term 5 is the whole hit-step dependence.
+\end{itemize}
+\codenote{\code{shape.order\_jump} (\code{ORDER\_FIT} $= \{k: 32,\ \text{pool}: 0\}$;
+\code{value\_query(direction=}$\mp n$\code{)} on \code{Backward.collision}); cotangent
+\code{timing\_cotangent(head, -jump, dt, 1.0)} on the first pass's body hits; row
+\code{ShapeTerms.order} (set when \code{collision} is given).}
+\end{frame}
+
+\begin{frame}{Term 7: the cut-cell volume in the collision step}
+Every collision probability of cell $c$ scales as $1/V_c$ (NTC frame).  The collision law is
+the only thing that changes, so this is a kernel-parameter (operator) term with
+$\partial_\theta\log q$ replaced by $\partial_\theta\log V_c^{-1}$:
+\[
+\frac{\dd D}{\dd\theta}\Big|_V = -\sum_k\sum_c\frac{\partial_\theta V_c}{V_c}\,C_{k,c},
+\qquad
+C_{k,c} = \tfrac12\sum_{i\in c} c_{k,i}\quad\text{(each pair seen from both ends)},
+\]
+$C_{k,c}$ the expected change of the objective by the collisions of cell $c$ in step $k$.
+The geometry factor is the shape derivative of the cut volume:
+\[
+V_c = \int_c H(\phi)\,\dd x,\qquad
+\frac{\partial V_c}{\partial c_j} = \int_c\delta(\phi)\,B_j\,\dd x
+= \int_{\Gamma\cap c}\frac{B_j}{|\nabla\phi|}\,\dd s ,
+\]
+evaluated with a smoothed Heaviside $H_w(\phi) = \tfrac12\big(1 + \tanh(\phi/w)\big)$; each
+sub-region of a split cell separately.  Zero without collisions.
+\codenote{\code{Backward.cell\_collision} (per-cell sums of $c_{k,i}$),
+\code{shape.volume\_weights} ($g_c = -\sum_k C_{k,c}/V_c$), \code{shape.volume\_cotangent}
+($32^D$ samples per cell, $w = h_\phi/4$, split cells by \code{collision\_cell}),
+\code{ensemble\_mesh.\_volume\_term} (level-set bodies, virtual pull-back); row \code{volume}.}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\section{Assembly}
+
+\begin{frame}{Assembly}
+Per seed, on the level-set coefficients:
+\[
+\widehat{\nabla_c D} = \sum_k\Big(\underbrace{\text{pathwise}_x + \text{pathwise}_v}_{1}
++ \underbrace{\text{tally}}_{2} + \underbrace{\text{score}}_{3} + \underbrace{\text{silhouette}}_{4}
++ \underbrace{\text{timing}}_{5} + \underbrace{\text{order}}_{6}\Big) + \underbrace{\text{volume}}_{7},
+\]
+then chained to the controls by the VJP of $\theta\mapsto c(\theta)$, and averaged over seeds.
+
+\begin{center}\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+term & free-molecular, specular & free-molecular, diffuse & collisional\\
+\midrule
+1 pathwise $x$, $v$ & \ok & \ok & \ok{} ($+\Lstar\lambda$ along $v$)\\
+2 tally & \ok & \ok & \ok\\
+3 diffuse normal score & \nil & \ok & if diffuse\\
+4 silhouette & $O(\varepsilon_b)$, off & \ok & if diffuse\\
+5 window edges & \ok & \ok & \ok\\
+6 hit/collision order & \nil & \nil & \ok\\
+7 cut-cell volume & \nil & \nil & \ok\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+One gradient evaluation: forward with capture $\to$ replay $\to$ two-column value backward
+(with the collision increments) $\to$ one VJP scan over the captured steps $\to$ volume term
+$\to$ control chain.
+\codenote{\code{ensemble\_mesh.shape\_terms} $\to$ \code{ensemble\_gradient(variant=}
+\code{"along\_pool\_plane")}: \code{gradient = pathwise + score + silhouette + volume + timing
++ order}; \code{control\_gradient} (\code{jax.vjp} of \code{levelset\_coef}).  A
+\code{newborn\_hit\_share} above \code{NEWBORN\_HIT\_MAX} $=10^{-3}$ warns (\code{\_newborn\_share}).}
+\end{frame}
+
+\begin{frame}{From the gradient to the optimiser}
+\textbf{Squash (one scalar control).}  Adam on
+$J'(s) = \widehat{\dd D/\dd s} - \lambda_A\,\dd A/\dd s$, the step's largest change of $s$ set by
+the learning rate; $S$ common-random-number seeds per iterate.
+
+\medskip
+\textbf{Free shape (all coefficients), at fixed area.}
+\begin{enumerate}
+\item seed mean $g$; restrict to the coefficients within a band of the surface and smooth with a
+  Gaussian (an $H^1$-type gradient that removes knot-scale noise);
+\item gradient descent or Adam (Adam's normalised step is smoothed again);
+\item fixed largest normal displacement per iterate ($s_{\max} = 0.05$, a tenth of a cell);
+\item reinitialise $\phi$ to a signed distance;
+\item restore the area by a uniform shift $\gamma$ of $\phi$: to first order the displacement becomes
+  $V_n = \eta\,(d - \langle d\rangle_\Gamma)$, the projection of the step onto
+  $\{\oint V_n = 0\}$, and the constraint then holds exactly (a retraction).
+\end{enumerate}
+\codenote{\code{optimize\_squash.run}, \code{seed\_gradient}, \code{adam\_direction}
+(\code{learning\_rate} $= 0.05$); \code{optimize.run}, \code{smoothed\_direction}
+($\sigma = 2$ knots, band $1 + h_\phi$), \code{levelset.reinitialise},
+\code{project\_area} (bisection on \code{levelset.body\_volume}).  Both default to
+\code{along\_pool\_plane} and \code{timing\_band} $= 10$.}
+\end{frame}
+
+\begin{frame}{What is exact, and what is approximate}
+\small
+\begin{tabular}{@{}p{4.0cm}p{5.2cm}p{3.9cm}@{}}
+\toprule
+piece & approximation & size / control\\
+\midrule
+wall-map VJP, tally, scores & exact given the record & ---\\
+collision pull-back & $S$ substeps, $K$ virtual partners & $O(\Delta t/S)$; $(S,K)=(4,8)$\\
+value field of the pull-back & one guarded quadratic per cell (split at surfaces) & $-1.9\pm2.3\,\%$ (Kn 0.5)\\
+fitted slopes $\nabla\lambda$ & local quadratic, state-based node sets & fit bias; $k$, pool, half-space\\
+along-flight $\Lstar$ part & continuous identity in a discrete scheme & $O(\nu\Delta t)$\\
+grazing floor & $1/(v\cdot n)$ floored in the derivative & $O(\epsilon)$; $\epsilon = 0.05$\\
+silhouette band & finite band density & $O(\varepsilon_b)$\\
+window-edge band & $w$ whole steps & $O(w\Delta t)$ smoothing\\
+order term & uniform hit times in the step & steady flow\\
+captured horizon & sensitivities older than the captured steps & box memory (walls)\\
+\bottomrule
+\end{tabular}
+
+\medskip
+\textbf{Left out on purpose}: hits by particles born in the step or leaving the box in it
+(monitored, $0$ while the body is away from the inflow and outflow faces); the change of cell
+membership of a hit particle ($O(\nu\Delta t)$ below the order term); the silhouette term of
+specular bodies.
+
+\medskip
+Validation of each piece against finite differences: the validation deck.
+\codenote{Settings: \code{ensemble\_backward.VIRTUAL}; \code{shape.VARIANTS};
+\code{grazing}; \code{silhouette\_band}; \code{timing\_band}; captured \code{steps}
+(300 in production, $\ge 600$ for 1\,\%-level free-molecular gates); \code{NEWBORN\_HIT\_MAX}.}
+\end{frame}

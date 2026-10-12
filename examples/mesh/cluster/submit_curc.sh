@@ -31,11 +31,13 @@
 # ONLY=<regex> submits just the group's jobs whose name matches (e.g. the biasgate group:
 #   GPU_KIND=rtx  ONLY='^kn_(seed|fd)' bash examples/mesh/cluster/submit_curc.sh biasgate
 #   GPU_KIND=h200 ONLY='hor'           bash examples/mesh/cluster/submit_curc.sh biasgate).
+# Before submitting a group, run its local preflight (examples/mesh/cluster/preflight.sh
+# <group>): every job kind at toy size, as job.sbatch runs it.
 # PART / GRES_TYPE override the partition / gres name
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|all|check"; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|optckn|optc2|squashkn2|all|check"; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 GPU_KIND="${GPU_KIND:-a100}"
@@ -80,8 +82,8 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     sphere) HOURS=8 ;;
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
-    squash|squashkn) HOURS=24 ;;
-    biasgate) HOURS=12 ;;
+    squash|squashkn|squashkn2|optckn|optc2) HOURS=24 ;;
+    biasgate|cellgate) HOURS=12 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
   # the finer circle (240 k slots x 300 captured steps) peaks above a 24 GB MIG slice: the
@@ -89,7 +91,9 @@ for group in "${GROUPS_TO_RUN[@]}"; do
   # rtx opt job (2026-09-23).  The sphere (50 k slots) fits.
   if [ "${GPU_KIND}" = "rtx" ] && [ "${group}" != "sphere" ] && [ "${group}" != "optc" ] \
       && [ "${group}" != "squash" ] && [ "${group}" != "squashkn" ] \
-      && [ "${group}" != "biasgate" ]; then
+      && [ "${group}" != "biasgate" ] && [ "${group}" != "cellgate" ] \
+      && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] \
+      && [ "${group}" != "squashkn2" ]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi

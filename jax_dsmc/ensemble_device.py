@@ -39,7 +39,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 
-from jax_dsmc import sort
+from jax_dsmc import cell_fit, sort
 from jax_dsmc.collide.ntc import step_pairs, step_v_post
 from jax_dsmc.collide.vss import collision_rate, scatter
 from jax_dsmc.grid import cell_neighbourhood as grid_neighbourhood
@@ -334,6 +334,42 @@ def backward(
 # --- virtual-partner pull-back ------------------------------------------------------
 
 
+def _complex_load(carry, xs, grid, npc_max, basis):
+    """Alive slots in the complex cells of one step (:func:`fallback_capacity`)."""
+    x, alive, normals = xs
+    ids, valid, cell, _, count = cell_nodes(x, alive, grid, npc_max)
+    _, _, complex_ = _split_context(normals, ids, valid, basis)
+    c = jnp.minimum(cell, count.shape[0] - 1)
+    return carry, jnp.sum(alive & complex_[c] & (cell < count.shape[0]))
+
+
+@functools.partial(jax.jit, static_argnames=("npc_max", "basis"))
+def complex_load(records, normals, grid, npc_max, basis):
+    """``i32[M]``: per captured step, the alive slots in the complex cells of a split
+    per-cell fit (``basis`` ``"cell:...:align<r>"``) -- the queries per field evaluation
+    that its per-query fallback answers."""
+    body = functools.partial(_complex_load, grid=grid, npc_max=npc_max, basis=basis)
+    _, load = lax.scan(body, None, (records.x, records.alive, normals))
+    return load
+
+
+FALLBACK_BUCKET = 256
+
+
+def fallback_capacity(records, normals, grid, npc_max, basis):
+    """The static ``fallback_capacity`` of :func:`backward_virtual` for ``basis`` (host):
+    the largest :func:`complex_load` over the steps rounded up to
+    :data:`FALLBACK_BUCKET` (one compilation for similar loads); 0 when the basis is not a
+    split per-cell fit with a fallback (no normals, ``align`` 0, ``nofallback``)."""
+    if normals is None or not cell_fit.is_cell(basis):
+        return 0
+    spec = cell_fit.parse(basis)
+    if spec.align <= 0.0 or not spec.fallback:
+        return 0
+    worst = int(jnp.max(complex_load(records, normals, grid, npc_max, basis)))
+    return -(-worst // FALLBACK_BUCKET) * FALLBACK_BUCKET if worst else 0
+
+
 def _chunk_query(
     args, node_x, node_v, node_valid, node_val, node_class, scale, k, basis, gradients, halfspace
 ):
@@ -600,6 +636,80 @@ def staged_velocities(pairs_k, v_pre, v_post, cell, substeps):
     return jnp.stack(stages)
 
 
+class _Hybrid(NamedTuple):
+    """A split per-cell field whose complex cells' queries are answered by the per-query
+    one-sided fit from the own-cell ``tables``, at most ``capacity`` queries per call."""
+
+    split: cell_fit.SplitField
+    tables: tuple
+    capacity: int
+
+
+def _field(tables, scale, basis, grid, split=None, fallback=0):
+    """The fitted field of node tables ``(x, v, valid, lam)`` ``(C, P, .)``: the tables
+    themselves for the per-query fit (:func:`cell_query`), or a per-cell
+    :class:`cell_fit.CellField` for a ``"cell:..."`` basis (a pooled one over the
+    :func:`pooled_tables` block of ``grid``).  With surface normals, ``split`` is
+    :func:`_split_context`'s ``(node_normal, cell normal, complex)``: the
+    :class:`cell_fit.SplitField`, and with ``fallback`` (a query capacity) the per-query
+    fit in the complex cells (:class:`_Hybrid`)."""
+    if not cell_fit.is_cell(basis):
+        return tables
+    pool = cell_fit.parse(basis).pool
+    own = {}
+    wide = tables if split is None else (*tables, split[0])
+    if pool:
+        own = {"own_x": tables[0], "own_valid": tables[2]}
+        wide = pooled_tables(wide, grid, pool)
+    if split is None:
+        return cell_fit.fit(*wide, scale, basis, **own)
+    field = cell_fit.fit_split(*wide, split[1], split[2], scale, basis, **own)
+    return _Hybrid(field, tables, fallback) if fallback else field
+
+
+def _split_context(normals, ids, valid, basis):
+    """``(node_normal f64[C, P, 3], normal f64[C, 3], complex bool[C])`` of a step's slot
+    normals for a split per-cell fit (:func:`cell_fit.cell_normals`); ``None`` without
+    normals or for the per-query fit."""
+    if normals is None or not cell_fit.is_cell(basis):
+        return None
+    node_normal = jnp.where(valid[..., None], normals[ids].astype(jnp.float64), 0.0)
+    normal, complex_ = cell_fit.cell_normals(node_normal, valid, cell_fit.parse(basis).align)
+    return node_normal, normal, complex_
+
+
+def _n_cells(field):
+    if isinstance(field, _Hybrid):
+        return field.tables[2].shape[0]
+    if isinstance(field, cell_fit.SplitField):
+        return field.normal.shape[0]
+    if isinstance(field, cell_fit.CellField):
+        return field.centre.shape[0]
+    return field[2].shape[0]
+
+
+def _query(field, cell, q_x, q_v, q_normal, scale, k, basis, chunk):
+    """Field values at queries in cells ``cell`` (the sentinel ``C`` for dead slots) with
+    their surface normals ``q_normal`` (``None``: two-sided) from :func:`_field`'s output."""
+    n_cells = _n_cells(field)
+    c = jnp.minimum(cell, n_cells - 1)
+    direction = _side(q_v, q_normal)
+    if not cell_fit.is_cell(basis):
+        return cell_query(field, c, q_x, q_v, scale, k, basis, chunk, direction=direction)
+    if not isinstance(field, _Hybrid):
+        return cell_fit.evaluate(field, c, q_x, q_v, scale, basis, q_normal=q_normal)
+    value = cell_fit.evaluate(field.split, c, q_x, q_v, scale, basis, q_normal=q_normal)
+    q = q_x.shape[0]
+    need = field.split.complex[c] & (cell < n_cells)
+    idx = jnp.nonzero(need, size=field.capacity, fill_value=q)[0]
+    safe = jnp.minimum(idx, q - 1)
+    sub = cell_query(
+        field.tables, c[safe], q_x[safe], q_v[safe], scale, k, "quadratic_full", chunk,
+        direction=direction[safe],
+    )  # fmt: skip
+    return value.at[idx].set(sub, mode="drop")
+
+
 def _pair_kernel(vi, vj, u_chi, u_eps, sp):
     q = collision_rate(vi, vj, 0, 0, sp)
     vi_n, vj_n = scatter(vi, vj, 0, 0, sp, u_chi, u_eps)
@@ -611,7 +721,7 @@ def _partner_pass(
     key,
     x,
     v_nodes,
-    tables,
+    field,
     f_node,
     ids,
     cell,
@@ -636,21 +746,19 @@ def _partner_pass(
     j = ids[c, (rank + 1 + u) % jnp.maximum(count[c], 1)]
     u_chi = jax.random.uniform(k_chi, (n,))
     u_eps = jax.random.uniform(k_eps, (n,))
-    q, vi_n, vj_n = jax.vmap(functools.partial(_pair_kernel, sp=sp))(
-        v_nodes, v_nodes[j], u_chi, u_eps
-    )
-    f_i = cell_query(tables, c, x, vi_n, scale, k, basis, chunk, direction=_side(vi_n, normals))
-    f_j = cell_query(
-        tables,
-        c,
-        x[j],
-        vj_n,
-        scale,
-        k,
-        basis,
-        chunk,
-        direction=None if normals is None else _side(vj_n, normals[j]),
-    )
+    if cell_fit.is_cell(basis) and cell_fit.parse(basis).rb:
+        q = collision_rate(v_nodes, v_nodes[j], 0, 0, sp)
+        vi_pts, vj_pts = _scatter_sigma(v_nodes, v_nodes[j], sp)
+    else:
+        q, vi_n, vj_n = jax.vmap(functools.partial(_pair_kernel, sp=sp))(
+            v_nodes, v_nodes[j], u_chi, u_eps
+        )
+        vi_pts, vj_pts = (vi_n,), (vj_n,)
+    # j shares i's cell (the sentinel for a dead i, whose increment is dropped)
+    normal_j = None if normals is None else normals[j]
+    query = functools.partial(_query, field, scale=scale, k=k, basis=basis, chunk=chunk)
+    f_i = sum(query(cell, x, p, normals) for p in vi_pts) / len(vi_pts)
+    f_j = sum(query(cell, x[j], p, normal_j) for p in vj_pts) / len(vj_pts)
     four = f_i + f_j - f_node - f_node[j]
     w = weight * q
     delta = delta + _per_slot(w, four) * four
@@ -660,6 +768,42 @@ def _partner_pass(
     return (delta, kern), None
 
 
+def _scatter_sigma(vi, vj, sp):
+    """Six post-collision velocity pairs of ``(vi, vj)`` (``f64[N, 3]``, species 0) whose
+    equal-weight average of any function quadratic in the post-collision velocity is its
+    expectation over the VSS scattering angle -- the symmetric sigma points of the
+    post-collision relative direction ``n``, whose mean is ``E[cos chi] g_hat`` and
+    covariance ``var(cos chi) g_hat g_hat^T + (1 - E[cos^2 chi]) / 2 (I - g_hat g_hat^T)``
+    (``cos chi = 2 u^(1/alpha) - 1``: ``E[cos chi] = (alpha - 1)/(alpha + 1)``,
+    ``E[cos^2 chi] = 1 - 4 alpha / ((alpha + 1)(alpha + 2))``).  Returns two tuples of six
+    ``f64[N, 3]``: the ``i`` and ``j`` velocities (:func:`jax_dsmc.collide.vss.scatter`:
+    ``v_cm +- m_other / (m_i + m_j) |v_r| n``)."""
+    alpha = sp.alpha[0, 0]
+    vr = vi - vj
+    g = jnp.sqrt(jnp.sum(vr * vr, axis=1, keepdims=True))
+    ghat = vr / jnp.maximum(g, jnp.finfo(vr.dtype).tiny)
+    # two unit vectors perpendicular to g_hat (any pair: the law is axisymmetric)
+    helper = jnp.where(
+        jnp.abs(ghat[:, :1]) < 0.9, jnp.asarray([[1.0, 0.0, 0.0]]), jnp.asarray([[0.0, 1.0, 0.0]])
+    )
+    e1 = helper - jnp.sum(helper * ghat, axis=1, keepdims=True) * ghat
+    e1 = e1 / jnp.sqrt(jnp.sum(e1 * e1, axis=1, keepdims=True))
+    e2 = jnp.cross(ghat, e1)
+    mean_cos = (alpha - 1.0) / (alpha + 1.0)
+    mean_cos2 = 1.0 - 4.0 * alpha / ((alpha + 1.0) * (alpha + 2.0))
+    s_par = jnp.sqrt(jnp.maximum(mean_cos2 - mean_cos**2, 0.0))
+    s_perp = jnp.sqrt((1.0 - mean_cos2) / 2.0)
+    vcm = 0.5 * (vi + vj)  # equal masses (species 0 with itself)
+    root3 = jnp.sqrt(3.0)
+    vi_pts, vj_pts = [], []
+    for axis, spread in ((ghat, s_par), (e1, s_perp), (e2, s_perp)):
+        for sign in (1.0, -1.0):
+            n = mean_cos * ghat + sign * root3 * spread * axis
+            vi_pts.append(vcm + 0.5 * g * n)
+            vj_pts.append(vcm - 0.5 * g * n)
+    return tuple(vi_pts), tuple(vj_pts)
+
+
 def _side(v, normals):
     """One-sided fit direction of a query: ``sign(v . n) n`` (zero rows: unrestricted)."""
     if normals is None:
@@ -667,14 +811,14 @@ def _side(v, normals):
     return jnp.sign(jnp.sum(v * normals, axis=1))[:, None] * normals
 
 
-def _boundary_move(lam, x, v_prev, v_nodes, ids, valid, c, moved, normals, scale, k, basis, chunk):
+def _boundary_move(
+    lam, x, v_prev, v_nodes, ids, valid, cell, moved, normals, scale, k, basis, chunk, grid,
+    split, fallback,
+):  # fmt: skip
     tables = (x[ids], v_nodes[ids], valid, lam[ids])
-    f_prev = cell_query(
-        tables, c, x, v_prev, scale, k, basis, chunk, direction=_side(v_prev, normals)
-    )
-    f_here = cell_query(
-        tables, c, x, v_nodes, scale, k, basis, chunk, direction=_side(v_nodes, normals)
-    )
+    field = _field(tables, scale, basis, grid, split, fallback)
+    f_prev = _query(field, cell, x, v_prev, normals, scale, k, basis, chunk)
+    f_here = _query(field, cell, x, v_nodes, normals, scale, k, basis, chunk)
     return jnp.where(_per_slot(moved, lam), lam + f_prev - f_here, lam)
 
 
@@ -702,22 +846,22 @@ def _substep(
     partners,
     pair_score,
     normals,
+    grid,
+    split,
+    fallback,
 ):
     """One backward substep: ``lam += (dt/S) L* lam`` with ``partners`` virtual partners per
     particle, then the value move of particles whose state differs across the boundary."""
     lam, key = carry
     v_nodes, v_prev = xs
     key, sub = jax.random.split(key)
-    tables = (x[ids], v_nodes[ids], valid, lam[ids])
-    c = jnp.minimum(cell, count.shape[0] - 1)
-    f_node = cell_query(
-        tables, c, x, v_nodes, scale, k, basis, chunk, direction=_side(v_nodes, normals)
-    )
+    field = _field((x[ids], v_nodes[ids], valid, lam[ids]), scale, basis, grid, split, fallback)
+    f_node = _query(field, cell, x, v_nodes, normals, scale, k, basis, chunk)
     body = functools.partial(
         _partner_pass,
         x=x,
         v_nodes=v_nodes,
-        tables=tables,
+        field=field,
         f_node=f_node,
         ids=ids,
         cell=cell,
@@ -740,7 +884,16 @@ def _substep(
     moved = alive & jnp.any(v_prev != v_nodes, axis=1)
     lam = lax.cond(
         jnp.any(moved),
-        functools.partial(_boundary_move, scale=scale, k=k, basis=basis, chunk=chunk),
+        functools.partial(
+            _boundary_move,
+            scale=scale,
+            k=k,
+            basis=basis,
+            chunk=chunk,
+            grid=grid,
+            split=split,
+            fallback=fallback,
+        ),
         _boundary_skip,
         lam,
         x,
@@ -748,7 +901,7 @@ def _substep(
         v_nodes,
         ids,
         valid,
-        c,
+        cell,
         moved,
         normals,
     )
@@ -771,6 +924,7 @@ def _step_pullback_virtual(
     pair_score,
     collision_out,
     columns_out,
+    fallback_capacity,
 ):
     """One captured step backward under the virtual pull-back, then the move pull-back."""
     mu, key = carry
@@ -808,6 +962,9 @@ def _step_pullback_virtual(
         partners=partners,
         pair_score=pair_score,
         normals=normals_k,
+        grid=grid,
+        split=_split_context(normals_k, ids, valid, basis),
+        fallback=fallback_capacity,
     )
     (lam, _), (kern, delta) = lax.scan(
         body, (mu, step_key), (stages[1:], stages[:-1]), reverse=True
@@ -841,6 +998,7 @@ def _step_pullback_virtual(
         "pair_score",
         "collision_out",
         "columns_out",
+        "fallback_capacity",
     ),
 )
 def backward_virtual(
@@ -865,6 +1023,7 @@ def backward_virtual(
     normals=None,
     collision_out=False,
     columns_out=False,
+    fallback_capacity=0,
 ):
     """Reverse scan over the captured steps with the virtual-partner collision pull-back.
 
@@ -876,6 +1035,11 @@ def backward_virtual(
     position, zero rows away from surfaces: :func:`jax_dsmc.mesh.geometry.nearest_normal`)
     makes every fit query one-sided -- the nodes on the query velocity's side of
     ``v . n = 0`` only; ``None`` keeps the two-sided fit (bitwise the old results).
+    ``basis`` ``"cell:..."`` replaces the per-query fit by one fit per cell
+    (:mod:`jax_dsmc.cell_fit`; split at ``v . n = 0`` with ``normals``); its complex cells
+    (``align``) are answered by the per-query one-sided fit, at most
+    ``fallback_capacity`` queries per field evaluation (:func:`fallback_capacity`; 0: none,
+    the split fit everywhere).
     ``collision_out=True`` also returns each slot's per-step collision increment of the
     first value column and its cell sums (:attr:`Backward.collision`, ``f32[M, N]``;
     :attr:`Backward.cell_collision`, ``f64[M, C]``).  ``columns_out=True`` (value columns
@@ -912,6 +1076,7 @@ def backward_virtual(
         pair_score=pair_score,
         collision_out=collision_out,
         columns_out=columns_out,
+        fallback_capacity=fallback_capacity,
     )
     (mu0, _), (lam, kern, coll) = lax.scan(
         body, (mu, key), (records, phi_step, hit_reward, normals), reverse=True

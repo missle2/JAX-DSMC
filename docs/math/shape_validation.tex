@@ -1,0 +1,1046 @@
+% docs/math/shape_validation.tex
+% Reference deck: the whole validation history of the adjoints of JAX-DSMC, from the
+% forward gates and the parameter gradients on Couette, inlet and relaxation cases to the
+% shape gradient, its cluster studies and the 2026-10 bias study.  The derivation is in
+% shape_derivation.tex (presentation) / shape_derivation_code.tex (with code).  Numbers are
+% copied from docs/ADJOINT_BRANCH_REVIEW.md ("review"), docs/HANDOFF.md,
+% examples/mesh/cluster/study_results.json and scratch/bias/*.jsonl; inputs
+% shape_audit_gate.tex, shape_bias_{fm,diffuse,kn}.tex (scratch/bias/latex_tables.py).
+% Build: see docs/math/README.md.
+\documentclass[10pt,aspectratio=169]{beamer}
+\newif\ifcodedeck
+\codedecktrue
+\input{shape_slides_style}
+\graphicspath{{../../examples/}}
+
+\title{Adjoint and shape-gradient validation in JAX-DSMC}
+\subtitle{Every gate, study and finding, 2026-09-05 to 2026-10-11}
+\date{2026-10-11}
+
+\newcommand{\fig}[2]{\includegraphics[width=#1\linewidth]{#2}}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+
+\begin{frame}{How to read this deck}
+\small
+\textbf{Arbiters}, from strongest to weakest:
+\begin{itemize}
+\item analytic or exact references (closed forms, Rankine--Hugoniot, exact quadrature, replica-exact
+  value gradients on collisionless cases);
+\item \textbf{CRN FD}: central finite difference on the \emph{same} seeds (common random numbers),
+  paired with the estimator seed by seed; noise grows like $1/h$ across hit-set jumps;
+\item \textbf{FD-only}: finite differences over many independent seeds (no pairing).
+\end{itemize}
+$z$ = (estimator $-$ arbiter) / SE of the paired difference.  ``Seeds'' always means independent
+forward runs.  Lesson learned repeatedly: never conclude from 2 seeds.
+
+\medskip
+\textbf{Timeline}
+\begin{center}\footnotesize
+\begin{tabular}{@{}lll@{}}
+\toprule
+dates & phase & part\\
+\midrule
+09-05 -- 09-11 & forward gates; trajectory (DiCE) adjoint, boundary adjoints & I, II\\
+09-14 -- 09-17 & estimator benchmark; P3 ensemble adjoint, route (b), virtual partners & II\\
+09-18 -- 09-24 & embedded bodies; shape adjoint; level set; diffuse terms; cluster studies & III\\
+09-25 -- 10-02 & \code{mode2} and squash studies on the cluster & III\\
+10-02 -- 10-04 & bias study: seven findings, collisional terms built & IV\\
+\bottomrule
+\end{tabular}
+\end{center}
+Derivation of the current estimator: \code{shape\_derivation.tex} (with code:
+\code{shape\_derivation\_code.tex}).
+\end{frame}
+
+% =======================================================================================
+\section{I. Forward solver}
+
+\begin{frame}{Forward gates: transport and shocks}
+\small
+\textbf{Shear viscosity, Couette} (Chapman--Enskog, no free parameter).  Four wrong explanations
+of an apparent deficit preceded the right one; every one was a quantity read without an error
+bar.  The gate is the double extrapolation, 4 seeds per point:
+\[
+\mathrm{Kn}\to0:\ 0.9971\pm0.0095,\qquad dx\to0:\ +0.0135\pm0.0039,\qquad
+\mu/\mu_{\mathrm{CE}} = 1.0105\pm0.0103\ (|t| = 1.0).
+\]
+\textbf{2-D Taylor--Green decay}: viscosity $+0.38\,\%$ from Chapman--Enskog ($R^2 = 0.9994$).
+
+\textbf{Normal shock} (Bird \S12.11): $L/\lambda_1 = 5.98 / 6.12 / 6.18$ at $D = 1/2/3$ against
+$6.2$; jump conditions $0.1$--$0.7\,\%$, shock speed $0.3\,\%$.
+
+\textbf{Inflow-driven Mach-2 shock}: all six moments within $0.5\,\%$ of Rankine--Hugoniot, mass
+flux to $0.06\,\%$.
+
+\begin{center}
+\fig{0.48}{couette/figures/knudsen.png}
+\end{center}
+\end{frame}
+
+\begin{frame}{Forward gates: embedded bodies against SPARTA (2026-09-18)}
+\footnotesize
+Cut-cell geometry identical to SPARTA's (cell classes, cut set, volumes to $10^{-7}$); argon
+circle and sphere, 4 seeds each, every tracking diagnostic zero.
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+gate & circle & sphere & criterion\\
+\midrule
+final particle count & $z = -1.05$ & $z = 0.97$ & $|z|\le2$\\
+total drag & $+0.31\,\%$ ($z = 1.36$) & $-0.11\,\%$ ($z = -0.30$) & $|z|\le2$\\
+per-cell $n$, $u$, $T$ & rms $z$ 1.2, 90--92\,\% within 2 & rms $z$ 1.24, 91\,\% & \\
+polygon vs analytic body & drag $+0.5\,\%$ & $+0.75\,\%$ & \\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{Free-molecular drag} (FG5), extrapolated to zero blockage, against the half-range
+surface integral:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+case & measured $C_D$ & reference & $z$\\
+\midrule
+circle, specular & $17.080\pm0.080$ & $17.175$ & $-1.18$\\
+circle, diffuse & $20.429\pm0.087$ & $20.429$ & $0.00$\\
+sphere, specular & $14.684\pm0.211$ & $14.804$ & $-0.57$\\
+sphere, diffuse & $20.990\pm0.295$ & $21.211$ & $-0.75$\\
+\bottomrule
+\end{tabular}
+\end{center}
+The reference box (60\,\% blockage) raises the drag $\sim$50\,\% above the isolated body's.
+\end{frame}
+
+% =======================================================================================
+\section{II. Parameter gradients}
+
+\begin{frame}{The trajectory (DiCE) adjoint, M6--M8 (2026-09-05 \dots 09-11)}
+\footnotesize
+Score-function plus pathwise AD through the whole run (\code{jax\_dsmc/adjoint.py}).
+\begin{itemize}
+\item Oracles: [P1] Algorithm 2 and [P2] Algorithm 3 against \code{jax.grad} exactly
+  ($10^{-11}$, $10^{-10}$); move$\to$collide recursion to $10^{-16}$ (Oracle 3).
+\item Pathwise wall gradients: $\dd J/\dd T_{\mathrm{wall}}$, $\dd J/\dd u_{\mathrm{wall}}$ to
+  $3\times10^{-12}$ against fixed-key FD, and against the Couette closed form (figure).
+\item Inflow \code{nrho} (score): FD/AD $= 1.04$, $|z| = 0.81$.
+\item \textbf{Attribution bias}: pairing each score with its own particle's reward is exact without
+  collisions ($|z| = 0.18$) and $2.8\times$ low with them ($|z| = 22$), growing with the horizon
+  (FD/AD $1.13 \to 2.82$ from 2 to 40 steps).  Accommodation biased $2.8\times$; shock
+  $\dd(\rho_2/\rho_1)/\dd u_1$ \textbf{wrong sign}.
+\item VSS $\alpha$: argon's $\alpha = 1.40$ sits at the stationary point $\sqrt2$ of
+  $\langle\cos^2\chi\rangle$; $\dd T_y/\dd\alpha\approx0$ is the right answer (AD tracks FD,
+  $|z|\le0.96$, across $\alpha$).
+\end{itemize}
+\begin{center}
+\fig{0.46}{couette/figures/gradients.png}
+\end{center}
+\end{frame}
+
+\begin{frame}{Score estimators against CRN FD (review \S4.8, 384 seeds)}
+\footnotesize
+Couette ($N = 256$, 10 steps) and inlet shock ($N = 128$, 4 steps):
+\begin{center}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+control & arm & AD $-$ FD & $z$ & SE(AD)/SE(FD)\\
+\midrule
+Couette $u_{\mathrm{wall}}$ & terminal-label & $-0.001\pm0.011$ & $-0.2$ & 0.95\\
+ & trajectory, pilot baseline & $-0.068\pm0.11$ & $-1.2$ & 8.9\\
+ & trajectory, no baseline & $+0.17\pm1.2$ & $0.3$ & 90\\
+Couette $T_{\mathrm{left}}$ & terminal-label & $-0.004\pm0.03$ & $-0.3$ & 1.1\\
+ & trajectory, no baseline & $+1.19\pm2.4$ & $1.0$ & 106\\
+inlet $T$ & terminal-label & $+0.8\,\%$ & $2.6$ & 1.0\\
+inlet $n_\rho$ & every score arm & --- & --- & \textbf{185--1300}\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+\begin{itemize}
+\item The trajectory score is unbiased where resolvable but its SE grows like $M^{2.8}$ in the
+  horizon and $N^{0.56}$ in the particle count (it scores every event).
+\item A stochastically rounded count carries a score $\mp1/f$: the reservoir density is out of reach
+  of every score route.  This decided the move to the ensemble adjoint (2026-09-15).
+\end{itemize}
+\end{column}
+\begin{column}{0.43\textwidth}
+\fig{1.0}{gradient_bench/figures/estimator_triad.png}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{P3 replication and the two quadratures of the ensemble adjoint}
+\footnotesize
+\textbf{P3 Test 4 (Couette walls)}, $N = 32\,000$, 32 seeds: $\dd J/\dd u_{\mathrm{wall}} =
+3.032\pm0.010$ against the paper's $3.028$ --- a replication at the paper's precision.
+
+\textbf{P3 Test 3 (two-sided inflow)}: the transcription's own gradient is known to 1\,\%
+(1600-seed FD $0.1439\pm0.0014$); P3's retained-subset quadrature (a) depends on the retained count
+and on the reconstruction (affine $+18\,\%$, a Jensen bias of an affine fit to a convex field);
+the paper's $0.1517$ is 3--5\,\% above every estimate of the transcribed model: a forward-model
+difference at the inlet, not an adjoint one.
+
+\textbf{Route (b): values carried on the particles}, realised pairs as the collision quadrature
+(one interpolated ghost per collision).  On P3's model, two steps with strong collisions:
+interpolation-free (b) against CRN FD $+0.0008\pm0.0015$ (0.5\,\% resolution); route (a) with
+every particle retained $-0.8\,\%$ ($3\sigma$).  N$_0 = 16\,000$: (b) $0.1469\pm0.0005$ vs FD
+$0.1439\pm0.0014$ ($z = 2.0$) / $0.1466$ vs $0.1453$ ($z = 0.8$).  Cost $1/40$ of (a).
+
+\medskip
+\textbf{On the production solver} (VSS, NTC, move-then-collide, stochastic counts), inlet
+$T$, $N = 128$: the affine ghost basis read $-8.3\,\%$ ($z = -4.3$; collision term 27\,\% of the
+gradient); adding the $|v|^2$, $x^2$ columns (quadratic basis) gives $z = -0.95$.  Reservoir density:
+\textbf{0.43$\times$ the FD's noise}, unbiased.
+\end{frame}
+
+\begin{frame}{Walls as kernels, kernel parameters, and the exact sequential pull-back}
+\footnotesize
+\textbf{Diffuse walls}: the realised re-emission is a sample of the kernel, so wall $T$, $u$
+and accommodation enter only through the score of the re-emission density; no $\varepsilon$.
+\textbf{Kernel parameters} (\code{diam}, \code{omega}): $\partial_\theta\log q$ on the accepted
+pairs times their four-term.
+
+\medskip
+\textbf{The $\Delta t$-linearised pull-back is biased} where particles collide more than once a
+step: relaxation \code{diameter} $-9.9\,\%$ ($z = -4.2$) at 0.16 collisions per particle-step.
+\textbf{The sequential pull-back} (accepted attempts in reverse slot order, ghosts from the field as
+it stood after each) is the exact discrete adjoint of NTC: $-0.667\pm0.039$ vs FD $-0.675\pm0.017$.
+
+\medskip
+Every control, sequential pull-back (review \S5.7), CRN FD $h = 0.1$:
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+control & ensemble & FD & $z$ & SE ratio\\
+\midrule
+Couette accommodation & $0.2917\pm0.009$ & $0.2615\pm0.017$ & 1.7 & 0.52\\
+Couette $u_{\mathrm{wall}}$ ($\varepsilon = 0$) & $0.5865\pm0.014$ & $0.5933\pm0.0093$ & $-0.53$ & 1.47\\
+Couette $T_{\mathrm{left}}$ & $0.1634\pm0.0088$ & $0.1804\pm0.012$ & $-1.2$ & 0.73\\
+inlet $n_\rho$, $N = 128$ & $1.375\mathrm{e}5\pm1.3\mathrm{e}3$ & $1.377\mathrm{e}5\pm2.5\mathrm{e}3$ & $-0.08$ & 0.53\\
+inlet $T$, $N = 256$ & $1.364\mathrm{e}5\pm3.6\mathrm{e}3$ & $1.374\mathrm{e}5\pm1.1\mathrm{e}3$ & $-0.32$ & 3.3\\
+relaxation \code{diameter} & $-0.663\pm0.026$ & $-0.6723\pm0.012$ & 0.32 & 2.1\\
+relaxation \code{omega} & $0.2824\pm0.010$ & $0.2607\pm0.014$ & 1.2 & 0.69\\
+\bottomrule
+\end{tabular}
+\end{center}
+The accommodation FD is a step function of a decision parameter and cannot arbitrate below
+$\sim3\,\%$.
+\end{frame}
+
+\begin{frame}{Virtual-partner pull-back: bias and variance (review \S5.12)}
+\footnotesize
+The sequential form's noise grows with the collisions per particle-step and blows up above
+$\sim0.5$.  P3's virtual-partner average, with NTC weights, all four values from one cell fit,
+$S$ substeps.  Relaxation \code{diameter} against a 1800-seed FD-only arbiter $-0.6800\pm0.0034$:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+pull-back & estimate & per-seed sd & bias\\
+\midrule
+sequential & $-0.663\pm0.026$ & 0.36 & $+2.5\,\%$ ($0.7\sigma$)\\
+$\Delta t$-linearised & $-0.739\pm0.011$ & 0.15 & $-8.6\,\%$ ($5\sigma$)\\
+virtual, end-of-step nodes, $S = 2$ & $-0.641\pm0.007$ & 0.048 & $+5.8\,\%$ ($5\sigma$)\\
+virtual, staged nodes, $S = 2$ & $-0.668\pm0.007$ & 0.050 & $+1.8\,\%$\\
+virtual, staged, $S = 4$ & $-0.675\pm0.007$ & 0.048 & $+0.7\,\%$\\
+virtual, staged, $S = 8$ & $-0.680\pm0.007$ & 0.049 & $+0.1\,\%$\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+\begin{itemize}
+\item Residual $O(\Delta t/S)$; per-seed sd $7\times$ below sequential at 0.16 coll./step,
+  37--56$\times$ at 0.8.
+\item Staged nodes (the slot-order state at each substep) remove the frozen-field bias.
+\item Shipped: $(S,K) = (4,8)$, staged.
+\end{itemize}
+\end{column}
+\begin{column}{0.5\textwidth}
+\fig{1.0}{gradient_bench/figures/pullback_scan.png}
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Partner count, stability, and the Rankine--Hugoniot acceptance case}
+\footnotesize
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\textbf{Stability} (300-step shock, $\le84$ particles per cell): $K = 2$ grows geometrically
+($3\times10^6$ over the horizon); $K = 4$ marginal; $K\ge8$ one decaying curve.  The backward is
+refused when rms $\lambda$ grows more than $100\times$.
+
+\medskip
+\textbf{Acceptance case} $\dd(\rho_2/\rho_1)/\dd M_1$, 300 steps, where the pathwise derivative had the
+wrong sign: ensemble $2.74\pm0.66$, CRN FD $2.54\pm0.17$ / $2.17\pm0.42$, $z = 0.3$.  Right sign;
+coarse (per-seed sd $4\times$ the FD's): long transients cost variance; prefer windowed,
+quasi-steady objectives.
+
+\medskip
+Virtual pull-back, every control (staged, $S = 2$, $K = 8$): inlet $T$/$n_\rho$ at 0.8 collisions per
+particle-step $z = -0.7 / -0.4$, now below the CRN FD's own noise; Couette $u_{\mathrm{wall}}$
+$z = +0.8$, $T_{\mathrm{left}}$ $+1.7$; \code{omega} $+0.9\,\%$ against a 1600-seed arbiter.
+\end{column}
+\begin{column}{0.48\textwidth}
+\fig{1.0}{gradient_bench/figures/k_stability.png}
+\end{column}
+\end{columns}
+\end{frame}
+
+% =======================================================================================
+\section{III. Shape gradient}
+
+\begin{frame}{First shape oracles (2026-09-17/18)}
+\footnotesize
+\textbf{Planar oracle} (one step, collisionless, specular wall): analytic $\dd J/\dd\mathrm{gap} = -0.5917$.
+The pathwise gradient at frozen hits reads \textbf{0} (the hit set is invisible to it); the
+value-weighted $\varepsilon$-hit score $0.588\pm0.008$.
+
+\textbf{G3a window score} (1-D closed box, windowed impulse): the $\varepsilon$ hit-timing score has no
+resolvable mean on a steady window and costs 4--8$\times$ the FD's sd $\Rightarrow$ the shape runs use
+$\varepsilon = 0$; the hit set enters through the replayed wall map and band terms instead.
+
+\medskip
+\textbf{Value-form rewards on Couette} (48 seeds, CRN FD):
+\begin{center}
+\begin{tabular}{@{}llcc@{}}
+\toprule
+gate & objective, control & ensemble vs FD & $z$\\
+\midrule
+G1 & windowed $v_y^2$, wall speed & $+0.491\pm0.025$ vs $+0.4925\pm0.016$ & $-0.05$\\
+G2 & windowed shear (per-hit), wall speed & $-0.0177\pm0.0014$ vs $-0.0165\pm0.0008$ & $-0.77$\\
+G2 & same, $T_{\mathrm{left}}$ & $-0.0025\pm0.0006$ vs $-0.0032\pm0.0015$ & $+0.46$\\
+\bottomrule
+\end{tabular}
+\end{center}
+The first G2 read $40\times$ too small: the weight of a hit's kernel score must include the hit's own
+reward (reward-to-go from the draw onward).
+\end{frame}
+
+\begin{frame}{G3: a translated wall in a 2-D Couette, and what it taught}
+\footnotesize
+\begin{enumerate}
+\item \textbf{Hits change step.}  Windowed $v_y^2$: pathwise alone $+0.82\pm0.23$ vs FD
+  $+0.05\pm0.15$; the hit-timing band term ($-0.43\pm0.02$) closes it.
+\item \textbf{Two-sided fits are biased next to a wall.}  Windowed shear came out with the wrong sign
+  ($-0.012$ vs $+0.017$); nodes restricted to the leaving side ($v\cdot n > 0$) fix the sign.
+\item \textbf{Bias or horizon?}  With replica-exact value gradients the estimator equals the
+  \emph{truncated} FD on both objectives ($z = 0.5$); the gap to the full FD is the captured
+  horizon (72 captured steps before the window close it).
+\item \textbf{Estimators of $\nabla_x\lambda$} against replica-exact truth (windowed $v_y^2$, exact
+  $x/v$ part $+0.374\pm0.111$): one-sided $-0.29\pm0.17$ bias, pooled $-0.20\pm0.11$, one-sided +
+  along-flight $-0.08\pm0.11$, pooled + along-flight $-0.07\pm0.11$.  The along-flight identity holds
+  per particle ($-1.3\mathrm{e}{-5}\pm2.8\mathrm{e}{-5}$ on a scale $1.6\mathrm{e}{-3}$).
+\item \textbf{Unresolved}: the $x/v$ part of a \emph{translated flat wall} (a window-end delay
+  sensitivity); every fitted or value-based form reads 0.
+\end{enumerate}
+\textbf{Decisions (2026-09-20)}: shape controls are normal displacements of curved surfaces; the
+body is a $C^1$ level set (a polygon's vertex term is a representation artefact).
+\end{frame}
+
+\begin{frame}{Circle radius, level set and normal modes (2026-09-18 \dots 09-21)}
+\footnotesize
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\textbf{Circle radius}, analytic body, 48 seeds, collisionless:
+\begin{center}
+\begin{tabular}{@{}lc@{}}
+\toprule
+term & $10^{-20}$\,N/m\\
+\midrule
+tally & $1.28\pm0.01$\\
+$\nabla_v\lambda$ part & $0.02\pm0.02$\\
+$\nabla_x\lambda$ part & $0.14\pm0.09$\\
+\textbf{ensemble} & $1.44\pm0.09$\\
+CRN FD & $1.395\pm0.02$\\
+analytic $F/r$ (no blockage) & $1.23$\\
+\bottomrule
+\end{tabular}
+\end{center}
+$z = +0.5$.  The tally reproduces $F/r$ to 4\,\%; the rest is the blockage feedback.
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Level set}: the same simulation as the analytic body to the surface error (objective to
+$2\times10^{-6}$); radius $z = -1.4$ (4 seeds).
+
+\textbf{$\cos2\theta$ mode} (coarse, 4 seeds): ensemble $-1.587\pm0.030$ vs FD $-1.617 / -1.571$
+($z = +0.7 / -0.2$); per-seed sd 3.8\,\% (radius: 45\,\%).
+
+\textbf{Sphere radius} (8 seeds, cluster): $3.389\pm0.048$ vs FD $3.487\pm0.031$ ($10^{-20}$), $z = -1.71$.
+
+\textbf{Lane vs stencil tracker}: gradients agree to $2.3\times10^{-15}$.
+
+\textbf{First optimisation}: 8 GD iterates, drag $-7.4\,\%$ at fixed area.
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Grazing hits and the diffuse terms (2026-09-21/22)}
+\footnotesize
+\textbf{Grazing regularisation}: the per-hit derivative carries $1/(v\cdot n)$; one hit at
+$|v\cdot n|/|v| = 3\times10^{-3}$ was 15\,\% of a window's tally.  Floor in the derivative only:
+\begin{center}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+$\epsilon$ & 0 & 0.01 & 0.03 & 0.1 & 0.3\\
+\midrule
+seed sd of the tally term & 8.4\,\% & 5.9\,\% & 4.2\,\% & 2.9\,\% & 2.1\,\%\\
+paired bias vs $\epsilon = 0$ & --- & $+1.0\pm1.1$ & $+0.5\pm1.8$ & $-1.2\pm2.3$ & $-7.4\pm2.4$\\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{Diffuse capsule plate (GP)}, control = half-width: first pass 80\,\% of FD (silhouette
+term needed; score resolution); then the \textbf{hybrid normal term} (pathwise reward through the
+reparameterised re-emission + score on the value after the hit) cut the normal term's seed sd
+$4\times$: \textbf{$1.191\pm0.068$ vs FD $1.169\pm0.096$} ($z = +0.19$; $|z|\le1.6$ at five FD steps).
+Silhouette = 45\,\% of the gradient.
+
+\textbf{Diffuse circle (GD)}: $1.348\pm0.25$ with timing vs FD $1.442\pm0.03$ / $1.128\pm0.16$;
+silhouette 61\,\%; 9\,\% low against the precise FD without the timing term (open then; see Part IV).
+\begin{center}\fig{0.55}{mesh/figures/plate_estimators.png}\end{center}
+\end{frame}
+
+\begin{frame}{The specular capsule and the future-class fit (2026-09-22, superseded)}
+\footnotesize
+\textbf{Specular capsule}: mixed-pool fits read $-27\,\%$ ($z = -11$); the tally alone matched the FD
+seed by seed, and the deficit sat in the $\nabla\lambda$ parts.  Cause: at the curved cap the one-sided
+rule does not separate leaving particles from those heading for the flat face.
+
+\textbf{Stratifying the fits by ``a body hit at a later step''} fixed it:
+$0.964\pm0.037 \to 1.356\pm0.011$ vs FD $1.35$ ($z = +0.08$), and became the default.
+
+\medskip
+\textbf{It was biased by construction} (found 2026-09-25, explained 2026-10-02): the class is a
+property of the particle's future, so the fit drops $\nabla P\,(\lambda_1 - \lambda_0)$ (Part IV,
+Finding 1).  On the capsule $P\approx0$ after a reflection, so it was harmless there; on the fine
+$\cos2\theta$ mode (32 seeds, cluster) it read $-2.386\pm0.005$ against FD $-1.592$
+($z\approx-120$), the tally alone matching the FD ($z = -0.33$).
+
+\medskip
+\textbf{Consequences}: the \code{optc} optimisations ran with the class; the squash studies did not.
+The class is now a diagnostic option that warns.
+\end{frame}
+
+\begin{frame}{Cluster studies: \code{optc} free-shape optimisation (2026-09-22 \dots 09-25)}
+\footnotesize
+Coarse circle, $f_{\mathrm{num}}\times1$, specular, collisionless, fixed area; $S\in\{1,2,4,8\}$
+CRN seeds per iterate $\times$ \{GD, Adam\}; along-pool fits \emph{with the future class}.
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+run & iterates & drag change (in-sample) & held-out (4 seeds) & end\\
+\midrule
+S1 GD & 131 & $-14.9\,\%$ & within 1\,\% & cancelled\\
+S2 GD & 216 & $-19.2\,\%$ & within 1\,\% & time limit\\
+S4 GD & 113 & $-19.0\,\%$ & within 1\,\% & time limit\\
+S8 GD & 61 & $-13.9\,\%$ & within 1\,\% & host OOM\\
+S1 Adam & 250 & $-37.1\,\%$ & within 1\,\% & complete\\
+S2 / S4 / S8 Adam & 96 / 102 / 37 & $-38.8 / -35.0 / -41.8\,\%$ & within 1\,\% & inflow face / limit\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}
+\item Every failure on the way was a real tracking or meshing defect, fixed at its root (reinitialisation
+  band, smoothed Adam step, stuck particles, concave re-entry, split cells, replay tolerance $10^{-9}$),
+  and led to the lane tracker ($2\times$ faster, $-45\,\%$ memory).
+\item The Adam bodies reach the outflow and inflow faces: their reductions are not those of an
+  isolated body (a clearance constraint is needed).  The gradient they followed was class-biased.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Cluster studies: the squash gate and optimisations (2026-10-01/02)}
+\footnotesize
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\textbf{Free-molecular gradient gate} ($f_{\mathrm{num}}\times1$, 8 seeds), adjoint $-$ CRN FD (\% of FD):
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+variant & $s = 0.35$ & $0.6$ & $1$\\
+\midrule
+tally alone & $-2.6$ & $-2.4$ & $-2.4$\\
+\code{one} & $-2.8$ & $-3.0$ & $-7.5$\\
+\code{one\_pool} & $\mathbf{-15.5}$ & $-3.8$ & $-2.9$\\
+\code{along} & $-1.6$ & $-2.1$ & $-3.8$\\
+\code{along\_pool} (used) & $\mathbf{-9.1}$ & $-4.0$ & $-3.0$\\
+\bottomrule
+\end{tabular}
+\end{center}
+($\pm1$--$5\,\%$; \code{along\_pool} $z = -8.3$ at $s = 0.35$.)
+
+\textbf{Optimisations} (Adam, 25 iterates, \code{along\_pool}, 0.2-step timing band, no cut-volume or
+order terms, identity without $\Lstar\lambda$):
+free-molecular S1/S4: $s = 0.355 / 0.339$ (reference optimum 0.35);
+Kn 0.5: S1 drifts to $s = 1.21$, S4 to $1.13$ (8 iterates); Kn 0.5, M 10: S1 to $0.48$ (12 iterates).
+\end{column}
+\begin{column}{0.48\textwidth}
+\fig{1.0}{mesh/figures/squash/squash_gradient_gate.png}
+
+\fig{1.0}{mesh/figures/squash/squashkn_kn0.5_optimisation.png}
+\end{column}
+\end{columns}
+\end{frame}
+
+% =======================================================================================
+\section{IV. Bias study}
+
+\begin{frame}{Bias study (2026-10-02 \dots 10-04): method}
+\small
+Small runs on the 4\,GB workstation GPU; every estimator paired with the CRN FD of the same seed
+(\code{scratch/bias/}: \code{kn\_gate.py}, \code{fm\_exact.py}, \code{horizon.py}, \code{fd\_only.py},
+\code{summarise.py}).
+\begin{itemize}
+\item Squash ellipse ($R = 1.5$, $h_\phi = 0.0625$, grazing 0.05), 20$\times$20 cells, warm-up 700,
+  300 captured steps, window 200, CRN FD $h = 0.05$.
+\item Free-molecular and Kn $= 0.5$ ($\nu\Delta t\approx2.5\,\%$) at $f_{\mathrm{num}}\times2$ (75 particles
+  per cell); virtual pull-back $2\times4$ locally.
+\item All $\nabla_x\lambda$ variants from one replay, so their differences are paired too.
+\end{itemize}
+\textbf{An exact free-molecular reference that failed}: without collisions a path is a deterministic
+function of $\theta$, so the forward-mode JVP chained step to step is the exact pathwise derivative
+(reproduces the drag to $2\times10^{-16}$).  The box is a dispersing billiard (convex body, specular
+walls): tangents grow at every bounce, and the chained JVP ranged from $-5.5\times$ to $+8.8\times$
+the tally term over 8 seeds.  Useless per seed; the fits' smoothing is what makes the ensemble
+adjoint usable.
+\end{frame}
+
+\begin{frame}{Audit: every $\theta$-dependence of the forward}
+\footnotesize
+\scriptsize
+\begin{tabular}{@{}llll@{}}
+\toprule
+dependence & term & before the study & now\\
+\midrule
+hit times, points, specular $\vout$ & pathwise $x$, $v$ & in & in\\
+reward through $\vout$ & tally & in & in\\
+diffuse kernel normal & score & in & in (0 specular)\\
+hit $\leftrightarrow$ miss & silhouette & in & in (off for specular)\\
+hit crosses a window edge & timing & \textbf{reported, not added} & in, 10-step band (F6)\\
+hit/collision order at every step & order & \textbf{missing} & in (F7)\\
+cut-cell volume in NTC & operator & \textbf{missing} & in (F2)\\
+$\nabla_x\lambda$ along $v$ with collisions & along-flight & \textbf{$\Lstar\lambda$ dropped} & in (F3)\\
+node sets of the fits & --- & \textbf{future class (optc); pool across body} & state-based (F1, F5)\\
+newborn / leaving particles' hits & --- & unmonitored & warns above $10^{-3}$ (F4)\\
+\bottomrule
+\end{tabular}
+
+\medskip
+The VJP of the move is complete: every floating output of the wall map gets a cotangent, and the
+replay is checked against the record at every step.  F1--F7: the findings that follow.
+\end{frame}
+
+\begin{frame}{Finding 1: the future-class fit is biased, and cannot be repaired}
+\footnotesize
+\renewcommand{\medskip}{\smallskip}
+\input{shape_audit_gate.tex}
+
+\scriptsize
+\textbf{Not repairable}: restoring $\nabla P(\lambda_1 - \lambda_0)$ needs $\nabla P$ from the same local
+regression, and that sum is the mixed-pool fit again, with more variance.  Free-molecular squash:
+$+4$ to $+20\,\%$.  Valid stratification uses the present state ($v\cdot n$, the tangent half-space).
+\end{frame}
+
+\begin{frame}{Free-molecular specular squash: adjoint $-$ FD, \% of FD}
+\footnotesize
+\input{shape_bias_fm.tex}
+
+\normalsize
+\medskip
+\footnotesize
+8 CRN seeds per $s$ ($f_{\mathrm{num}}\times2$), $\pm$1 SE of the paired difference.  ``+ timing'':
+window-edge term (0.2-step band at $s = 0.35, 0.6$; 10-step band at $s = 1$).
+\begin{itemize}
+\item \code{one\_pool}, \code{along\_pool} (the cluster runs' variant): $-19\,\%$ / $-9\,\%$ at
+  $s = 0.35$, $-5\,\%$ at $s = 0.6$ --- Finding 5.
+\item Restricted to the hit's half-space (\code{*\_plane}): every entry within $2\sigma$; pooled over $s$
+  a residual of about $-2\,\%$ remains (located below).
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Finding 5: the pooled fit reaches across a thin body}
+\small
+The pooled fit draws its $k = 96$ nodes from the $3\times3$ block around the hit's cell
+($1.5\times1.5$\,m).  At $s = 0.35$ the body is $2sR = 1.05$\,m thick, two cells: the block around
+a hit on the upper face holds the particles \emph{below} the body.  Their values have nothing to do
+with the query's, and the one-sided rule does not separate them (below the body,
+$v\cdot n_{\mathrm{top}} > 0$ means moving towards the lower face).
+
+\medskip
+\textbf{Fix}: drop the nodes more than a quarter cell behind the plane through the query, normal to
+its hit normal, $(x_{\mathrm{node}} - x_q)\cdot n \ge -\tfrac14\Delta x$.  Variants
+\code{one\_pool\_plane}, \code{along\_pool\_plane}; the latter is the default everywhere.  It also
+removes most of the $v$ part's spread ($-1.1\to-0.12\times10^{-21}$ at $s = 0.35$).
+\end{frame}
+
+\begin{frame}{Finding 6: the window-edge timing term}
+\small
+\begin{itemize}
+\item It was left out as ``zero mean on a steady window''.  The window is steady (drag change over the
+  200 steps $-0.1\,\%$ specular, $+0.8\,\%$ diffuse).
+\item The 0.2-step band (one step per edge, $\sim$10 hits per seed) read $+2.8\pm1.2\,\%$ at $s = 1$ and
+  $-35\,\%$ on one diffuse seed: first mistaken for the missing $-2.4\,\%$; it is noise.
+\item 10-step band (whole steps per edge), same 8 seeds: $+0.03\pm0.25\,\%$.
+\end{itemize}
+\textbf{Decision}: the term belongs to the windowed objective's derivative (nonzero whenever the
+window is not steady), so it is in the reported gradient, with the 10-step band as default.
+
+\vspace{1em}
+\textbf{Diffuse squash} ($a = 1$, free-molecular, $s = 1$, 8 seeds, silhouette band 0.03):
+\begin{columns}[T]
+\begin{column}{0.4\textwidth}
+\footnotesize\input{shape_bias_diffuse.tex}
+\end{column}
+\begin{column}{0.58\textwidth}
+\footnotesize
+$9.12$ (tally, hybrid) $+\,9.84$ (silhouette) $-\,0.13$ (normal score) $-\,0.15$ ($\nabla\lambda$)
+$[10^{-21}]$ against FD $19.0$: the silhouette term is half the gradient; every variant but the
+cross-body \code{one\_pool} within its $\pm3\,\%$ noise.  The first diffuse squash gate.
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Finding 2: the cut-cell volume term, built and gated}
+\small
+NTC's $1/V_c$ was seen by neither the replay nor the VJP.  Built 2026-10-02 (derivation: Term 7).
+
+\textbf{Machinery gate} (Kn $= 0.5$, $f_{\mathrm{num}}\times4$, 8 seeds): scale the NTC volume of a set of
+cells by $1+\epsilon$ --- the only change --- and compare the FD in $\epsilon$ with the adjoint's
+$\sum_c g_c V_c$:
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+cells scaled & FD & adjoint & $z$\\
+\midrule
+all & $2.11\pm0.26$ & $2.45\pm0.08$ & $-1.2$\\
+cut cells & $0.69\pm0.45$ & $0.34\pm0.01$ & $+0.8$\\
+\bottomrule
+\end{tabular}
+\quad ($10^{-3}$\,N/m)
+\end{center}
+\textbf{Geometry factor}: $\sum_c\partial V_c/\partial s = -7.068$ against $-\pi R^2 = -7.069$.
+
+\textbf{Size} at Kn 0.5, $s = 1$: $-4.4\times10^{-4}$ $= -2.9\,\%$ of $\dd D/\dd s$ (seed SE 0.1\,\%).
+\end{frame}
+
+\begin{frame}{Finding 3: the along-flight identity with collisions}
+\small
+The identity used was $v\cdot\nabla_x\lambda = -T$; with collisions it is $-T - \Lstar\lambda$
+(the omission was justified at $\le0.3\,\%$ collisions per step; Kn 0.5 has 2.5\,\%).  Fitted slope
+against the identity's value of its component along $v$, paired (x part, $10^{-4}$\,N/m, 8 seeds):
+\[
+\text{fit} - \text{identity}(T + \Lstar\lambda) = -1.3\pm0.5,\qquad
+\text{fit} - \text{identity}(T) = +4.9\pm0.5 .
+\]
+\begin{itemize}
+\item Without $\Lstar\lambda$ (the cluster runs) the identity is off by 3.2\,\% of $\dd D/\dd s$ ($z\approx10$);
+  with it fit and identity nearly agree; the residual $-0.8\,\%$ is the $O(\nu\Delta t)$ of the discrete scheme.
+\end{itemize}
+\footnotesize
+Kn 0.5, adjoint $-$ paired FD (\% of FD; the $h = 0.05$ FD has 18\,\% per-seed noise):
+
+\medskip
+\input{shape_bias_kn.tex}
+\quad (\code{\_free}: identity without $\Lstar\lambda$.)
+\end{frame}
+
+\begin{frame}{Finding 7: the order of a hit and the step's collisions}
+\small
+NTC collides once per step, after the move.  A hit that slips from step $k$ into $k+1$ collides in
+step $k$ as the incoming particle instead of the reflected one:
+$J_c = c(x_w,\vin) - c(x_w,\vout)$, $c = \Delta t\,\Lstar\lambda$, at every step boundary.  The
+window-edge reward jump is the collisionless remainder of the same event.
+
+\medskip
+Kn 0.5, $s = 1$, 8 seeds: $+6.3\pm4.4\times10^{-5}$ $= +0.4\pm0.3\,\%$ of $\dd D/\dd s$.  Small,
+because the incoming and reflected collision effects differ by a small fraction of the reward; in
+the gradient by default.
+
+\medskip
+\textbf{Finding 4} (unscored hits): hits of particles born in the step or leaving the box in it
+get no reward in $\lambda$ and no VJP.  Their share is recorded; zero while the body is more than
+$|v|\Delta t$ from the inflow and outflow faces; nonzero only for the \code{optc} Adam bodies that
+reached those faces.  Now warns above $10^{-3}$.
+\end{frame}
+
+\begin{frame}{Audit: where could a no-collision assumption hide?}
+\footnotesize
+The step is move (hits) $\to$ NTC collisions.  Each term's justification, re-checked with collisions:
+
+\medskip
+\begin{tabular}{@{}p{3.2cm}p{5.6cm}p{4.2cm}@{}}
+\toprule
+term & assumption & with collisions\\
+\midrule
+pathwise $x$, $v$ & $\nabla\lambda_k$ at the post-move state; $\lambda_k$ includes step $k$'s collisions & holds\\
+tally, score, hybrid normal & exact reward; weights $\lambda$ + later rewards & holds\\
+silhouette & straight flight to the step end & holds (collisions follow the move)\\
+\textbf{timing band} & a hit changing step matters only at the window edges & \textbf{wrong}: the hit/collision order swaps --- Finding 7\\
+along-flight & $v\cdot\nabla_x\lambda = -T-\Lstar\lambda$ & $O(\nu\Delta t)$ in the discrete scheme (F3)\\
+cut-cell volume & --- & built (F2)\\
+cell membership of a hit particle & omitted (integer) & $O(\nu\Delta t)$ below the order term\\
+fits at hit slots only & only hit slots' post-move states depend on $\theta$ & holds\\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+\begin{frame}{The free-molecular $-2\,\%$: noise or bias?}
+\footnotesize
+Adjoint $-$ FD (\%), 8 seeds per $s$, $f_{\mathrm{num}}\times2$; pooled with inverse-variance weights:
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & $s = 0.35$ & $0.6$ & $1$ & pooled \\
+\midrule
+\code{along\_pool\_plane} & $-1.7$ & $-2.5$ & $-1.5$ & $-1.8\pm0.7$ ($z=-2.5$)\\
+\code{one\_pool\_plane} & $-2.7$ & $-2.6$ & $-1.5$ & $-2.6\pm0.5$ ($z=-5.3$)\\
+tally term alone & $-1.2$ & $-2.6$ & $-1.2$ & \\
+tally alone, $f_{\mathrm{num}}\times1$ (cluster gate) & $-2.6$ & $-2.4$ & $-2.4$ & ($\pm0.9$--$1.4$ each)\\
+\bottomrule
+\end{tabular}
+\end{center}
+\textbf{Systematic}, and it sits in the \emph{tally} term, which is exact given the hits.
+\begin{itemize}
+\item FD curvature ($h = 0.05$, on the analytic reference): $\le0.15\,\%$, wrong sign.
+\item Grazing cut-off removed (same forward): $+0.15\pm0.25\,\%$.
+\item \textbf{The captured horizon}: particles reflected \emph{before} the captured steps bounce off the
+  specular $y$ walls ($\sim$230-step round trip) and re-hit inside the window; the adjoint cannot see
+  their first hit's dependence on the shape.  Capturing 600 instead of 300 steps (same forward,
+  $f_{\mathrm{num}}\times4$, 8 seeds): $+0.8\pm0.25\,\%$ at $s = 1$, $+1.1\pm0.3\,\%$ at $s = 0.35$.
+\end{itemize}
+Most of the $-2\,\%$ is truncation, not a code error; it grows with the box's memory (reflective walls,
+trapping bodies).  Gates at the 1\,\% level: $\ge600$ captured steps or open $y$ faces.  Cluster jobs
+\code{fm\_hor\_s*} capture the whole run to close the remainder.
+\end{frame}
+
+\begin{frame}{Kn $= 0.5$: the remaining gap, and what it is not}
+\small
+\textbf{Precise FD} (FD-only, 32 seeds, $f_{\mathrm{num}}\times2$): $h = 0.1$: $0.01650\pm0.00019$; $h = 0.2$:
+$0.01605\pm0.00010$; Richardson $\mathbf{0.01665\pm0.00026}$.
+
+\textbf{Adjoint} (8 seeds, every term): \code{along} $-6.5\,\%$, \code{along\_pool\_plane} $-7.5\,\%$,
+\code{one\_pool\_plane} $-8.3\,\%$ (each $\pm1.8$); the old configuration $-9.7\,\%$.
+
+\medskip
+\textbf{Ruled out} (paired, same forward):
+\begin{itemize}
+\item horizon 300 $\to$ 450 captured steps: $+0.1\pm0.4\,\%$ (fit variants);
+\item virtual quadrature $S\times K = 2\times4\to4\times8$: $<1\,\%$;
+\item fit width $k = 48, 96, 192$ pooled: within 1\,\% (unpooled $k = 16$: $+4$--$10\,\%$, noisy);
+\item one-sided fits in the backward next to the body: $<1\,\%$; timing band: $+0.15\,\%$;
+\item the sequential (exact) pull-back as referee: $50\times$ noisier at this collision rate --- useless.
+\end{itemize}
+\textbf{Open}: tally $+$ volume alone $\approx$ the FD; the fitted $v$ part ($-10\,\%$ of $\dd D/\dd s$) is the
+prime suspect.  Cluster \code{biasgate} jobs: $f_{\mathrm{num}}\times1$, $4\times8$, 64-seed FD, whole-run horizon.
+\end{frame}
+
+\begin{frame}{What the week's changes do to the squashkn result}
+\footnotesize
+The squashkn cluster runs (2026-10-01/02) used the then-default estimator.  Same 8 Kn 0.5 seeds,
+$s = 1$, paired, \% of the old gradient:
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+change & effect on $\dd D/\dd s$ & sign of the old error\\
+\midrule
+$\Lstar\lambda$ in the along-flight identity (F3) & $+4.1\pm0.2\,\%$ & too low\\
+half-space restriction of the pooled fit (F5) & $+0.8\pm0.05\,\%$ & too low\\
+cut-cell volume term (F2) & $-2.9\pm0.1\,\%$ & too high\\
+hit/collision order term (F7) & $+0.4\pm0.3\,\%$ & too low\\
+10-step timing band (F6) & $\approx0$ in the mean; far less noise & ---\\
+\midrule
+\textbf{net} & $\mathbf{+2.4\,\%}$ ($+2.0\pm0.16$ without F7) & \\
+\bottomrule
+\end{tabular}
+\end{center}
+Against the precise FD: old $-9.7\,\%$ $\to$ now $-7.5\,\%$ (the open gap).
+
+\medskip
+\textbf{On the optimum}: $J'(s) = \dd D/\dd s - \lambda_A\,\dd A/\dd s$ is the difference of two nearly equal
+numbers ($\lambda_A\,\dd A/\dd s = 1.537\times10^{-2}$, $\dd D/\dd s\approx1.47\times10^{-2}$ at $s = 1$), so a few
+per cent of $\dd D/\dd s$ moves the zero of $J'$ a long way.  A linear fit of the old runs' $\dd D/\dd s$ in $s$
+($\pm50\,\%$ on the slope) puts the old zero at $s^*\approx1.08$--$1.11$, the corrected one at $\approx1.04$--$1.05$,
+and one matching the FD (+8\,\%) at $\approx0.92$--$0.94$.  The Kn 0.5 optimum is ill-conditioned; re-run
+squashkn only after the gap is closed.  M 10: the corrections were not measured there.
+\end{frame}
+
+\section{V. The field interpolant of the collision pull-back}
+
+\begin{frame}{Why the interpolant was reopened (2026-10-09/10)}
+\small
+The virtual pull-back asks $(3+2K)N$ field values per substep ($19N$ at $4\times8$): the node's own value,
+the two post-collision ghosts of each virtual partner, the boundary move.  Until 2026-10-11 each was a
+\textbf{per-query} weighted quadratic fit over the $k$ nearest nodes of the query's cell.
+
+\medskip
+\textbf{Its answer depended on $k$} (Kn 0.5 squash, $s = 1$, $f_{\mathrm{num}}\times4$, paired, \% of $\dd D/\dd s$):
+\begin{center}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+$k$ & 16 & 32 & 48 & 64 & 96, 128\\
+\midrule
+vs $k = 128$ (3 seeds) & diverges & $-3.2\pm0.3$ & $0.0\pm0.7$ & $+0.1\pm0.1$ & $0$ (whole cell)\\
+seconds per seed & 465 & 670 & 790 & 985 & 1295, 1660\\
+\bottomrule
+\end{tabular}
+\end{center}
+Over 12 seeds: $k = 32$ $-3.5\pm1.8\,\%$ vs FD, $k = 64$ $-2.0\pm2.0\,\%$ ($k$ 32$\to$64: $+1.6\pm0.7\,\%$,
+half the 3-seed estimate).  Cost: $\approx300$\,s fixed $+\;10.7$\,s per unit of $k$; at $k\ge$ occupancy
+the fit is the whole cell and its weights $1/(1+(d/d_k)^2)$ only span $[\tfrac12,1]$.
+
+\medskip
+\textbf{Idea}: if the fit spans the cell anyway, fit \emph{once per cell} ($C$ fits, not $19N$) and evaluate
+the polynomial at every query.  Settled first: $S$, $K$ (S1/S2/S8, K4/K16 within $\pm3\,\%$, flat at
+$4\times8$) and the simpler collision adjoints (23 stored gates reproduce to $7\times10^{-10}$).
+\end{frame}
+
+\begin{frame}{The per-cell interpolants tried}
+\footnotesize
+One least-squares polynomial per collision cell in scaled offsets $o = (\tilde p - \bar p_c)$ from the cell's
+node mean ($\tilde p = (x/\Delta x, v/v_s)$), relative ridge $10^{-8}$; \code{cell\_fit.py},
+\code{basis="cell:<poly>[:opt]"}.
+\begin{center}
+\begin{tabular}{@{}lp{9.7cm}@{}}
+\toprule
+basis & what it is\\
+\midrule
+\code{mean}, \code{lin} & constant (1 column); $1, o$ (6 in 2-D)\\
+\code{quad} & the per-query fit's design: $1, o, v\otimes v, x_d^2$ (14)\\
+\code{quadfull} / \code{cubicv} / \code{cubic} & every product (21) / $+$ cubic in $v$ (24) / every monomial to order 3 (56)\\
+\code{adapt}$a$ & \textbf{order guard}: highest order whose cumulative columns $\le$ count$/a$; else a plane, else the mean\\
+\code{loo} & per cell the order (0..max) of least leave-one-out residual $\sum w\,(r_i/(1-h_{ii}))^2$\\
+\code{pool}$r$ & fit the $(2r+1)^D$ block, tricube weight in $x$ (support $r+1$ cells), evaluate in the cell\\
+\code{rb} & partner ghosts averaged over the VSS angle: 6 sigma points, exact for quadratics (any $\alpha$)\\
+split (normals) & three fits per cell: leaving / approaching the surface ($v\cdot n_c \gtrless 0$) / all\\
+\code{align}$r$, \code{both} & cells with $|\sum n_i|/\#n_i < r$ (complex): per-query fallback, or two-sided (\code{both})\\
+\bottomrule
+\end{tabular}
+\end{center}
+The per-query fit's weights cannot be reproduced per cell (they are centred on the query); the
+per-cell fit is unweighted (or $x$-weighted when pooled).
+\end{frame}
+
+\begin{frame}{Correctness of the machinery}
+\small
+\begin{itemize}
+\item every basis reproduces its own polynomials to $10^{-15}$; the fit is the numpy least-squares
+  solution to $10^{-13}$; the slopes are the exact polynomial derivative ($4\times10^{-11}$);
+\item order guard: 60, 40, 25 nodes $\to$ quadratic, 14 $\to$ plane, 3 $\to$ mean;
+  leave-one-out picks the mean on pure noise and the quadratic on a quadratic field;
+\item sigma points against $4\times10^5$ VSS scatterings: quadratics within 1.3 se at $\alpha = 1, 1.4$; cubics
+  only at $\alpha = 1$ ($67$ se off at $1.4$, as derived);
+\item split fits in \textbf{1, 2 and 3-D} (collide-only box, $3^D$ cells): with every cell complex the hybrid
+  backward \emph{is} the per-query one-sided backward (relative difference $0$); fallback capacity = the
+  measured load;
+\item an empty side (no node leaving the surface) gave NaN on a real geometry: now the identity, deferring
+  to the unsplit fit (\code{test\_cell\_fit.py}, 12 tests).
+\end{itemize}
+\textbf{0-D relaxation} ($t_x$, 24 seeds, CRN FD): \code{cell:quad} $+0.0\pm3.0\,\%$ vs FD, $+0.3\pm0.7\,\%$ paired
+vs $k = 32$; backward 1.2\,s vs $\approx1100$\,s (CPU).  A \code{lin} fit gives $\approx0$: $1, v$ are collision
+invariants, so a linear field has no collision term (the machinery's own check).
+\end{frame}
+
+\begin{frame}{Kn 0.5 squash, 12 seeds: the decisive comparison}
+\scriptsize
+$s = 1$, $f_{\mathrm{num}}\times4$, $4\times8$, CRN FD $h = 0.2$ per seed: $0.01597\pm0.00026$.
+\begin{center}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+backward field & $\dd D/\dd s$ & vs FD & $-$ ($k{=}64$): sd (max) & s / seed, bwd\\
+\midrule
+per-query $k = 32$ & $0.01541\pm0.00025$ & $-3.5\pm1.8\,\%$ & 2.5 (6.0)\,\% & 670 / $\approx$550\,s\\
+per-query $k = 64$ & $0.01565\pm0.00030$ & $-2.0\pm2.0\,\%$ & --- & 985 / 897\,s\\
+\code{cell:quad} & $0.01665\pm0.00107$ & $+4.3\pm7.9\,\%$ & \textbf{28 (95)}\,\% & 98 / 13\,s\\
+\code{cell:quad:rb} & $0.01544\pm0.00057$ & $-3.3\pm4.0\,\%$ & 11 (34)\,\% & 112 / 27\,s\\
+\textbf{\code{cell:quad:adapt1.5}} & $\mathbf{0.01566\pm0.00024}$ & $\mathbf{-1.9\pm2.3\,\%}$ & 5.3 (13)\,\% & \textbf{95 / 13\,s}\\
+\code{cell:cubicv:adapt1.5} & $0.01611\pm0.00019$ & $+0.9\pm1.8\,\%$ & 5.5 (15)\,\% & 103 / 20\,s\\
+\code{cell:quad:pool1} (3 seeds) & $0.01452\pm0.00030$ & ($-10.9\pm4.4\,\%$) & 3.8 (8)\,\% & 131 / 53\,s\\
+\bottomrule
+\end{tabular}
+\end{center}
+\begin{itemize}
+\item \textbf{Unguarded \code{quad} is unstable}: seed 11 $+97\,\%$, seed 10 $-26\,\%$ (the per-query fits: $+2$, $-8\,\%$).
+  Sparse cells' underdetermined quadratics answer the partner ghosts with extrapolated noise and the
+  recursion compounds it.  \code{rb} (seed 10 $-40\,\%$) does not cure it.
+\item \textbf{The order guard does}: \code{adapt1.5} matches $k = 64$ ($+0.05\pm1.5\,\%$) and the FD at $\frac1{10}$
+  of the seed's time; its seed-to-seed SE equals the per-query fit's.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Per seed: adjoint $/$ FD $- 1$, \%}
+\scriptsize
+\begin{center}
+\begin{tabular}{@{}rcrrrrrr@{}}
+\toprule
+seed & FD & $k = 32$ & $k = 64$ & \code{quad} & \code{quad:rb} & \code{quad:adapt1.5} & \code{cubicv:adapt1.5}\\
+\midrule
+0 & 0.01532 & $-9.5$ & $-5.8$ & $-2.8$ & $-0.7$ & $-5.0$ & $-3.2$\\
+1 & 0.01744 & $-13.4$ & $-11.0$ & $-10.6$ & $-10.0$ & $-17.7$ & $-7.9$\\
+2 & 0.01610 & $-7.7$ & $-4.4$ & $-3.5$ & $-3.3$ & $-5.4$ & $-1.8$\\
+3 & 0.01629 & $+1.8$ & $+3.2$ & $+2.7$ & $+0.9$ & $+3.6$ & $+5.4$\\
+4 & 0.01636 & $+0.7$ & $+3.2$ & $+3.7$ & $+3.1$ & $+1.5$ & $+4.9$\\
+5 & 0.01547 & $-0.3$ & $+3.0$ & $+3.4$ & $+5.2$ & $+1.2$ & $+4.8$\\
+6 & 0.01596 & $-5.1$ & $-7.1$ & $-7.0$ & $-6.3$ & $-7.8$ & $-1.7$\\
+7 & 0.01598 & $+3.0$ & $+9.5$ & $+13.8$ & $+14.3$ & $+2.9$ & $-0.3$\\
+8 & 0.01536 & $+5.2$ & $+4.7$ & $+4.6$ & $+5.0$ & $+3.9$ & $+6.2$\\
+9 & 0.01686 & $-9.2$ & $-9.9$ & $-10.1$ & $-10.5$ & $-5.1$ & $-3.0$\\
+10 & 0.01655 & $-8.0$ & $-8.3$ & $\mathbf{-25.5}$ & $\mathbf{-39.8}$ & $-5.5$ & $-5.7$\\
+11 & 0.01393 & $+2.3$ & $+1.2$ & $\mathbf{+97.2}$ & $+6.2$ & $+14.2$ & $+16.5$\\
+\bottomrule
+\end{tabular}
+\end{center}
+\small
+The per-seed spread is mostly the FD's own (CRN FD at $h = 0.2$, $\approx\pm6\,\%$ per seed); the paired columns
+move together except where an unguarded fit breaks.
+\end{frame}
+
+\begin{frame}{Variance: what \code{rb} buys, and why value cross-validation misleads}
+\small
+\textbf{The backward's own noise} (0-D relaxation, 8 forwards $\times$ 8 partner keys, sd of the gradient):
+\begin{center}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+& sampled angle & \code{rb} (exact angle average)\\
+\midrule
+$4\times8$ & 1.37\,\% & 0.91\,\%\\
+$4\times2$ & 2.95\,\% & 1.85\,\%\\
+\bottomrule
+\end{tabular}
+\end{center}
+Variance $/2.2$ --- real, but small against a forward's seed-to-seed noise ($\approx3.5\,\%$), and no help
+against the sparse-cell instability.
+
+\medskip
+\textbf{5-fold cross-validation of node values} (squash snapshot, $k = 64$ backward, 3 steps):
+the values are nearly pure noise --- the cell mean predicts held-out nodes at the noise floor
+(mse $3.0\times10^{-12}$, variance $3.1\times10^{-12}$); every unguarded quadratic overfits to $3\times$
+($k = 32$: 9.7, $k = 64$: 8.9, per-cell \code{quad}: 9.3, all $\times10^{-12}$), mostly in cells of $<20$
+nodes; guarded / pooled / LOO fits reach 2.2--3.5.  \textbf{But this cannot rank fits for the backward}: the
+cell mean wins it and has \emph{no collision term} ($1, v, |v|^2$ are invariants; only the rest of
+$\lambda$ enters $\Lstar\lambda$).  Only gradients against FD rank them.
+\end{frame}
+
+\begin{frame}{The stored collisional gates, re-run with the per-cell fits}
+\scriptsize
+Paired with the gates' own per-query $k = 32$ runs (same forwards; \code{scratch/cellfit/gates*.jsonl}).
+\begin{center}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+gate (seeds) & \code{cell:quad} vs $k = 32$ & \code{adapt1.5} & \code{rb}\\
+\midrule
+0-D relaxation $t_x$ (24) & $+0.3\pm0.7\,\%$ & --- & $+0.3\,\%$ vs FD\\
+Couette speed: energy, shear windows (4; 32) & $\le0.2\pm0.6\,\%$ & same & same\\
+Couette speed, one-sided split (2; 32) & $+0.2\pm0.6$, $+0.2\pm0.2\,\%$ & same & same\\
+Couette wall temperature (32) & $+0.3\pm1.3\,\%$ & same & $+0.5\pm1.3\,\%$\\
+Couette temperature, one-sided (2; 32) & $+4.5\pm7.0$, $+5.0\pm5.4\,\%$ & same & same\\
+inlet $n$ / $T$, $N = 128$ (32) & $+0.7\pm0.3$ / $+2.0\pm1.1\,\%$ & $+0.8\pm0.6$ / --- & $+0.3$ / $+1.5\,\%$\\
+relaxation \code{diameter} / \code{omega} (8) & $+1.2\pm0.3$ / $-0.3\pm0.6\,\%$ & same & ---\\
+\bottomrule
+\end{tabular}
+\end{center}
+\small
+These cells hold $\le\approx40$ nodes (the order guard rarely engages); the FD noise of these gates ($\pm6$ to
+$\pm280\,\%$) is far larger than every difference.  Each per-cell run took seconds where the per-query fit took
+up to 40 minutes on the CPU.
+\end{frame}
+
+\begin{frame}{Cut cells on real geometry: survey and the one-sided failure}
+\small
+\textbf{Geometry survey} (optc iterates, normal resultant $R$ per cell over its flow region): cells with
+$R < 0.9$ hold $\le6\,\%$ of the flow (circle: 0), $R < 0.8$ $\le5\,\%$; up to 24 cells contain opposed normals.
+
+\medskip
+\textbf{optc S1-adam iterate 100, Kn 0.5} ($f_{\mathrm{num}}\times4$; $g\cdot\mathbf 1$ = derivative along the uniform
+level-set shift; FD $h = 0.05$):
+\begin{center}
+\footnotesize
+\begin{tabular}{@{}lcc@{}}
+\toprule
+backward field & seed 1 & seed 2\\
+\midrule
+FD & $-0.0046$ & $-0.0055$\\
+per-query, one-sided $k = 32$ (the old option) & $+0.113$ ($\lambda$ rms $\times150$) & ---\\
+per-query, two-sided $k = 32$ & $-0.0024$ & $+0.018$\\
+\code{cell:quad}, two-sided (unguarded) & $-0.0028$ & $-0.027$\\
+\code{cell:quad:adapt1.5}, two-sided & $\mathbf{-0.0049}$ & $\mathbf{-0.0044}$\\
+\code{cell:quad:adapt1.5}, split everywhere & $-0.0040$ & $+0.0033$\\
+\code{cell:quad:adapt1.5:align0.9:both} (shipped) & $\mathbf{-0.0035}$ & $\mathbf{-0.0038}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+The circle at the same settings: every fit sane.  Falling back to the per-query one-sided fit in complex cells
+inherits its divergence; the shipped choice leaves those cells two-sided.  Two seeds of one shape: evidence, not
+a gate --- the cluster \code{cellgate} runs six shapes $\times$ 16 seeds.
+\end{frame}
+
+\begin{frame}{Selection}
+\small
+\textbf{Shipped} (\code{ensemble\_backward.CELL\_BASIS}, 2026-10-11): \code{cell:quad:adapt1.5:align0.9:both}
+\begin{itemize}
+\item one quadratic per cell, its columns capped at count$/1.5$ (else plane, else mean);
+\item with surface normals: split at $v\cdot n_c = 0$ (each side guarded), empty sides and cells with
+  $R < 0.9$ two-sided;
+\item matches the 64-nearest fit ($+0.05\pm1.5\,\%$) and FD ($-1.9\pm2.3\,\%$); seed-to-seed SE unchanged;
+  every stored gate; stable on the optc shapes where the per-query fits failed;
+\item \textbf{a squash seed $985\to95$\,s} (backward $897\to13$\,s): $\sim10\times$ more optimisation iterates per GPU-hour.
+\end{itemize}
+\textbf{Rejected}: unguarded \code{quad}, \code{rb} (heavy tails); \code{pool1} (reads low, 3 seeds); the per-query
+fallback (unstable one-sided fit).  \textbf{Kept as options}: \code{cubicv:adapt1.5} ($+3\,\%$ vs $k = 64$, $+0.9\,\%$
+vs FD: not distinguishable at 12 seeds), \code{rb}, \code{loo}, \code{pool}, \code{own}, \code{quadratic\_full}.
+The shape gradient's \emph{slope} fits (pooled, one-sided, $k = 96$) are unchanged.
+
+\medskip
+\textbf{Open}: \code{cellgate} on the cluster at production density ($f_{\mathrm{num}}\times1$): 16 + 8 squash seeds
+(all fits paired with FD), six optc shapes at Kn 0.5 and free-molecular, two FD directions.
+\end{frame}
+
+\begin{frame}{Validation status of the current estimator}
+\footnotesize
+\begin{tabular}{@{}p{6.0cm}p{5.3cm}p{1.9cm}@{}}
+\toprule
+case & result & regime\\
+\midrule
+parameter gradients (inlet, Couette walls, VSS kernel), virtual $4\times8$ & $|z|\le1.7$; $\le1\,\%$ bias & collisional\\
+Rankine--Hugoniot $\dd(\rho_2/\rho_1)/\dd M_1$ & $z = 0.3$ (coarse) & collisional\\
+level-set circle radius; sphere radius & $z = -1.4$; $z = -1.71$ & free-mol.\\
+$\cos2\theta$ coarse, state-based fits & paired $+0.007\pm0.071$ & free-mol.\\
+diffuse plate (silhouette + hybrid normal) & $z = +0.19$ ($|z|\le1.6$ at 5 steps) & free-mol.\\
+\midrule
+squash specular, $s = 0.35 / 0.6 / 1$ & $-1.7 / -2.5 / -1.5\,\%$ ($\pm1.5$); $\approx-1\,\%$ is horizon & free-mol.\\
+squash $s = 1$, diffuse & $-1.4\pm3.3\,\%$ & free-mol.\\
+cut-volume machinery & $z = -1.2$ (all cells), $+0.8$ (cut cells) & Kn 0.5\\
+squash $s = 1$, Kn $= 0.5$ (2026-10-03, $f_{\mathrm{num}}\times2$, $k = 32$) & $-6.5$ to $-8.3\pm1.8\,\%$ & superseded\\
+squash $s = 1$, Kn $= 0.5$, 12 seeds: per-cell \code{adapt1.5} / $k = 64$ & $-1.9\pm2.3$ / $-2.0\pm2.0\,\%$ & Kn 0.5\\
+\bottomrule
+\end{tabular}
+
+\medskip
+\small
+Free-molecular shape gradients, specular and diffuse, agree with FD to $\sim$2\,\%, and most of that
+is the captured horizon.  The collisional gradient was 7--8\,\% low (8 seeds, $f_{\mathrm{num}}\times2$); over 12 seeds at $f_{\mathrm{num}}\times4$
+the per-query $k = 32$ reads $-3.5\pm1.8\,\%$, $k = 64$ and the shipped per-cell fit $-2\,\%$ ($\pm2$).  Parameter
+gradients on collisional flows are validated to $\le1\,\%$, with either field fit.
+\end{frame}
+
+\begin{frame}{Open items}
+\small
+\begin{enumerate}
+\item \textbf{Kn 0.5 gap} (now $\approx2\pm2\,\%$): cluster \code{cellgate} (squash at $f_{\mathrm{num}}\times1$, every fit
+  paired with FD, 16 + 8 seeds; six optc shapes) and \code{biasgate} (\code{kn\_fd*} 64-seed FD, horizons; its
+  2026-10-04 jobs all died on \code{import jax\_dsmc}: fixed in \code{env.sh}, preflight added).
+\item \textbf{Free-molecular remainder} ($\sim$1\,\% after 600 captured steps): \code{fm\_hor\_s*}.
+\item \textbf{Re-runs}: free-molecular squash and \code{optc} can be re-run now (the old runs used
+  \code{along\_pool}, $-9\,\%$ at $s = 0.35$, and \code{optc} the future class); squashkn after item 1.
+\item \textbf{optc} bodies need a body-to-face clearance constraint before their drag reductions are quoted:
+  the \code{optc2} and \code{optckn} re-runs use a 3$\times$ longer box centred on the body (\code{circle\_long},
+  15\,m each side; warm-up 2800 steps) and keep the body 1\,m from every face (\code{optimize --keepout}).
+\item Translations of flat walls remain unsupported as controls.
+\end{enumerate}
+\medskip
+Summaries: \code{scratch/bias/summarise.py}, \code{horizon\_summary.py}; cluster:
+\code{examples/mesh/cluster/README.md} (\code{biasgate}).
+\end{frame}
+
+\end{document}

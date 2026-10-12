@@ -144,7 +144,7 @@ def ensemble_gradient(parameter, key, cfg, neighbors=32, device=False):
                 jax.random.fold_in(key, 12345),
                 n,
                 neighbors,
-                "quadratic_full",
+                ensemble_backward.VIRTUAL_BASIS,
                 min(4096, 1 << (n - 1).bit_length()),
                 substeps,
                 partners,
@@ -189,13 +189,20 @@ def main(argv=None):
     p.add_argument("--pullback", default="virtual", choices=("virtual", "sequential", "linearised"))
     p.add_argument("--substeps", type=int, default=4)
     p.add_argument("--partners", type=int, default=8)
+    p.add_argument(
+        "--backward-basis",
+        default=ensemble_backward.CELL_BASIS,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+    )
     p.add_argument("--nodes", default="staged", choices=("staged", "post"))
     p.add_argument("--device", action="store_true", help="backward on the device (JIT)")
     p.add_argument("--seeds", type=int, default=32)
     p.add_argument("--seed-start", type=int, default=0)
     p.add_argument("--output", type=Path, default=None)
     args = p.parse_args(argv)
-    tag = ensemble_backward.configure(args.pullback, args.substeps, args.partners, args.nodes)
+    tag = ensemble_backward.configure(
+        args.pullback, args.substeps, args.partners, args.nodes, args.backward_basis
+    )
     cfg = {k: getattr(args, k) for k in ("particles", "steps", "attempts", "dt", "majorant")}
     out = args.output or Path(RESULTS) / (
         f"ensemble_relax_{args.parameter}_N{args.particles}_M{args.steps}{tag}"

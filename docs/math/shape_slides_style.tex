@@ -1,0 +1,46 @@
+% docs/math/shape_slides_style.tex
+% Shared preamble of the shape-sensitivity decks (shape_derivation.tex,
+% shape_derivation_code.tex, shape_validation.tex).  Each deck sets \codedecktrue or
+% \codedeckfalse before \input{shape_slides_style}.
+\usetheme{default}
+\usecolortheme{dove}
+\usefonttheme[onlymath]{serif}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamerfont{frametitle}{size=\large}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,array}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\ind}{\mathbf{1}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Lam}{\Lambda}
+\newcommand{\pth}{\mathrm{post}}
+\newcommand{\vin}{v^{\mathrm{in}}}
+\newcommand{\vout}{v^{\mathrm{out}}}
+\newcommand{\Lstar}{\mathcal L^*}
+\newcommand{\jump}[1]{[\![#1]\!]}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\definecolor{codebg}{RGB}{232,238,248}
+\definecolor{good}{RGB}{0,110,0}
+\definecolor{bad}{RGB}{170,0,0}
+\definecolor{warn}{RGB}{190,100,0}
+\newcommand{\ok}{\textcolor{good}{\textbf{yes}}}
+\newcommand{\nil}{\textcolor{gray}{0}}
+
+% \codenote{...}: the code references of a derivation frame.  Shown at the foot of the
+% frame in the documentation deck, dropped from the presentation deck, so the two decks
+% match frame for frame.
+\newcommand{\codenote}[1]{%
+  \ifcodedeck\par\vfill
+  {\scriptsize\setlength{\fboxsep}{3pt}%
+   \colorbox{codebg}{\parbox{\dimexpr\linewidth-2\fboxsep\relax}{\textbf{Code.} #1}}}%
+  \fi}
+% \presonly{...}: a line of the presentation deck only (spoken intuition that the
+% documentation deck replaces with its code note).
+\newcommand{\presonly}[1]{\ifcodedeck\else#1\fi}

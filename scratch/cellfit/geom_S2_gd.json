@@ -1,0 +1,83 @@
+{
+ "run": "examples/mesh/results/optimize/circle_coarse_S2_gd",
+ "iterates": {
+  "100": {
+   "cells_near_surface": 103,
+   "split_subcells": 0,
+   "flow_share_near_surface": 0.2820953406622661,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 31,
+     "flow_share_of_near": 0.2792922252010724,
+     "flow_share_of_all": 0.07878703541241885
+    },
+    "0.95": {
+     "cells": 23,
+     "flow_share_of_near": 0.2031313672922252,
+     "flow_share_of_all": 0.05730241225549216
+    },
+    "0.9": {
+     "cells": 17,
+     "flow_share_of_near": 0.13188203753351208,
+     "flow_share_of_all": 0.03720330830524985
+    },
+    "0.8": {
+     "cells": 12,
+     "flow_share_of_near": 0.11425201072386058,
+     "flow_share_of_all": 0.03222995988649633
+    },
+    "0.7": {
+     "cells": 9,
+     "flow_share_of_near": 0.08169436997319035,
+     "flow_share_of_all": 0.023045601127776334
+    },
+    "0.5": {
+     "cells": 4,
+     "flow_share_of_near": 0.04471849865951743,
+     "flow_share_of_all": 0.012614880113261657
+    }
+   },
+   "worst_cos_below_0": 11,
+   "r_min": 0.2992990550706373
+  },
+  "200": {
+   "cells_near_surface": 122,
+   "split_subcells": 4,
+   "flow_share_near_surface": 0.28907819268652746,
+   "near_cells_below": {
+    "0.99": {
+     "cells": 50,
+     "flow_share_of_near": 0.40525324403516116,
+     "flow_share_of_all": 0.11714987536603665
+    },
+    "0.95": {
+     "cells": 34,
+     "flow_share_of_near": 0.26498534951862707,
+     "flow_share_of_all": 0.07660148592725248
+    },
+    "0.9": {
+     "cells": 23,
+     "flow_share_of_near": 0.19966513185433235,
+     "flow_share_of_all": 0.057718835458967596
+    },
+    "0.8": {
+     "cells": 13,
+     "flow_share_of_near": 0.11615738802846379,
+     "flow_share_of_all": 0.03357856779845599
+    },
+    "0.7": {
+     "cells": 11,
+     "flow_share_of_near": 0.09238174968606111,
+     "flow_share_of_all": 0.02670554923646572
+    },
+    "0.5": {
+     "cells": 8,
+     "flow_share_of_near": 0.057806613645876935,
+     "flow_share_of_all": 0.01671063139807846
+    }
+   },
+   "worst_cos_below_0": 23,
+   "r_min": 0.0785033289686207
+  }
+ }
+}

@@ -169,7 +169,7 @@ def test_device_virtual_kernel_term_matches_the_host_form_in_expectation():
     so they agree only statistically -- but the ensemble means over 4 seeds must be
     within the noise of the difference."""
     cfg = {"particles": 300, "steps": 2, "attempts": 512, "dt": 0.2, "majorant": "certified"}
-    host.configure("virtual", 2, 8, "staged")
+    host.configure("virtual", 2, 8, "staged", "quadratic_full")  # the host's fit
     try:
         diffs = []
         for seed in range(4):

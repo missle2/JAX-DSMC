@@ -1126,9 +1126,9 @@ def gradient(
     grad lam_0`` and drops ``grad P (lam_1 - lam_0)``; restoring it needs ``grad P`` from
     the same local regression, which turns the estimator back into the mixed-pool fit with
     more variance.  Measured: coarse ``cos 2 theta`` +40 %, free-molecular squash +4..20 %
-    (2026-10-02/03, slides Finding 1).  Stratification is legitimate only by a function of
-    the current state (the one-sided ``v . n`` rule, the ``halfspace`` plane), which is
-    what the fits use.
+    (2026-10-02/03; docs/math/shape_validation.tex, Finding 1).  Stratification is
+    legitimate only by a function of the current state (the one-sided ``v . n`` rule, the
+    ``halfspace`` plane), which is what the fits use.
 
     ``hit_fits=True`` fits ``grad lambda`` only at the slots with a body event in the step
     (:func:`_body_hit_slots`) instead of every slot -- the same gradient (to the last bit)

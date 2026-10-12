@@ -63,6 +63,23 @@ CASES = {
         "fnum": 1.0e-3,
         "capacity": 60_000,
     },
+    "circle_long": {
+        # the circle in a 3x longer box (2026-10-11), centred on the body: 15 m of free
+        # stream ahead of its centre and 15 m of wake, the same 0.5 m cells, y faces
+        # unchanged (specular).  The optc shape optimisations in the 10 m box elongated the
+        # body until it crossed the outflow face (and once reached the inflow face); here an
+        # elongated body keeps its distance either way.  3x the cells and slots of `circle`
+        # at the same fnum.
+        "dim": 2,
+        "lo": [-10.0, 0.0],
+        "hi": [20.0, 10.0],
+        "n": (60, 20),
+        "surf": "data.circle",
+        "centre": [5.0, 5.0],
+        "radius": 3.0,
+        "fnum": 1.0e-3,
+        "capacity": 180_000,
+    },
     "ellipse": {
         # the aspect-ratio test: the circle box with a smaller circle (blockage ~3 % at s = 1,
         # free_molecular_circle.json) squashed in y to semi-axes (R, s R); a level-set body

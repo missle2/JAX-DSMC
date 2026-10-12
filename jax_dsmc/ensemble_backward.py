@@ -145,6 +145,22 @@ through the fit at that boundary) or ``"post"`` (the end-of-step state at every
 substep, so the field ``f`` inside the step is frozen: an O(dt) splitting error the
 substep count cannot remove, -6 % on the relaxation arbiter)."""
 
+CELL_BASIS = "cell:quad:adapt1.5:align0.9:both"
+"""The shipped field fit of the device virtual pull-back (2026-10-11): ONE quadratic fit per
+collision cell (:mod:`jax_dsmc.cell_fit`), its polynomial order capped by the cell's node
+count (``adapt1.5``: at most ``count / 1.5`` columns, else a plane, else the mean); with
+surface normals split at ``v . n = 0`` (ahead / behind / both), the cells whose normals
+disagree (resultant below 0.9) left two-sided (``both``).  Measured (``scratch/cellfit``,
+docs/PSEUDOCODE.md section 9.9): Kn 0.5 squash 12 seeds -1.9 +- 2.3 % vs FD and
++0.05 +- 1.5 % vs the 64-nearest fit at a tenth of the seed's time; stable on the optc
+shapes where the per-query fits blew up.  The unguarded per-cell quadratic is unstable."""
+
+VIRTUAL_BASIS = CELL_BASIS
+"""Field fit of the device virtual pull-back: :data:`CELL_BASIS` (shipped) or
+``"quadratic_full"`` (the per-query fit until 2026-10-11: a weighted fit around every query
+from its ``k`` nearest nodes, :func:`ensemble_device.field_query`; kept for the host /
+device parity tests and the artifacts named without a basis)."""
+
 SEQUENTIAL = True
 """With ``VIRTUAL = None``: pull the accepted attempts back in reverse order (the discrete
 adjoint of the NTC step) rather than all at once with the end-of-step field (its
@@ -792,16 +808,20 @@ def max_occupancy(records, grid):
     return worst
 
 
-def configure(pullback="virtual", substeps=4, partners=8, nodes="staged"):
+def configure(pullback="virtual", substeps=4, partners=8, nodes="staged", basis=CELL_BASIS):
     """Select the collision pull-back for the process: ``virtual`` (the shipped default:
     substepped operator with virtual partners, fit nodes ``"staged"`` or ``"post"``),
-    ``sequential`` (exact, realized pairs) or ``linearised`` (batched realized pairs).
-    Called without arguments it restores the defaults.  Returns a short tag for artifact
-    names (the sequential form's is empty: it named the artifacts before section 5.12)."""
-    global SEQUENTIAL, VIRTUAL, VIRTUAL_NODES  # noqa: PLW0603 -- process-wide selection
+    ``sequential`` (exact, realized pairs) or ``linearised`` (batched realized pairs);
+    ``basis`` the virtual device pull-back's field fit (:data:`VIRTUAL_BASIS`).  Called
+    without arguments it restores the defaults.  Returns a short tag for artifact names
+    (the sequential form's is empty: it named the artifacts before section 5.12); a
+    virtual pull-back with a per-cell basis appends :func:`basis_tag` (the per-query
+    ``quadratic_full`` keeps the historical names)."""
+    global SEQUENTIAL, VIRTUAL, VIRTUAL_NODES, VIRTUAL_BASIS  # noqa: PLW0603 -- process-wide
     if nodes not in ("post", "staged"):
         raise ValueError("nodes must be post or staged")
     VIRTUAL_NODES = nodes
+    VIRTUAL_BASIS = basis
     if pullback == "sequential":
         SEQUENTIAL, VIRTUAL = True, None
         return ""
@@ -810,5 +830,12 @@ def configure(pullback="virtual", substeps=4, partners=8, nodes="staged"):
         return "_lin"
     if pullback == "virtual":
         SEQUENTIAL, VIRTUAL = False, (int(substeps), int(partners))
-        return f"_virt{int(substeps)}x{int(partners)}{'st' if nodes == 'staged' else ''}"
+        tag = f"_virt{int(substeps)}x{int(partners)}{'st' if nodes == 'staged' else ''}"
+        return tag + basis_tag(basis)
     raise ValueError("pullback must be sequential, linearised or virtual")
+
+
+def basis_tag(basis):
+    """Artifact-name suffix of a backward basis: empty for the per-query ``quadratic_full``,
+    else ``_`` + the basis with its separators as dashes (``_cell-quad-adapt1.5-...``)."""
+    return "" if basis == "quadratic_full" else "_" + basis.replace(":", "-")

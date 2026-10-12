@@ -1,0 +1,82 @@
+% docs/math/shape_derivation_appendix.tex
+% Appendix of the documentation deck (shape_derivation_code.tex): settings, data flow,
+% and the tests that pin each term.
+
+\section{Appendix: implementation reference}
+
+\begin{frame}{Settings and their defaults}
+\scriptsize
+\begin{tabular}{@{}lllp{4.6cm}@{}}
+\toprule
+setting & where & default & role\\
+\midrule
+\code{variant} & \code{ensemble\_gradient}, optimisers & \code{along\_pool\_plane} & $\nabla_x\lambda$ estimator (\code{shape.VARIANTS})\\
+\code{--backward-basis} & \code{configure(basis=)}, CLI & \code{CELL\_BASIS} & pull-back's value field: \code{cell:quad:adapt1.5:align0.9:both}\\
+\code{neighbors} & config / CLI & 32 & $k$ of the unpooled per-query fits (backward only with \code{quadratic\_full})\\
+pool, $k$, half-space & \code{shape.VARIANTS} & 1, 96, 0.25 cells & pooled shape fits\\
+\code{value\_class} & config & \code{"none"} & \code{"hit\_ahead"}: diagnostic only, warns\\
+\code{VIRTUAL} & \code{ensemble\_backward.configure} & $(4, 8)$ staged & $(S, K)$; $(1, 2)$ collisionless\\
+\code{RIDGE\_REL} & \code{ensemble\_device} & $10^{-8}$ & relative ridge of every fit\\
+\code{grazing} & config & 0.05 (level set runs) & $\epsilon$ of the $1/(v\cdot n)$ floors\\
+\code{silhouette\_band} & config & 0 (specular), 0.03 & $\varepsilon_b$\\
+\code{timing\_band} & config / CLI & 10 & $w$ whole steps per window edge ($<1$: step fraction)\\
+\code{ORDER\_FIT} & \code{shape} & $k = 32$, pool 0 & fit of $c$ at the hit point\\
+volume samples, width & \code{volume\_cotangent} & $32^D$, $h_\phi/4$ & smoothed cut volume\\
+\code{levelset\_h}, samples & config & 0.0625, 16 & knot spacing, hit-search samples\\
+\code{warmup}, \code{steps}, \code{window} & config & 700, 300, 200 & captured horizon and window\\
+\code{REPLAY\_TOL} & \code{ensemble\_mesh} & $10^{-9}$ & replay continuous error\\
+\code{NEWBORN\_HIT\_MAX} & \code{ensemble\_mesh} & $10^{-3}$ & warning on unscored hits\\
+\code{GROWTH\_LIMIT} & \code{ensemble\_inlet\_shock} & 100 & refuse an unstable backward\\
+\code{learning\_rate} & \code{optimize\_squash} & 0.05 & largest $\Delta s$ per iterate\\
+step, smoothing, band & \code{optimize} & 0.05, $\sigma = 2$, $1 + h_\phi$ & free-shape optimiser\\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+\begin{frame}{Data flow of one gradient evaluation (\code{ensemble\_mesh.shape\_terms})}
+\small
+\begin{enumerate}
+\item \code{forward(cfg, ..., capture=True)}: warm-up, then \code{steps} captured steps
+  $\to$ \code{EventRecord} (\code{M} steps $\times$ \code{N} slots, lean record).
+\item \code{shape.replay}: re-runs $\mathcal W_\theta$ per captured step; per-hit rewards
+  (\code{\_drag\_reward}), timing rewards (\code{\_drag\_jump}), replay error.
+\item \code{\_backwards}: one \code{backward\_virtual} sweep with two value columns
+  (hit rewards, timing rewards), \code{collision\_out=True}, \code{columns\_out=True}
+  $\to$ \code{lam}, \code{lam\_timing} (f64[M, N]), \code{collision} (f32[M, N]),
+  \code{cell\_collision} (f64[M, C]).
+\item \code{shape.gradient\_variants(lam\_timing, collision=...)}: one scan over the
+  captured steps, one VJP per step; all \code{VARIANTS} share the replay and the
+  non-fitted cotangents $\to$ \code{ShapeTerms} per variant (incl.\ \code{order}).
+\item \code{\_volume\_term}: \code{volume\_weights} + \code{volume\_cotangent}.
+\item \code{control\_gradient}: the VJP of \code{levelset\_coef} for a scalar control;
+  the optimiser of free shapes keeps the coefficient gradient.
+\end{enumerate}
+Memory on the 4\,GB workstation GPU: \code{fnum\_scale} $\times2$ with 300 captured steps is
+the largest collisional squash case; production runs use the cluster.
+\end{frame}
+
+\begin{frame}{Tests that pin each piece (\code{tests/})}
+\footnotesize
+\begin{tabular}{@{}p{3.0cm}>{\raggedright\arraybackslash}p{10.6cm}@{}}
+\toprule
+piece & tests\\
+\midrule
+virtual pull-back & \code{test\_ensemble\_device.py} (host = device; quadratic invariant to $10^{-12}$ at zero ridge)\\
+per-cell field & \code{test\_cell\_fit.py}: polynomial reproduction, least squares and slopes, order guard, empty split sides, sigma points, complex-cell fallback $=$ per-query one-sided backward\\
+value-form rewards & \code{test\_value\_form\_rewards\_accumulate\_backward\_without\_collisions}\\
+field slopes & \code{test\_field\_query\_returns\_exact\_position\_slopes\_of\_a\_quadratic\_field}, \code{test\_pooled\_one\_sided\_node\_gradients\_are\_exact\_on\_a\_quadratic\_field}, \code{test\_halfspace\_drops\_the\_nodes\_behind\_the\_query\_plane}\\
+wall-map VJP, replay & \code{test\_wall\_map\_vjp\_matches\_finite\_differences\_on\_specular\_hits}, \code{test\_replay\_reproduces\_the\_captured\_forward\_bitwise\_and\_the\_vjp\_runs}, \code{test\_replay\_mismatch\_separates\_discrete\_divergence\_from\_roundoff}\\
+along-flight & \code{test\_along\_flight\_replaces\_only\_the\_component\_along\_the\_velocity}\\
+diffuse normal & \code{test\_normal\_score\_matches\_finite\_differences\_of\_the\_density}, \code{test\_diffuse\_reparameterisation\_in\_the\_normal\_is\_bounded\_and\_unbiased}\\
+silhouette & \code{test\_silhouette\_term\_counts\_the\_hit\_set\_change}\\
+window edges & \code{test\_timing\_cotangent\_selects\_the\_band\_with\_the\_lost\_jump}, \code{test\_traced\_times\_are\_the\_hit\_times}\\
+cut-volume term & \code{test\_volume\_weights\_sum\_the\_cell\_collision\_terms\_over\_the\_volume}, \code{test\_volume\_cotangent\_of\_unit\_weights\_is\_the\_flow\_area\_derivative}\\
+level set & \code{test\_mesh\_levelset.py} (hit position error $O(h_\phi^4)$, $\partial t/\partial c$ against the analytic body)\\
+\bottomrule
+\end{tabular}
+
+\medskip
+Gates against finite differences are not unit tests: they are in the validation deck, with
+the scripts that reproduce them (\code{examples/mesh/report.py},
+\code{examples/mesh/cluster/collect.py}, \code{scratch/bias/}).
+\end{frame}
