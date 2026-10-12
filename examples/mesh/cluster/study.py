@@ -94,7 +94,7 @@ SQUASH_POINTS = (0.35, 0.6, 1.0)
 SQUASH_SEEDS = 8
 SQUASH_OPT_SEEDS = (1, 4)
 SQUASH_KN_SEEDS = (1, 4)
-SQUASH_ITERATIONS = 25
+SQUASH_ITERATIONS = 100
 # the Kn = 0.5 settings (measured 2026-10-01: at most 21 NTC attempts per cell at s = 1)
 KN05 = "--knudsen 0.5 --a-max 64"
 # M = 10 (3079 m/s), scaled from the Kn = 0.5 measurement rather than measured: the step
@@ -116,9 +116,9 @@ KEEPOUT = 1.0  # m: two DSMC cells between the body and every box face
 # scratch/cellfit/warmup_check.py); centred (15 m of inflow) 2100 / 2800 / 3500 steps read
 # 3.631 / 3.682 / 3.692 e-20 free-molecular: 2800
 LONG = "--case circle_long --fnum-scale 2 --warmup 2800"
-OPTCKN_SEEDS = (2, 4, 8)
-OPTCKN_ITERATIONS = 200
-SQUASH_KN2_ITERATIONS = 80
+OPTCKN_SEEDS = (1, 2, 4, 8)
+OPTCKN_ITERATIONS = 250
+SQUASH_KN2_ITERATIONS = 100
 KNPULLBACK = "--substeps 4 --partners 8"
 SPHERE_ARTIFACT = "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev"
 MODE2_ARTIFACT = (
