@@ -1,0 +1,57 @@
+[Mon Oct 12 13:45:20 MDT 2026] gapgate_fmgz_a200_b1 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+    MIG 1g.24gb     Device  0: (UUID: MIG-d0855abc-99ef-5d8e-b1ff-5068fba84f75)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/gapgate/cluster_job.sh fmgz_a200_b1
+seed 8 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift -2.7830e-21 g.mode2 -9.4690e-21 lambda_rms [2.4517328790935456e-25, 5.534794205738432e-25, 0.0] |g| 7.4740e-21 (63 s, backward 3 s)
+seed 8 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift -7.6855e-22 g.mode2 -1.1027e-20 lambda_rms [2.4517328790935456e-25, 5.534794205738432e-25, 0.0] |g| 7.7785e-21 (56 s, backward 2 s)
+seed 8 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift -6.6700e-21 g.mode2 -6.4494e-21 lambda_rms [2.4517328790935456e-25, 5.534794205738432e-25, 0.0] |g| 6.7424e-21 (58 s, backward 2 s)
+seed 8 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift -7.4267e-22 g.mode2 -1.1037e-20 lambda_rms [2.4517328790935456e-25, 5.534794205738432e-25, 0.0] |g| 7.7777e-21 (61 s, backward 2 s)
+seed 8 FD shift [-1.2893362679763809e-20, -1.39576112345794e-20, -1.230776072542556e-20]
+seed 8 FD mode2 [-3.952872088402297e-21, -1.964272475610545e-21, -3.283747685225524e-21]
+seed 9 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift -1.1000e-20 g.mode2 -3.1243e-21 lambda_rms [2.4551972213496646e-25, 5.5670188731361185e-25, 0.0] |g| 7.2937e-21 (33 s, backward 2 s)
+seed 9 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift -1.0060e-20 g.mode2 -3.7696e-21 lambda_rms [2.4551972213496646e-25, 5.5670188731361185e-25, 0.0] |g| 7.3438e-21 (32 s, backward 2 s)
+seed 9 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift -1.6759e-20 g.mode2 +1.0120e-21 lambda_rms [2.4551972213496646e-25, 5.5670188731361185e-25, 0.0] |g| 6.7480e-21 (32 s, backward 2 s)
+seed 9 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift -1.0060e-20 g.mode2 -3.7696e-21 lambda_rms [2.4551972213496646e-25, 5.5670188731361185e-25, 0.0] |g| 7.3438e-21 (32 s, backward 2 s)
+seed 9 FD shift [-1.5144669458514307e-20, -1.1756855516285374e-20, -1.0824797770317337e-20]
+seed 9 FD mode2 [-3.571865514890052e-21, -2.825524457478253e-21, -2.766404473076152e-21]
+seed 10 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift -3.8358e-21 g.mode2 -8.6354e-21 lambda_rms [2.53688198861554e-25, 5.631117975175658e-25, 0.0] |g| 8.0513e-21 (33 s, backward 2 s)
+seed 10 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift +2.0351e-21 g.mode2 -1.3372e-20 lambda_rms [2.53688198861554e-25, 5.631117975175658e-25, 0.0] |g| 9.1301e-21 (34 s, backward 2 s)
+seed 10 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift -1.1231e-20 g.mode2 -2.7917e-21 lambda_rms [2.53688198861554e-25, 5.631117975175658e-25, 0.0] |g| 6.7388e-21 (33 s, backward 2 s)
+seed 10 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift +2.2498e-21 g.mode2 -1.3549e-20 lambda_rms [2.53688198861554e-25, 5.631117975175658e-25, 0.0] |g| 9.1339e-21 (33 s, backward 2 s)
+seed 10 FD shift [-1.532861117368971e-20, -1.3264811991385028e-20, -1.1545833000414389e-20]
+seed 10 FD mode2 [-7.374197485056636e-22, -9.770746829377744e-22, -2.609542531622326e-21]
+seed 11 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift +1.1073e-20 g.mode2 -2.1853e-20 lambda_rms [2.4530550722768028e-25, 5.648476101331061e-25, 0.0] |g| 1.1168e-20 (33 s, backward 2 s)
+seed 11 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift -1.0774e-20 g.mode2 -2.9684e-21 lambda_rms [2.4530550722768028e-25, 5.648476101331061e-25, 0.0] |g| 1.8876e-20 (33 s, backward 2 s)
+seed 11 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift +3.2850e-21 g.mode2 -1.5470e-20 lambda_rms [2.4530550722768028e-25, 5.648476101331061e-25, 0.0] |g| 7.5245e-21 (33 s, backward 2 s)
+seed 11 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift -4.8224e-20 g.mode2 +2.9251e-20 lambda_rms [2.4530550722768028e-25, 5.648476101331061e-25, 0.0] |g| 3.5413e-20 (33 s, backward 2 s)
+seed 11 FD shift [-1.3111737631537793e-20, -1.2216519448122111e-20, -1.1168676140960775e-20]
+seed 11 FD mode2 [-2.9635807367288547e-21, -2.3894944570974732e-21, -2.5625416619788695e-21]
+seed 12 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift -1.6597e-21 g.mode2 -9.3750e-21 lambda_rms [2.451259986899015e-25, 5.584537946994204e-25, 0.0] |g| 8.2066e-21 (33 s, backward 2 s)
+seed 12 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift +6.8442e-21 g.mode2 -1.5935e-20 lambda_rms [2.451259986899015e-25, 5.584537946994204e-25, 0.0] |g| 1.0038e-20 (33 s, backward 2 s)
+seed 12 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift -1.1424e-20 g.mode2 -2.4565e-21 lambda_rms [2.451259986899015e-25, 5.584537946994204e-25, 0.0] |g| 6.8564e-21 (33 s, backward 2 s)
+seed 12 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift +6.9136e-21 g.mode2 -1.5998e-20 lambda_rms [2.451259986899015e-25, 5.584537946994204e-25, 0.0] |g| 1.0037e-20 (33 s, backward 2 s)
+seed 12 FD shift [-9.96630353292113e-21, -1.2414981714111163e-20, -1.2003998453261023e-20]
+seed 12 FD mode2 [-5.519917449660733e-21, -3.0681229203599354e-21, -2.531399573878388e-21]
+seed 13 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift -6.1825e-21 g.mode2 -7.7184e-21 lambda_rms [2.4957898391982582e-25, 5.568209943647483e-25, 0.0] |g| 8.1480e-21 (33 s, backward 2 s)
+seed 13 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift -7.5999e-21 g.mode2 -6.5375e-21 lambda_rms [2.4957898391982582e-25, 5.568209943647483e-25, 0.0] |g| 8.2542e-21 (33 s, backward 2 s)
+seed 13 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift -1.0045e-20 g.mode2 -4.9879e-21 lambda_rms [2.4957898391982582e-25, 5.568209943647483e-25, 0.0] |g| 7.1641e-21 (33 s, backward 2 s)
+seed 13 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift -7.5954e-21 g.mode2 -6.5473e-21 lambda_rms [2.4957898391982582e-25, 5.568209943647483e-25, 0.0] |g| 8.2550e-21 (33 s, backward 2 s)
+seed 13 FD shift [-1.3132200971313553e-20, -1.0066951511717514e-20, -1.0939129276999905e-20]
+seed 13 FD mode2 [-3.966635489973084e-21, -5.20589872079067e-21, -3.1986196586834546e-21]
+seed 14 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift -1.9732e-20 g.mode2 +2.0236e-21 lambda_rms [2.522006660243862e-25, 5.5170940656655795e-25, 0.0] |g| 7.4103e-21 (33 s, backward 2 s)
+seed 14 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift -2.0570e-20 g.mode2 +2.6784e-21 lambda_rms [2.522006660243862e-25, 5.5170940656655795e-25, 0.0] |g| 7.4634e-21 (33 s, backward 2 s)
+seed 14 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift -1.4933e-20 g.mode2 -1.1619e-21 lambda_rms [2.522006660243862e-25, 5.5170940656655795e-25, 0.0] |g| 6.9179e-21 (33 s, backward 2 s)
+seed 14 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift -2.0794e-20 g.mode2 +2.8037e-21 lambda_rms [2.522006660243862e-25, 5.5170940656655795e-25, 0.0] |g| 7.4674e-21 (33 s, backward 2 s)
+seed 14 FD shift [-1.2672920789507945e-20, -1.0936964247107151e-20, -1.082305349571592e-20]
+seed 14 FD mode2 [-4.0500396991971114e-21, -4.216400383560956e-21, -3.253198605160955e-21]
+seed 15 cell:quad:adapt1.5:align0.9:both_k32_gz0.05  g.shift -7.0467e-21 g.mode2 -7.2318e-21 lambda_rms [2.463145558871536e-25, 5.6505462971756655e-25, 0.0] |g| 7.5329e-21 (33 s, backward 2 s)
+seed 15 cell:quad:adapt1.5:align0.9:both_k32_gz0.01  g.shift -7.8121e-22 g.mode2 -1.3251e-20 lambda_rms [2.463145558871536e-25, 5.6505462971756655e-25, 0.0] |g| 7.9633e-21 (33 s, backward 2 s)
+seed 15 cell:quad:adapt1.5:align0.9:both_k32_gz0.2   g.shift -1.3039e-20 g.mode2 -2.2722e-21 lambda_rms [2.463145558871536e-25, 5.6505462971756655e-25, 0.0] |g| 7.2123e-21 (33 s, backward 2 s)
+seed 15 cell:quad:adapt1.5:align0.9:both_k32_gz0     g.shift -8.9545e-22 g.mode2 -1.3148e-20 lambda_rms [2.463145558871536e-25, 5.6505462971756655e-25, 0.0] |g| 7.9485e-21 (33 s, backward 2 s)
+seed 15 FD shift [-1.51393206863617e-20, -1.2740445391165676e-20, -1.1077379602480543e-20]
+seed 15 FD mode2 [3.1320384610443096e-22, -1.0507287894062646e-21, -1.5644673061722754e-21]
+[Mon Oct 12 14:21:28 MDT 2026] done
