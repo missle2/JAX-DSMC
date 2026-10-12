@@ -1,0 +1,29 @@
+[Mon Oct 12 01:30:47 MDT 2026] cellgate_optc_g200_kn_b1 on c3gpu-e7-u5: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c693841e-1c67-0045-604c-b02ee0a15723)
+    MIG 1g.24gb     Device  0: (UUID: MIG-daff2e2b-cafe-5638-b224-f22b44098de8)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-77eb083b-cfeb-88cc-bb3c-649712864b4d)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-4373faaf-d9a0-1e18-5233-f0640f4a35c7)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-38f150cf-7b77-213d-04be-4384af6a13c4)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/cellfit/cluster_job.sh optc_g200_kn_b1
+seed 4 quadratic_full_k32_twosided                  g.shift -1.2368e-02 g.mode2 +2.2532e-03 lambda_rms [9.589747016850328e-08, 2.7625671198384014e-07, 0.0] |g| 3.7895e-03 (825 s, backward 767 s)
+seed 4 cell:quad:adapt1.5:align0.9:both_k32_twosided g.shift -9.1987e-03 g.mode2 +1.8783e-04 lambda_rms [1.5755576707248054e-07, 2.9925711428200766e-07, 0.0] |g| 3.2982e-03 (36 s, backward 10 s)
+seed 4 cell:quad:adapt1.5:align0.9:both_k32         g.shift -9.6348e-03 g.mode2 +5.7154e-04 lambda_rms [1.5805574798656408e-07, 2.984175621619221e-07, 0.0] |g| 3.2828e-03 (49 s, backward 24 s)
+seed 4 FD shift [-0.00458052828408561]
+seed 4 FD mode2 [-0.0035206279179049275]
+seed 5 quadratic_full_k32_twosided                  g.shift -1.5170e-02 g.mode2 +5.0429e-03 lambda_rms [9.837696830587359e-08, 2.7776160427745773e-07, 0.0] |g| 2.8196e-03 (791 s, backward 766 s)
+seed 5 cell:quad:adapt1.5:align0.9:both_k32_twosided g.shift -1.1887e-02 g.mode2 +1.7090e-03 lambda_rms [1.5233802421605228e-07, 2.987368536363041e-07, 0.0] |g| 2.9686e-03 (35 s, backward 10 s)
+seed 5 cell:quad:adapt1.5:align0.9:both_k32         g.shift -1.1268e-02 g.mode2 +1.1024e-03 lambda_rms [1.527050885641012e-07, 2.9840789639200873e-07, 0.0] |g| 3.0324e-03 (49 s, backward 23 s)
+seed 5 FD shift [-0.004654589797215766]
+seed 5 FD mode2 [-0.0009699633055368535]
+seed 6 quadratic_full_k32_twosided                  g.shift -8.0565e-03 g.mode2 -1.2368e-03 lambda_rms [9.376060112367238e-08, 2.80830562085461e-07, 0.0] |g| 3.1314e-03 (791 s, backward 766 s)
+seed 6 cell:quad:adapt1.5:align0.9:both_k32_twosided g.shift -2.6398e-03 g.mode2 -4.6806e-03 lambda_rms [1.5477070840386992e-07, 3.0324499585539715e-07, 0.0] |g| 3.1499e-03 (35 s, backward 10 s)
+seed 6 cell:quad:adapt1.5:align0.9:both_k32         g.shift -3.9940e-03 g.mode2 -3.7294e-03 lambda_rms [1.5475451544877762e-07, 3.038699388425813e-07, 0.0] |g| 3.2498e-03 (49 s, backward 23 s)
+seed 6 FD shift [-0.005881109038750453]
+seed 6 FD mode2 [-0.0017374885004122972]
+seed 7 quadratic_full_k32_twosided                  g.shift -5.9128e-03 g.mode2 -4.0647e-03 lambda_rms [9.335927472251264e-08, 2.786188576981747e-07, 0.0] |g| 3.0615e-03 (791 s, backward 766 s)
+seed 7 cell:quad:adapt1.5:align0.9:both_k32_twosided g.shift -3.5903e-03 g.mode2 -6.0201e-03 lambda_rms [1.5842060538200205e-07, 3.005949072397484e-07, 0.0] |g| 3.6071e-03 (35 s, backward 10 s)
+seed 7 cell:quad:adapt1.5:align0.9:both_k32         g.shift -4.2640e-03 g.mode2 -5.2519e-03 lambda_rms [1.5812482634727213e-07, 3.0115615847794275e-07, 0.0] |g| 3.5719e-03 (49 s, backward 23 s)
+seed 7 FD shift [-0.004646277355508793]
+seed 7 FD mode2 [-0.0029327308941282104]
+[Mon Oct 12 02:34:14 MDT 2026] done

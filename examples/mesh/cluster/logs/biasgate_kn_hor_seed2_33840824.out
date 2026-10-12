@@ -1,0 +1,10 @@
+[Mon Oct 12 04:16:46 MDT 2026] biasgate_kn_hor_seed2 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+    MIG 1g.24gb     Device  0: (UUID: MIG-c02c5970-4d01-58ea-92d0-7a66e72a70ce)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/bias/cluster_job.sh kn_hor_seed2
+{"s": 1.0, "seed": 2, "config": {"fnum_scale": 1, "knudsen": 0.5, "a_max": 64}, "virtual": [4, 8], "horizons": {"300": {"objective": 0.013260766230664689, "tally": 0.016746428698879455, "volume": -0.0002821121452869331, "timing": 3.829225277417542e-05, "order": 5.255983128121227e-06, "variants": {"one": 0.01614545029912192, "one_pool": 0.015484087285814173, "along": 0.01549495957515728, "along_pool": 0.015405573945159358, "one_pool_plane": 0.01553671654698339, "along_pool_plane": 0.015439955033414188}}, "1000": {"objective": 0.013260766230664692, "tally": 0.016746428698879455, "volume": -0.00030551270863461244, "timing": 3.829225277417543e-05, "order": 5.846349829427275e-06, "variants": {"one": 0.01635219823632422, "one_pool": 0.016070526063239228, "along": 0.015493186247725096, "along_pool": 0.01588279909253897, "one_pool_plane": 0.016124845356613238, "along_pool_plane": 0.015907815802666786}}}, "fd": [0.015146428970540261], "seconds": 242.20234179496765}
+[Mon Oct 12 04:20:56 MDT 2026] done
