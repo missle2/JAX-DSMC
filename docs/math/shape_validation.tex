@@ -981,9 +981,10 @@ a gate --- the cluster \code{cellgate} runs six shapes $\times$ 16 seeds.
 
 \begin{frame}{Selection}
 \small
-\textbf{Shipped} (\code{ensemble\_backward.CELL\_BASIS}, 2026-10-11): \code{cell:quad:adapt1.5:align0.9:both}
+\textbf{Shipped} (\code{ensemble\_backward.CELL\_BASIS}, 2026-10-12): \code{cell:cubicv:adapt1.5:align0.9:both}
+(2026-10-11: \code{cell:quad:\dots}; the cubic-in-$v$ columns are the only change, next frames)
 \begin{itemize}
-\item one quadratic per cell, its columns capped at count$/1.5$ (else plane, else mean);
+\item one quadratic (cubic in $v$) per cell, its columns capped at count$/1.5$ (else plane, else mean);
 \item with surface normals: split at $v\cdot n_c = 0$ (each side guarded), empty sides and cells with
   $R < 0.9$ two-sided;
 \item matches the 64-nearest fit ($+0.05\pm1.5\,\%$) and, at $f_{\mathrm{num}}\times1$, the per-query $k = 32$
@@ -992,9 +993,8 @@ a gate --- the cluster \code{cellgate} runs six shapes $\times$ 16 seeds.
 \item \textbf{a squash seed $985\to95$\,s} (backward $897\to13$\,s): $\sim10\times$ more optimisation iterates per GPU-hour.
 \end{itemize}
 \textbf{Rejected}: unguarded \code{quad}, \code{rb} (heavy tails); \code{pool1} (reads low, 3 seeds); the per-query
-fallback (unstable one-sided fit).  \textbf{Kept as options}: \code{cubicv:adapt1.5} ($+3.1\pm0.2\,\%$ over the shipped
-fit, $-0.7\pm0.8\,\%$ vs FD at $f_{\mathrm{num}}\times1$: the candidate default, next frames), \code{rb}, \code{loo},
-\code{pool}, \code{own}, \code{quadratic\_full}.
+fallback (unstable one-sided fit).  \textbf{Kept as options}: \code{cell:quad:adapt1.5:align0.9:both} (the 10-11 default),
+\code{rb}, \code{loo}, \code{pool}, \code{own}, \code{quadratic\_full}.
 The shape gradient's \emph{slope} fits (pooled, one-sided, $k = 96$) are unchanged.
 
 \end{frame}
@@ -1011,8 +1011,7 @@ and against the seed's CRN FD ($h = 0.2$); \code{scratch/cellfit/cluster\_analys
 \item $s = 1$ / $0.6$: shipped $-3.7\pm0.8$ / $-2.8\pm1.2\,\%$; per-query $k = 32$ $-3.4$ / $-2.3$; unguarded \code{quad} $-3.2$ / $-2.8$
   (stable at this density); \textbf{\code{cubicv:adapt1.5} $-0.7\pm0.8$ / $+0.1\pm1.1\,\%$} (paired $+3.1\pm0.2$ / $+3.0\pm0.3\,\%$
   over the shipped fit; 50 vs 46\,s a seed; the per-query fit 1100\,s).
-\item \textbf{Horizon}: the whole run captured adds $+2.8\pm0.8\,\%$ at Kn 0.5 (4 seeds; 300$\to$450 gave $+0.1\,\%$: the
-  fill transient), $+0.3$ / $+0.6\,\%$ free-molecular.  Basis order and horizon are each the gap's size; additivity unmeasured.
+\item \textbf{Horizon}: the whole run captured adds $+2.8\pm0.8\,\%$ at Kn 0.5 (4 seeds), $+0.3$ / $+0.6\,\%$ free-molecular.  Basis order and horizon are each the gap's size; additivity: \code{gapgate}, below.
 \end{itemize}
 \end{frame}
 
@@ -1033,9 +1032,40 @@ $g\cdot d$ vs CRN FD ($h = 0.05$) along the uniform shift and $\cos2\theta$, in 
 \end{itemize}
 \end{frame}
 
+\begin{frame}{\code{gapgate}: Kn 0.5 --- basis $\times$ horizon $\times$ run length}
+\scriptsize
+Same forward captured for its last 300 and 1000 steps, both fits paired; production length $T = 1000$ and a filled box
+$T = 2000$; 16 CRN seeds a point; \code{scratch/gapgate/analysis.py}.
+\begin{center}
+\fig{0.84}{mesh/figures/gapgate_kn.png}
+\end{center}
+\begin{itemize}
+\item \textbf{Squash}: horizon $1000-300$ $+2.1\pm0.3\,\%$ at \emph{both} $T$ (adjoint memory, not the fill); \code{cubicv}$-$quad
+  $+3.0\pm0.2\,\%$.  Together they overshoot ($+1.9\pm0.65\,\%$): part of the cubic's gain stands in for the horizon.  At 300
+  steps \code{cubicv} reads $-0.7$ / $-1.8\,\%$ (quad $-3.7$ / $-5.0$) $\Rightarrow$ \textbf{adopted}; stable on all optc iterates.
+\item \textbf{Circle shift}: $-14\pm3\,\%$ at $T = 1000$, $-1\pm4\,\%$ at $T = 2000$; the adjoint is the same at both, the FD moves
+  13\,\%; the whole run captured (from an empty box) changes nothing.  The FD of the filling box sees the shape's effect on
+  the fill, which the fits do not carry; not an error of the steady gradient.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{\code{gapgate}: free-molecular --- grazing, smoothing, FD linearity}
+\scriptsize
+\begin{center}
+\fig{0.88}{mesh/figures/gapgate_fm.png}
+\end{center}
+\begin{itemize}
+\item \textbf{Variance = grazing hits on sub-cell features}: the scatter ratio falls with the cut-off (S1/GD: $10$--$16$ /
+  $6$--$12$ / $3.5$--$6$ at 0 / 0.05 / 0.2; circle $\approx1$ at any) and with smoothing the features ($2.8$--$5$).
+\item \textbf{Biases are not the cut-off}: exact $-$ shipped, paired: squash $+0.10\pm0.23$ / $+0.01\pm0.07\,\%$, S8 $\cos2\theta$
+  $-0.01\pm0.03$.  Still unlocated: squash $\sim-1.5\,\%$, S8 it 30 $\cos2\theta$ $+0.14\pm0.03$ (FD linear).
+\item \textbf{Rough iterates}: FD shift at $h = 0.025$ / $0.05$ / $0.1$ moves 20--30\,\% (S1 50, 200); no derivative at that scale.
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Validation status of the current estimator}
 \footnotesize
-\begin{tabular}{@{}p{6.0cm}p{5.3cm}p{1.9cm}@{}}
+\begin{tabular}{@{}p{5.95cm}p{5.25cm}p{1.9cm}@{}}
 \toprule
 case & result & regime\\
 \midrule
@@ -1049,27 +1079,26 @@ squash specular, $s = 0.35 / 0.6 / 1$ & $-1.7 / -2.5 / -1.5\,\%$ ($\pm1.5$); $\l
 squash $s = 1$, diffuse & $-1.4\pm3.3\,\%$ & free-mol.\\
 cut-volume machinery & $z = -1.2$ (all cells), $+0.8$ (cut cells) & Kn 0.5\\
 squash Kn 0.5, $f_{\mathrm{num}}\times2$ (vs Richardson FD) / $\times4$ (12 seeds) & $-7.5$ / $-1.9\pm2.3\,\%$ & superseded\\
-squash $s = 1$, Kn $= 0.5$, 16 seeds, $f_{\mathrm{num}}\times1$: shipped / \code{cubicv} & $-3.7\pm0.8$ / $-0.7\pm0.8\,\%$ & Kn 0.5\\
-optc circle, uniform shift, Kn 0.5 / free-mol. (16 seeds) & $-12\pm3\,\%$ / $+1\pm2\,\%$ & both\\
+squash $s = 1$, Kn 0.5, $f_{\mathrm{num}}\times1$, $T = 1000$ / $2000$: quad / \code{cubicv} & $-3.7$, $-5.0$ / $-0.7$, $-1.8\,\%$ ($\pm0.8$) & Kn 0.5\\
+optc circle shift, Kn 0.5 $T = 1000$ / $2000$; free-mol. & $-14\pm3$ / $-1\pm4\,\%$; $+1\pm2\,\%$ & both\\
 \bottomrule
 \end{tabular}
 
 \medskip
 \small
 Free-molecular shape gradients agree with FD to $\sim$2\,\% (the horizon $\le1\,\%$ of it).  Kn 0.5 at production
-density: $-3.7\pm0.8\,\%$, shipped and per-query fits alike; a cubic-in-$v$ fit $-0.7\pm0.8\,\%$.  Parameter
-gradients on collisional flows: $\le1\,\%$, either fit.
+density with the shipped cubic-in-$v$ fit: $-1.2\pm0.6\,\%$ (two run lengths pooled).  Parameter gradients on
+collisional flows: $\le1\,\%$, either fit.
 \end{frame}
 
 \begin{frame}{Open items}
 \small
 \begin{enumerate}
-\item \textbf{Kn 0.5 gap} ($-3.7\pm0.8\,\%$, shipped fit, $f_{\mathrm{num}}\times1$): \code{cubicv} closes it ($-0.7\pm0.8\,\%$), the
-  whole-run horizon adds $+2.8\pm0.8\,\%$ (4 seeds).  Next: both bases at the whole-run horizon, paired, 16 seeds --- do
-  they add?  Then the default basis.  The circle's Kn 0.5 shift ($-12\pm3\,\%$) after that.
-\item \textbf{Free-molecular remainder}: $-1.0\pm1.2$ / $-1.8\pm0.6\,\%$ with the whole run captured (the horizon $+0.3$ / $+0.6$);
-  and the S8 it 30 $\cos2\theta$ bias ($+0.14\pm0.03$ of the shift derivative).
-\item \textbf{Shape-gradient noise} on the elongated optc iterates: per-seed sd $3$--$13\times$ the FD's, free-molecular too.
+\item \textbf{Kn 0.5}: \code{cubicv} at 300 steps $-1.2\pm0.6\,\%$; with the whole run $+1.9\pm0.65\,\%$ --- the fit's and the
+  horizon's corrections overlap; a longer-horizon default would need the fit revisited.
+\item \textbf{Free-molecular remainder}: squash $\sim-1.5\,\%$ and S8 it 30 $\cos2\theta$ $+0.14\pm0.03$; not grazing, horizon or FD.
+\item \textbf{Shape-gradient noise}: grazing hits on sub-cell features the few-seed runs grow; prevent the features
+  (curvature penalty in the objective) rather than raise the cut-off (0.2 biases the circle $+5\,\%$).
 \item \textbf{Re-runs}: free-molecular squash and \code{optc} can be re-run now (the old runs used
   \code{along\_pool}, $-9\,\%$ at $s = 0.35$, and \code{optc} the future class); squashkn after item 1.
 \item \textbf{optc} bodies need a body-to-face clearance constraint before their drag reductions are quoted:

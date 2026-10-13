@@ -494,8 +494,11 @@ per-cell fit reads $-3.7\pm0.8\,\%$, the same as the per-query $k = 32$ ($-3.4\p
 cubic-in-$v$ basis \code{cell:cubicv:adapt1.5} $-0.7\pm0.8\,\%$ (paired $+3.1\pm0.2\,\%$ over the quadratic); a seed
 985\,s $\to$ 95\,s (the backward 897\,s $\to$ 13\,s); every stored collisional gate within its paired
 error of the per-query runs; stable on the optimiser's complicated shapes where the per-query
-one-sided fit diverged.  Shipped: \code{ensemble\_backward.CELL\_BASIS} $=$
-\code{"cell:quad:adapt1.5:align0.9:both"} (\code{jax\_dsmc/cell\_fit.py}); \code{"quadratic\_full"}
+one-sided fit diverged.  Shipped (2026-10-12; \code{jax\_dsmc/cell\_fit.py}):
+\code{ensemble\_backward.CELL\_BASIS} $=$ \code{"cell:cubicv:adapt1.5:align0.9:both"}
+(the quadratic \code{cell:quad:\dots} before: at
+production density and the 300-step horizon it reads $-0.7$ / $-1.8\,\%$ against FD where the quadratic read
+$-3.7$ / $-5.0\,\%$, at the same cost; with the whole run captured it overshoots by $+1.9\pm0.7\,\%$); \code{"quadratic\_full"}
 selects the per-query fit below.  Options (evaluated, not shipped): other polynomial
 bases, leave-one-out order selection, pooled fits, and the Rao--Blackwellised partners,
 whose ghosts are the field's expectation over the VSS angle --- the post-collision direction

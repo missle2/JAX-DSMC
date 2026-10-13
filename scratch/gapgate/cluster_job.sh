@@ -41,7 +41,7 @@ declare -A SHAPE=(
   [a100]="${OPT}/circle_coarse_S1_adam 100" [a200]="${OPT}/circle_coarse_S1_adam 200"
   [s8a30]="${OPT}/circle_coarse_S8_adam 30" [g200]="${OPT}/circle_coarse_S2_gd 200"
 )
-CELL="$(python3 -c 'from jax_dsmc.ensemble_backward import CELL_BASIS; print(CELL_BASIS)')"
+CELL="cell:quad:adapt1.5:align0.9:both"  # the shipped fit when these ran (CELL_BASIS until 2026-10-12)
 CUBIC="cell:cubicv:adapt1.5:align0.9:both"
 KN='"fnum_scale": 1, "knudsen": 0.5, "a_max": 64'
 FM='"fnum_scale": 1, "knudsen": 0.0, "backward_normals": false, "virtual": [1, 2]'

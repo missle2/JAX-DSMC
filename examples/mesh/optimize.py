@@ -492,6 +492,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
             json.dumps(
                 {
                     "config": cfg,
+                    "backward_basis": ensemble_backward.VIRTUAL_BASIS,
                     "area_target": area0,
                     "rows": history,
                     "elapsed": time.time() - t_start,
@@ -565,6 +566,24 @@ def plot(cfg, out: Path, path_fig: str):
     print("wrote", path_fig)
 
 
+PRE_CUBIC_BASIS = "cell:quad:adapt1.5:align0.9:both"
+"""The backward basis of the histories written before ``backward_basis`` was recorded
+(2026-10-11 .. 10-12; older finished runs used the per-query ``quadratic_full``)."""
+
+
+def resumed_basis(out: Path, asked):
+    """The backward basis of run ``out``: a resumed run keeps the one it started with (its
+    history's ``backward_basis``, :data:`PRE_CUBIC_BASIS` if it predates the record) and
+    asking for another raises; a new run takes ``asked`` or the shipped default."""
+    path = out / "history.json"
+    if not path.exists():
+        return asked or ensemble_backward.CELL_BASIS
+    basis = json.loads(path.read_text()).get("backward_basis", PRE_CUBIC_BASIS)
+    if asked not in (None, basis):
+        raise ValueError(f"{out} was run with backward basis {basis}, not {asked}")
+    return basis
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     cfg = default_config()
@@ -577,8 +596,9 @@ def main(argv=None):
     p.add_argument("--partners", type=int, default=2)
     p.add_argument(
         "--backward-basis",
-        default=ensemble_backward.CELL_BASIS,
-        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query)",
+        default=None,
+        help="field fit of the virtual pull-back (jax_dsmc.cell_fit; quadratic_full: per query); "
+        "default: a resumed run's own, else ensemble_backward.CELL_BASIS",
     )
     p.add_argument("--plot", action="store_true", help="only draw the figure from the artifacts")
     # worker mode of `parallel_terms` (internal): evaluate one level set on some seeds
@@ -589,10 +609,9 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     args = p.parse_args(argv)
     cfg = {k: getattr(args, k) for k in cfg}
-    ensemble_backward.configure(
-        args.pullback, args.substeps, args.partners, "staged", args.backward_basis
-    )
     out = Path(RESULTS) / cfg["tag"]
+    basis = resumed_basis(out, args.backward_basis)
+    ensemble_backward.configure(args.pullback, args.substeps, args.partners, "staged", basis)
     if args.eval_coef is not None:
         evaluate_worker(cfg, args.eval_coef, args.eval_seeds, args.eval_out, args.eval_frames_for)
         return

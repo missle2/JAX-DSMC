@@ -110,8 +110,10 @@ of inflow): free-molecular 3.631 / 3.682 / 3.692 e-20 after 2100 / 2800 / 3500 (
 on the optc shapes (circle, S1-adam 100 and the protruding 200) never clips even at
 `a_max 32` (`scratch/cellfit/attempts_check.py`), so 64 has ≥ 2× margin; `keep_inside` +
 `project_area` alternated (`optimize.constrain`) hold the margin and the area exactly on a
-shape that had crossed a face.  Suggested order (2026-10-12): `gapgate` (results in
-`scratch/gapgate/cluster/`; the default basis is chosen from it), then `squashkn2` and
+shape that had crossed a face.  Suggested order (2026-10-12): `gapgate` (done 2026-10-12,
+`scratch/gapgate/analysis.py`: the default basis is now `cell:cubicv:adapt1.5:align0.9:both`;
+`optimize.py` records it in `history.json` and a resumed run keeps its own; `optimize_squash`
+names its artifacts by basis, so `squashkn2` starts new runs), then `squashkn2` and
 `optckn`, `optc2`; of `biasgate` only
 `ONLY='^kn_fd|hor'` (the FD arbiter and horizons; `kn_seed*` is superseded by `cellgate`).
 

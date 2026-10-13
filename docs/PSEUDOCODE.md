@@ -2407,7 +2407,7 @@ The per-cell fit forms **one** least-squares polynomial per collision cell per s
 (`VIRTUAL_BASIS`, read by `device_backward` and the relaxation example), the CLI flag
 `--backward-basis` of every example, default `ensemble_backward.CELL_BASIS`:
 
-    CELL_BASIS = "cell:quad:adapt1.5:align0.9:both"
+    CELL_BASIS = "cell:cubicv:adapt1.5:align0.9:both"   # 2026-10-12; cell:quad:... from 10-11
 
 ```
 # ---- fit (cell_fit.fit), once per cell per substep (and per field evaluation of the
@@ -2527,7 +2527,8 @@ guarded per-cell fits stayed stable: `g . 1` two-sided -0.0049 / -0.0044, split 
 complex cells two-sided -0.0035 / -0.0038 (FD -0.0046 / -0.0055); the split everywhere
 flipped sign on seed 2.  The circle at the same settings: every fit sane.
 
-**Selection and why.**  `cell:quad:adapt1.5` is the cheapest basis that is stable,
+**Selection and why** (2026-10-11; on 2026-10-12 the cluster gates moved the default to
+`cubicv`, the same fit with cubic-in-`v` columns -- *The hypothesis gates* below).  `cell:quad:adapt1.5` is the cheapest basis that is stable,
 unbiased within the measurements' resolution (matches k = 64 to 0.05 +- 1.5 % and the FD
 to -1.9 +- 2.3 %) and no noisier across seeds than the per-query fit, at a tenth of a
 seed's time (the backward 13 s of a 95 s seed).  `cubicv:adapt1.5` sits +3 % above
@@ -2559,8 +2560,7 @@ fnum x4 was within its noise of this).  Two candidates of the gap's size: the fi
 truncation in `v` (the cubic-in-`v` columns add +3.1 % with a tight paired error) and the
 captured horizon -- Kn 0.5, 4 seeds, the same forward captured for its last 300 steps and for
 the whole 1000-step run: +2.8 +- 0.8 % (the 2026-10-03 300 -> 450 test saw +0.1 +- 0.4 %;
-the difference lies in the fill transient).  Whether they add (cubicv + whole run would read
-~+2 %) is not measured.  Free-molecular horizon (8 seeds each): whole run - 300 =
+not the fill transient: the same +2.1 % in a filled box, below).  Whether they add: below.  Free-molecular horizon (8 seeds each): whole run - 300 =
 +0.3 +- 0.2 % (s = 1), +0.6 +- 0.1 % (s = 0.35); the whole run still reads -1.0 +- 1.2 % /
 -1.8 +- 0.6 % against FD, so the free-molecular remainder (~1.5 %) is mostly not the horizon.
 
@@ -2586,6 +2586,60 @@ the FD's are exactly those.  The few-seed runs imprint their gradient noise as w
 which then amplify it.  The long-box free-molecular S8 run has 2.8 % at iterate 88 (max
 41 /m).  Gates: `study.py --group gapgate` (`fmsm_*`: the same iterates smoothed; `fmgz_*`:
 the grazing cut-off).
+
+*The hypothesis gates* (2026-10-12; `study.py --group gapgate`, 74 jobs,
+`scratch/gapgate/cluster_job.sh`, tables `scratch/gapgate/analysis.py`, figures
+`examples/mesh/figures/gapgate_kn.png`, `gapgate_fm.png`; fnum x1, 16 CRN seeds per point).
+
+Kn 0.5, the same forward captured for its last 300 and 1000 steps with both fits paired, at
+the production run length T = 1000 (700 warm-up) and at T = 2000 (box filled):
+
+| (adjoint - FD) / FD | quad, 300 | quad, 1000 | cubicv, 300 | cubicv, 1000 |
+|---|---|---|---|---|
+| squash s = 1, T = 1000 | -3.7 +- 0.8 % | -1.6 +- 0.8 % | **-0.7 +- 0.8 %** | +2.0 +- 0.9 % |
+| squash s = 1, T = 2000 | -5.0 +- 0.8 % | -2.8 +- 1.0 % | **-1.8 +- 0.9 %** | +1.7 +- 0.9 % |
+| circle shift, T = 1000 | -14 +- 3 % | -13 +- 3 % | -17 +- 3 % | -15 +- 3 % |
+| circle shift, T = 2000 | -1 +- 4 % | +1 +- 4 % | -2 +- 3 % | -0 +- 3 % |
+
+(circle in units of |FD along the shift|; cos 2 theta: +7 / +9 % quad 300, +2 / +3 % cubicv
+1000 at T = 1000 / 2000.)  Paired: the horizon 1000 - 300 adds +2.1 +- 0.3 % (quad) at both
+run lengths -- adjoint memory beyond 300 steps in a steady flow, mostly the `v` part, not the
+fill; `cubicv` - quad +3.0 +- 0.2 % at 300 steps, growing to +3.6 / +4.6 % at 1000 (the fit's
+difference accumulates per captured step).  The two corrections **overshoot together**
+(+1.9 +- 0.65 % pooled): the cubic's +3 % is not purely the removal of the quadratic's bias,
+part of it stands in for the truncated horizon.  At the production horizon `cubicv` is the
+closest setting (pooled -1.2 +- 0.6 %, against -4.3 +- 0.6 % for the quadratic) at the same
+cost, and on the optc iterates (`cub_*`, 8 seeds) it is as stable as the quadratic (lambda rms
+identical, paired differences within noise; GD 200 -0.34 +- 0.25 along the shift) ->
+**adopted as `CELL_BASIS`** (2026-10-12; `optimize.py` keeps a resumed run's own basis, the
+history now records `backward_basis`).  The circle's -14 % is **not an adjoint error**: the FD
+along the shift moves by 13 % between T = 1000 (-0.00567) and T = 2000 (-0.00642), the adjoint
+reads -0.0065 at both, and capturing the whole 1000-step run (which starts empty, so nothing
+is left undifferentiated) does not move it (+0.01 +- 0.01).  The FD of the unsteady
+60 %-blockage box sees how the shape changes the slow fill; the backward's fits do not carry
+that mode.  Production Kn 0.5 runs (`circle_long`, warm-up 2800) are steady.
+
+Free-molecular (`fmgz_*`: grazing cut-off 0, 0.01, 0.05, 0.2 paired on one forward; `fmsm_*`:
+the S1/GD iterates smoothed, sigma 12.5 cm, same area; `sqfm_*`: the squash):
+
+- **The grazing cut-off is not the bias.** Exact (0) - shipped (0.05), paired: squash
+  +0.10 +- 0.23 % (s = 1), +0.01 +- 0.07 % (s = 0.35); S8 30 cos 2 theta -0.01 +- 0.03.  The
+  squash still reads -1.6 +- 0.7 / -1.8 +- 0.5 % (300 steps; whole run about -1.2 %), the
+  FD's truncation there is <= 0.17 % (analytic ellipse drag), so ~1.5 % stays unlocated.  S8
+  30 cos 2 theta +0.14 +- 0.03 (median +0.13; FD linear in h to 0.01): a real ~60 % error on
+  that mode (FD -0.23, adjoint -0.09), unlocated.  The cut-off 0.2 biases the circle shift
+  +0.05 +- 0.01 (0.05 is unbiased there).
+- **The grazing hits are the variance.** sd(adjoint - FD) / sd(FD) along the shift, cut-off
+  0 / 0.05 / 0.2: circle 1.4 / 1.1 / 1.1, S8 30 3.9 / 2.5 / 2.0, S1/GD iterates 10-16 / 6-12
+  / 3.5-6.  The tally and `v` parts move in opposite directions with the cut-off (S1 50 cos
+  2 theta: tally +0.44 -> +0.57, `v` -0.63 -> -0.84 from 0.05 to 0): O(1/(v . n)) terms that
+  cancel in expectation, not per seed.  Smoothing the sub-cell features cuts the ratio to
+  2.8-5.0 (shift) and 2.1-3.8 (cos 2 theta) at the shipped cut-off -- the features make the
+  grazing hits.
+- **The rough iterates have no FD derivative at h ~ 0.05.** FD along the shift at
+  h = 0.025 / 0.05 / 0.1: S1 50 1.20 / 1.00 / 0.87, S1 200 1.09 / 1.00 / 0.93 (paired, z 3-7);
+  circle, S8 30, GD 200 linear.  A 2.5-10 cm shift moves features of 3.5-14 cm radius; the
+  "biases" measured on those shapes are not meaningful, only their scatter is.
 
 *Tests*: `tests/test_cell_fit.py` (polynomial reproduction for every basis, the
 least-squares solution and exact slopes, the order guard's column caps, finite empty

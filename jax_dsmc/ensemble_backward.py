@@ -145,15 +145,17 @@ through the fit at that boundary) or ``"post"`` (the end-of-step state at every
 substep, so the field ``f`` inside the step is frozen: an O(dt) splitting error the
 substep count cannot remove, -6 % on the relaxation arbiter)."""
 
-CELL_BASIS = "cell:quad:adapt1.5:align0.9:both"
-"""The shipped field fit of the device virtual pull-back (2026-10-11): ONE quadratic fit per
-collision cell (:mod:`jax_dsmc.cell_fit`), its polynomial order capped by the cell's node
-count (``adapt1.5``: at most ``count / 1.5`` columns, else a plane, else the mean); with
-surface normals split at ``v . n = 0`` (ahead / behind / both), the cells whose normals
-disagree (resultant below 0.9) left two-sided (``both``).  Measured (``scratch/cellfit``,
-docs/PSEUDOCODE.md section 9.9): Kn 0.5 squash 12 seeds -1.9 +- 2.3 % vs FD and
-+0.05 +- 1.5 % vs the 64-nearest fit at a tenth of the seed's time; stable on the optc
-shapes where the per-query fits blew up.  The unguarded per-cell quadratic is unstable."""
+CELL_BASIS = "cell:cubicv:adapt1.5:align0.9:both"
+"""The shipped field fit of the device virtual pull-back (2026-10-12 evening; the quadratic
+``cell:quad:adapt1.5:align0.9:both`` from 2026-10-11): ONE fit per collision cell
+(:mod:`jax_dsmc.cell_fit`), quadratic in x and cubic in v (``cubicv``), its polynomial order
+capped by the cell's node count (``adapt1.5``: at most ``count / 1.5`` columns, else lower
+orders, else the mean); with surface normals split at ``v . n = 0`` (ahead / behind / both),
+the cells whose normals disagree (resultant below 0.9) left two-sided (``both``).  Measured
+(``scratch/gapgate``, docs/PSEUDOCODE.md section 9.7.2, fnum x1, 16 CRN seeds): Kn 0.5
+squash s = 1, 300 captured steps, -0.7 +- 0.8 % vs FD (production run) and -1.8 +- 0.9 %
+(filled box) where the quadratic read -3.7 / -5.0 % (paired +3.0 +- 0.2 %); same cost; as
+stable as the quadratic on the optc shapes.  The unguarded per-cell quadratic is unstable."""
 
 VIRTUAL_BASIS = CELL_BASIS
 """Field fit of the device virtual pull-back: :data:`CELL_BASIS` (shipped) or

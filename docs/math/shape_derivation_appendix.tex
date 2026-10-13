@@ -11,7 +11,7 @@
 setting & where & default & role\\
 \midrule
 \code{variant} & \code{ensemble\_gradient}, optimisers & \code{along\_pool\_plane} & $\nabla_x\lambda$ estimator (\code{shape.VARIANTS})\\
-\code{--backward-basis} & \code{configure(basis=)}, CLI & \code{CELL\_BASIS} & pull-back's value field: \code{cell:quad:adapt1.5:align0.9:both}\\
+\code{--backward-basis} & \code{configure(basis=)}, CLI & \code{CELL\_BASIS} & pull-back's value field: \code{cell:cubicv:adapt1.5:align0.9:both}\\
 \code{neighbors} & config / CLI & 32 & $k$ of the unpooled per-query fits (backward only with \code{quadratic\_full})\\
 pool, $k$, half-space & \code{shape.VARIANTS} & 1, 96, 0.25 cells & pooled shape fits\\
 \code{value\_class} & config & \code{"none"} & \code{"hit\_ahead"}: diagnostic only, warns\\
