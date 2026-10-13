@@ -20,7 +20,9 @@ Each iterate evaluates ``dD/ds`` by the ensemble adjoint (``examples.ensemble_me
 through :func:`ensemble_mesh.control_gradient`), adds the exact ``-lam dV/ds``, and takes
 an Adam step ``s <- s - lr m_hat / sqrt(v_hat)`` (``optimize.adam_direction``; its step has
 unit scale, so ``--learning-rate`` is the largest change of ``s`` per iterate).  Common
-random numbers across iterates.
+random numbers across iterates.  The run stops when ``s`` has converged -- the last
+``--converge-window`` iterates' ``s`` within ``--converge-tol`` of their mean
+(``optimize.window_converged``) -- or at ``--iterations``, whichever comes first.
 
 ``--knudsen K`` (``examples.ensemble_mesh.knudsen_density``) raises the gas density, at the
 same particle count, to the free-stream Knudsen number ``K`` on the body diameter ``2 R``:
@@ -57,7 +59,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ellipsoid_reference as E
 import forward as F
-from optimize import adam_direction
+from optimize import adam_direction, window_converged
 
 from examples import ensemble_mesh as EM
 from jax_dsmc import ensemble_backward
@@ -87,7 +89,12 @@ def default_config():
             "learning_rate": 0.05,
             "adam_beta1": 0.9,
             "adam_beta2": 0.999,
-            "iterations": 25,
+            # the cap; the run stops earlier when the last `converge_window` iterates' s spread
+            # by at most `converge_tol` of their mean.  The Kn 0.5 Adam runs wander +-0.05 in
+            # s on gradient noise: 1 % fired at a turning point (iterate 21 of 80, S = 4)
+            "iterations": 300,
+            "converge_window": 5,
+            "converge_tol": 0.005,
             "seeds_per_iterate": 4,
             "seed_start": 32,
             # pooled one-sided fit without the nodes behind the hit's tangent plane, plus the
@@ -151,6 +158,11 @@ def seed_gradient(cfg, s, seed):
     return info["objective"], grad, parts, info
 
 
+def converged_s(cfg, rows) -> bool:
+    """``window_converged`` on the iterates' ``s``."""
+    return window_converged([r["s"] for r in rows], cfg["converge_window"], cfg["converge_tol"])
+
+
 def run(cfg, out: Path):
     out.mkdir(parents=True, exist_ok=True)
     path = out / "history.json"
@@ -160,7 +172,7 @@ def run(cfg, out: Path):
     lam = dd_t / dv  # reference optimum at s_target
     s = rows[-1]["s_next"] if rows else cfg["s0"]
     moments = (rows[-1]["adam_m"], rows[-1]["adam_v"]) if rows else (0.0, 0.0)
-    while len(rows) < cfg["iterations"]:
+    while len(rows) < cfg["iterations"] and not converged_s(cfg, rows):
         t0 = time.time()
         per = [seed_gradient(cfg, s, i) for i in range(cfg["seeds_per_iterate"])]
         drag = np.array([p[0] for p in per])
@@ -201,6 +213,7 @@ def run(cfg, out: Path):
                     "lam": lam,
                     "knudsen_density": EM.knudsen_density(cfg),
                     "s_star_ref": cfg["s_target"],
+                    "converged": converged_s(cfg, rows),
                     "rows": rows,
                 },
                 indent=1,
@@ -214,6 +227,8 @@ def run(cfg, out: Path):
             flush=True,
         )
         s = s_next
+    if converged_s(cfg, rows):
+        print(f"converged after {len(rows)} iterates", flush=True)
 
 
 def backfill_frames(out: Path):

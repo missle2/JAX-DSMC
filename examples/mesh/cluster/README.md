@@ -3,7 +3,7 @@
 Set up 2026-09-21 to run **off the workstation**, one right-sized SLURM job per task on
 the University of Colorado Research Computing Alpine cluster.  **Partition: `aa100`**
 (12 nodes × 3 NVIDIA A100, 64 cores, 243 GB; `--gres=gpu:a100-40gb:N`, 21 cores per GPU
-max; QOS `gpu-normal` 24 h, `gpu-testing` 1 h; default account `ucb-general`; `module
+max; QOS `gpu-normal` 24 h, `gpu-testing` 1 h; account `ucb856_asc1` (`#SBATCH --account` in `job.sbatch` / `check_env.sbatch`); `module
 load slurm/alpine` on a login node before `sbatch` — CURC docs, *Alpine hardware* and
 *Running jobs*).  JAX comes from a **CUDA venv** (`pip install "jax[cuda12]"`,
 self-contained CUDA 12 libraries; **verified on Alpine 2026-09-21: jax 0.6.2,
@@ -60,7 +60,7 @@ written are skipped), so a job that hits its time limit is resubmitted with the 
 |---|---|---|---|---|---|
 | `sphere` | `seed{0..7}` | 3-D level-set sphere (`h_φ = 0.1` on the 0.2 grid, `fnum × 2` ≈ 40 k particles), radius gradient vs CRN FD (h = 0.05, 0.02), one seed per job | 1 | `gradient_bench/results/ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_…_dev_seed{i}.json` → merged `…_dev.json` | ~3× the circle's 9 min/seed on the workstation GPU → ≤ 30 min/seed, 8 h limit |
 | `mode2` | `seed{0..31}` | finer circle (`fnum × 1` ≈ 48 k particles, 40 × 40 DSMC grid, `h_φ = 0.0625`), `cos 2θ` gradient vs CRN FD, one seed per job | 1 | `…circle_levelset0.0625_gz0.05_grid2_mode2_f1_…_dev_seed{i}.json` → merged | ~15 min/seed on the workstation → < 1 h, 4 h limit |
-| `opt` | `opt_S{1,2,4,8}_{gd,adam}` | finer circle drag minimisation at fixed area, 250 iterates (`--iterations 250`; 20 when this table was written), S CRN seeds per iterate evaluated concurrently (`optimize.py --workers min(S, GPUs/node)`), GD (normalised, projected) vs Adam | min(S, 3) | `mesh/results/optimize/circle_fine_S{S}_{opt}/history.json` + `coef_k.npy` | ~8 min per seed-evaluation on the workstation; per iterate ⌈S / GPUs⌉ × 8 min → S = 1, 2, 4: ~3 h; S = 8: ~6 h for 20 iterates (24 h limit; resubmit to continue) |
+| `opt` | `opt_S{1,2,4,8}_{gd,adam}` | finer circle drag minimisation at fixed area, to convergence (cap `--iterations 300`; 20 when this table was written), S CRN seeds per iterate evaluated concurrently (`optimize.py --workers min(S, GPUs/node)`), GD (normalised, projected) vs Adam | min(S, 3) | `mesh/results/optimize/circle_fine_S{S}_{opt}/history.json` + `coef_k.npy` | ~8 min per seed-evaluation on the workstation; per iterate ⌈S / GPUs⌉ × 8 min → S = 1, 2, 4: ~3 h; S = 8: ~6 h for 20 iterates (24 h limit; resubmit to continue) |
 | `optc` | `opt_S{1,2,4,8}_{gd,adam}` (jobs `optc_opt_…`) | `opt` on the SPARTA 20 × 20 DSMC grid (`--grid-scale 1`, `fnum × 1`, same level set and step): 60 k slots, a quarter of `opt`'s memory, fits a 24 GB rtx MIG slice (`GPU_KIND=rtx`, one slice, seeds run in turn) | 1 | `mesh/results/optimize/circle_coarse_S{S}_{opt}/` → `optimize_convergence_coarse.png`, `optc_drag.png`, `optc_body_extent.png` | measured (`study_results.json`, `optc_runs`): ≈ 4.3–4.9 min per seed evaluation, median 4.6–4.9 / 9.1–9.8 / 18–19 / 35–36 min per iterate at S = 1 / 2 / 4 / 8 |
 
 ### 2026-10-11: the per-cell backward, its gates and the longer runs
@@ -82,6 +82,20 @@ command; `scratch/*/cluster_job.sh` honour `SMOKE=1`, the optimisers get toy fla
 `/tmp/preflight` tag).  It would have caught the 2026-10-04 failure; on 2026-10-11 it
 caught one in its own flags.
 
+On a GPU kind (a new node type, a new allocation) submit the same preflight as one job:
+
+```
+GPU_KIND=h200 bash examples/mesh/cluster/submit_curc.sh preflight optckn optc2 squashkn2
+QOS=<qos> GPU_KIND=h200 ...                          # if the allocation has its own QOS
+```
+
+One 1-hour job on two GPUs: `job.sbatch`'s own checks (driver, `check_env --quick`, import),
+then `preflight.sh` of each group with `PREFLIGHT_GPU=1` -- on the GPUs, the optimisers'
+toys with a two-worker pool (one seed per GPU) and a 600-step warm-up, so the body is hit
+in `circle_long` (30 steps reached it with no particle; the log now warns on `hits 0`).
+Verified on the workstation GPU 2026-10-13: optc2 and the optckn Kn 0.5 toy (cubic fit,
+Lagrangian area, 156 hits).
+
 The backward's field fit is now one guarded quadratic per collision cell
 (`ensemble_backward.CELL_BASIS`, docs/PSEUDOCODE.md §9.7.2): a Kn 0.5 squash seed 985 s →
 95 s on the workstation (the backward 897 → 13 s; the per-query fit was ~92 % of a
@@ -97,9 +111,10 @@ collisional seed), so collisional optimisations can afford ~10× the iterates.  
 | | `cub_{a50,a100,a200,s8a30,g200}_b{0,1}` | the cubic fit (split, as it would ship) paired with `CELL_BASIS` on the optc iterates at Kn 0.5, 4 seeds a job | ~5 min / seed |
 | | `fmgz_{c0,…,g200}_b{0,1}`, `sqfm_s{0.35,1}_b{0,1}` | free-molecular grazing cut-off 0.05 / 0.01 / 0.2 / 0 paired (derivative-only), every term's projection, FD h = 0.025 / 0.05 / 0.1; optc iterates and the squash; 8 seeds a job | ~5–8 min / seed |
 | | `fmsm_{a50,a100,a200,g200}_b{0,1}` | the elongated iterates smoothed (σ = 2 knots, same area): do the heavy-tailed gradients go with the sub-cell features? | ~3 min / seed |
-| `optckn` | `opt_S{1,2,4,8}_adam`, `opt_S4_gd` | `optc` at Kn 0.5 with the per-cell fit, 250 iterates, in the **3× longer box** `circle_long` (x ∈ [−10, 20] m, centred on the body: 15 m each side; `fnum × 2`, 120 k slots (90 k ran out at Kn 0.5 on the first iterate, 2026-10-12); warm-up 2800 steps) **and** the bodies kept 1 m from every face (`--keepout 1.0`): the FM Adam runs grew through the outflow face of the 10 m box, S8 died on `inflow_shortfall`; the area in the differentiated objective (`--area-mode lagrangian`: augmented Lagrangian started from the squash runs' area price, 2026-10-12) instead of the projection; tags `circle_long_kn0.5_S{S}_{opt}_al` | ~10 min / seed at 90 k slots (now 2× the slots of `optc`: expect ~1.3× that), collisions → S = 4: ~35 iterates / day (resubmit) |
-| `optc2` | `opt_S{4,8}_adam` | the free-molecular `optc` Adam runs again in the long box with the margin and `--area-mode lagrangian`, 250 iterates; tags `circle_long_S{S}_adam_al` (the projection runs `circle_long_S{S}_adam` stay as they are) | ~7 min / seed |
-| `squashkn2` | `kn0.5_S{4,8}`, `kn0.5_M10_S{2,4}` | `squashkn` with the per-cell fit: 80 iterates at Kn 0.5, 60 with M 10 (the 2026-10-01 runs managed 10 and 3 iterates at S = 4 in 24 h); tags carry the basis, so they never resume the per-query runs | Kn 0.5: ~200 s / seed; M 10: ~400 s / seed |
+| `optckn` | `opt_S{1,2,4,8}_adam`, `opt_S4_gd` | `optc` at Kn 0.5 with the per-cell fit, to convergence (cap 300), in the **3× longer box** `circle_long` (x ∈ [−10, 20] m, centred on the body: 15 m each side; `fnum × 2`, 120 k slots (90 k ran out at Kn 0.5 on the first iterate, 2026-10-12); warm-up 2800 steps) **and** the bodies kept 1 m from every face (`--keepout 1.0`): the FM Adam runs grew through the outflow face of the 10 m box, S8 died on `inflow_shortfall`; the area in the differentiated objective (`--area-mode lagrangian`: augmented Lagrangian started from the squash runs' area price, 2026-10-12) instead of the projection; tags `circle_long_kn0.5_S{S}_{opt}_al` | ~10 min / seed at 90 k slots (now 2× the slots of `optc`: expect ~1.3× that), collisions → S = 4: ~35 iterates / day (resubmit) |
+| `optc2` | `opt_S{4,8}_adam` | the free-molecular `optc` Adam runs again in the long box with the margin and `--area-mode lagrangian`, to convergence (cap 300); tags `circle_long_S{S}_adam_al` (the projection runs `circle_long_S{S}_adam` stay as they are) | ~7 min / seed |
+| `optab` | `ctl`, `smooth{4,8}`, `lsh{0.125,0.25}` | A/B of the control resolution against the sub-cell wiggles: `optc2`'s S = 4 Adam run with the step smoothed over 2 (control) / 4 / 8 knots (12.5 / 25 / 50 cm), or a coarser level set (`--levelset-h 0.125` / `0.25`, smooth 2 knots: the same 25 / 50 cm widths, representation vs smoothing); tags `circle_long_S4_adam_al_ab_<name>`; compare final drag, shape roughness, `gradient_seed_sd` | ~7 min / seed, 1 rtx slice each |
+| `squashkn2` | `kn0.5_S{4,8}`, `kn0.5_M10_S{2,4}` | `squashkn` with the per-cell fit, to convergence (`s` of the last 5 iterates within 0.5 %, cap 300; the 2026-10-01 runs managed 10 and 3 iterates at S = 4 in 24 h); tags carry the basis, so they never resume the per-query runs | Kn 0.5: ~200 s / seed; M 10: ~400 s / seed |
 
 Formulation checks behind them (2026-10-11): with the inflow 10 m from the body centre the
 empty long box's windowed drag was steady from 1400 warm-up steps (free-molecular 3.606 /
@@ -114,7 +129,7 @@ shape that had crossed a face.  Suggested order (2026-10-12): `gapgate` (done 20
 `scratch/gapgate/analysis.py`: the default basis is now `cell:cubicv:adapt1.5:align0.9:both`;
 `optimize.py` records it in `history.json` and a resumed run keeps its own; `optimize_squash`
 names its artifacts by basis, so `squashkn2` starts new runs), then `squashkn2` and
-`optckn`, `optc2`; of `biasgate` only
+`optckn`, `optc2` (since 2026-10-13 every optimisation runs to convergence, capped at 300 iterates: `study.MAX_ITERATIONS`, `optimize.window_converged`; `collect` counts a converged run as done); of `biasgate` only
 `ONLY='^kn_fd|hor'` (the FD arbiter and horizons; `kn_seed*` is superseded by `cellgate`).
 
 Sizing: `submit_curc.sh` gives every job a GPU's share of its node (A100: 21 cores and

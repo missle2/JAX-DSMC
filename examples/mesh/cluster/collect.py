@@ -237,6 +237,12 @@ def _job_id(path: str) -> int:
     return int(path.rsplit("_", 1)[1][: -len(".out")])
 
 
+def run_done(h) -> bool:
+    """An optimisation history has finished: converged (``optimize.window_converged``) or
+    at its iterate cap."""
+    return bool(h.get("converged")) or len(h["rows"]) >= h["config"]["iterations"]
+
+
 def job_end(text: str, iterates: int, target: int) -> str:
     """How one Slurm log ended: ``complete`` when the run reached its target, else the
     first matching reason (a Python error's last line when there is one)."""
@@ -272,7 +278,9 @@ def run_accounting(hist):
                 {
                     "job": _job_id(path),
                     "iterates": [its[0], its[-1]] if its else None,
-                    "end": job_end(text, its[-1] + 1 if its else 0, cfg["iterations"]),
+                    "end": "converged"
+                    if "converged after" in text
+                    else job_end(text, its[-1] + 1 if its else 0, cfg["iterations"]),
                 }
             )
         sec = np.array([r["seconds"] for r in h["rows"]])
@@ -281,6 +289,7 @@ def run_accounting(hist):
             "optimizer": opt,
             "iterates": len(h["rows"]),
             "target": cfg["iterations"],
+            "converged": bool(h.get("converged")),
             "jobs": jobs,
             "last_end": jobs[-1]["end"] if jobs else "no log",
             "seconds_per_iterate_median": float(np.median(sec)),
@@ -793,7 +802,7 @@ def _run_label(h):
     """``S = n``, with the progress when the run is not finished."""
     n, target = len(h["rows"]), h["config"]["iterations"]
     label = f"S = {h['config']['seeds_per_iterate']}"
-    return label if n >= target else f"{label} (running, {n}/{target})"
+    return label if run_done(h) else f"{label} (running, {n}/{target})"
 
 
 def _iterate_panel(ax, h, key, key_se=None, factor=1.0, marker="o"):
@@ -926,6 +935,7 @@ def squash_outputs():
     hists = {t: h for t, h in load_squash_histories().items() if t.startswith("ellipse_")}
     report["squash_runs"] = {
         t: {"iterates": len(h["rows"]), "target": h["config"]["iterations"],
+            "converged": bool(h.get("converged")),
             "s_last": h["rows"][-1]["s_next"] if h["rows"] else None,
             "hours_per_iterate": float(np.mean([r["seconds"] for r in h["rows"]])) / 3600 if h["rows"] else None}
         for t, h in hists.items()
@@ -936,7 +946,7 @@ def squash_outputs():
         sets.setdefault((c.get("knudsen", 0.0), c.get("mach", 0.0)), {})[t] = h
     for (kn, mach), runs in sorted(sets.items()):
         if kn == 0.0:
-            done = {t: h for t, h in runs.items() if len(h["rows"]) >= h["config"]["iterations"]}
+            done = {t: h for t, h in runs.items() if run_done(h)}
             if done:
                 figure_squash_optimisation(
                     done, gate, figure_path("squash", "squash_optimisation.png")

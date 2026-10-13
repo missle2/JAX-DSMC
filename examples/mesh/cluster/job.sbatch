@@ -4,7 +4,7 @@
 # the environment variable CMD (--export=ALL,CMD=...).  Runs from the repository root.
 #SBATCH --partition=aa100
 #SBATCH --qos=gpu-normal
-#SBATCH --account=ucb-general
+#SBATCH --account=ucb856_asc1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --output=examples/mesh/cluster/logs/%x_%j.out

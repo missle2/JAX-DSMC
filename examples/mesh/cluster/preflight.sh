@@ -15,6 +15,10 @@
 #    seeds run the same code, so one of each kind proves the plumbing; what depends on
 #    density or shape (NTC attempt budget, inflow shortfall, memory) a toy cannot show --
 #    check that at production size once (scratch/cellfit/attempts_check.py).
+# PREFLIGHT_GPU=1: on the job's GPUs instead (the backend env.sh pins, no local lock), the
+# optimisers' toys with --workers PREFLIGHT_WORKERS (default 1) and as many seeds, at least 2,
+# so the worker pool runs one seed per GPU -- submitted on a GPU kind by
+# `submit_curc.sh preflight <group>...` (one job, two GPUs).
 # Exit status: the number of failures.
 set -uo pipefail
 group="$1"
@@ -23,22 +27,33 @@ ROOT="$(pwd)"
 [ -f "${ROOT}/jax_dsmc/__init__.py" ] || { echo "run from the repository root"; exit 2; }
 LOCK=/home/aakash/jax_dsmc/run_locked.sh
 [ -x "${LOCK}" ] || LOCK=""
+GPU="${PREFLIGHT_GPU:-0}"
+WORKERS="${PREFLIGHT_WORKERS:-1}"
+PLATFORM=cpu
+if [ "${GPU}" = 1 ]; then LOCK=""; fi
 # The jobs' environment (the venv, X64, ...) where there is one: on the cluster `module`
 # exists and env.sh activates the venv (without it `import jax` fails); env.sh pins
-# JAX_PLATFORMS=cuda, which clean() overrides -- the preflight runs on a CPU node.
+# JAX_PLATFORMS=cuda, which clean() overrides -- the preflight runs on a CPU node (unless
+# PREFLIGHT_GPU=1).
 if type module > /dev/null 2>&1; then
   set +u
   # shellcheck disable=SC1091
   source examples/mesh/cluster/env.sh
   set -u
 fi
-TOY_OPT="--iterations 1 --fnum-scale 16 --warmup 30 --steps 30 --window 20 --frames-every 0"
-TOY_OPT="${TOY_OPT} --seeds-per-iterate 2"
+# the GPU mode keeps the backend env.sh pinned (a refused cuInit then fails, not falls back)
+if [ "${GPU}" = 1 ]; then PLATFORM="${JAX_PLATFORMS:-cuda}"; fi
+# the GPU mode warms up 600 steps (60 ms): in circle_long the body is 12 m from the inflow
+# and a 30-step toy reached it with no particle (hits 0: the surface terms never ran)
+TOY_WARMUP=30
+if [ "${GPU}" = 1 ]; then TOY_WARMUP=600; fi
+TOY_OPT="--iterations 1 --fnum-scale 16 --warmup ${TOY_WARMUP} --steps 30 --window 20 --frames-every 0"
+TOY_OPT="${TOY_OPT} --seeds-per-iterate $((WORKERS > 2 ? WORKERS : 2))"
 mkdir -p /tmp/preflight
 failed=0
 
 clean() {  # run "$1" in a clean environment as job.sbatch would; extra env as "$2"
-  env -u PYTHONPATH JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 PYTHONUNBUFFERED=1 \
+  env -u PYTHONPATH JAX_PLATFORMS="${PLATFORM}" JAX_ENABLE_X64=1 PYTHONUNBUFFERED=1 \
     SLURM_SUBMIT_DIR="${ROOT}" ${2:-} bash -c '
       export PYTHONPATH="${SLURM_SUBMIT_DIR:-${PWD}}${PYTHONPATH:+:${PYTHONPATH}}"
       eval "$0"' "$1"
@@ -73,7 +88,7 @@ for i in "${!NAMES[@]}"; do
     rm -rf "/tmp/preflight/${group}_${name}"
     cmd="${cmd} ${TOY_OPT} --tag /tmp/preflight/${group}_${name}"
     # optimize.py's worker pool (optimize_squash has none)
-    [[ "${cmd}" == python3\ -m\ examples.mesh.optimize\ * ]] && cmd="${cmd} --workers 1"
+    [[ "${cmd}" == python3\ -m\ examples.mesh.optimize\ * ]] && cmd="${cmd} --workers ${WORKERS}"
   fi
   log="/tmp/preflight/${group}_${name}.log"
   echo "[$(date +%H:%M:%S)] toy ${group}/${name} (kind ${kind})"
@@ -81,6 +96,8 @@ for i in "${!NAMES[@]}"; do
   rc=$?
   if [ ${rc} -eq 0 ] && ! grep -q "Traceback" "${log}"; then
     echo "    ok"
+    # optimize.py prints the iterate's mean hits: none means the toy never touched the body
+    if grep -q " hits 0 " "${log}"; then echo "    WARNING: hits 0 -- the surface terms were not exercised"; fi
   else
     echo "    FAILED (exit ${rc}): ${log}"; tail -5 "${log}" | sed 's/^/      /'
     failed=$((failed + 1))

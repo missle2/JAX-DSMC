@@ -7,7 +7,10 @@
 
 Every command is a plain ``python3 -m examples....`` invocation that resumes from its own
 artifact (rows / iterates already done are skipped), so a job can be re-submitted after a
-time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
+time limit.  The optimisations (``squash*``, ``opt*``) iterate to convergence -- the last 5
+iterates' objective (``optimize``) or ``s`` (``optimize_squash``) within a tolerance of
+their mean, ``optimize.window_converged`` -- capped at :data:`MAX_ITERATIONS`; a converged
+run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
 
 * ``sphere``: the 3-D level-set sphere, radius gradient vs CRN FD, 8 seeds -- **one job
   per seed** (``--seed-start 32+i --seeds 1 --output ..._seed{i}.json``; ``collect.py``
@@ -25,7 +28,7 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
   unstratified fit (``--value-class none``: the hit-ahead class biased mode2,
   2026-09-25); ``opt_S{S}``: ``examples.mesh.optimize_squash`` (Adam, learning rate 0.05)
   from the circle (``s = 1``) on ``J = D - lam V`` with the reference optimum at
-  ``s* = 0.35``, 25 iterates: the optimiser on DSMC gradients against the analytic
+  ``s* = 0.35``, to convergence: the optimiser on DSMC gradients against the analytic
   optimum.  Fits a 24 GB rtx slice (80 k slots, like ``optc``).
 * ``squashkn``: the same optimisation in the transitional regime, where the free-molecular
   reference no longer holds: the gas density raised to ``Kn = lambda / 2R = 0.5`` at the
@@ -53,7 +56,7 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
   of the 10 m box and one
   reached the inflow face) with the bodies also kept :data:`KEEPOUT` from every face
   (``optimize.keep_inside``), Adam at ``S in OPTCKN_SEEDS`` and GD at 4,
-  :data:`OPTCKN_ITERATIONS` iterates (resumed across jobs).
+  to convergence (resumed across jobs).
 * ``optc2``: the free-molecular ``optc`` Adam runs again in the long box with the margin,
   S = 4, 8.
 * ``gapgate`` (2026-10-12): the hypothesis gates after ``cellgate`` (``bash
@@ -64,10 +67,18 @@ time limit.  The groups (``submit_curc.sh`` sizes one SLURM job per line):
   remainder and the S8 ``cos 2 theta`` bias (grazing cut-off sweeps ``fmgz_*`` / ``sqfm_*``),
   the elongated iterates' heavy-tailed gradients (smoothed iterates ``fmsm_*``).
 * ``squashkn2``: ``squashkn`` with the per-cell fit at ~10x the iterates per hour: Kn 0.5 at
-  S = 4, 8 (:data:`SQUASH_KN2_ITERATIONS` iterates), Kn 0.5 + M 10 at S = 2, 4 (fewer).
+  S = 4, 8, Kn 0.5 + M 10 at S = 2, 4, to convergence.
   Its tags carry the basis (``optimize_squash``), so they never resume the per-query runs.
-* ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, 250
-  iterates (``--iterations 250``, resumed across jobs), ``S`` CRN seeds per iterate for
+* ``optab`` (2026-10-13): A/B of the control's resolution against the sub-cell wiggles
+  (gapgate: features of 3.5-14 cm radius, under a quarter of the 0.5 m DSMC cell, carry the
+  per-seed gradient spikes): ``optc2``'s S = 4 Adam run (free-molecular, long box, margin,
+  Lagrangian area) with the step smoothed wider (``smooth{n}``: ``--smooth n`` knots of
+  6.25 cm, control ``ctl`` = 2 knots = 12.5 cm) or on a coarser level set (``lsh{h}``:
+  ``--levelset-h h`` with ``--smooth 2``, i.e. 25 / 50 cm, the same physical widths as
+  ``smooth4`` / ``smooth8``: representation vs smoothing at equal width).  Tags
+  ``circle_long_S4_adam_al_ab_<name>``; one GPU each (fits an rtx MIG slice).
+* ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, to
+  convergence (resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
   its learning rate); the ``S`` seeds of an iterate run concurrently on
   ``min(S, gpus_per_node)`` GPUs (``optimize.py --workers``; ``--gpus-per-node`` = the
@@ -101,7 +112,8 @@ SQUASH_POINTS = (0.35, 0.6, 1.0)
 SQUASH_SEEDS = 8
 SQUASH_OPT_SEEDS = (1, 4)
 SQUASH_KN_SEEDS = (1, 4)
-SQUASH_ITERATIONS = 100
+# every optimisation's iterate cap: they stop earlier when converged (module doc)
+MAX_ITERATIONS = 300
 # the Kn = 0.5 settings (measured 2026-10-01: at most 21 NTC attempts per cell at s = 1)
 KN05 = "--knudsen 0.5 --a-max 64"
 # M = 10 (3079 m/s), scaled from the Kn = 0.5 measurement rather than measured: the step
@@ -124,8 +136,6 @@ KEEPOUT = 1.0  # m: two DSMC cells between the body and every box face
 # 3.631 / 3.682 / 3.692 e-20 free-molecular: 2800
 LONG = "--case circle_long --fnum-scale 2 --warmup 2800"
 OPTCKN_SEEDS = (1, 2, 4, 8)
-OPTCKN_ITERATIONS = 250
-SQUASH_KN2_ITERATIONS = 100
 KNPULLBACK = "--substeps 4 --partners 8"
 SPHERE_ARTIFACT = "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev"
 MODE2_ARTIFACT = (
@@ -171,14 +181,11 @@ def _gapgate_jobs(gpus_per_node: int) -> dict[str, str]:
 def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     out = {}
-    for label, extra, seeds, iters in (
-        ("kn0.5", KN05, (4, 8), SQUASH_KN2_ITERATIONS),
-        ("kn0.5_M10", KN05_M10, (2, 4), SQUASH_KN2_ITERATIONS * 3 // 4),
-    ):
+    for label, extra, seeds in (("kn0.5", KN05, (4, 8)), ("kn0.5_M10", KN05_M10, (2, 4))):
         for s in seeds:
             out[f"{label}_S{s}"] = (
                 f"python3 -m examples.mesh.optimize_squash --seeds-per-iterate {s} "
-                f"--iterations {iters} {extra}"
+                f"--iterations {MAX_ITERATIONS} {extra}"
             )
     return out
 
@@ -190,21 +197,45 @@ def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     gradient), tags ``circle_long_[kn0.5_]S{S}_{opt}_al`` (the projection runs keep theirs)."""
     if collisional:
         runs = [(s, "adam") for s in OPTCKN_SEEDS] + [(4, "gd")]
-        regime, extra, iters = "kn0.5_", f"{KN05} {KNPULLBACK}", OPTCKN_ITERATIONS
+        regime, extra = "kn0.5_", f"{KN05} {KNPULLBACK}"
     else:
-        runs, regime, extra, iters = [(4, "adam"), (8, "adam")], "", PULLBACK, 250
+        runs, regime, extra = [(4, "adam"), (8, "adam")], "", PULLBACK
     out = {}
     for s, opt in runs:
         out[f"opt_S{s}_{opt}"] = (
             f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt}_al "
-            f"--optimizer {opt} --iterations {iters} --seeds-per-iterate {s} "
+            f"--optimizer {opt} --iterations {MAX_ITERATIONS} --seeds-per-iterate {s} "
             f"--workers {min(s, gpus_per_node)} {COARSE} {LONG} --step 0.05 --smooth 2 "
             f"--band 1.0 --keepout {KEEPOUT} --area-mode lagrangian {extra}"
         )
     return out
 
 
+# optab: name -> extra flags (the later flag wins over COARSE's --levelset-h)
+OPTAB = {
+    "ctl": "--smooth 2",
+    "smooth4": "--smooth 4",
+    "smooth8": "--smooth 8",
+    "lsh0.125": "--smooth 2 --levelset-h 0.125",
+    "lsh0.25": "--smooth 2 --levelset-h 0.25",
+}
+
+
+def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    return {
+        name: (
+            f"python3 -m examples.mesh.optimize --tag circle_long_S4_adam_al_ab_{name} "
+            f"--optimizer adam --iterations {MAX_ITERATIONS} --seeds-per-iterate 4 --workers 1 "
+            f"{COARSE} {LONG} --step 0.05 --band 1.0 --keepout {KEEPOUT} "
+            f"--area-mode lagrangian {PULLBACK} {extra}"
+        )
+        for name, extra in OPTAB.items()
+    }
+
+
 NEW_GROUPS = {
+    "optab": _optab_jobs,
     "cellgate": _cellgate_jobs,
     "gapgate": _gapgate_jobs,
     "squashkn2": _squashkn2_jobs,
@@ -246,7 +277,7 @@ def _jobs(group: str, gpus_per_node: int) -> dict[str, str]:
         for s in SQUASH_OPT_SEEDS:
             out[f"opt_S{s}"] = (
                 f"python3 -m examples.mesh.optimize_squash --seeds-per-iterate {s} "
-                f"--iterations {SQUASH_ITERATIONS} {PULLBACK}"
+                f"--iterations {MAX_ITERATIONS} {PULLBACK}"
             )
         return out
     if group == "squashkn":
@@ -255,7 +286,7 @@ def _jobs(group: str, gpus_per_node: int) -> dict[str, str]:
             for s in SQUASH_KN_SEEDS:
                 out[f"{label}_S{s}"] = (
                     f"python3 -m examples.mesh.optimize_squash --seeds-per-iterate {s} "
-                    f"--iterations {SQUASH_ITERATIONS} {extra}"
+                    f"--iterations {MAX_ITERATIONS} {extra}"
                 )
         return out
     if group == "biasgate":
@@ -269,7 +300,7 @@ def _jobs(group: str, gpus_per_node: int) -> dict[str, str]:
             for opt in OPTIMIZERS:
                 out[f"opt_S{s}_{opt}"] = (
                     f"python3 -m examples.mesh.optimize --tag circle_{label}_S{s}_{opt} "
-                    f"--optimizer {opt} --iterations 250 --seeds-per-iterate {s} "
+                    f"--optimizer {opt} --iterations {MAX_ITERATIONS} --seeds-per-iterate {s} "
                     f"--workers {min(s, gpus_per_node)} {settings} --step 0.05 --smooth 2 "
                     f"--band 1.0 {PULLBACK}"
                 )

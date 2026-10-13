@@ -10,6 +10,9 @@
 #   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh optc   # coarser circle, fits rtx
 #   bash examples/mesh/cluster/submit_curc.sh all
 #   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh check   # check_env on that kind
+#   GPU_KIND=h200 bash examples/mesh/cluster/submit_curc.sh preflight optckn optc2 squashkn2
+#       # one job (PREFLIGHT_HOURS, default 2: rtx compiles slowly) on two GPUs of that kind: preflight.sh of each group on the GPUs
+#       # (PREFLIGHT_GPU=1), the optimisers' toys with a two-worker pool
 #
 # Sizing per GPU = the node divided by its GPUs (CURC "Alpine hardware"): ah200 (4 H200,
 # 128 cores, 1.5 TB) -> 32 cores, 128 GB (a quarter of the memory would be 384 GB; the
@@ -33,13 +36,17 @@
 #   GPU_KIND=h200 ONLY='hor'           bash examples/mesh/cluster/submit_curc.sh biasgate).
 # Before submitting a group, run its local preflight (examples/mesh/cluster/preflight.sh
 # <group>): every job kind at toy size, as job.sbatch runs it.
-# PART / GRES_TYPE override the partition / gres name
+# QOS overrides the QOS of job.sbatch / check_env.sbatch (gpu-normal), e.g. for a new
+# allocation's priority QOS.  PART / GRES_TYPE override the partition / gres name
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|optckn|optc2|squashkn2|all|check"; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|optckn|optc2|optab|squashkn2|all|check|preflight <group>..."; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
+[ "${GROUPS_TO_RUN[0]}" = "preflight" ] && PREFLIGHT_GROUPS=("${GROUPS_TO_RUN[@]:1}")
+QOS_ARG=()
+if [ -n "${QOS:-}" ]; then QOS_ARG=(--qos="${QOS}"); fi
 GPU_KIND="${GPU_KIND:-a100}"
 case "${GPU_KIND}" in
   h200) PART="${PART:-ah200}"; GRES="${GRES_TYPE:-h200}"; CORES=32; MEM=128; PER_NODE=4 ;;
@@ -67,8 +74,20 @@ PY="${PYTHON:-${JAX_VENV:-/projects/${USER}/jax-env}/bin/python3}"
 "${PY}" -c 'import sys; sys.exit(sys.version_info < (3, 8))' || { echo "${PY} is $("${PY}" -V); need >= 3.8 (set PYTHON or JAX_VENV)"; exit 1; }
 mkdir -p examples/mesh/cluster/logs
 if [ -n "${CHECK_ONLY:-}" ]; then
-  sbatch --partition="${PART}" --gres="gpu:${GRES}:1" --export=ALL,GPU_KIND="${GPU_KIND}" \
-    examples/mesh/cluster/check_env.sbatch
+  sbatch "${QOS_ARG[@]}" --partition="${PART}" --gres="gpu:${GRES}:1" \
+    --export=ALL,GPU_KIND="${GPU_KIND}" examples/mesh/cluster/check_env.sbatch
+  exit 0
+fi
+if [ -n "${PREFLIGHT_GROUPS+x}" ]; then
+  [ ${#PREFLIGHT_GROUPS[@]} -gt 0 ] || { echo "usage: $0 preflight <group>..."; exit 1; }
+  n=$((PER_NODE < 2 ? PER_NODE : 2))
+  # no commas in CMD: sbatch --export splits on them
+  CMD="rc=0; for g in ${PREFLIGHT_GROUPS[*]}; do PREFLIGHT_GPU=1 PREFLIGHT_WORKERS=${n} bash examples/mesh/cluster/preflight.sh \${g} || rc=1; done; exit \${rc}"
+  sbatch --job-name="preflight_${GPU_KIND}" "${QOS_ARG[@]}" \
+    --partition="${PART}" --gres="gpu:${GRES}:${n}" \
+    --cpus-per-task=$((CORES * n)) --mem="$((MEM * n))G" --time="0${PREFLIGHT_HOURS:-2}:00:00" \
+    --export=ALL,CMD="${CMD}",GPU_KIND="${GPU_KIND}" \
+    examples/mesh/cluster/job.sbatch
   exit 0
 fi
 # nodes a preflight found unusable, plus anything the caller names
@@ -82,7 +101,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     sphere) HOURS=8 ;;
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
-    squash|squashkn|squashkn2|optckn|optc2) HOURS=24 ;;
+    squash|squashkn|squashkn2|optckn|optc2|optab) HOURS=24 ;;
     biasgate|cellgate|gapgate) HOURS=12 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
@@ -93,7 +112,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
       && [ "${group}" != "squash" ] && [ "${group}" != "squashkn" ] \
       && [ "${group}" != "biasgate" ] && [ "${group}" != "cellgate" ] \
       && [ "${group}" != "gapgate" ] \
-      && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] \
+      && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] && [ "${group}" != "optab" ] \
       && [ "${group}" != "squashkn2" ]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
@@ -114,7 +133,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     n="${GPUS[$i]}"
     hours="${HOURS}"
     if [ "${group}" = "opt" ] && [ "${n}" -le 2 ]; then hours=12; fi
-    sbatch --job-name="${group}_${NAMES[$i]}" "${EXCLUDE_ARG[@]}" \
+    sbatch --job-name="${group}_${NAMES[$i]}" "${EXCLUDE_ARG[@]}" "${QOS_ARG[@]}" \
       --partition="${PART}" --gres="gpu:${GRES}:${n}" \
       --cpus-per-task=$((CORES * n)) --mem="$((MEM * n))G" --time="${hours}:00:00" \
       --export=ALL,CMD="${CMDS[$i]}",GPU_KIND="${GPU_KIND}" \

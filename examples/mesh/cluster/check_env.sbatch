@@ -8,7 +8,7 @@
 #SBATCH --job-name=jaxdsmc-check
 #SBATCH --partition=aa100
 #SBATCH --qos=gpu-normal
-#SBATCH --account=ucb-general
+#SBATCH --account=ucb856_asc1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8

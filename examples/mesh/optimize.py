@@ -34,6 +34,11 @@ per visible GPU (``ROCR_VISIBLE_DEVICES`` / ``CUDA_VISIBLE_DEVICES`` round-robin
 re-invocation of this script in worker mode (``--eval-coef`` ...); the combination is the
 same mean, so ``W`` changes the wall time only.
 
+The run stops when it has converged -- the objective (the Lagrangian with
+``--area-mode lagrangian``) of the last ``--converge-window`` iterates spread by at most
+``--converge-tol`` of its mean (:func:`window_converged`) -- or at ``--iterations``,
+whichever comes first; a resumed run that has converged does nothing.
+
 Artifacts under ``examples/mesh/results/optimize/<tag>/``: ``history.json`` (one row per
 iterate: objective mean and SE over the seeds, area, step, gradient norms, seconds),
 ``coef_<k>.npy`` and ``frames_<k>.npz`` (the field movie of the first seed's forward at
@@ -81,7 +86,14 @@ def default_config():
     cfg["body"] = "levelset"
     cfg.update(
         {
-            "iterations": 12,
+            # the cap; the run stops earlier when converged (window_converged): the objective
+            # of the last `converge_window` iterates within `converge_tol` of their mean.  On
+            # the optc histories 0.125 % stopped only the S1 / S2 GD runs (at 87 / 97 % of their
+            # eventual drag reduction); 0.25 % also stopped S1 Adam (90 %) and S4 GD (80 %),
+            # 1 % fired on plateaus (41-82 %)
+            "iterations": 300,
+            "converge_window": 5,
+            "converge_tol": 0.00125,
             "seeds_per_iterate": 2,
             "seed_start": 32,
             "step": 0.05,
@@ -182,6 +194,21 @@ def adam_direction(g, state, k, beta1, beta2, eps=1e-30):
 
 
 FRAME_KEYS = ("step", "nrho", "u", "temp")
+
+
+def window_converged(values, window: int, tol: float) -> bool:
+    """True when the last ``window`` of ``values`` spread (max - min) by at most ``tol`` times
+    their mean magnitude: the optimisers' stopping test (``--iterations`` is the cap)."""
+    if window < 2 or len(values) < window:
+        return False
+    w = np.asarray(values[-window:], dtype=float)
+    return bool(np.ptp(w) <= tol * abs(w.mean()))
+
+
+def converged_objective(cfg, history) -> bool:
+    """:func:`window_converged` on the rows' Lagrangian (the objective in projection mode)."""
+    values = [r.get("lagrangian", r["objective"]) for r in history]
+    return window_converged(values, cfg["converge_window"], cfg["converge_tol"])
 
 
 def seed_terms(cfg, ls, seeds, frames_for=None):
@@ -392,7 +419,7 @@ def after_step(stepped, mode, area0, lo, hi, keepout):
     return new, shift, 0
 
 
-def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept whole
+def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loop, kept whole
     out.mkdir(parents=True, exist_ok=True)
     hist_path = out / "history.json"
     saved = json.loads(hist_path.read_text()) if hist_path.exists() else None
@@ -420,7 +447,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
     price = area_price(cfg)
     mu = cfg["area_penalty"] * price / area0
     nu = history[-1]["area_multiplier_next"] if history and mode == "lagrangian" else -price
-    while k < cfg["iterations"]:
+    while k < cfg["iterations"] and not converged_objective(cfg, history):
         t0 = time.time()
         # the mesh of the current iterate (an uncovered box raises here; split cells get
         # sub-cells since 2026-09-23)
@@ -494,6 +521,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
                     "config": cfg,
                     "backward_basis": ensemble_backward.VIRTUAL_BASIS,
                     "area_target": area0,
+                    "converged": converged_objective(cfg, history),
                     "rows": history,
                     "elapsed": time.time() - t_start,
                 },
@@ -509,6 +537,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0915 -- one optimiser loop, kept w
         )
         ls, nu = new, nu_next
         k += 1
+    if converged_objective(cfg, history):
+        print(f"converged after {len(history)} iterates", flush=True)
 
 
 def plot(cfg, out: Path, path_fig: str):
