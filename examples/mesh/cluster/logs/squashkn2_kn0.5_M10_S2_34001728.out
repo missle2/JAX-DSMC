@@ -1,0 +1,69 @@
+[Tue Oct 13 21:33:13 MDT 2026] squashkn2_kn0.5_M10_S2 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+    MIG 1g.24gb     Device  0: (UUID: MIG-f1dbe281-c944-5ae7-a4e4-cbaaec8faa95)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize_squash --seeds-per-iterate 2 --iterations 300 --knudsen 0.5 --mach 10 --dt 2.5e-5 --slots 160000 --a-max 256
+iterate 0: s 1.0000  D 1.9841e+00 (ref 2.2538e+00)  dD/ds 2.5176e+00 ± 1.2e-02 (ref 3.1473e+00)  J' +3.776e-01  -> s 0.9500  225s
+iterate 1: s 0.9500  D 1.8534e+00 (ref 2.0972e+00)  dD/ds 2.5281e+00 ± 1.6e-02 (ref 3.1136e+00)  J' +3.881e-01  -> s 0.9000  187s
+iterate 2: s 0.9000  D 1.7380e+00 (ref 1.9424e+00)  dD/ds 2.5035e+00 ± 4.2e-04 (ref 3.0758e+00)  J' +3.635e-01  -> s 0.8501  184s
+iterate 3: s 0.8501  D 1.6137e+00 (ref 1.7899e+00)  dD/ds 2.4863e+00 ± 1.8e-02 (ref 3.0336e+00)  J' +3.463e-01  -> s 0.8003  194s
+iterate 4: s 0.8003  D 1.4859e+00 (ref 1.6402e+00)  dD/ds 2.4870e+00 ± 9.1e-03 (ref 2.9864e+00)  J' +3.470e-01  -> s 0.7507  181s
+iterate 5: s 0.7507  D 1.3725e+00 (ref 1.4932e+00)  dD/ds 2.4642e+00 ± 2.2e-02 (ref 2.9335e+00)  J' +3.242e-01  -> s 0.7012  191s
+iterate 6: s 0.7012  D 1.2494e+00 (ref 1.3496e+00)  dD/ds 2.4235e+00 ± 1.6e-02 (ref 2.8741e+00)  J' +2.835e-01  -> s 0.6524  175s
+iterate 7: s 0.6524  D 1.1328e+00 (ref 1.2108e+00)  dD/ds 2.4269e+00 ± 1.2e-03 (ref 2.8078e+00)  J' +2.869e-01  -> s 0.6039  176s
+iterate 8: s 0.6039  D 1.0191e+00 (ref 1.0764e+00)  dD/ds 2.4068e+00 ± 1.3e-02 (ref 2.7335e+00)  J' +2.668e-01  -> s 0.5559  187s
+iterate 9: s 0.5559  D 9.0087e-01 (ref 9.4716e-01)  dD/ds 2.3654e+00 ± 1.2e-02 (ref 2.6502e+00)  J' +2.254e-01  -> s 0.5088  172s
+iterate 10: s 0.5088  D 7.9425e-01 (ref 8.2441e-01)  dD/ds 2.3197e+00 ± 1.3e-02 (ref 2.5575e+00)  J' +1.797e-01  -> s 0.4630  182s
+iterate 11: s 0.4630  D 6.8894e-01 (ref 7.0965e-01)  dD/ds 2.2553e+00 ± 2.9e-02 (ref 2.4555e+00)  J' +1.153e-01  -> s 0.4195  168s
+iterate 12: s 0.4195  D 5.8875e-01 (ref 6.0506e-01)  dD/ds 2.1847e+00 ± 1.4e-02 (ref 2.3458e+00)  J' +4.468e-02  -> s 0.3792  167s
+iterate 13: s 0.3792  D 5.0337e-01 (ref 5.1289e-01)  dD/ds 2.0953e+00 ± 1.8e-02 (ref 2.2316e+00)  J' -4.470e-02  -> s 0.3439  174s
+iterate 14: s 0.3439  D 4.2968e-01 (ref 4.3605e-01)  dD/ds 1.9974e+00 ± 4.7e-02 (ref 2.1199e+00)  J' -1.426e-01  -> s 0.3155  162s
+iterate 15: s 0.3155  D 3.7344e-01 (ref 3.7729e-01)  dD/ds 1.9209e+00 ± 1.1e-01 (ref 2.0213e+00)  J' -2.191e-01  -> s 0.2953  164s
+iterate 16: s 0.2953  D 3.3450e-01 (ref 3.3721e-01)  dD/ds 2.8253e+00 ± 1.1e+00 (ref 1.9457e+00)  J' +6.853e-01  -> s 0.2666  161s
+iterate 17: s 0.2666  D 2.8124e-01 (ref 2.8302e-01)  dD/ds 1.7784e+00 ± 1.4e-01 (ref 1.8301e+00)  J' -3.616e-01  -> s 0.2483  161s
+iterate 18: s 0.2483  D 2.4922e-01 (ref 2.5026e-01)  dD/ds 2.5269e+00 ± 2.3e-01 (ref 1.7509e+00)  J' +3.869e-01  -> s 0.2254  202s
+iterate 19: s 0.2254  D 2.1160e-01 (ref 2.1122e-01)  dD/ds 4.4114e+00 ± 3.3e+00 (ref 1.6446e+00)  J' +2.271e+00  -> s 0.1929  177s
+iterate 20: s 0.1929  D 1.6092e-01 (ref 1.6038e-01)  dD/ds -2.9924e+01 ± 7.1e+00 (ref 1.4802e+00)  J' -3.206e+01  -> s 0.2159  168s
+iterate 21: s 0.2159  D 1.9744e-01 (ref 1.9591e-01)  dD/ds 8.2475e+00 ± 7.5e+00 (ref 1.5986e+00)  J' +6.107e+00  -> s 0.2317  164s
+iterate 22: s 0.2317  D 2.2110e-01 (ref 2.2178e-01)  dD/ds 1.7201e+00 ± 4.9e-01 (ref 1.6748e+00)  J' -4.199e-01  -> s 0.2464  162s
+iterate 23: s 0.2464  D 2.4691e-01 (ref 2.4694e-01)  dD/ds 2.9327e+00 ± 3.5e-01 (ref 1.7424e+00)  J' +7.926e-01  -> s 0.2592  164s
+iterate 24: s 0.2592  D 2.6821e-01 (ref 2.6954e-01)  dD/ds 3.4890e-01 ± 1.2e+00 (ref 1.7985e+00)  J' -1.791e+00  -> s 0.2723  166s
+iterate 25: s 0.2723  D 2.9237e-01 (ref 2.9341e-01)  dD/ds 7.0202e-01 ± 5.0e-01 (ref 1.8537e+00)  J' -1.438e+00  -> s 0.2854  192s
+iterate 26: s 0.2854  D 3.1653e-01 (ref 3.1802e-01)  dD/ds 2.1160e+00 ± 1.8e-01 (ref 1.9068e+00)  J' -2.401e-02  -> s 0.2973  167s
+iterate 27: s 0.2973  D 3.3703e-01 (ref 3.4108e-01)  dD/ds 1.7526e+00 ± 7.1e-02 (ref 1.9534e+00)  J' -3.874e-01  -> s 0.3085  168s
+iterate 28: s 0.3085  D 3.5790e-01 (ref 3.6321e-01)  dD/ds 1.8230e+00 ± 1.5e-01 (ref 1.9956e+00)  J' -3.170e-01  -> s 0.3190  167s
+iterate 29: s 0.3190  D 3.7737e-01 (ref 3.8433e-01)  dD/ds 1.8926e+00 ± 7.1e-02 (ref 2.0338e+00)  J' -2.474e-01  -> s 0.3288  167s
+iterate 30: s 0.3288  D 4.0037e-01 (ref 4.0437e-01)  dD/ds 1.9080e+00 ± 6.7e-02 (ref 2.0683e+00)  J' -2.320e-01  -> s 0.3379  167s
+iterate 31: s 0.3379  D 4.1781e-01 (ref 4.2334e-01)  dD/ds 2.1120e+00 ± 1.6e-01 (ref 2.0996e+00)  J' -2.804e-02  -> s 0.3462  167s
+iterate 32: s 0.3462  D 4.3543e-01 (ref 4.4092e-01)  dD/ds 1.9975e+00 ± 3.7e-03 (ref 2.1275e+00)  J' -1.425e-01  -> s 0.3539  166s
+iterate 33: s 0.3539  D 4.5092e-01 (ref 4.5741e-01)  dD/ds 2.0357e+00 ± 4.8e-02 (ref 2.1527e+00)  J' -1.043e-01  -> s 0.3610  165s
+iterate 34: s 0.3610  D 4.6578e-01 (ref 4.7280e-01)  dD/ds 1.9885e+00 ± 4.9e-02 (ref 2.1755e+00)  J' -1.515e-01  -> s 0.3676  171s
+iterate 35: s 0.3676  D 4.7990e-01 (ref 4.8727e-01)  dD/ds 2.0497e+00 ± 2.3e-02 (ref 2.1962e+00)  J' -9.035e-02  -> s 0.3737  170s
+iterate 36: s 0.3737  D 4.9156e-01 (ref 5.0074e-01)  dD/ds 2.0589e+00 ± 1.5e-02 (ref 2.2150e+00)  J' -8.116e-02  -> s 0.3794  167s
+iterate 37: s 0.3794  D 5.0455e-01 (ref 5.1329e-01)  dD/ds 2.1088e+00 ± 3.3e-02 (ref 2.2321e+00)  J' -3.117e-02  -> s 0.3845  167s
+iterate 38: s 0.3845  D 5.1408e-01 (ref 5.2486e-01)  dD/ds 2.1047e+00 ± 4.4e-03 (ref 2.2475e+00)  J' -3.530e-02  -> s 0.3893  169s
+iterate 39: s 0.3893  D 5.2551e-01 (ref 5.3554e-01)  dD/ds 2.1195e+00 ± 3.0e-02 (ref 2.2614e+00)  J' -2.053e-02  -> s 0.3936  173s
+iterate 40: s 0.3936  D 5.3290e-01 (ref 5.4536e-01)  dD/ds 2.1322e+00 ± 1.0e-03 (ref 2.2740e+00)  J' -7.842e-03  -> s 0.3976  176s
+iterate 41: s 0.3976  D 5.4176e-01 (ref 5.5436e-01)  dD/ds 2.1581e+00 ± 5.0e-02 (ref 2.2853e+00)  J' +1.804e-02  -> s 0.4011  167s
+iterate 42: s 0.4011  D 5.5090e-01 (ref 5.6255e-01)  dD/ds 2.1308e+00 ± 1.7e-02 (ref 2.2954e+00)  J' -9.197e-03  -> s 0.4044  172s
+iterate 43: s 0.4044  D 5.5881e-01 (ref 5.7005e-01)  dD/ds 2.1485e+00 ± 1.5e-03 (ref 2.3046e+00)  J' +8.503e-03  -> s 0.4074  174s
+iterate 44: s 0.4074  D 5.6416e-01 (ref 5.7688e-01)  dD/ds 2.1720e+00 ± 8.5e-03 (ref 2.3128e+00)  J' +3.202e-02  -> s 0.4100  169s
+iterate 45: s 0.4100  D 5.6992e-01 (ref 5.8304e-01)  dD/ds 2.1754e+00 ± 1.0e-02 (ref 2.3202e+00)  J' +3.539e-02  -> s 0.4124  169s
+iterate 46: s 0.4124  D 5.7771e-01 (ref 5.8857e-01)  dD/ds 2.1611e+00 ± 7.0e-03 (ref 2.3267e+00)  J' +2.108e-02  -> s 0.4145  175s
+iterate 47: s 0.4145  D 5.8402e-01 (ref 5.9356e-01)  dD/ds 2.1861e+00 ± 4.2e-03 (ref 2.3325e+00)  J' +4.606e-02  -> s 0.4164  172s
+iterate 48: s 0.4164  D 5.8184e-01 (ref 5.9799e-01)  dD/ds 2.1784e+00 ± 3.4e-02 (ref 2.3377e+00)  J' +3.844e-02  -> s 0.4181  172s
+iterate 49: s 0.4181  D 5.8969e-01 (ref 6.0193e-01)  dD/ds 2.1841e+00 ± 1.4e-02 (ref 2.3422e+00)  J' +4.408e-02  -> s 0.4196  171s
+iterate 50: s 0.4196  D 5.8739e-01 (ref 6.0541e-01)  dD/ds 2.1429e+00 ± 7.0e-03 (ref 2.3462e+00)  J' +2.894e-03  -> s 0.4209  171s
+iterate 51: s 0.4209  D 5.9699e-01 (ref 6.0856e-01)  dD/ds 2.1982e+00 ± 6.7e-03 (ref 2.3498e+00)  J' +5.816e-02  -> s 0.4221  172s
+iterate 52: s 0.4221  D 5.9703e-01 (ref 6.1128e-01)  dD/ds 2.1923e+00 ± 1.1e-02 (ref 2.3528e+00)  J' +5.229e-02  -> s 0.4231  171s
+iterate 53: s 0.4231  D 5.9985e-01 (ref 6.1362e-01)  dD/ds 2.1943e+00 ± 5.7e-03 (ref 2.3555e+00)  J' +5.432e-02  -> s 0.4239  172s
+iterate 54: s 0.4239  D 6.0005e-01 (ref 6.1560e-01)  dD/ds 2.1942e+00 ± 3.0e-02 (ref 2.3577e+00)  J' +5.415e-02  -> s 0.4246  178s
+iterate 55: s 0.4246  D 5.9855e-01 (ref 6.1726e-01)  dD/ds 2.1763e+00 ± 1.3e-03 (ref 2.3596e+00)  J' +3.631e-02  -> s 0.4252  171s
+iterate 56: s 0.4252  D 6.0556e-01 (ref 6.1866e-01)  dD/ds 2.2068e+00 ± 2.4e-02 (ref 2.3611e+00)  J' +6.681e-02  -> s 0.4257  171s
+iterate 57: s 0.4257  D 6.0351e-01 (ref 6.1976e-01)  dD/ds 2.1923e+00 ± 1.6e-02 (ref 2.3624e+00)  J' +5.228e-02  -> s 0.4261  171s
+iterate 58: s 0.4261  D 6.0510e-01 (ref 6.2061e-01)  dD/ds 2.2041e+00 ± 2.2e-02 (ref 2.3633e+00)  J' +6.411e-02  -> s 0.4263  171s
+converged after 59 iterates
+[Wed Oct 14 00:23:43 MDT 2026] done

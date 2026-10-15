@@ -76,7 +76,10 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   6.25 cm, control ``ctl`` = 2 knots = 12.5 cm) or on a coarser level set (``lsh{h}``:
   ``--levelset-h h`` with ``--smooth 2``, i.e. 25 / 50 cm, the same physical widths as
   ``smooth4`` / ``smooth8``: representation vs smoothing at equal width).  Tags
-  ``circle_long_S4_adam_al_ab_<name>``; one GPU each (fits an rtx MIG slice).
+  ``circle_long_S4_adam_tan_ab_<name>``; one GPU each (fits an rtx MIG slice).  The first round
+  (2026-10-13, tags ``..._al_ab_<name>``, ``--area-mode lagrangian``) is confounded: the
+  multiplier wound up and the area swung 4-220 % of ``A0`` (``scratch/optab/analysis.py``), so
+  the group now runs ``--area-mode tangent`` (exact area: a Lagrange multiplier per iterate).
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, to
   convergence (resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -193,8 +196,11 @@ def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
 def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     """``optckn`` (``collisional``) / ``optc2``: the circle's optimisations in the long box
     (:data:`LONG`) with the face margin and the area in the differentiated objective
-    (``--area-mode lagrangian``, 2026-10-12: the projection's step was never seen by the
-    gradient), tags ``circle_long_[kn0.5_]S{S}_{opt}_al`` (the projection runs keep theirs)."""
+    -- since 2026-10-14 ``--area-mode tangent``: the step projected onto the constant-area set
+    (a Lagrange multiplier per iterate), the shift restoring only the second-order remainder
+    (0.5 mm against the projection runs' 1-2 cm per Adam iterate; the augmented Lagrangian of
+    the ``_al`` runs wound up in ``optab``), tags ``circle_long_[kn0.5_]S{S}_{opt}_tan`` (the
+    ``_al`` and projection runs keep theirs)."""
     if collisional:
         runs = [(s, "adam") for s in OPTCKN_SEEDS] + [(4, "gd")]
         regime, extra = "kn0.5_", f"{KN05} {KNPULLBACK}"
@@ -203,10 +209,10 @@ def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     out = {}
     for s, opt in runs:
         out[f"opt_S{s}_{opt}"] = (
-            f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt}_al "
+            f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt}_tan "
             f"--optimizer {opt} --iterations {MAX_ITERATIONS} --seeds-per-iterate {s} "
             f"--workers {min(s, gpus_per_node)} {COARSE} {LONG} --step 0.05 --smooth 2 "
-            f"--band 1.0 --keepout {KEEPOUT} --area-mode lagrangian {extra}"
+            f"--band 1.0 --keepout {KEEPOUT} --area-mode tangent {extra}"
         )
     return out
 
@@ -225,10 +231,10 @@ def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     return {
         name: (
-            f"python3 -m examples.mesh.optimize --tag circle_long_S4_adam_al_ab_{name} "
+            f"python3 -m examples.mesh.optimize --tag circle_long_S4_adam_tan_ab_{name} "
             f"--optimizer adam --iterations {MAX_ITERATIONS} --seeds-per-iterate 4 --workers 1 "
             f"{COARSE} {LONG} --step 0.05 --band 1.0 --keepout {KEEPOUT} "
-            f"--area-mode lagrangian {PULLBACK} {extra}"
+            f"--area-mode tangent {PULLBACK} {extra}"
         )
         for name, extra in OPTAB.items()
     }

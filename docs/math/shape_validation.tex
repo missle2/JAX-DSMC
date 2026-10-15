@@ -1063,6 +1063,44 @@ $T = 2000$; 16 CRN seeds a point; \code{scratch/gapgate/analysis.py}.
 \end{itemize}
 \end{frame}
 
+\section{VI. Optimisation runs with the cubic fit (2026-10-13/14)}
+
+\begin{frame}{\code{squashkn2}: the Kn 0.5 optimum is ill-conditioned}
+\scriptsize
+Adam, lr 0.05, to convergence ($s$ of the last 5 iterates within 0.5\,\%); \code{scratch/optab/squash\_analysis.py}.
+\begin{center}
+\fig{0.95}{mesh/figures/squash/squashkn2_cubic.png}
+\end{center}
+\begin{itemize}
+\item \textbf{Kn 0.5, M 0.32}: \code{cubicv} S4 / S8 converge to $s = 0.640\pm0.016$ / $0.623\pm0.013$ (last 30 iterates);
+  the quadratic fit's runs sat at 0.83--0.86.  The slope ratio $(\dd D/\dd s)/(\lambda\,\dd V/\dd s)$ is within 2\,\% of 1 over
+  $s\in[0.5, 0.9]$ (0.27 per unit $s$ at the crossing): the fit's $+3\,\%$ moved the optimum by 0.2, and the remaining
+  $-1.2\pm0.6\,\%$ puts the true optimum $\approx0.045\pm0.02$ \emph{lower}, $s^*\approx0.58$--$0.62$.
+\item \textbf{Kn 0.5, M 10}: both fits agree (crossing $s\approx0.40$, slope $\sim0.9$ per unit $s$: well conditioned); S4 0.400,
+  S2 0.394 (stopped on a slow drift at 0.426).
+\end{itemize}
+\end{frame}
+
+\begin{frame}{\code{optab}: the augmented Lagrangian winds up}
+\scriptsize
+optc2 S4 Adam (free-molecular, long box), step smoothed 2 / 4 / 8 knots vs level set $h = 12.5$ / $25$\,cm (smooth 2 knots:
+the same physical widths); \code{scratch/optab/analysis.py}.
+\begin{center}
+\fig{0.58}{mesh/figures/optc/optab_overview.png}
+\end{center}
+\begin{itemize}
+\item \textbf{Area control unstable}: a fixed-size step overshoots whatever the pull, and $\nu\leftarrow\nu+\mu\,\Delta A$ integrates the
+  overshoot --- $\nu$ reached $\sim400\times$ the price, the area swung 4--220\,\% of $A_0$, the shapes stayed convex blobs
+  ($D/D_{\mathrm{circle}}(A)$ 0.86--0.93 vs 0.33 for the projection S8).  Replaced by \code{--area-mode tangent}: exact area, the
+  step projected onto $\nabla A^\perp$ (a multiplier per iterate), the shift only the $O(\mathrm{step}^2)$ remainder (0.5\,mm vs 1--2\,cm).
+\item \textbf{Smoothing} (first 40 iterates, before the swings): the control grows wiggles (turning $1.5$, $r_{\min}$ 30--50\,cm);
+  every wider setting stays convex.  At equal width the coarse level set and the wider smoothing are the same ($r_{\min}\approx1$\,m
+  at 25\,cm, $\approx2$\,m at 50\,cm): coarsening buys nothing (at 25\,cm it kinked once the body shrank to $\sim1$\,m).
+\item \textbf{Apparent adjoint error} (panel f, projection runs): observed $\Delta D$ / predicted $=0.1$--$0.7$, rising with $S$
+  as $S/(S+\rho)$, $\rho = 4.8$: the step follows the noisy gradient, so $g\cdot\Delta c$ carries the noise's power.  Noise, not bias.
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Validation status of the current estimator}
 \footnotesize
 \begin{tabular}{@{}p{5.95cm}p{5.25cm}p{1.9cm}@{}}
@@ -1092,13 +1130,17 @@ collisional flows: $\le1\,\%$, either fit.
 \end{frame}
 
 \begin{frame}{Open items}
-\small
+\footnotesize
 \begin{enumerate}
 \item \textbf{Kn 0.5}: \code{cubicv} at 300 steps $-1.2\pm0.6\,\%$; with the whole run $+1.9\pm0.65\,\%$ --- the fit's and the
   horizon's corrections overlap; a longer-horizon default would need the fit revisited.
 \item \textbf{Free-molecular remainder}: squash $\sim-1.5\,\%$ and S8 it 30 $\cos2\theta$ $+0.14\pm0.03$; not grazing, horizon or FD.
 \item \textbf{Shape-gradient noise}: grazing hits on sub-cell features the few-seed runs grow; prevent the features
-  (curvature penalty in the objective) rather than raise the cut-off (0.2 biases the circle $+5\,\%$).
+  rather than raise the cut-off (0.2 biases the circle $+5\,\%$).  \code{optab}: a step smoothing of 4--8 knots
+  (25--50\,cm) keeps the early iterates convex; a coarser level set adds nothing.  Per-step signal fraction $S/(S+4.8)$.
+\item \textbf{Area}: \code{--area-mode tangent} (projected gradient: $g - \nu\nabla A$, $\nu = g\cdot\nabla A/|\nabla A|^2$, the step
+  projected too) replaces the wound-up augmented Lagrangian; the restoring shift is 0.5\,mm, against 1--2\,cm per Adam
+  iterate in the old projection mode.  \code{optab} re-runs with it (tags \code{\_tan\_ab\_*}) to confirm the smoothing choice.
 \item \textbf{Re-runs}: free-molecular squash and \code{optc} can be re-run now (the old runs used
   \code{along\_pool}, $-9\,\%$ at $s = 0.35$, and \code{optc} the future class); squashkn after item 1.
 \item \textbf{optc} bodies need a body-to-face clearance constraint before their drag reductions are quoted:

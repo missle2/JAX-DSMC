@@ -29,6 +29,27 @@ squash runs (:func:`area_price`: ``dD_ref/ds / dV/ds`` of the free-molecular ell
 circle's own ``dD/dA`` under uniform growth (2.4e-21 vs 6.0e-22 at R = 3, free-molecular),
 and with ``D ~ R`` against ``A ~ R^2`` the body would grow without bound.
 
+The multiplier update is unstable with this step: the step has a fixed size (``--step``,
+GD normalised, Adam unit-scale), so the area overshoots whatever the pull, and the update
+integrates the overshoot -- in the 2026-10-13 ``optab`` runs ``nu`` wound up to ~400x the
+price within 100 iterates and the area swung between 4 % and 220 % of ``A0``, the steps
+spent on the area instead of the drag.  ``--area-mode penalty`` keeps the same objective
+with constant coefficients, ``nu = --area-linear * price`` (default 0) and ``mu`` as above:
+a fixed function of the shape, nothing to wind up.  Its optimum misses ``A0`` by
+``-(dD/dA + nu) / mu`` -- with ``nu = 0`` and the default ``mu`` about -0.25 % of ``A0``
+(the circle's ``dD/dA`` is ~price / 4) -- and a fixed-size step jitters the area by up to
+one step's area change around it (~0.05 m x the perimeter).
+
+``--area-mode tangent`` holds the area exactly with a Lagrange multiplier per iterate
+instead (projected gradient): the gradient loses its component along ``grad A``,
+``g_t = g - nu grad A`` with ``nu = g . grad A / |grad A|^2`` (the KKT gradient on the
+constant-area set; ``nu`` is recorded, ~``dD/dA``), and so does the final step direction
+(Adam's elementwise scaling and the smoothing do not keep it orthogonal) -- the step then
+changes the area only at second order, which the uniform shift of the projection restores
+(:func:`tangent_component`).  Unlike ``projection``, whose shift undid whatever area the
+step itself changed (a move the gradient never saw: Adam's first steps are a uniform
+growth), the shift here is ``O(step^2)``.
+
 ``--workers W`` (cluster) evaluates the seeds of an iterate in ``W`` subprocesses, one
 per visible GPU (``ROCR_VISIBLE_DEVICES`` / ``CUDA_VISIBLE_DEVICES`` round-robin), each a
 re-invocation of this script in worker mode (``--eval-coef`` ...); the combination is the
@@ -114,9 +135,14 @@ def default_config():
             # the optc runs of 2026-09-23 which grew through the outflow face)
             "keepout": 0.0,
             # the area constraint: "projection" (uniform shift after the step, the runs up to
-            # 2026-10-12) or "lagrangian" (differentiated augmented Lagrangian, module doc)
+            # 2026-10-12), "lagrangian" (differentiated augmented Lagrangian, module doc; its
+            # multiplier update winds up), "penalty" (the same objective, constant
+            # coefficients: nu = area_linear * price, mu = area_penalty * price / A0) or
+            # "tangent" (Lagrange multiplier per iterate: the step is projected onto the
+            # constant-area set, the shift restores the second-order remainder)
             "area_mode": "projection",
             "area_penalty": 100.0,
+            "area_linear": 0.0,
         }
     )
     return cfg
@@ -170,6 +196,13 @@ def project_area(ls: LevelSet, target: float, lo, hi, n_bisect: int = 40) -> tup
             b = mid
     c = 0.5 * (a + b)
     return dataclasses.replace(ls, coef=ls.coef + c), c
+
+
+def tangent_component(v: np.ndarray, g_area: np.ndarray) -> tuple[np.ndarray, float]:
+    """``v`` without its component along ``g_area`` (coefficient space: ``g_area . dc`` is the
+    first-order area change of a step ``dc``), and the removed coefficient."""
+    nu = float(np.sum(v * g_area) / np.sum(g_area * g_area))
+    return v - nu * g_area, nu
 
 
 def smoothed_direction(grad: np.ndarray, ls: LevelSet, sigma: float, band: float) -> np.ndarray:
@@ -403,12 +436,12 @@ def constrain(ls, area0, lo, hi, margin, shift, passes: int = 12):
 
 def after_step(stepped, mode, area0, lo, hi, keepout):
     """Reinitialise the stepped level set, then the constraints: ``projection`` restores the
-    area by a uniform shift (with the face margin, :func:`constrain`); ``lagrangian`` only
-    applies the face margin (the area is in the differentiated objective).  Returns
+    area by a uniform shift (with the face margin, :func:`constrain`); ``lagrangian`` /
+    ``penalty`` only apply the face margin (the area is in the differentiated objective).  Returns
     ``(ls, area shift, knots the face floor moved)``."""
     # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1
     new = L.reinitialise(stepped)
-    if mode == "lagrangian":
+    if mode in ("lagrangian", "penalty"):
         clipped = 0
         if keepout > 0.0:
             new, clipped = keep_inside(new, lo, hi, keepout)
@@ -442,11 +475,13 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     mode = cfg["area_mode"]
     if saved and saved["config"].get("area_mode", "projection") != mode:
         raise ValueError(f"{out} was run with area_mode {saved['config'].get('area_mode')}")
-    if mode not in ("projection", "lagrangian"):
+    if mode not in ("projection", "lagrangian", "penalty", "tangent"):
         raise ValueError(f"area_mode {mode}")
     price = area_price(cfg)
     mu = cfg["area_penalty"] * price / area0
     nu = history[-1]["area_multiplier_next"] if history and mode == "lagrangian" else -price
+    if mode == "penalty":
+        nu = cfg["area_linear"] * price
     while k < cfg["iterations"] and not converged_objective(cfg, history):
         t0 = time.time()
         # the mesh of the current iterate (an uncovered box raises here; split cells get
@@ -460,10 +495,15 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             avg = averaged_terms(cfg, ls, seeds)
         g = avg["gradient"]
         area_err = 0.0
-        if mode == "lagrangian":
+        if mode in ("lagrangian", "penalty"):
             area_now, g_area = area_and_gradient(ls, lo, hi)
             area_err = area_now - area0
             g = g + (nu + mu * area_err) * g_area
+        elif mode == "tangent":
+            area_now, g_area = area_and_gradient(ls, lo, hi)
+            area_err = area_now - area0
+            # the KKT gradient: Adam's moments then track the constrained gradient too
+            g, nu = tangent_component(g, g_area)
         direction = smoothed_direction(g, ls, cfg["smooth"], cfg["band"] + ls.h)
         if cfg["optimizer"] == "adam":
             # Adam's elementwise-normalised step has unit scale: `step` is its learning
@@ -477,6 +517,9 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             # until the tracker's event budget runs out -- `wall_recrossed` on every optc Adam
             # run, 2026-09-23), so the step itself is smoothed again
             direction = smoothed_direction(direction, ls, cfg["smooth"], cfg["band"] + ls.h)
+        if mode == "tangent":
+            # the step itself: first-order area preserving
+            direction, _ = tangent_component(direction, g_area)
         scale = float(np.abs(direction).max())
         eta = cfg["step"] / max(scale, 1e-300)
         stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
@@ -503,7 +546,9 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "predicted_decrease": predicted,
             "seconds": time.time() - t0,
         }
-        if mode == "lagrangian":
+        if mode == "tangent":
+            row.update(area_multiplier=nu, area_error=area_err)
+        if mode in ("lagrangian", "penalty"):
             row.update(
                 area_multiplier=nu,
                 area_multiplier_next=nu_next,

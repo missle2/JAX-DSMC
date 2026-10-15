@@ -1,0 +1,16 @@
+[Tue Oct 13 13:33:16 MDT 2026] preflight_rtx on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+    MIG 1g.24gb     Device  0: (UUID: MIG-71923261-b6bd-542d-85bf-27e9ace9d1f5)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+rc=0; for g in optab; do PREFLIGHT_GPU=1 PREFLIGHT_WORKERS=1 bash examples/mesh/cluster/preflight.sh ${g} || rc=1; done; exit ${rc}
+import check: ok
+[13:33:20] toy optab/ctl (kind ctl)
+    ok
+[13:35:47] toy optab/smooth4 (kind smooth)
+    ok
+[13:36:36] toy optab/lsh0.125 (kind lsh)
+    ok
+preflight optab: 0 jobs checked, 3 toy runs, 0 failed

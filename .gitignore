@@ -230,3 +230,18 @@ scratch/**/*.npz
 scratch/**/*.pkl
 scratch/**/*.done
 scratch/perf/profile/**/plugins/
+
+# Bulk run data: moved between machines by rsync, not git (2026-10-14).  What stays tracked
+# is the record -- history.json / summary json, logs, figures and the final movies (.mp4/.gif).
+# Optimiser per-iterate artifacts (level-set coefficients, flow-movie frames, Adam state):
+examples/mesh/results/**/coef_*.npy
+examples/mesh/results/**/frames_*.npz
+examples/mesh/results/**/adam_state.npz
+# VTK field dumps of the forward runs
+examples/mesh/results/vtk/
+# the PNG frames a movie is assembled from (examples.mesh.movie); the .mp4 / .gif stay
+examples/mesh/figures/movie/*/
+# profiler traces
+scratch/profile/
+*.xplane.pb
+*.trace.json.gz
