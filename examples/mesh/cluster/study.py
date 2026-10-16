@@ -200,7 +200,9 @@ def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     (a Lagrange multiplier per iterate), the shift restoring only the second-order remainder
     (0.5 mm against the projection runs' 1-2 cm per Adam iterate; the augmented Lagrangian of
     the ``_al`` runs wound up in ``optab``), tags ``circle_long_[kn0.5_]S{S}_{opt}_tan`` (the
-    ``_al`` and projection runs keep theirs)."""
+    ``_al`` and projection runs keep theirs).  The step is smoothed over 8 knots (50 cm) since
+    2026-10-15 (``optab`` round 2: the smoothest shapes and the closest adjoint check, drag within
+    a few % of the best), tags ``..._tan_sm8``."""
     if collisional:
         runs = [(s, "adam") for s in OPTCKN_SEEDS] + [(4, "gd")]
         regime, extra = "kn0.5_", f"{KN05} {KNPULLBACK}"
@@ -209,9 +211,9 @@ def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     out = {}
     for s, opt in runs:
         out[f"opt_S{s}_{opt}"] = (
-            f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt}_tan "
+            f"python3 -m examples.mesh.optimize --tag circle_long_{regime}S{s}_{opt}_tan_sm8 "
             f"--optimizer {opt} --iterations {MAX_ITERATIONS} --seeds-per-iterate {s} "
-            f"--workers {min(s, gpus_per_node)} {COARSE} {LONG} --step 0.05 --smooth 2 "
+            f"--workers {min(s, gpus_per_node)} {COARSE} {LONG} --step 0.05 --smooth 8 "
             f"--band 1.0 --keepout {KEEPOUT} --area-mode tangent {extra}"
         )
     return out

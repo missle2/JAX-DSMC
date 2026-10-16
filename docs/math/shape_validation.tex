@@ -1101,6 +1101,42 @@ the same physical widths); \code{scratch/optab/analysis.py}.
 \end{itemize}
 \end{frame}
 
+\begin{frame}{\code{optab} with the tangent area mode: drag at fixed area}
+\scriptsize
+The same five runs, \code{--area-mode tangent} (tags \code{circle\_long\_S4\_adam\_tan\_ab\_*}), first 110--129 of 300 iterates
+(pulled 2026-10-15); area held to $10^{-12}$; \code{scratch/optab/analysis\_tan.py}.
+\begin{center}
+\fig{0.82}{mesh/figures/optc/optab_tan_drag.png}
+\end{center}
+\begin{itemize}
+\item Drag falls to \textbf{0.23--0.26 of the circle's} at equal area (the projection run's $\eta$ was 0.33 at 300).  All
+  settings within $\sim$4\,\% of each other, except $h = 25$\,cm, which kinked at its nose (iterate $\sim$95, $+15\,\%$).
+\item The wider settings lead the control by 5--8\,\% over iterates 10--80; the control closes the gap late.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{\code{optab} (tangent): shapes, adjoint check, timings}
+\scriptsize
+\begin{columns}[T]
+\column{0.5\linewidth}
+\fig{1.0}{mesh/figures/optc/optab_tan_shapes.png}\\
+\fig{1.0}{mesh/figures/optc/optab_tan_adjoint.png}
+\column{0.5\linewidth}
+\begin{itemize}
+\item \textbf{Shapes}: all become the same slender body, 15\,m $\times$ 2.4\,m (from a 6\,m circle).  Smoothing over 8 knots (50\,cm)
+  is the smoothest (turning 1.8, $r_{\min}$ 19\,cm); the control the roughest (turning 2.6, $r_{\min}$ 10\,cm, a blunt kinked tail).
+\item \textbf{Adjoint}: observed $\Delta D$ / predicted $g\cdot\Delta c$ = 0.70 (control), 0.79 (25\,cm), \textbf{0.88} (50\,cm),
+  correlation 0.90--0.97 --- against 0.45 for the S4 projection runs.  Adam's momentum takes most of the step's own noise
+  out of $g\cdot\Delta c$.  The 20-step ratio falls late in every run (0.4--0.7 by iterate 110): the gradient shrinks while the
+  step stays 5\,cm, so noise and the second-order term grow relative to the decrease --- a step decay is due.
+\item \textbf{Timings}: 3 runs went from 150 to 180--190\,s per iterate at the same minute (16:47) at different
+  iterates (56--59), $h = 25$\,cm $+$11\,s at 17:02, $h = 12.5$\,cm never.  No change in hits; the step follows the clock,
+  not the run: a neighbour on the shared node, not the code.
+\end{itemize}
+\fig{1.0}{mesh/figures/optc/optab_tan_timing.png}
+\end{columns}
+\end{frame}
+
 \begin{frame}{Validation status of the current estimator}
 \footnotesize
 \begin{tabular}{@{}p{5.95cm}p{5.25cm}p{1.9cm}@{}}
@@ -1137,10 +1173,11 @@ collisional flows: $\le1\,\%$, either fit.
 \item \textbf{Free-molecular remainder}: squash $\sim-1.5\,\%$ and S8 it 30 $\cos2\theta$ $+0.14\pm0.03$; not grazing, horizon or FD.
 \item \textbf{Shape-gradient noise}: grazing hits on sub-cell features the few-seed runs grow; prevent the features
   rather than raise the cut-off (0.2 biases the circle $+5\,\%$).  \code{optab}: a step smoothing of 4--8 knots
-  (25--50\,cm) keeps the early iterates convex; a coarser level set adds nothing.  Per-step signal fraction $S/(S+4.8)$.
+  (25--50\,cm) keeps the early iterates convex; a coarser level set adds nothing.  Per-step signal fraction $S/(S+4.8)$
+  in projection mode; 0.7--0.9 with the tangent mode's Adam runs.  Choice: smooth 8 knots, $h = 6.25$\,cm.
 \item \textbf{Area}: \code{--area-mode tangent} (projected gradient: $g - \nu\nabla A$, $\nu = g\cdot\nabla A/|\nabla A|^2$, the step
   projected too) replaces the wound-up augmented Lagrangian; the restoring shift is 0.5\,mm, against 1--2\,cm per Adam
-  iterate in the old projection mode.  \code{optab} re-runs with it (tags \code{\_tan\_ab\_*}) to confirm the smoothing choice.
+  iterate in the old projection mode.  \code{optab} (tags \code{\_tan\_ab\_*}): area to $10^{-12}$, drag 0.23--0.26 of the circle's.
 \item \textbf{Re-runs}: free-molecular squash and \code{optc} can be re-run now (the old runs used
   \code{along\_pool}, $-9\,\%$ at $s = 0.35$, and \code{optc} the future class); squashkn after item 1.
 \item \textbf{optc} bodies need a body-to-face clearance constraint before their drag reductions are quoted:

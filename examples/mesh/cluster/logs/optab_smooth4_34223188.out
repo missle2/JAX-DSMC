@@ -114,3 +114,5 @@ iterate 104: J = 9.179e-21 ± 5.4e-23  area 28.2769 -> 28.2769 (shift -0.0002)  
 iterate 105: J = 9.0685e-21 ± 7.5e-23  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 4.15e-21  predicted dJ -1.36e-22  hits 32959  stuck 0  190s
 iterate 106: J = 9.0493e-21 ± 6.6e-23  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 4.09e-21  predicted dJ -9.08e-23  hits 33109  stuck 0  189s
 iterate 107: J = 8.9672e-21 ± 7e-23  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 4.22e-21  predicted dJ -1.21e-22  hits 33160  stuck 0  192s
+iterate 108: J = 8.9614e-21 ± 7.5e-23  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 4.18e-21  predicted dJ -1.14e-22  hits 33125  stuck 0  196s
+iterate 109: J = 8.8737e-21 ± 8.5e-23  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 4.06e-21  predicted dJ -1.02e-22  hits 33212  stuck 0  207s
