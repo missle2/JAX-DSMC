@@ -1,0 +1,17 @@
+[
+ {
+  "seed": 32,
+  "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+  "variants": [
+   "along_pool"
+  ],
+  "total": 38.99637270600033,
+  "forward": 6.808340002000477,
+  "replay": 1.6655848840000544,
+  "backward": 2.945044901998699,
+  "gradient_variants": 26.439641163000488,
+  "volume_term": 0.04991910599892435,
+  "host_other": 1.0878426490016864,
+  "hits": 10329
+ }
+]

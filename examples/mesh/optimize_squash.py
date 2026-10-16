@@ -355,6 +355,7 @@ def main(argv=None):
     ensemble_backward.configure(args.pullback, substeps, partners, "staged", args.backward_basis)
     regime = f"_kn{cfg['knudsen']:g}" if cfg["knudsen"] > 0.0 else ""
     regime += f"_M{cfg['mach']:g}" if cfg["mach"] > 0.0 else ""
+    regime += "_free" if cfg.get("boundary", "channel") != "channel" else ""
     # the collisional runs depend on the backward's field fit (the free-molecular ones do
     # not: no collision term): its tag keeps a per-cell run out of a per-query run's
     # directory (the kn0.5 runs of 2026-10-01 are the per-query fit's)

@@ -164,8 +164,17 @@ def build(
     acc: float,
     radius_cells: int,
     body_radius: float | None = None,
+    boundary: str = "channel",
 ):
-    """Everything a run needs; ``body_radius`` overrides the analytic body's radius."""
+    """Everything a run needs; ``body_radius`` overrides the analytic body's radius.
+
+    ``boundary``: ``"channel"`` is SPARTA's test deck -- inflow at x-lo, outflow at x-hi,
+    specular sides (a 2-D case is a cascade of bodies one box height apart, and the stream
+    in the box is half-range: nothing enters against it).  ``"free"`` (2026-10-15) makes
+    every face a free-stream face (SPARTA's ``emit/face all``): the reservoir's inward flux
+    in -- at x-hi the molecules moving against the stream, on the sides the thermal flux
+    with the stream tangential -- and every leaving particle out, so the body sits in free
+    space (the optimisations: a blunt body at M 10 choked the channel)."""
     c = CASES[case]
     D = c["dim"]
     grid = GridSpec(lo=jnp.array(c["lo"]), hi=jnp.array(c["hi"]), n=c["n"])
@@ -198,12 +207,31 @@ def build(
         K_walk=8,
         sort="partition",
     )
-    faces = Faces((BC.INFLOW, BC.OUTFLOW) + (BC.SPECULAR,) * (2 * D - 2))
+    if boundary == "channel":
+        faces = Faces((BC.INFLOW, BC.OUTFLOW) + (BC.SPECULAR,) * (2 * D - 2))
+    elif boundary == "free":
+        faces = Faces((BC.INFLOW,) * (2 * D))
+    else:
+        raise ValueError(f"boundary {boundary!r}: channel or free")
     res = inflow.InflowParams.uniform(D, NRHO, TEMP, [VSTREAM, 0.0, 0.0])
     wall = WallParams.uniform(D, T_SURF, acc=0.0, n_models=1).with_model(D, 0, temp=T_SURF, acc=acc)
     target = float(inflow.target_count(res, grid, 0, 0, sp.mass[0], params.fnum[0], params.dt))
-    capacity = int(2 * target + 64)
+    capacity = injection_bound(res, grid, faces, sp.mass[0], params.fnum[0], params.dt)
     return grid, mesh, sp, params, static, faces, res, wall, target, capacity
+
+
+def injection_bound(res, grid, faces, mass, fnum, dt):
+    """The static per-face, per-step entrant bound: twice the largest inflow face's expected
+    count (+64) -- with free-stream faces a side can out-inject the x inflow face (a 30 m
+    side of circle_long takes ~0.9x its flux at M 0.32)."""
+    dim = len(grid.n)
+    targets = [
+        float(inflow.target_count(res, grid, axis, side, mass, fnum, dt))
+        for axis in range(dim)
+        for side in (0, 1)
+        if faces.of(axis, side) is BC.INFLOW
+    ]
+    return int(2 * max(targets) + 64)
 
 
 def surface_loads(momentum, energy, hits, mesh, fnum, window_steps, dt):

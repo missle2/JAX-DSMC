@@ -1,0 +1,34 @@
+[
+ {
+  "seed": 32,
+  "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+  "variants": [
+   "one",
+   "along_pool"
+  ],
+  "total": 68.05616706,
+  "forward": 6.422453409999434,
+  "replay": 1.7293540729988308,
+  "backward": 30.152697837000233,
+  "gradient_variants": 28.718592502998945,
+  "volume_term": 0.05350507199909771,
+  "host_other": 0.9795641650034668,
+  "hits": 10329
+ },
+ {
+  "seed": 33,
+  "device": "NVIDIA GeForce RTX 3050 Ti Laptop GPU",
+  "variants": [
+   "one",
+   "along_pool"
+  ],
+  "total": 69.79411065199929,
+  "forward": 6.5341985689992725,
+  "replay": 1.5250797569988208,
+  "backward": 30.521813456000018,
+  "gradient_variants": 30.23647219799932,
+  "volume_term": 0.07738826400054677,
+  "host_other": 0.8991584080013126,
+  "hits": 10452
+ }
+]

@@ -1098,3 +1098,14 @@ cheapest remaining speed-up there.  The f64 assembly is ~4x off the f64 roofline
 consumer GPU; consumer and RTX-class GPUs run f64 at 1/64 rate, A100 / H200 at 1/2, so
 collisional adjoint runs belong on the A100 / H200 partitions.
 
+Re-timed 2026-10-15 with the per-cell cubic fit (`cell_fit.py`, since 10-11), untraced stage
+timers after a warm-up seed (`scratch/perf/stage_times.py`; the 10-04 code timed the same way
+from a worktree of 74366aa for the before bar): one seed 69 -> 38 s.  Forward 6.0-6.5 s and
+replay 1.4-1.7 s unchanged; value backwards 30.3 -> 2.8 s (11x: partner draws 0.9 s GPU, per-
+cell LU 0.5, normal equations 0.3); shape gradient 29.5 -> 26.9 s, now 70 % of the seed and
+launch-bound (4.5 s GPU busy, ~6950 kernels per step at 2.2 us) -- the next target.  Profile
+`scratch/perf/profile/cellfit_seed2`; `profile_report.py cellfit_seed2 cellfit_along_pool`.
+Caveats found on the way: regress.py's second seed is not clean (84 s with compilation in it),
+the traced walls run ~10 % slow, and one profile ran in a slow GPU clock state (all kernels
+~2x long, forward 18.5 s) and was discarded -- compare busy times with an earlier profile.
+

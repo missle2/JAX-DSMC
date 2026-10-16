@@ -8,7 +8,15 @@ events.npz from profile_extract.py) and the regression timings (scratch/perf/reg
                                                the speed-up changes (same seeds, same GPU)
   scratch/perf/profile/<tag>/summary.json
 
-    python3 scratch/perf/profile_report.py gpu_after
+    python3 scratch/perf/profile_report.py gpu_after [untraced]
+
+``untraced`` (2026-10-15): take the stage wall times from scratch/perf/regress/stages_<untraced>.json
+(scratch/perf/stage_times.py, no profiler attached) instead of the profiled seed's: the host
+tracer inflates them (cellfit_seed2: forward 7.6 s traced vs 6.8 s untraced).  Check the GPU
+busy times against an earlier profile before trusting a new one: a first cellfit profile ran
+in a slow GPU clock state (forward kernels 8.2 us mean vs 4.4-5.1 us, the same 513 per step)
+and was discarded.  regress.py's second seed is not a clean steady seed either (cellfit:
+84 s with compilation in it vs 38 s here).
 """
 
 import json
@@ -45,6 +53,8 @@ CATEGORIES = {
         ("while/body", "step body: pass 0, rewards, checks"),
     ],
     "backward": [
+        ("cki", "fit: per-cell normal equations (einsum)"),  # cell_fit, since 2026-10-11
+        ("while/body/while/body/jit(solve)", "fit: per-cell LU solve"),
         ("qki", "fit: normal equations (einsum)"),
         ("jit(solve)", "fit: LU solve"),  # before 2026-10-02
         ("spd_solve", "fit: Cholesky solve (all columns)"),
@@ -74,9 +84,17 @@ def category(stage, op):
     return "other"
 
 
-def load(tag):
+UNTRACED = {"forward": ("forward",), "replay": ("replay",), "backward": ("backward",),
+            "shape": ("gradient_variants", "volume_term")}  # fmt: skip
+
+
+def load(tag, untraced=None):
     root = os.path.join(HERE, "profile", tag)
     walls = json.load(open(os.path.join(root, "stages.json")))["stages"]
+    if untraced:
+        rows = json.load(open(os.path.join(HERE, "regress", f"stages_{untraced}.json")))
+        for slug, name, _steps in STAGES:
+            walls[name] = float(np.mean([sum(r[k] for k in UNTRACED[slug]) for r in rows]))
     out = {}
     for slug, name, steps in STAGES:
         ev = np.load(os.path.join(root, slug, "events.npz"))["events"]
@@ -119,7 +137,10 @@ def fig_stages(rows, path):
         )  # fmt: skip
     ax.set_yticks(y)
     ax.set_yticklabels(names, fontsize=8)
-    ax.set_xlabel("seconds (one optimiser seed, optc settings at fnum x 4, RTX 3050 Ti, float64)")
+    ax.set_xlabel(
+        "seconds (one optimiser seed, optc settings at fnum x 4, RTX 3050 Ti, float64)\n"
+        "wall: untraced timers; busy: the profiled seed"
+    )
     ax.set_xlim(0, wall.max() * 1.9)
     ax.legend(fontsize=7.5, frameon=False, loc="upper right")
     if any(r["truncated"] for r in rows.values()):
@@ -156,6 +177,24 @@ def fig_breakdown(rows, path):
     plt.close(fig)
 
 
+def history_part(tag, key):
+    """A history bar's part: regress.py's second seed, or (``stages:<tag>``) the mean over the
+    timed seeds of stage_times.py (shape = gradient variants + cut-volume term; forward + replay
+    + host = the rest)."""
+    if not tag.startswith("stages:"):
+        return json.load(open(os.path.join(HERE, "regress", f"{tag}.json")))[1][key]
+    rows = json.load(open(os.path.join(HERE, "regress", f"stages_{tag[7:]}.json")))
+    shape = [r["gradient_variants"] + r.get("volume_term", 0.0) for r in rows]
+    part = {
+        "backward": [r["backward"] for r in rows],
+        "shape": shape,
+        "forward_replay": [
+            r["total"] - r["backward"] - s for r, s in zip(rows, shape, strict=True)
+        ],
+    }[key]
+    return float(np.mean(part))
+
+
 def fig_history(path):
     versions = [
         ("base", "before"),
@@ -167,20 +206,27 @@ def fig_history(path):
         ("merged", "09-30: inflow, level\nset, compaction"),
         ("final", "10-01: tracker,\nsort, bookkeeping"),
         ("columns", "10-02: two-column\nbackward"),
+        # right of the line: stage_times.py, a warm-up seed first, then 2 seeds averaged
+        ("stages:pre_cellfit_1004", "10-04 re-timed\n(warm-up seed)"),
+        ("stages:cellfit", "10-11: per-cell\ncubic fit"),
     ]
     parts = [("forward_replay", "forward + replay + host", ORANGE), ("backward", "value backwards", GREY),
              ("shape", "shape gradient", BLUE)]  # fmt: skip
-    fig, ax = plt.subplots(figsize=(11, 3.8))
+    fig, ax = plt.subplots(figsize=(12.5, 3.8))
     x = np.arange(len(versions))
     bottom = np.zeros(len(versions))
     totals = []
     for key, label, colour in parts:
         vals = []
         for tag, _l in versions:
-            vals.append(json.load(open(os.path.join(HERE, "regress", f"{tag}.json")))[1][key])
+            vals.append(history_part(tag, key))
         ax.bar(x, vals, bottom=bottom, color=colour, label=label, width=0.6)
         bottom += np.array(vals)
     totals = bottom
+    split = next(i for i, v in enumerate(versions) if v[0].startswith("stages:")) - 0.5
+    ax.axvline(split, color="0.5", lw=0.8, ls=":")
+    ax.text(split + 0.05, totals.max() * 0.95, "untraced stage timers,\nafter a warm-up seed",
+            fontsize=7, va="top", color="0.35")  # fmt: skip
     for xi, t in zip(x, totals, strict=True):
         ax.text(xi, t + 5, f"{t:.0f} s", ha="center", fontsize=8)
     ax.set_xticks(x)
@@ -197,8 +243,8 @@ def fig_history(path):
     plt.close(fig)
 
 
-def main(tag):
-    root, rows = load(tag)
+def main(tag, untraced=None):
+    root, rows = load(tag, untraced)
     with open(os.path.join(root, "summary.json"), "w") as fh:
         json.dump(rows, fh, indent=1)
     fig_stages(rows, os.path.join(FIGURES, "profile_stages.png"))
@@ -211,4 +257,4 @@ def main(tag):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(*sys.argv[1:3])

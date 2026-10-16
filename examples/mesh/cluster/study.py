@@ -80,6 +80,11 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   (2026-10-13, tags ``..._al_ab_<name>``, ``--area-mode lagrangian``) is confounded: the
   multiplier wound up and the area swung 4-220 % of ``A0`` (``scratch/optab/analysis.py``), so
   the group now runs ``--area-mode tangent`` (exact area: a Lagrange multiplier per iterate).
+* ``optm`` (2026-10-15): the long optimisations across regimes, one GPU each (an H200: a
+  multi-GPU request waits in the queue), S = 4 Adam, 50 cm step smoothing, tangent area:
+  ``kn0.5`` (the deck's stream, M 0.32), ``M10`` (free-molecular) and ``kn0.5_M10``, in free
+  space (``--boundary free``: every face a free-stream face), tags
+  ``circle_long_{kn0.5_,M10_,kn0.5_M10_}S4_adam_tan_sm8_free``.
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, to
   convergence (resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -139,6 +144,11 @@ KEEPOUT = 1.0  # m: two DSMC cells between the body and every box face
 # 3.631 / 3.682 / 3.692 e-20 free-molecular: 2800
 LONG = "--case circle_long --fnum-scale 2 --warmup 2800"
 OPTCKN_SEEDS = (1, 2, 4, 8)
+# optm runs in free space (--boundary free, 2026-10-15): every face a free-stream face.  The
+# specular channel choked at Kn 0.5 + M 10 (a normal shock spanning the 10 m height moved
+# upstream; scratch/optm10/m10_gate.py) and held a half-range stream (free-molecular Cd 17.2
+# against free space's 12.2 at M 0.32; scratch/freebox/fm_free_gate.py).  The free box's default
+# slots (1.3x the free stream, 195 k here) cover all three: 117 k alive at Kn 0.5 + M 10
 KNPULLBACK = "--substeps 4 --partners 8"
 SPHERE_ARTIFACT = "ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_H700_M300_W200_virt1x2st_dev"
 MODE2_ARTIFACT = (
@@ -219,6 +229,26 @@ def _keepout_jobs(gpus_per_node: int, collisional: bool) -> dict[str, str]:
     return out
 
 
+def _optm_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optm``: one S = 4 Adam run per regime on one GPU (module doc)."""
+    del gpus_per_node
+    m10 = "--mach 10 --dt 2.5e-5"
+    regimes = {
+        "kn0.5": f"{KN05} {KNPULLBACK}",
+        "M10": f"{m10} {PULLBACK}",
+        "kn0.5_M10": f"--knudsen 0.5 {m10} --a-max 256 {KNPULLBACK}",
+    }
+    return {
+        name: (
+            f"python3 -m examples.mesh.optimize --tag circle_long_{name}_S4_adam_tan_sm8_free "
+            f"--optimizer adam --iterations {MAX_ITERATIONS} --seeds-per-iterate 4 --workers 1 "
+            f"{COARSE} {LONG} --step 0.05 --smooth 8 --band 1.0 --keepout {KEEPOUT} "
+            f"--area-mode tangent --boundary free {extra}"
+        )
+        for name, extra in regimes.items()
+    }
+
+
 # optab: name -> extra flags (the later flag wins over COARSE's --levelset-h)
 OPTAB = {
     "ctl": "--smooth 2",
@@ -244,6 +274,7 @@ def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
 
 NEW_GROUPS = {
     "optab": _optab_jobs,
+    "optm": _optm_jobs,
     "cellgate": _cellgate_jobs,
     "gapgate": _gapgate_jobs,
     "squashkn2": _squashkn2_jobs,

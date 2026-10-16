@@ -50,7 +50,7 @@ import forward as F
 
 from examples.ensemble_inlet_shock import device_backward
 from examples.gradient_bench import RESULTS
-from jax_dsmc import ensemble_backward, inflow, initialize, sample, shape, simulate, sort
+from jax_dsmc import ensemble_backward, initialize, sample, shape, simulate, sort
 from jax_dsmc import species_data as sd
 from jax_dsmc.constants import K_BOLTZ
 from jax_dsmc.grid import n_cartesian, num_cells
@@ -106,6 +106,9 @@ def default_config():
         # case's capacity / fnum_scale) a faster, fuller box needs
         "mach": 0.0,
         "dt": 0.0,
+        # the box's faces (forward.build): "channel" (SPARTA's deck: inflow, outflow, specular
+        # sides) or "free" (every face a free-stream face: the body in free space)
+        "boundary": "channel",
         "slots": 0,
         # the captured record: "lean" drops v_post (rebuilt bitwise from v and the pair
         # record) and born_v (host adjoint only) -- 48 of ~122 bytes per slot and step
@@ -266,7 +269,13 @@ def build(cfg, parameter, value, steps, body=None):
     """The forward's objects at control ``value`` (``F.build`` with a scaled ``fnum``), or
     at an explicit ``body`` (the optimiser's iterates)."""
     grid, mesh, sp, params, static, faces, res, wall, _target, capacity = F.build(
-        cfg["case"], "analytic", cfg["tracker"], "Ar", cfg["acc"], cfg["radius_cells"]
+        cfg["case"],
+        "analytic",
+        cfg["tracker"],
+        "Ar",
+        cfg["acc"],
+        cfg["radius_cells"],
+        boundary=cfg.get("boundary", "channel"),
     )
     k_grid = int(cfg["grid_scale"])
     if k_grid > 1:
@@ -293,6 +302,11 @@ def build(cfg, parameter, value, steps, body=None):
     if density != 1.0:
         res = dataclasses.replace(res, nrho=res.nrho * density)
     n = int(cfg.get("slots", 0)) or int(static.N / cfg["fnum_scale"]) + 256
+    if not int(cfg.get("slots", 0)) and cfg.get("boundary", "channel") == "free":
+        # a free box holds the full drifting Maxwellian, not the channel's half-range stream
+        # (~1.4x the particles at M 0.32): 1.3x the free stream's count
+        volume = float(np.prod(np.asarray(grid.hi) - np.asarray(grid.lo)))
+        n = max(n, int(1.3 * F.NRHO * volume / (F.CASES[cfg["case"]]["fnum"] * cfg["fnum_scale"])))
     a_max = int(cfg.get("a_max", 0)) or static.A_max
     static = dataclasses.replace(
         static, N=n, A_max=a_max, n_steps=steps, record=cfg.get("record", "lean")
@@ -308,8 +322,7 @@ def build(cfg, parameter, value, steps, body=None):
                 jnp.where(res.vstream[:, 0] != 0.0, stream_speed(cfg), 0.0)
             ),
         )
-        target = inflow.target_count(res, grid, 0, 0, sp.mass[0], params.fnum[0], params.dt)
-        capacity = int(2 * float(target) + 64)
+        capacity = F.injection_bound(res, grid, faces, sp.mass[0], params.fnum[0], params.dt)
     return grid, mesh, sp, params, static, faces, res, wall, capacity
 
 
@@ -801,6 +814,8 @@ def artifact_tag(cfg):
         tag += f"_kn{cfg['knudsen']:g}"
     if cfg.get("mach", 0.0) > 0.0:
         tag += f"_M{cfg['mach']:g}"
+    if cfg.get("boundary", "channel") != "channel":
+        tag += "_free"
     if cfg.get("value_class", "hit_ahead") != "none":
         # stratified grad-lambda fits (2026-09-22); untagged artifacts are the mixed pool
         tag += "_vchit"

@@ -64,7 +64,7 @@ the changes and what is left: `docs/HANDOFF.md` section 1.9.
 | `profile_forward.py` (+ `dump_run.py` for the HLO dump) | GPU per-scope profile | `profile/forward_scopes.json` |
 | `plot_forward_history.py`, `plot_cpu_breakdown.py`, `forward_breakdown.py`, `plot_forward_vs_sparta.py` | the figures | `figures/performance/forward_speedup_history.png`, `forward_step_breakdown_cpu.png`, `forward_step_breakdown.png`, `forward_vs_sparta.png` |
 | `noise_gate.py forward\|gradient` | the seed-noise gate every speed-up passed | `noise_gate/*.json` |
-| `regress.py`, `profile_seed.py`, `profile_report.py` | one optimiser seed: regression, GPU stages, history | `figures/performance/speedup_history.png`, `profile_stages.png`, `profile_breakdown.png` |
+| `regress.py`, `profile_seed.py`, `stage_times.py`, `profile_report.py` | one optimiser seed: regression, GPU stages, untraced stage timers (since 2026-10-15), history | `figures/performance/speedup_history.png`, `profile_stages.png`, `profile_breakdown.png` |
 
 ## Adjoint and shape gradients (phase C/D)
 

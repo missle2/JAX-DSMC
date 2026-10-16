@@ -41,7 +41,7 @@
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|optckn|optc2|optab|squashkn2|all|check|preflight <group>..."; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|optckn|optc2|optab|optm|squashkn2|all|check|preflight <group>..."; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 [ "${GROUPS_TO_RUN[0]}" = "preflight" ] && PREFLIGHT_GROUPS=("${GROUPS_TO_RUN[@]:1}")
@@ -101,7 +101,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     sphere) HOURS=8 ;;
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
-    squash|squashkn|squashkn2|optckn|optc2|optab) HOURS=24 ;;
+    squash|squashkn|squashkn2|optckn|optc2|optab|optm) HOURS=24 ;;
     biasgate|cellgate|gapgate) HOURS=12 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
