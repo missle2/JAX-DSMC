@@ -27,6 +27,15 @@ A fit is named by a ``basis`` string ``"cell:<poly>[:<option>]..."`` (static):
 * ``loo``: per cell, the order (0 to the poly's) of least leave-one-out residual sum
   ``sum w (r_i / (1 - h_ii))^2`` -- each order's fit and hat diagonal from the same
   normal matrix with its higher-order columns masked;
+* ``guard<h>``: per QUERY, the highest order (1 to the poly's, lower orders' columns kept, the
+  ``adapt`` cap still applying) whose leverage ``h = f(o)^T M^-1 f(o)`` at the query is at most
+  ``h``, the cell mean (order 0) if none is -- ``h`` is the fitted value's variance in units of
+  one node's noise, so a query outside the region the cell's nodes determine (e.g. a
+  post-collision velocity in the empty gap between a hypersonic beam and the wall-reflected
+  gas, where a cubic's leverage reaches ~10^3) takes a lower order instead of an
+  extrapolation the backward would compound every substep (the thin-body M 10 blow-up of
+  ``cubicv``, 2026-10-18: scratch/thingate).  Not with ``loo``.  :data:`TRACE` counts the
+  orders chosen;
 * ``ridge<e>``: the relative ridge on the non-intercept columns (default ``1e-8``, as
   :data:`ensemble_device.RIDGE_REL`);
 * ``rb``: the virtual partners' four-term values are the field's EXPECTATION over the
@@ -88,14 +97,27 @@ class Spec(NamedTuple):
     align: float = 0.0
     fallback: bool = True
     both: bool = False
+    guard: float = 0.0
+
+
+# the orders a ``guard`` fit chose: None (off) or a dict ``{C: int64[C, G]}`` the evaluations
+# add their per-cell counts to (a host callback per evaluation: diagnostics only; set it before
+# the backward is first traced)
+TRACE = None
 
 
 class CellField(NamedTuple):
     """A fitted per-cell field: ``centre f64[C, D+3]`` (scaled), ``beta f64[C, p]`` (or
-    ``f64[C, p, R]`` fitted to value columns)."""
+    ``f64[C, p, R]`` fitted to value columns).  A ``guard`` fit also carries every order's fit
+    ``levels f64[C, G, p(, R)]`` (zero above the order) and the inverse normal matrices
+    ``minv f64[C, G, p, p]`` (zero on masked columns) its query leverages come from, and the
+    highest order ``adapt`` lets each cell fit, ``top int[C]``."""
 
     centre: jax.Array
     beta: jax.Array
+    levels: jax.Array | None = None
+    minv: jax.Array | None = None
+    top: jax.Array | None = None
 
 
 class SplitField(NamedTuple):
@@ -129,6 +151,9 @@ def is_cell(basis: str) -> bool:
     return basis.startswith("cell:")
 
 
+NUMERIC_OPTIONS = {"pool": int, "adapt": float, "guard": float, "ridge": float}
+
+
 @functools.cache
 def parse(basis: str) -> Spec:
     """The :class:`Spec` of a ``"cell:..."`` basis string."""
@@ -137,10 +162,9 @@ def parse(basis: str) -> Spec:
         raise ValueError(f"not a per-cell basis: {basis!r} (polys {POLYS})")
     spec = Spec(poly)
     for o in opts:
-        if o.startswith("pool"):
-            spec = spec._replace(pool=int(o[4:]))
-        elif o.startswith("adapt"):
-            spec = spec._replace(adapt=float(o[5:]))
+        numeric = next((n for n in NUMERIC_OPTIONS if o.startswith(n)), None)
+        if numeric:
+            spec = spec._replace(**{numeric: NUMERIC_OPTIONS[numeric](o[len(numeric) :])})
         elif o == "loo":
             spec = spec._replace(loo=True)
         elif o == "rb":
@@ -153,10 +177,10 @@ def parse(basis: str) -> Spec:
             spec = spec._replace(fallback=False)
         elif o == "both":
             spec = spec._replace(fallback=False, both=True)
-        elif o.startswith("ridge"):
-            spec = spec._replace(ridge=float(o[5:]))
         else:
             raise ValueError(f"unknown per-cell fit option {o!r} in {basis!r}")
+    if spec.guard and spec.loo:
+        raise ValueError(f"guard and loo are exclusive: {basis!r}")
     return spec
 
 
@@ -242,6 +266,25 @@ def _loo_press(design, weights, vals, beta, m, d):
     return jnp.sum(weights[..., None] * loo**2, axis=(1, 2))
 
 
+def _fit_guard(design, weights, vals, keep, order, spec, squeeze, centre):
+    """A ``guard`` fit's :class:`CellField`: every order's fit and inverse normal matrix."""
+    levels, minvs = [], []
+    for g in range(max(orders(spec.poly, centre.shape[-1] - 3)) + 1):
+        keep_g = keep & (order[None, :] <= g)
+        beta, m, _ = _solve_masked(design, weights, vals, keep_g, spec.ridge)
+        mask = keep_g[:, :, None] & keep_g[:, None, :]
+        levels.append(beta)
+        minvs.append(jnp.where(mask, jnp.linalg.inv(m), 0.0))
+    levels = jnp.stack(levels, axis=1)  # (C, G, p, R)
+    return CellField(
+        centre,
+        levels[:, -1, :, 0] if squeeze else levels[:, -1],
+        levels[..., 0] if squeeze else levels,
+        jnp.stack(minvs, axis=1),
+        jnp.max(jnp.where(keep, order[None, :], 0), axis=1),
+    )
+
+
 def fit(node_x, node_v, node_valid, node_val, scale, basis, own_x=None, own_valid=None, adapt=0.0):
     """:class:`CellField` of the node tables ``(C, P, .)`` (``node_val`` ``(C, P)`` or
     ``(C, P, R)``).  A pooled fit passes the widened tables
@@ -272,6 +315,8 @@ def fit(node_x, node_v, node_valid, node_val, scale, basis, own_x=None, own_vali
     else:
         keep = jnp.ones((count.shape[0], order.shape[0]), bool)
     squeeze = node_val.ndim == 2
+    if spec.guard:
+        return _fit_guard(design, weights, vals, keep, order, spec, squeeze, centre)
     if not spec.loo:
         beta, _, _ = _solve_masked(design, weights, vals, keep, spec.ridge)
         return CellField(centre, beta[..., 0] if squeeze else beta)
@@ -331,18 +376,62 @@ def fit_split(
     )
 
 
-def evaluate(field, c, q_x, q_v, scale, basis, gradients=False, q_normal=None):
+def take_trace():
+    """The :data:`TRACE` counts so far, ``int64[C, G]`` summed over the field sizes seen (None
+    if no guard fit was evaluated), and an emptied :data:`TRACE` for the next run."""
+    jax.effects_barrier()
+    if not TRACE:
+        return None
+    counts = TRACE[max(TRACE)]
+    TRACE.clear()
+    return counts
+
+
+def _record(counts):
+    counts = jax.device_get(counts)
+    total = TRACE.setdefault(counts.shape[0], 0)
+    TRACE[counts.shape[0]] = total + counts
+
+
+GUARD_BATCH = 8192
+
+
+def _leverage(args, minv):
+    c, f = args
+    return jnp.einsum("i,gij,j->g", f, minv[c], f)
+
+
+def _guard_level(field, c, f, guard, q_valid):
+    """The order ``int[Q]`` a guard fit uses at each query (design ``f (Q, p)``)."""
+    # batched: one gathered (G, p, p) per query is ~2 kB x G
+    h = jax.lax.map(
+        functools.partial(_leverage, minv=field.minv), (c, f), batch_size=GUARD_BATCH
+    )  # (Q, G)
+    levels = jnp.arange(h.shape[1])
+    ok = ((h <= guard) & (levels[None, :] <= field.top[c][:, None])) | (levels[None, :] == 0)
+    level = jnp.max(jnp.where(ok, levels[None, :], 0), axis=1)
+    if TRACE is not None:
+        hit = jax.nn.one_hot(level, h.shape[1], dtype=jnp.int64) * q_valid[:, None]
+        counts = jax.ops.segment_sum(hit, c, num_segments=field.centre.shape[0])
+        jax.debug.callback(_record, counts)
+    return level
+
+
+def evaluate(
+    field, c, q_x, q_v, scale, basis, gradients=False, q_normal=None, q_valid=None
+):  # fmt: skip
     """The fitted value at ``Q`` queries in cells ``c`` -- ``f64[Q]`` (``f64[Q, R]`` for a
     field fitted to value columns) -- and with ``gradients`` its ``(grad_x, grad_v)`` per
     unscaled coordinate (``f64[Q, D]``, ``f64[Q, 3]``, trailing ``R`` likewise).  A
     :class:`SplitField` needs the queries' own surface normals ``q_normal (Q, 3)`` (zero
-    rows: no surface near, the ``both`` field)."""
+    rows: no surface near, the ``both`` field).  ``q_valid bool[Q]`` only masks a ``guard`` fit's
+    :data:`TRACE` counts (dead slots' sentinel queries)."""
     if isinstance(field, SplitField):
         near = jnp.any(q_normal != 0.0, axis=1)
         side_normal = q_normal.astype(q_v.dtype) if parse(basis).own else field.normal[c]
         ahead = jnp.sum(q_v * side_normal, axis=1) > 0.0
         parts = [
-            evaluate(f, c, q_x, q_v, scale, basis, gradients)
+            evaluate(f, c, q_x, q_v, scale, basis, gradients, q_valid=q_valid)
             for f in (field.ahead, field.behind, field.both)
         ]
         sided = jax.tree.map(functools.partial(_pick, ahead), parts[0], parts[1])
@@ -354,7 +443,15 @@ def evaluate(field, c, q_x, q_v, scale, basis, gradients=False, q_normal=None):
     spec = parse(basis)
     q = jnp.concatenate((q_x, q_v), axis=-1) / scale
     o = q - field.centre[c]
-    beta = field.beta[c]  # (Q, p[, R])
+    if spec.guard:
+        f = features(o, spec.poly)
+        valid = jnp.ones(c.shape, bool) if q_valid is None else q_valid
+        level = _guard_level(field, c, f, spec.guard, valid)
+        beta = jnp.take_along_axis(
+            field.levels[c], level.reshape((-1, 1) + (1,) * (field.levels.ndim - 2)), axis=1
+        )[:, 0]
+    else:
+        beta = field.beta[c]  # (Q, p[, R])
     squeeze = beta.ndim == 2
     beta = beta[..., None] if squeeze else beta
     value = jnp.einsum("qi,qir->qr", features(o, spec.poly), beta)

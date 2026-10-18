@@ -35,9 +35,15 @@ FIT_NAMES = {
     "cell:cubicv:adapt1.5:ridge1e-3:align0.9:both": "CR cubic, ridge 1e-3",
     "cell:cubicv:adapt4:align0.9:both": "CA cubic, adapt 4",
     "cell:cubicv:adapt1.5:loo:align0.9:both": "CL cubic, leave-one-out order",
+    "cell:cubicv:adapt1.5:guard2:align0.9:both": "G2 cubic, leverage guard 2",
+    "cell:cubicv:adapt1.5:guard8:align0.9:both": "G8 cubic, leverage guard 8",
+    "cell:cubicv:adapt1.5:guard32:align0.9:both": "G32 cubic, leverage guard 32",
 }
 ORDER = list(FIT_NAMES.values())
-COLOURS = dict(zip(ORDER, ("#E69F00", "#0072B2", "#009E73", "#CC79A7", "#56B4E9"), strict=True))
+COLOURS = dict(
+    zip(ORDER, ("#E69F00", "#0072B2", "#009E73", "#CC79A7", "#56B4E9", "#D55E00", "#000000",
+                "#999999"), strict=True)
+)  # fmt: skip
 OPTM = "examples/mesh/results/optimize/circle_long_kn0.5_M10_S4_adam_tan_sm8_free"
 
 
@@ -58,6 +64,12 @@ def assembled(run):
     t = run["variants"]["along_pool_plane"]
     return (run["tally"] + t["x"] + t["v"] + run["volume"] + run["order"] + run["score"]
             + t["sil"] + run["timing"])  # fmt: skip
+
+
+def guard_levels(runs):
+    """The mean fraction of queries per order (mean, lin, quad, cubic) of a guard fit's runs."""
+    levels = [x["guard_levels"] for x in runs if x.get("guard_levels")]
+    return np.mean(levels, axis=0).tolist() if levels else None
 
 
 def rows(path):
@@ -91,6 +103,7 @@ def squash(root):
                 "tally": float(np.mean([x["tally"] for x in runs])),
                 "lambda_absmax_median": float(np.median(lam)) if lam else None,
                 "per_seed": g.tolist(),
+                "guard_levels": guard_levels(runs),
             }  # fmt: skip
         out[f"{kind} s={s:.4g}"] = rec
     return out
@@ -149,6 +162,7 @@ def optm(root):
                         np.mean([x["terms"][term][n] for x in runs])
                     )
             fr["lambda_absmax"] = [x.get("lambda_absmax") for x in runs]
+            fr["guard_levels"] = guard_levels(runs)
             maps = sorted(glob.glob(f"{root}/maps/{job}/it{it}_seed*_{tag.replace(':', '-')}.npz"))
             if maps:
                 grads = [np.load(m)["gradient"].astype(float) for m in maps]
@@ -219,6 +233,11 @@ def plot(sq, om):
     print("wrote", path)
 
 
+def levels_text(f):
+    lv = f.get("guard_levels")
+    return "" if not lv else "  orders " + "/".join(f"{x:.3f}" for x in lv)
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "scratch/thingate/cluster"
     sq, om = squash(root), optm(root)
@@ -230,7 +249,7 @@ def main():
                   f"- FD {f['minus_fd']:+.4g} ± {f['minus_fd_se']:.2g} (z {f['z']:+.1f})  "
                   f"v {f['pathwise_v']:+.4g} (median |v| {f['pathwise_v_median_abs']:.3g}, "
                   f"max {f['pathwise_v_max_abs']:.3g})  max|lambda| "
-                  f"{'-' if lam is None else f'{lam:.3g}'}")  # fmt: skip
+                  f"{'-' if lam is None else f'{lam:.3g}'}{levels_text(f)}")  # fmt: skip
     for job, rec in om.items():
         print(
             f"{job}  iterate {rec['iterate']} ({rec['seeds']} seeds)  optimiser |g| "
@@ -244,6 +263,8 @@ def main():
             print(
                 f"    {name:32s} {dirs}  |mean g| {f.get('seed_mean_grad_norm', float('nan')):.4g}"
                 f"  v peak at ({peak.get('x', float('nan')):.2f}, {peak.get('y', float('nan')):.2f})"
+                f"  max|lambda| {max((v for v in f['lambda_absmax'] if v is not None), default=0):.3g}"
+                + levels_text(f)
             )
     with open(os.path.join(root, "summary.json"), "w") as fh:
         json.dump({"squash": sq, "optm": om}, fh, indent=1)

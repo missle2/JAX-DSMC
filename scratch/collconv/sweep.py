@@ -37,7 +37,7 @@ sys.path.insert(0, "examples/mesh")
 import optimize_squash as OS  # noqa: E402
 
 from examples import ensemble_mesh as EM  # noqa: E402
-from jax_dsmc import ensemble_backward, shape  # noqa: E402
+from jax_dsmc import cell_fit, ensemble_backward, shape  # noqa: E402
 
 EXTRA = {
     "one_k16": (0, 16, False),
@@ -63,10 +63,21 @@ def setting_tag(st):
 MAP_TERMS = ("pathwise_v", "pathwise_x", "pathwise_tally")
 
 
-def save_maps(path, t, grid_shape):
-    """The per-coefficient terms ``MAP_TERMS`` of one variant's ``ShapeTerms`` (float32)."""
+def save_maps(path, t, grid_shape, guard=None, grid_n=None):
+    """The per-coefficient terms ``MAP_TERMS`` of one variant's ``ShapeTerms`` (float32), and
+    a guard fit's per-cell order counts (``guard_counts int64[C, G]`` on the ``grid_n`` grid)."""
     arrays = {n: np.asarray(getattr(t, n), np.float32) for n in MAP_TERMS}
+    if guard is not None:
+        arrays.update(guard_counts=guard, grid_n=np.asarray(grid_n))
     np.savez_compressed(path, shape=np.asarray(grid_shape), **arrays)
+
+
+def guard_fractions(counts):
+    """The fraction of a guard fit's live queries at each order (0 = mean .. 3 = cubic)."""
+    if counts is None:
+        return None
+    total = counts.sum(axis=0)
+    return (total / max(int(total.sum()), 1)).tolist()
 
 
 def terms_row(cfg, key, setting, tband, maps=None):
@@ -82,9 +93,10 @@ def terms_row(cfg, key, setting, tband, maps=None):
         cfg, key, None, "squash_y", setting["k"], tband, tuple(shape.VARIANTS)
     )
     pick = functools.partial(EM.control_gradient, cfg, "squash_y", st["grid"])
+    guard = cell_fit.take_trace()
     if maps:
         shipped = terms[cfg["variant"]]
-        save_maps(maps, shipped, np.shape(shipped.pathwise_v))
+        save_maps(maps, shipped, np.shape(shipped.pathwise_v), guard, st["grid"].n)
     one = terms["one"]
     out = {
         "objective": info["objective"],
@@ -101,6 +113,7 @@ def terms_row(cfg, key, setting, tband, maps=None):
         "lambda_rms": info["lambda_rms"],
         "lambda_absmax": info.get("lambda_absmax"),
         "lambda_p9999": info.get("lambda_p9999"),
+        "guard_levels": guard_fractions(guard),
         "seconds": time.time() - t0,
         "seconds_backward": info["seconds_backward"],
         "seconds_shape": info["seconds_shape"],
@@ -126,14 +139,15 @@ def main():
         over["case_centre"] = centre  # recorded with the rows
     if maps:
         os.makedirs(maps, exist_ok=True)
+    cell_fit.TRACE = {}  # before the first trace: guard fits count the orders they choose
     for i in range(int(sys.argv[3]), int(sys.argv[4])):
         key = jax.random.key(cfg["seed_start"] + i)
         row = {"s": s, "seed": i, "config": over, "timing_band": tband, "runs": {}}
         t0 = time.time()
         for st in settings:
             tag = setting_tag(st)
-            path = f"{maps}/s{s:g}_seed{i}_{tag.replace(':', '-')}.npz" if maps else None
-            row["runs"][tag] = terms_row(cfg, key, st, tband, path)
+            map_path = f"{maps}/s{s:g}_seed{i}_{tag.replace(':', '-')}.npz" if maps else None
+            row["runs"][tag] = terms_row(cfg, key, st, tband, map_path)
         row["fd"] = EM.finite_differences(cfg, "squash_y", key, hs) if hs else []
         row["fd_steps"] = hs
         row["seconds"] = time.time() - t0

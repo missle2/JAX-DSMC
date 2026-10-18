@@ -93,6 +93,11 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   grid ``sqg2_*``; subsonic ``sq_M032_*``; free-molecular ``sq_FM10_*``) and the optm Kn 0.5
   M 10 iterates with the optimiser's own seeds (``om_it*``, ``omg2_it*`` on the finer grid).
   ``sq_*``: an rtx slice; ``sqg2_*`` / ``om*``: one H200 each.
+* ``guardgate`` (2026-10-18): the leverage-guarded cubic (``cell:cubicv:...:guard<h>``, h = 2 /
+  8 / 32) against the shipped cubic and the quadratic, ``bash scratch/guardgate/cluster_job.sh
+  <name>`` (results in ``scratch/guardgate/cluster/``): the blunt Kn 0.5 squash at s = 0.6
+  (``sq_M032_s0.6_b*``, 16 seeds), thingate's thin M 10 squash (``sq_M10_*``), optm iterates
+  30 / 58 / 156 / 246 (``om_it*``, one H200 each) and the stored device gates (``unit``).
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, to
   convergence (resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -215,6 +220,14 @@ def _thingate_jobs(gpus_per_node: int) -> dict[str, str]:
     return {name: f"bash scratch/thingate/cluster_job.sh {name}" for name in names}
 
 
+def _guardgate_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    names = [f"sq_M032_s0.6_b{j}" for j in range(4)]
+    names += [f"sq_M10_s{s}_b{j}" for s in THIN_S for j in range(2)]
+    names += [f"om_it{k}_b0" for k in (30, 58, 156, 246)] + ["unit"]
+    return {name: f"bash scratch/guardgate/cluster_job.sh {name}" for name in names}
+
+
 def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     out = {}
@@ -302,6 +315,7 @@ NEW_GROUPS = {
     "cellgate": _cellgate_jobs,
     "gapgate": _gapgate_jobs,
     "thingate": _thingate_jobs,
+    "guardgate": _guardgate_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

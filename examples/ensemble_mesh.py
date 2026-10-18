@@ -304,9 +304,11 @@ def build(cfg, parameter, value, steps, body=None):
     n = int(cfg.get("slots", 0)) or int(static.N / cfg["fnum_scale"]) + 256
     if not int(cfg.get("slots", 0)) and cfg.get("boundary", "channel") == "free":
         # a free box holds the full drifting Maxwellian, not the channel's half-range stream
-        # (~1.4x the particles at M 0.32): 1.3x the free stream's count
+        # (~1.4x the particles at M 0.32): 1.3x the free stream's count (k^D more on a grid_scale
+        # k grid)
         volume = float(np.prod(np.asarray(grid.hi) - np.asarray(grid.lo)))
-        n = max(n, int(1.3 * F.NRHO * volume / (F.CASES[cfg["case"]]["fnum"] * cfg["fnum_scale"])))
+        count = F.NRHO * volume / (F.CASES[cfg["case"]]["fnum"] * cfg["fnum_scale"])
+        n = max(n, int(1.3 * count * k_grid**static.D))
     a_max = int(cfg.get("a_max", 0)) or static.A_max
     static = dataclasses.replace(
         static, N=n, A_max=a_max, n_steps=steps, record=cfg.get("record", "lean")

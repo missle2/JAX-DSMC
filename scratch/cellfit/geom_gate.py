@@ -42,7 +42,7 @@ sys.path.insert(0, "examples/mesh")
 import optimize as OPT  # noqa: E402
 
 from examples import ensemble_mesh as EM  # noqa: E402
-from jax_dsmc import ensemble_backward  # noqa: E402
+from jax_dsmc import cell_fit, ensemble_backward  # noqa: E402
 from jax_dsmc.mesh import levelset as L  # noqa: E402
 
 DEFAULT_SETTINGS = [{"basis": "quadratic_full", "k": 32}]
@@ -91,6 +91,14 @@ def smoothed(ls, cfg, sigma):
     return out
 
 
+def guard_fractions(counts):
+    """The fraction of a guard fit's live queries at each order (0 = mean .. 3 = cubic)."""
+    if counts is None:
+        return None
+    total = counts.sum(axis=0)
+    return (total / max(int(total.sum()), 1)).tolist()
+
+
 def gradient(cfg, ls, key, setting, virtual, dirs):
     ensemble_backward.configure("virtual", *virtual, "staged", setting["basis"])
     cfg = setting_cfg(cfg, setting)
@@ -108,6 +116,9 @@ def gradient(cfg, ls, key, setting, virtual, dirs):
     if s["volume"] is not None:
         parts["volume"] = s["volume"]
     terms = {n: {d: float(jnp.sum(v * dv)) for d, dv in dirs.items()} for n, v in parts.items()}
+    guard = cell_fit.take_trace()
+    if guard is not None:
+        info = dict(info, guard_counts=guard, grid_n=s["grid"].n)
     return np.asarray(g), info, time.time() - t0, terms, parts
 
 
@@ -150,6 +161,7 @@ def main():
     maps = over.pop("maps", None)
     if maps:
         os.makedirs(maps, exist_ok=True)
+    cell_fit.TRACE = {}  # before the first trace: guard fits count the orders they choose
     cfg = config(over)
     _grid, ls = OPT.initial_levelset(cfg)
     ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(f"{run}/coef_{it}.npy")))
@@ -165,6 +177,9 @@ def main():
             tag = setting_tag(st)
             if maps:
                 arrays = {n: np.asarray(v, np.float32) for n, v in parts.items()}
+                if "guard_counts" in info:
+                    arrays.update(guard_counts=info["guard_counts"],
+                                  grid_n=np.asarray(info["grid_n"]))  # fmt: skip
                 np.savez_compressed(f"{maps}/it{it}_seed{i}_{tag.replace(':', '-')}.npz",
                                     gradient=g.astype(np.float32), **arrays)  # fmt: skip
             row["runs"][tag] = {
@@ -176,6 +191,7 @@ def main():
                 "lambda_rms": info["lambda_rms"],
                 "lambda_absmax": info.get("lambda_absmax"),
                 "lambda_p9999": info.get("lambda_p9999"),
+                "guard_levels": guard_fractions(info.get("guard_counts")),
             }  # fmt: skip
             proj = " ".join(f"g.{n} {float(jnp.sum(g * d)):+.4e}" for n, d in dirs.items())
             print(f"seed {i} {tag:44s} {proj} lambda_rms {info['lambda_rms']} "

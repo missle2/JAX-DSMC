@@ -696,11 +696,14 @@ def _query(field, cell, q_x, q_v, q_normal, scale, k, basis, chunk):
     direction = _side(q_v, q_normal)
     if not cell_fit.is_cell(basis):
         return cell_query(field, c, q_x, q_v, scale, k, basis, chunk, direction=direction)
+    live = cell < n_cells
     if not isinstance(field, _Hybrid):
-        return cell_fit.evaluate(field, c, q_x, q_v, scale, basis, q_normal=q_normal)
-    value = cell_fit.evaluate(field.split, c, q_x, q_v, scale, basis, q_normal=q_normal)
+        return cell_fit.evaluate(field, c, q_x, q_v, scale, basis, q_normal=q_normal, q_valid=live)
+    value = cell_fit.evaluate(
+        field.split, c, q_x, q_v, scale, basis, q_normal=q_normal, q_valid=live
+    )
     q = q_x.shape[0]
-    need = field.split.complex[c] & (cell < n_cells)
+    need = field.split.complex[c] & live
     idx = jnp.nonzero(need, size=field.capacity, fill_value=q)[0]
     safe = jnp.minimum(idx, q - 1)
     sub = cell_query(

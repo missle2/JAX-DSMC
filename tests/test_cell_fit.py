@@ -86,6 +86,70 @@ def test_order_guard_caps_the_columns_by_the_node_count():
     assert top == [2, 2, 2, 1, 0, -1]
 
 
+def _leverage(z_nodes, z_query, poly):
+    """The plain least-squares leverage of queries (unscaled numpy reference)."""
+    centre = z_nodes.mean(0)
+    f = np.asarray(cell_fit.features(jnp.asarray(z_nodes - centre), poly))
+    fq = np.asarray(cell_fit.features(jnp.asarray(z_query - centre), poly))
+    return np.einsum("ni,ij,nj->n", fq, np.linalg.inv(f.T @ f), fq)
+
+
+def test_leverage_guard_takes_the_highest_order_the_nodes_determine_at_the_query():
+    x, v, valid, rng = _tables()
+    lam = rng.normal(size=(C, P))
+    args = (jnp.asarray(x), jnp.asarray(v), jnp.asarray(valid), jnp.asarray(lam), SCALE)
+    # queries in cell 0: its own nodes (interpolation) and far outside its velocity cloud
+    qx = np.repeat(x[0, :1], 4, axis=0)
+    qv = np.array([v[0, 0], v[0, 1], [12.0, 9.0, -9.0], [30.0, 0.0, 0.0]])
+    c = jnp.zeros(4, jnp.int32)
+
+    def at(basis, f):
+        return np.asarray(cell_fit.evaluate(f, c, jnp.asarray(qx), jnp.asarray(qv), SCALE, basis))
+
+    plain = at("cell:cubicv:ridge0", cell_fit.fit(*args, "cell:cubicv:ridge0"))
+    # a guard nothing reaches is the plain fit
+    loose = "cell:cubicv:ridge0:guard1e30"
+    np.testing.assert_allclose(at(loose, cell_fit.fit(*args, loose)), plain, rtol=1e-9)
+    # a guard below every order's leverage is the cell mean
+    tight = "cell:cubicv:ridge0:guard1e-12"
+    np.testing.assert_allclose(at(tight, cell_fit.fit(*args, tight)), lam[0, :60].mean(), rtol=1e-9)
+    # guard 1: each query the highest order whose own leverage is <= 1 (numpy reference)
+    z = np.concatenate((x[0, :60], v[0, :60]), -1) / np.asarray(SCALE)
+    zq = np.concatenate((qx, qv), -1) / np.asarray(SCALE)
+    want = []
+    for i in range(4):
+        level = 0
+        for g, poly in ((1, "lin"), (2, "quad"), (3, "cubicv")):
+            if _leverage(z, zq[i : i + 1], poly)[0] <= 1.0:
+                level = g
+        basis = f"cell:{('mean', 'lin', 'quad', 'cubicv')[level]}:ridge0"
+        want.append(at(basis, cell_fit.fit(*args, basis))[i])
+    guarded = "cell:cubicv:ridge0:guard1"
+    np.testing.assert_allclose(at(guarded, cell_fit.fit(*args, guarded)), want, rtol=1e-8)
+    assert want[0] == pytest.approx(plain[0]) and want[3] != pytest.approx(plain[3])
+
+
+def test_leverage_guard_trace_counts_the_live_queries():
+    x, v, valid, rng = _tables()
+    lam = rng.normal(size=(C, P))
+    basis = "cell:cubicv:adapt1.5:guard4"
+    f = cell_fit.fit(jnp.asarray(x), jnp.asarray(v), jnp.asarray(valid), jnp.asarray(lam), SCALE,
+                     basis)  # fmt: skip
+    c = jnp.asarray(np.repeat(np.arange(C), P))
+    live = jnp.asarray(valid.reshape(-1))
+    cell_fit.TRACE = {}
+    try:
+        jax.block_until_ready(cell_fit.evaluate(f, c, jnp.asarray(x.reshape(-1, D)),
+                                                jnp.asarray(v.reshape(-1, 3)), SCALE, basis,
+                                                q_valid=live))  # fmt: skip
+        counts = cell_fit.TRACE[C]
+    finally:
+        cell_fit.TRACE = None
+    np.testing.assert_array_equal(counts.sum(1), COUNTS)
+    # adapt still caps the order: 14 nodes -> at most a plane, 3 -> the mean
+    assert counts[3, 2:].sum() == 0 and counts[4, 1:].sum() == 0
+
+
 def test_split_fit_is_finite_with_an_empty_side_and_defers_to_the_unsplit_fit():
     x, v, valid, rng = _tables()
     lam = rng.normal(size=(C, P))
@@ -157,3 +221,44 @@ def test_complex_cell_fallback_is_the_per_query_one_sided_backward():
         for b, c in (("quadratic_full", 0), (basis, cap))
     ]  # fmt: skip
     np.testing.assert_allclose(np.asarray(run[1]), np.asarray(run[0]), rtol=1e-12, atol=1e-15)
+
+
+def test_leverage_guard_through_the_virtual_backward():
+    """A guard nothing reaches is the unguarded backward; a finite guard runs, stays finite and
+    counts every live query (the collisional pull-back, no normals)."""
+    dim, cells, per = 2, 4, 60
+    n = cells * per
+    key = jax.random.key(5)
+    grid = GridSpec(jnp.zeros(dim), jnp.ones(dim), (2, 2))
+    static = SimStatic(n, dim, 1, 1, 256, 1, 3, majorant_mode="certified")
+    params = SimParams(jnp.float64(0.2), jnp.full(cells, 1.0 / n), jnp.float64(0.0))
+    kx, kv = jax.random.split(key)
+    v = jax.random.normal(kv, (n, 3), dtype=jnp.float64)
+    v = v.at[: n // 2, 0].add(8.0)  # a beam and a cold gas in every cell
+    state = ParticleState(
+        jax.random.uniform(kx, (n, dim), dtype=jnp.float64), v, jnp.zeros(n, jnp.int32),
+        jnp.ones(n, bool), jnp.zeros(n),
+    )  # fmt: skip
+    (out, _), aux = simulate.run(
+        state, CollideState(jnp.zeros((cells, 1, 1))), grid, R.species(R.CONTROLS), params,
+        static, key, collide_only=True, emit_moments="none", capture=True,
+    )  # fmt: skip
+    scale = jnp.asarray([1 / 2, 1 / 2, 1.0, 1.0, 1.0])
+
+    def lam0(basis):
+        return ensemble_device.backward_virtual(
+            aux[2], state.alive, out, out.v[:, 0] ** 3 / n, grid, scale, R.species(R.CONTROLS),
+            jax.random.key(9), 128, 32, basis, 512, 2, 4, "staged", None,
+        ).lambda0  # fmt: skip
+
+    plain = lam0("cell:cubicv:adapt1.5")
+    loose = lam0("cell:cubicv:adapt1.5:guard1e30")
+    np.testing.assert_allclose(np.asarray(loose), np.asarray(plain), rtol=1e-10, atol=1e-14)
+    cell_fit.TRACE = {}
+    try:
+        guarded = lam0("cell:cubicv:adapt1.5:guard4")
+        counts = cell_fit.take_trace()
+    finally:
+        cell_fit.TRACE = None
+    assert np.all(np.isfinite(np.asarray(guarded)))
+    assert counts is not None and counts.shape == (cells, 4) and counts.sum() > 0
