@@ -302,3 +302,4 @@ iterate 296: J = 7.6079e-19 ± 2.6e-21  area 28.2769 -> 28.2769 (shift -0.0066) 
 iterate 297: J = 7.5592e-19 ± 2.6e-21  area 28.2769 -> 28.2769 (shift -0.0066)  |g| 1.45e-18  predicted dJ -2.23e-20  hits 49528  stuck 0  130s
 iterate 298: J = 7.5121e-19 ± 2.3e-21  area 28.2769 -> 28.2769 (shift -0.0066)  |g| 1.54e-18  predicted dJ -1.82e-20  hits 49663  stuck 0  128s
 iterate 299: J = 7.4639e-19 ± 2.1e-21  area 28.2769 -> 28.2769 (shift -0.0065)  |g| 1.58e-18  predicted dJ -1.79e-20  hits 49671  stuck 0  127s
+slurmstepd: error: *** JOB 34248394 ON c3gpu-g5-u13 CANCELLED AT 2026-10-16T14:41:09 ***
