@@ -49,7 +49,7 @@ QOS_ARG=()
 if [ -n "${QOS:-}" ]; then QOS_ARG=(--qos="${QOS}"); fi
 GPU_KIND="${GPU_KIND:-a100}"
 case "${GPU_KIND}" in
-  h200) PART="${PART:-ah200}"; GRES="${GRES_TYPE:-h200}"; CORES=32; MEM=128; PER_NODE=4 ;;
+  h200) PART="${PART:-ah200}"; GRES="${GRES_TYPE:-h200_2g.35gb}"; CORES=10; MEM=40; PER_NODE=16 ;;
   a100) PART="${PART:-aa100}"; GRES="${GRES_TYPE:-a100-40gb}"; CORES=21; MEM=70; PER_NODE=3 ;;
   mi100) PART="${PART:-ami100}"; GRES="${GRES_TYPE:-mi100}"; CORES=21; MEM=70; PER_NODE=3 ;;
   rtx)
