@@ -1091,7 +1091,7 @@ the same physical widths); \code{scratch/optab/analysis.py}.
 \begin{itemize}
 \item \textbf{Area control unstable}: a fixed-size step overshoots whatever the pull, and $\nu\leftarrow\nu+\mu\,\Delta A$ integrates the
   overshoot --- $\nu$ reached $\sim400\times$ the price, the area swung 4--220\,\% of $A_0$, the shapes stayed convex blobs
-  ($D/D_{\mathrm{circle}}(A)$ 0.86--0.93 vs 0.33 for the projection S8).  Replaced by \code{--area-mode tangent}: exact area, the
+  ($D/D_{\mathrm{circle}}(A)$ 0.86--0.93 vs 0.33 for the projection S8).  Replaced by \code{-{}-area-mode tangent}: exact area, the
   step projected onto $\nabla A^\perp$ (a multiplier per iterate), the shift only the $O(\mathrm{step}^2)$ remainder (0.5\,mm vs 1--2\,cm).
 \item \textbf{Smoothing} (first 40 iterates, before the swings): the control grows wiggles (turning $1.5$, $r_{\min}$ 30--50\,cm);
   every wider setting stays convex.  At equal width the coarse level set and the wider smoothing are the same ($r_{\min}\approx1$\,m
@@ -1103,7 +1103,7 @@ the same physical widths); \code{scratch/optab/analysis.py}.
 
 \begin{frame}{\code{optab} with the tangent area mode: drag at fixed area}
 \scriptsize
-The same five runs, \code{--area-mode tangent} (tags \code{circle\_long\_S4\_adam\_tan\_ab\_*}), first 110--129 of 300 iterates
+The same five runs, \code{-{}-area-mode tangent} (tags \code{circle\_long\_S4\_adam\_tan\_ab\_*}), first 110--129 of 300 iterates
 (pulled 2026-10-15); area held to $10^{-12}$; \code{scratch/optab/analysis\_tan.py}.
 \begin{center}
 \fig{0.82}{mesh/figures/optc/optab_tan_drag.png}
@@ -1137,8 +1137,99 @@ The same five runs, \code{--area-mode tangent} (tags \code{circle\_long\_S4\_ada
 \end{columns}
 \end{frame}
 
+
+\section{VII. Free space and the optm runs (2026-10-15/16)}
+
+\begin{frame}{\code{squashkn2}: every run's history, and the M 10 cubic S2 spike}
+\scriptsize
+\begin{center}
+\fig{0.66}{mesh/figures/squash/squashkn2_histories.png}
+\end{center}
+\begin{itemize}
+\item \textbf{M 0.32}: \code{cubicv} converges at $s = 0.61$--$0.65$ (S4 oscillates $\pm0.04$, period $\sim$25); the quadratic runs
+  sat at 0.76--0.94 unconverged.  $J$ is flat there (noise-dominated): the ill-conditioning of the previous frames.
+\item \textbf{M 10}: all four end at $s\approx0.39$--$0.42$.  The \code{cubicv} S2 spike (iterate 20, $s = 0.193$: $\dd D/\dd s = -29.9\pm7.1$
+  vs the reference $+1.48$) is \emph{only} \code{pathwise\_v} ($-31.4$; tally $+1.47$, forward drag within 0.3\,\%), both seeds.
+  $|$\code{pathwise\_v}$|$ median 0.05 at $s\in[0.35,0.45]$, 0.62 at $[0.25,0.30]$, 2.0 below 0.25 (quadratic: 0.03): $\nabla_v\lambda$ of
+  the cubic-in-$v$ fit breaks down once the body is under $\sim$2 DSMC cells thick.  Adam's $v$ jumped 0.002 $\to$ 1.04 and starved
+  the later steps: the ``converged'' $s = 0.424$ is a step-starvation stop (reference $J' = +0.22$ there).
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Free-space boundary: why, and its gates}
+\scriptsize
+\code{forward.build(boundary="free")} (\code{-{}-boundary free}): every box face injects the drifting Maxwellian's inward flux and
+removes what leaves; injection capacity $2\times$ the largest face's target; tags \code{\_free}.
+\begin{itemize}
+\item \textbf{The channel holds a half-range stream}: free-molecular circle Cd 17.69 / 17.33 / 17.35 at blockage 0.3 / 0.15 / 0.075
+  against the half-range closed form 17.17; the full Maxwellian (free space) gives 12.22 at M 0.32.
+\item \textbf{The channel chokes at Kn 0.5, M 10}: a channel-wide region at $\sim$4.4\,$n_\infty$ (the strong-shock ratio) grows upstream
+  for $D/H\ge0.3$; 30\,m of upstream box only gave it room (x $-14$..0\,m, 600\,k slots overflowed).  $D/H = 0.2$ starts
+  (\code{scratch/optm10/m10\_gate.py}).  Free-molecular M 10's 1.9\,$n_\infty$ ahead of the body is physical (specular back-reflection).
+\item \textbf{Free-space gates} (\code{scratch/freebox/}):
+  \begin{itemize}\scriptsize
+  \item free-molecular Cd, full-Maxwellian start: $R = 1.5$: $12.245\pm0.036$ ($z = 0.8$); $R = 0.75$: $12.342\pm0.056$ ($z = 2.2$, 1\,\% high);
+    counts steady, no inflow shortfall;
+  \item Kn 0.5 + M 10, $R = 3$ in \code{circle\_long}: starts, 1.09\,$n_\infty$ at the inflow face, $\sim$2 ahead of the body, 117\,k alive;
+  \item radius gradient, level-set circle, free-molecular, $f_{\mathrm{num}}\times4$, 8 seeds (newborns from all four faces):
+    $+2.2\pm2.7\,\%$ vs $D/R$ ($z = 0.8$), $-0.9\pm3.6\,\%$ vs FD 0.05 ($z = -0.3$), $+2.1\pm3.1\,\%$ vs FD 0.1.
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{\code{optm}: drag at fixed area in free space, three regimes}
+\scriptsize
+S4 Adam, smooth 8 knots, tangent area, \code{circle\_long} (x $-10$..20, y 0..10\,m), 1\,m keep-out, \code{-{}-boundary free}, one H200 each;
+pulled 2026-10-16 (Kn 0.5 236, free-mol.\ M 10 300 = done, Kn 0.5 + M 10 68 iterates); \code{scratch/optm/analysis\_optm.py}.
+\begin{columns}[T]
+\column{0.5\linewidth}
+\fig{1.0}{mesh/figures/optc/optm_drag.png}\\
+\fig{1.0}{mesh/figures/optc/optm_timing.png}
+\column{0.5\linewidth}
+\begin{itemize}
+\item \textbf{Kn 0.5, M 0.32}: 0.21 of the circle's drag, a slender 13.8\,m $\times$ 2.9\,m body; flat since $\sim$140.  Adjoint slope
+  (observed $\Delta D$ on $g\cdot\Delta c$) $0.81\pm0.13$ over 0--79, then within noise --- the fixed 5\,cm step at the noise floor:
+  a step decay would pay here.
+\item \textbf{Timings} (H200, s per iterate): 174 / 121 / 337; iterate 0 1250--1610 (compile).  Free-mol.\ M 10 iterates 127, 139, 192
+  took $\sim$1200\,s: full recompiles of the backward and the shape gradient, the densest cell having crossed a 64-particle step
+  of \code{npc\_max} (a static argument; \code{NPC\_BUCKET}).  $\sim$55\,min of 11.4\,h.  $+6$\,s per iterate while the keep-out
+  is active (floor / shift passes, not timed).
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{\code{optm} free-molecular M 10: the box, not the step}
+\scriptsize
+\begin{center}
+\fig{0.74}{mesh/figures/optc/optm_M10.png}
+\end{center}
+\begin{itemize}
+\item The body becomes a wedge with a flat base.  At M 10 nothing hits the base, so area there costs no drag: the area constraint
+  moves area into the shadow and the body slides downstream (nose x 1.7 $\to$ 8.9\,m, length $\sim$10\,m throughout).
+\item Lowest drag \textbf{0.104} at iterate 254 --- the iterate the base reached the x = 19\,m keep-out.  From there the floor clips
+  $\sim$2300 knots per step and the area restore thickens the wedge (3.75 $\to$ 4.05\,m): drag 0.15 at 300 while the adjoint
+  still predicted a fall every step.
+\item Before the keep-out (150--253): slope $0.07\pm0.03$ at an objective s.e.\ of 0.04\,\%: not noise --- overshoot of the fixed
+  5\,cm step or a gradient error at the sharp nose ($r_{\min}\approx5$\,cm).  Resuming from \code{coef\_250} at half the step separates them.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{\code{optm} Kn 0.5 + M 10: gradient spikes at the nose}
+\scriptsize
+\begin{center}
+\fig{0.80}{mesh/figures/optc/optm_kn0.5_M10.png}
+\end{center}
+\begin{itemize}
+\item Iterates 0--35: slope $0.94\pm0.02$, drag 0.50.  From $\sim$36 $|g|$ grows to 70--680$\times$ its start; slope $\approx0$; drag
+  stalls at 0.324 (iterate 55) and creeps to 0.344.
+\item The spikes sit at the nose (x $\approx$ 1.5, y $\approx$ 4.2\,m, just inside the surface): Adam's $v$ there $\sim$790$\times$ the
+  surface median, so the nose's steps starve while the rest move.  Same signature as the squash \code{cubicv} spike; the per-step
+  gradient is not saved, so the term is not yet identified.
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Validation status of the current estimator}
-\footnotesize
+\scriptsize
 \begin{tabular}{@{}p{5.95cm}p{5.25cm}p{1.9cm}@{}}
 \toprule
 case & result & regime\\
@@ -1155,6 +1246,7 @@ cut-volume machinery & $z = -1.2$ (all cells), $+0.8$ (cut cells) & Kn 0.5\\
 squash Kn 0.5, $f_{\mathrm{num}}\times2$ (vs Richardson FD) / $\times4$ (12 seeds) & $-7.5$ / $-1.9\pm2.3\,\%$ & superseded\\
 squash $s = 1$, Kn 0.5, $f_{\mathrm{num}}\times1$, $T = 1000$ / $2000$: quad / \code{cubicv} & $-3.7$, $-5.0$ / $-0.7$, $-1.8\,\%$ ($\pm0.8$) & Kn 0.5\\
 optc circle shift, Kn 0.5 $T = 1000$ / $2000$; free-mol. & $-14\pm3$ / $-1\pm4\,\%$; $+1\pm2\,\%$ & both\\
+free-space boundary: Cd $R = 1.5$ / $0.75$; radius gradient (8 seeds) & $z = 0.8$ / $2.2$; $+2.2\pm2.7\,\%$ (FD $-0.9\pm3.6$) & free-mol.\\
 \bottomrule
 \end{tabular}
 
@@ -1175,7 +1267,7 @@ collisional flows: $\le1\,\%$, either fit.
   rather than raise the cut-off (0.2 biases the circle $+5\,\%$).  \code{optab}: a step smoothing of 4--8 knots
   (25--50\,cm) keeps the early iterates convex; a coarser level set adds nothing.  Per-step signal fraction $S/(S+4.8)$
   in projection mode; 0.7--0.9 with the tangent mode's Adam runs.  Choice: smooth 8 knots, $h = 6.25$\,cm.
-\item \textbf{Area}: \code{--area-mode tangent} (projected gradient: $g - \nu\nabla A$, $\nu = g\cdot\nabla A/|\nabla A|^2$, the step
+\item \textbf{Area}: \code{-{}-area-mode tangent} (projected gradient: $g - \nu\nabla A$, $\nu = g\cdot\nabla A/|\nabla A|^2$, the step
   projected too) replaces the wound-up augmented Lagrangian; the restoring shift is 0.5\,mm, against 1--2\,cm per Adam
   iterate in the old projection mode.  \code{optab} (tags \code{\_tan\_ab\_*}): area to $10^{-12}$, drag 0.23--0.26 of the circle's.
 \item \textbf{Re-runs}: free-molecular squash and \code{optc} can be re-run now (the old runs used
@@ -1183,6 +1275,20 @@ collisional flows: $\le1\,\%$, either fit.
 \item \textbf{optc} bodies need a body-to-face clearance constraint before their drag reductions are quoted:
   the \code{optc2} and \code{optckn} re-runs use a 3$\times$ longer box centred on the body (\code{circle\_long},
   15\,m each side; warm-up 2800 steps) and keep the body 1\,m from every face (\code{optimize --keepout}).
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Open items (2026-10-16)}
+\footnotesize
+\begin{enumerate}\setcounter{enumi}{6}
+\item \textbf{Free space} (\code{-{}-boundary free}, 2026-10-15): gated; used by \code{optm}.  Retrofit to \code{optc2}, \code{optckn},
+  \code{optab} and the squash groups (new tags) still to do.  The 10\,m box leaves 2\,m between the faces and a 6\,m body.
+\item \textbf{Gradient blow-ups}: squash M 10 \code{cubicv} below $\sim$2 cells thick (\code{pathwise\_v}); \code{optm} Kn 0.5 + M 10 at
+  the nose from iterate 36.  Locate the term (save the per-knot gradient), then a guard; Adam's $v$ starves steps after a spike.
+\item \textbf{Box-bound optima}: free-molecular M 10 moves area into the drag-free base until the keep-out stops it (\code{optm} 254).
+  A bigger box or a base constraint before quoting the wedge's drag.
+\item \textbf{Step}: fixed 5\,cm per iterate; slope falls to 0.05--0.2 late in every run.  Step decay not built.
+\item \textbf{Recompiles}: \code{npc\_max} bucket of 64 crossed $\to$ $\sim$1200\,s on H200 (3$\times$ in 300 iterates).
 \item Translations of flat walls remain unsupported as controls.
 \end{enumerate}
 \medskip

@@ -31,7 +31,7 @@
   "variant": "along_pool_plane"
  },
  "requested_seeds": 8,
- "complete": false,
+ "complete": true,
  "fd_steps": [
   0.1,
   0.05
@@ -316,7 +316,287 @@
    ],
    "seed": 3,
    "seconds": 112.93676328659058
+  },
+  {
+   "objective": 2.3743401329113033e-20,
+   "hits": 13868,
+   "stuck": 0,
+   "newborn_hit_share": 1.2674113099437178e-16,
+   "alive_final": 17554,
+   "lambda_rms": [
+    5.431953491729359e-25,
+    2.65267938017183e-24,
+    0.0
+   ],
+   "seconds_backward": 19.694007873535156,
+   "seconds_shape": 35.88420295715332,
+   "gradient": 8.12284779966525e-21,
+   "gradient_without_timing": 8.08659798304862e-21,
+   "pathwise": 8.08659798304862e-21,
+   "pathwise_x": -6.444455577555293e-24,
+   "pathwise_v": -1.7613536134918473e-23,
+   "pathwise_tally": 8.110655974761098e-21,
+   "score": -0.0,
+   "silhouette": -0.0,
+   "volume": -0.0,
+   "order": -0.0,
+   "timing": 3.624981661662956e-23,
+   "variants": {
+    "one": {
+     "pathwise": 8.11628631862016e-21,
+     "pathwise_x": 4.2034840297244976e-24,
+     "pathwise_v": 1.4268598293418058e-24,
+     "gradient": 8.15253613523679e-21
+    },
+    "one_pool": {
+     "pathwise": 8.074782917604969e-21,
+     "pathwise_x": -1.9532786471740636e-23,
+     "pathwise_v": -1.6340270684381865e-23,
+     "gradient": 8.111032734221599e-21
+    },
+    "along": {
+     "pathwise": 8.111182967342082e-21,
+     "pathwise_x": -8.998672483512171e-25,
+     "pathwise_v": 1.4268598293418058e-24,
+     "gradient": 8.147432783958712e-21
+    },
+    "along_pool": {
+     "pathwise": 8.087883538885772e-21,
+     "pathwise_x": -6.432165190942532e-24,
+     "pathwise_v": -1.6340270684381865e-23,
+     "gradient": 8.124133355502403e-21
+    },
+    "one_pool_plane": {
+     "pathwise": 8.074202971784426e-21,
+     "pathwise_x": -1.883946684174359e-23,
+     "pathwise_v": -1.7613536134918473e-23,
+     "gradient": 8.110452788401056e-21
+    },
+    "along_pool_plane": {
+     "pathwise": 8.08659798304862e-21,
+     "pathwise_x": -6.444455577555293e-24,
+     "pathwise_v": -1.7613536134918473e-23,
+     "gradient": 8.12284779966525e-21
+    }
+   },
+   "analytic_F_over_r": 7.914467109704345e-21,
+   "fd": [
+    7.50250477183304e-21,
+    7.73946246421755e-21
+   ],
+   "seed": 4,
+   "seconds": 113.39338636398315
+  },
+  {
+   "objective": 2.5252647188449705e-20,
+   "hits": 14213,
+   "stuck": 0,
+   "newborn_hit_share": 1.191663398949106e-16,
+   "alive_final": 17740,
+   "lambda_rms": [
+    5.484525118150728e-25,
+    2.6527966448934935e-24,
+    0.0
+   ],
+   "seconds_backward": 19.0329372882843,
+   "seconds_shape": 39.52840995788574,
+   "gradient": 7.979555930074125e-21,
+   "gradient_without_timing": 8.177258779035559e-21,
+   "pathwise": 8.177258779035559e-21,
+   "pathwise_x": -2.9852011762936018e-24,
+   "pathwise_v": -1.2630079187816657e-23,
+   "pathwise_tally": 8.192874059399668e-21,
+   "score": -0.0,
+   "silhouette": -0.0,
+   "volume": -0.0,
+   "order": -0.0,
+   "timing": -1.9770284896143305e-22,
+   "variants": {
+    "one": {
+     "pathwise": 8.190681149990262e-21,
+     "pathwise_x": -1.8251173086822585e-24,
+     "pathwise_v": -3.677921007285626e-25,
+     "gradient": 7.992978301028829e-21
+    },
+    "one_pool": {
+     "pathwise": 8.175320455367687e-21,
+     "pathwise_x": -5.748006217538157e-24,
+     "pathwise_v": -1.1805597814444545e-23,
+     "gradient": 7.977617606406253e-21
+    },
+    "along": {
+     "pathwise": 8.192451941200927e-21,
+     "pathwise_x": -5.432609802145695e-26,
+     "pathwise_v": -3.677921007285626e-25,
+     "gradient": 7.994749092239494e-21
+    },
+    "along_pool": {
+     "pathwise": 8.17538240276112e-21,
+     "pathwise_x": -5.686058824114332e-24,
+     "pathwise_v": -1.1805597814444545e-23,
+     "gradient": 7.977679553799687e-21
+    },
+    "one_pool_plane": {
+     "pathwise": 8.17674203743945e-21,
+     "pathwise_x": -3.5019427724086794e-24,
+     "pathwise_v": -1.2630079187816657e-23,
+     "gradient": 7.979039188478017e-21
+    },
+    "along_pool_plane": {
+     "pathwise": 8.177258779035559e-21,
+     "pathwise_x": -2.9852011762936018e-24,
+     "pathwise_v": -1.2630079187816657e-23,
+     "gradient": 7.979555930074125e-21
+    }
+   },
+   "analytic_F_over_r": 8.417549062816568e-21,
+   "fd": [
+    8.90981399124511e-21,
+    9.340770545265894e-21
+   ],
+   "seed": 5,
+   "seconds": 119.25417017936707
+  },
+  {
+   "objective": 2.4673191509291283e-20,
+   "hits": 13968,
+   "stuck": 0,
+   "newborn_hit_share": 1.2196498928692888e-16,
+   "alive_final": 17539,
+   "lambda_rms": [
+    5.568300353143018e-25,
+    2.6631691671890436e-24,
+    0.0
+   ],
+   "seconds_backward": 19.301509618759155,
+   "seconds_shape": 35.82531118392944,
+   "gradient": 8.669467355511484e-21,
+   "gradient_without_timing": 7.952985659984418e-21,
+   "pathwise": 7.952985659984418e-21,
+   "pathwise_x": -6.03843824362135e-26,
+   "pathwise_v": -5.009798908032315e-24,
+   "pathwise_tally": 7.958055843274884e-21,
+   "score": -0.0,
+   "silhouette": -0.0,
+   "volume": -0.0,
+   "order": -0.0,
+   "timing": 7.164816955270665e-22,
+   "variants": {
+    "one": {
+     "pathwise": 7.767297072127169e-21,
+     "pathwise_x": -1.906178966099001e-22,
+     "pathwise_v": -1.4087453781293862e-25,
+     "gradient": 8.483778767654235e-21
+    },
+    "one_pool": {
+     "pathwise": 7.955280718843676e-21,
+     "pathwise_x": 3.568059291509621e-24,
+     "pathwise_v": -6.3431837227243304e-24,
+     "gradient": 8.671762414370742e-21
+    },
+    "along": {
+     "pathwise": 7.938399922652773e-21,
+     "pathwise_x": -1.951504608429692e-23,
+     "pathwise_v": -1.4087453781293862e-25,
+     "gradient": 8.654881618179838e-21
+    },
+    "along_pool": {
+     "pathwise": 7.952027765661905e-21,
+     "pathwise_x": 3.151061097470249e-25,
+     "pathwise_v": -6.3431837227243304e-24,
+     "gradient": 8.66850946118897e-21
+    },
+    "one_pool_plane": {
+     "pathwise": 7.955286062686448e-21,
+     "pathwise_x": 2.240018319599594e-24,
+     "pathwise_v": -5.009798908032315e-24,
+     "gradient": 8.671767758213514e-21
+    },
+    "along_pool_plane": {
+     "pathwise": 7.952985659984418e-21,
+     "pathwise_x": -6.03843824362135e-26,
+     "pathwise_v": -5.009798908032315e-24,
+     "gradient": 8.669467355511484e-21
+    }
+   },
+   "analytic_F_over_r": 8.22439716976376e-21,
+   "fd": [
+    8.178985543100651e-21,
+    8.811489542149736e-21
+   ],
+   "seed": 6,
+   "seconds": 114.82925772666931
+  },
+  {
+   "objective": 2.470732147602912e-20,
+   "hits": 14003,
+   "stuck": 0,
+   "newborn_hit_share": 1.2179651044022014e-16,
+   "alive_final": 17794,
+   "lambda_rms": [
+    5.5401252148331295e-25,
+    2.6928238944219017e-24,
+    0.0
+   ],
+   "seconds_backward": 19.516087293624878,
+   "seconds_shape": 36.13743543624878,
+   "gradient": 7.326275706168245e-21,
+   "gradient_without_timing": 7.87786744716976e-21,
+   "pathwise": 7.87786744716976e-21,
+   "pathwise_x": -3.5793146896562976e-24,
+   "pathwise_v": -4.493281540343434e-24,
+   "pathwise_tally": 7.885940043399757e-21,
+   "score": -0.0,
+   "silhouette": -0.0,
+   "volume": -0.0,
+   "order": -0.0,
+   "timing": -5.515917410015147e-22,
+   "variants": {
+    "one": {
+     "pathwise": 7.903862447229662e-21,
+     "pathwise_x": 1.8330580699263503e-23,
+     "pathwise_v": -4.081768693645977e-25,
+     "gradient": 7.352270706228147e-21
+    },
+    "one_pool": {
+     "pathwise": 7.861736620666674e-21,
+     "pathwise_x": -1.989353219576318e-23,
+     "pathwise_v": -4.309890537322548e-24,
+     "gradient": 7.310144879665159e-21
+    },
+    "along": {
+     "pathwise": 7.891270044997469e-21,
+     "pathwise_x": 5.73817846707142e-24,
+     "pathwise_v": -4.081768693645977e-25,
+     "gradient": 7.339678303995954e-21
+    },
+    "along_pool": {
+     "pathwise": 7.874137011219296e-21,
+     "pathwise_x": -7.493141643145125e-24,
+     "pathwise_v": -4.309890537322548e-24,
+     "gradient": 7.322545270217781e-21
+    },
+    "one_pool_plane": {
+     "pathwise": 7.865340265247177e-21,
+     "pathwise_x": -1.6106496612237852e-23,
+     "pathwise_v": -4.493281540343434e-24,
+     "gradient": 7.313748524245662e-21
+    },
+    "along_pool_plane": {
+     "pathwise": 7.87786744716976e-21,
+     "pathwise_x": -3.5793146896562976e-24,
+     "pathwise_v": -4.493281540343434e-24,
+     "gradient": 7.326275706168245e-21
+    }
+   },
+   "analytic_F_over_r": 8.23577382534304e-21,
+   "fd": [
+    6.813048684255337e-21,
+    7.465365426146834e-21
+   ],
+   "seed": 7,
+   "seconds": 115.5956871509552
   }
  ],
- "elapsed": 866.9497294425964
+ "elapsed": 1330.0320076942444
 }

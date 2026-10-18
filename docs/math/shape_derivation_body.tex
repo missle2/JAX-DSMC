@@ -38,8 +38,8 @@ Boltzmann equation for the one-particle density $f(t,x,v)$ in $\Omega(\theta)$:
 \[
 \partial_t f + v\cdot\nabla_x f = Q(f,f),
 \]
-inflow (drifting Maxwellian flux) at $x = 0$, outflow at $x = L$, specular $y$ walls, and on
-the body, for $v\cdot n > 0$,
+inflow (drifting Maxwellian flux) at $x = 0$, outflow at $x = L$, specular $y$ walls (or, in free
+space, the inward flux on every face), and on the body, for $v\cdot n > 0$,
 \[
 |v\cdot n|\, f(x, v) = \int_{v'\cdot n<0} K(v' \to v;\, n)\, |v'\cdot n|\, f(x, v')\,\dd v',
 \quad K = (1-a)\,\delta(v - R_n v') + a\, q_w(v\mid n),
@@ -52,7 +52,7 @@ normal displacement, chained through $c(\theta)$.
 \code{levelset\_h} $= 0.0625$, 16 samples).  Controls: \code{ensemble\_mesh.levelset\_coef},
 \code{PARAMETERS} (\code{radius}, \code{centre\_x}, \code{mode2}, \code{width},
 \code{squash\_y}), or all coefficients (\code{optimize.py}).  Config \code{acc} $= a$.  Cases:
-\code{examples/mesh/forward.py::CASES}.}
+\code{forward.py::CASES}; faces \code{-{}-boundary channel|free}.}
 \end{frame}
 
 \begin{frame}{The objective: windowed drag}
@@ -249,7 +249,7 @@ and every query in $c$ reads $\Lam(x_q, v_q) = \phi(\tilde p_q - \bar p_c)\cdot\
 \codenote{\code{jax\_dsmc/cell\_fit.py}: \code{fit}, \code{fit\_split}, \code{cell\_normals},
 \code{evaluate}; \code{ensemble\_device.\_field} / \code{\_query} (\code{\_Hybrid} for the optional per-query
 fallback).  \code{ensemble\_backward.CELL\_BASIS} = \code{"cell:cubicv:adapt1.5:align0.9:both"} (2026-10-12; \code{cell:quad:\dots} before; default of
-\code{configure} and every example's \code{--backward-basis}; \code{quadratic\_full} = the per-query fit).
+\code{configure} and every example's \code{-{}-backward-basis}; \code{quadratic\_full} = the per-query fit).
 Tests \code{tests/test\_cell\_fit.py}; record docs/PSEUDOCODE.md 9.7.2.}
 \end{frame}
 
@@ -620,16 +620,22 @@ the learning rate; $S$ common-random-number seeds per iterate.
 \item seed mean $g$; restrict to the coefficients within a band of the surface and smooth with a
   Gaussian (an $H^1$-type gradient that removes knot-scale noise);
 \item gradient descent or Adam (Adam's normalised step is smoothed again);
+\item project the gradient and the step onto the area's tangent space,
+  $g - \nu\nabla A$ with $\nu = g\cdot\nabla A/|\nabla A|^2$ (Adam's moments track the constrained gradient);
 \item fixed largest normal displacement per iterate ($s_{\max} = 0.05$, a tenth of a cell);
 \item reinitialise $\phi$ to a signed distance;
-\item restore the area by a uniform shift $\gamma$ of $\phi$: to first order the displacement becomes
-  $V_n = \eta\,(d - \langle d\rangle_\Gamma)$, the projection of the step onto
-  $\{\oint V_n = 0\}$, and the constraint then holds exactly (a retraction).
+\item restore the area by a uniform shift $\gamma$ of $\phi$: only the step's $O(s_{\max}^2)$ remainder
+  (sub-mm), so the constraint holds exactly (a retraction);
+\item keep the body a margin from every box face: $\phi$ at the knots floored at
+  $\text{margin} - d_{\text{face}}$, alternated with the shift until both hold.
 \end{enumerate}
 \codenote{\code{optimize\_squash.run}, \code{seed\_gradient}, \code{adam\_direction}
 (\code{learning\_rate} $= 0.05$); \code{optimize.run}, \code{smoothed\_direction}
-($\sigma = 2$ knots, band $1 + h_\phi$), \code{levelset.reinitialise},
-\code{project\_area} (bisection on \code{levelset.body\_volume}).  Both default to
+(\code{-{}-smooth} $\sigma$, default 2 knots, production 8; band $1 + h_\phi$),
+\code{tangent\_component} (\code{-{}-area-mode tangent}; \code{projection} the uniform shift of the whole step,
+\code{lagrangian} / \code{penalty} superseded), \code{levelset.reinitialise},
+\code{project\_area} (bisection on \code{levelset.body\_volume}), \code{keep\_inside} /
+\code{constrain} (\code{-{}-keepout}, 1\,m in production).  Both default to
 \code{along\_pool\_plane} and \code{timing\_band} $= 10$.}
 \end{frame}
 

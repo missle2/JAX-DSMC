@@ -427,6 +427,8 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
     return state0, final, aux[1], (aux[2] if capture else None), aux[-1], setup
 
 
+# npc_max is a static argument of the backward and the shape gradient: each new multiple of this
+# recompiles both (~1200 s on H200; 3x in the 300-iterate optm M 10 run, 2026-10-16)
 NPC_BUCKET = 64
 
 

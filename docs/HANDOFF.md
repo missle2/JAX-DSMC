@@ -1109,3 +1109,39 @@ Caveats found on the way: regress.py's second seed is not clean (84 s with compi
 the traced walls run ~10 % slow, and one profile ran in a slow GPU clock state (all kernels
 ~2x long, forward 18.5 s) and was discarded -- compare busy times with an earlier profile.
 
+
+## 1.11 Free space, and the `optm` runs (2026-10-15/16)
+
+`forward.build(boundary="free")` (`--boundary free` in `optimize`, `optimize_squash`,
+`ensemble_mesh`; default `channel`, the SPARTA deck) makes every box face a free-stream face:
+the drifting Maxwellian's inward flux is injected on all four, whatever leaves is removed;
+the per-step injection capacity is `forward.injection_bound` (2x the largest face target + 64)
+and the free box's default slots `max(old rule, 1.3 NRHO V / fnum)`.  Tags get `_free`.  Why:
+the specular channel holds a half-range stream (free-molecular circle Cd 17.2-17.7 against
+free space's 12.22 at M 0.32), and at Kn 0.5 + M 10 it chokes for D/H >= 0.3 (a channel-wide
+~4.4 n_inf region grows upstream; a longer box only gives it room).  Gates
+(`scratch/freebox/`): free-molecular Cd 12.245 +- 0.036 (R 1.5, z 0.8) and 12.342 +- 0.056
+(R 0.75, z 2.2); the radius gradient with newborns from all faces +2.2 +- 2.7 % vs D/R,
+-0.9 +- 3.6 % vs FD.  Not yet retrofitted to optc2 / optckn / optab / squash.
+
+`optm` (cluster README): S4 Adam, smooth 8, tangent area, 1 m keep-out, free space, one H200
+each.  Mid-run findings (`scratch/optm/analysis_optm.py`, `figures/optc/optm_*`):
+
+* Kn 0.5, M 0.32: 0.21 of the circle's drag, flat since ~140; the adjoint slope (observed
+  dD on g.dc, common random numbers) 0.81 early, then noise -- the fixed step at the noise
+  floor.
+* Free-molecular M 10: a wedge whose flat base receives no hits, so the area constraint puts
+  area into the shadow and the body slides downstream until the base meets the keep-out
+  (iterate 254, drag 0.104); the floor then clips the base, the area restore thickens the
+  wedge and the drag rises to 0.15.  The box bounds this optimum -- enlarge it (or constrain
+  the base) before quoting the wedge.
+* Kn 0.5 + M 10: from iterate ~36 the gradient grows 70-680x, concentrated at the nose
+  (Adam's v there ~790x the surface median); slope 0.94 -> ~0, drag stalls at 0.32.  Same
+  signature as the squash M 10 `cubicv` spike (`pathwise_v` on bodies < 2 cells thick).  The
+  per-step gradient is not saved, so the term is not identified yet: save it, then guard.
+* The optimiser step is normalised (the largest knot moves exactly `--step` every iterate);
+  without a decay the late iterates dither.
+* Recompiles: `npc_max` (the backward's per-cell table width) is rounded to
+  `ensemble_mesh.NPC_BUCKET` = 64 and is a static argument of the backward and the shape
+  gradient; each new bucket recompiles both, ~1200 s on H200 (3x in the 300-iterate M 10
+  run).  A larger bucket or a configured floor trades padding for fewer compiles.
