@@ -733,6 +733,9 @@ def shape_terms(
         "newborn_hit_share": newborn_share,
         "alive_final": int(final.alive.sum()),
         "lambda_rms": [float(np.sqrt(np.mean(lam[k][alive[k]] ** 2))) for k in (0, m // 2, m - 1)],
+        # a few wild carried values hide in the rms (thin-body gate, 2026-10-17): every step
+        "lambda_absmax": float(np.abs(lam[alive]).max(initial=0.0)),
+        "lambda_p9999": float(np.percentile(np.abs(lam[alive]), 99.99)) if alive.any() else 0.0,
         "seconds_backward": t_backward,
         "seconds_shape": t_shape,
     }

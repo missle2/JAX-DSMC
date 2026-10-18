@@ -18,10 +18,19 @@ off: the iterate's coefficients Gaussian-filtered, reinitialised and shifted bac
 area -- the sub-cell features removed, FD and adjoint both on the smoothed body) and cfg
 keys (knudsen 0: free-molecular, the regime the optc runs optimised in).  Each run also
 records every term's projection on the directions (``terms``).
+
+Since 2026-10-17 (scratch/thingate): direction ``nose`` (a Gaussian bump of sigma
+:data:`NOSE_SIGMA` on the coefficients at the body's most upstream point: the surface
+there moved alone), ``maps`` DIR (every (seed, setting)'s per-coefficient terms to
+``DIR/it<k>_seed<i>_<setting>.npz``, float32) and the carried value's rms / max / 99.99th
+percentile per run (``lambda_*``).  The optimiser's own iterate is reproduced exactly by its
+config (``case``, ``boundary``, ``mach``, ...), ``virtual``, the shipped basis and seeds
+``0 .. S-1`` (keys ``seed_start + i``, the optimiser's common random numbers).
 """
 
 import dataclasses
 import json
+import os
 import sys
 import time
 
@@ -37,6 +46,7 @@ from jax_dsmc import ensemble_backward  # noqa: E402
 from jax_dsmc.mesh import levelset as L  # noqa: E402
 
 DEFAULT_SETTINGS = [{"basis": "quadratic_full", "k": 32}]
+NOSE_SIGMA = 0.5  # m: one DSMC cell
 
 
 def config(over):
@@ -98,7 +108,7 @@ def gradient(cfg, ls, key, setting, virtual, dirs):
     if s["volume"] is not None:
         parts["volume"] = s["volume"]
     terms = {n: {d: float(jnp.sum(v * dv)) for d, dv in dirs.items()} for n, v in parts.items()}
-    return np.asarray(g), info, time.time() - t0, terms
+    return np.asarray(g), info, time.time() - t0, terms, parts
 
 
 def direction(name, cfg, ls):
@@ -109,6 +119,14 @@ def direction(name, cfg, ls):
         centre = jnp.asarray(EM.F.CASES[cfg["case"]]["centre"], dtype=jnp.float64)
         mode = EM._mode_shape(L.knots(ls), centre)
         return L.interpolate(mode.reshape(ls.coef.shape))
+    if name == "nose":
+        x = L.knots(ls)
+        phi = L.value(ls, x)
+        inside = np.asarray(phi) < 0.0
+        xs = np.asarray(x)
+        tip = xs[inside][np.argmin(xs[inside, 0])]
+        bump = jnp.exp(-jnp.sum((x - jnp.asarray(tip)) ** 2, axis=1) / (2 * NOSE_SIGMA**2))
+        return L.interpolate(bump.reshape(ls.coef.shape))
     raise ValueError(name)
 
 
@@ -129,6 +147,9 @@ def main():
     names = over.pop("directions", ["shift", "mode2"])
     virtual = over.pop("virtual", [4, 8])
     sigma = over.pop("smooth_shape", 0)
+    maps = over.pop("maps", None)
+    if maps:
+        os.makedirs(maps, exist_ok=True)
     cfg = config(over)
     _grid, ls = OPT.initial_levelset(cfg)
     ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(f"{run}/coef_{it}.npy")))
@@ -140,15 +161,21 @@ def main():
         row = {"run": run, "iterate": it, "seed": i, "config": over, "smooth_shape": sigma,
                "runs": {}}
         for st in settings:
-            g, info, secs, terms = gradient(cfg, ls, key, st, virtual, dirs)
+            g, info, secs, terms, parts = gradient(cfg, ls, key, st, virtual, dirs)
             tag = setting_tag(st)
+            if maps:
+                arrays = {n: np.asarray(v, np.float32) for n, v in parts.items()}
+                np.savez_compressed(f"{maps}/it{it}_seed{i}_{tag.replace(':', '-')}.npz",
+                                    gradient=g.astype(np.float32), **arrays)  # fmt: skip
             row["runs"][tag] = {
                 "terms": terms,
-                "gradient": g.tolist(),
+                "gradient": [] if maps else g.tolist(),  # maps: in the npz
                 "directional": {n: float(jnp.sum(g * d)) for n, d in dirs.items()},
                 "objective": info["objective"], "seconds": secs,
                 "seconds_backward": info["seconds_backward"],
                 "lambda_rms": info["lambda_rms"],
+                "lambda_absmax": info.get("lambda_absmax"),
+                "lambda_p9999": info.get("lambda_p9999"),
             }  # fmt: skip
             proj = " ".join(f"g.{n} {float(jnp.sum(g * d)):+.4e}" for n, d in dirs.items())
             print(f"seed {i} {tag:44s} {proj} lambda_rms {info['lambda_rms']} "

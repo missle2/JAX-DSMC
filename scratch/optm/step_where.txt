@@ -1,0 +1,247 @@
+  0 max-move knot x   5.00 y  5.00 phi -3.00 local 0.03 nose x  2.00 y 5.00 nose_dc   +6.5 mm
+  1 max-move knot x   5.06 y  5.06 phi -2.91 local 0.04 nose x  2.00 y 4.88 nose_dc   +6.9 mm
+  2 max-move knot x   5.12 y  4.94 phi -2.88 local 0.04 nose x  2.00 y 4.75 nose_dc   +6.5 mm
+  3 max-move knot x   5.19 y  4.94 phi -2.86 local 0.04 nose x  2.00 y 4.62 nose_dc   +6.6 mm
+  4 max-move knot x   5.25 y  5.06 phi -2.83 local 0.05 nose x  2.00 y 4.50 nose_dc   +6.5 mm
+  5 max-move knot x   5.31 y  5.00 phi -2.81 local 0.05 nose x  2.00 y 4.38 nose_dc   +6.2 mm
+  6 max-move knot x   5.38 y  5.00 phi -2.77 local 0.05 nose x  2.00 y 4.25 nose_dc   +5.8 mm
+  7 max-move knot x   5.44 y  5.00 phi -2.74 local 0.05 nose x  2.00 y 4.19 nose_dc   +4.8 mm
+  8 max-move knot x   5.50 y  5.00 phi -2.70 local 0.04 nose x  2.00 y 4.06 nose_dc   +4.1 mm
+  9 max-move knot x   5.56 y  5.00 phi -2.67 local 0.04 nose x  1.94 y 4.25 nose_dc   +2.2 mm
+ 10 max-move knot x   5.62 y  5.00 phi -2.64 local 0.04 nose x  1.94 y 4.12 nose_dc   +1.5 mm
+ 11 max-move knot x   5.69 y  4.88 phi -2.59 local 0.04 nose x  1.94 y 4.06 nose_dc   +1.1 mm
+ 12 max-move knot x   5.75 y  4.88 phi -2.57 local 0.04 nose x  1.88 y 4.19 nose_dc   -0.2 mm
+ 13 max-move knot x   5.81 y  4.88 phi -2.55 local 0.04 nose x  1.88 y 4.12 nose_dc   -0.1 mm
+ 14 max-move knot x   5.88 y  5.12 phi -2.53 local 0.03 nose x  1.81 y 4.25 nose_dc   -1.0 mm
+ 15 max-move knot x   3.44 y  5.00 phi -1.64 local 0.02 nose x  1.81 y 4.19 nose_dc   -0.8 mm
+ 16 max-move knot x   6.00 y  4.94 phi -2.49 local 0.03 nose x  1.75 y 4.38 nose_dc   -0.9 mm
+ 17 max-move knot x   6.00 y  5.00 phi -2.53 local 0.03 nose x  1.75 y 4.25 nose_dc   -0.4 mm
+ 18 max-move knot x   6.06 y  5.00 phi -2.50 local 0.03 nose x  1.69 y 4.50 nose_dc   -0.1 mm
+ 19 max-move knot x   6.12 y  5.00 phi -2.48 local 0.03 nose x  1.69 y 4.31 nose_dc   +0.3 mm
+ 20 max-move knot x   6.19 y  5.00 phi -2.45 local 0.03 nose x  1.69 y 4.25 nose_dc   +0.9 mm
+ 21 max-move knot x   6.38 y  4.81 phi -2.29 local 0.03 nose x  1.62 y 4.44 nose_dc   +1.3 mm
+ 22 max-move knot x   6.50 y  4.69 phi -2.18 local 0.03 nose x  1.62 y 4.38 nose_dc   +2.2 mm
+ 23 max-move knot x   6.44 y  4.88 phi -2.31 local 0.03 nose x  1.56 y 4.56 nose_dc   +2.8 mm
+ 24 max-move knot x   6.44 y  4.94 phi -2.35 local 0.03 nose x  1.56 y 4.44 nose_dc   +3.6 mm
+ 25 max-move knot x   6.44 y  5.00 phi -2.39 local 0.03 nose x  1.56 y 4.38 nose_dc   +4.0 mm
+ 26 max-move knot x   6.50 y  5.00 phi -2.36 local 0.03 nose x  1.50 y 4.56 nose_dc   +3.9 mm
+ 27 max-move knot x   6.62 y  4.88 phi -2.27 local 0.03 nose x  1.50 y 4.50 nose_dc   +4.9 mm
+ 28 max-move knot x   6.56 y  5.00 phi -2.37 local 0.03 nose x  1.50 y 4.44 nose_dc   +5.2 mm
+ 29 max-move knot x   6.62 y  5.00 phi -2.35 local 0.03 nose x  1.44 y 4.69 nose_dc   +5.2 mm
+ 30 max-move knot x   6.75 y  5.12 phi -2.26 local 0.03 nose x  1.44 y 4.62 nose_dc   +6.9 mm
+ 31 max-move knot x   6.75 y  4.94 phi -2.30 local 0.03 nose x  1.44 y 4.56 nose_dc   +7.6 mm
+ 32 max-move knot x   6.75 y  5.00 phi -2.33 local 0.03 nose x  1.38 y 4.94 nose_dc   +8.7 mm
+ 33 max-move knot x   6.94 y  4.81 phi -2.17 local 0.03 nose x  1.38 y 4.81 nose_dc   +9.5 mm
+ 34 max-move knot x   6.88 y  5.06 phi -2.28 local 0.03 nose x  1.38 y 4.75 nose_dc   +9.8 mm
+ 35 max-move knot x   6.88 y  5.00 phi -2.32 local 0.02 nose x  1.38 y 4.75 nose_dc  +11.2 mm
+ 36 max-move knot x   7.06 y  4.81 phi -2.16 local 0.03 nose x  1.38 y 4.75 nose_dc  +10.9 mm
+ 37 max-move knot x   7.00 y  5.06 phi -2.27 local 0.03 nose x  1.38 y 4.75 nose_dc  +11.7 mm
+ 38 max-move knot x   7.00 y  5.00 phi -2.31 local 0.03 nose x  1.31 y 5.06 nose_dc   +9.9 mm
+ 39 max-move knot x   7.25 y  4.75 phi -2.08 local 0.03 nose x  1.31 y 4.94 nose_dc   +9.8 mm
+ 40 max-move knot x   7.19 y  5.12 phi -2.19 local 0.03 nose x  1.31 y 4.94 nose_dc  +11.7 mm
+ 41 max-move knot x   7.12 y  5.00 phi -2.30 local 0.02 nose x  1.31 y 4.88 nose_dc  +12.7 mm
+ 42 max-move knot x   7.19 y  5.00 phi -2.28 local 0.03 nose x  1.31 y 4.88 nose_dc  +10.2 mm
+ 43 max-move knot x   7.38 y  4.81 phi -2.12 local 0.03 nose x  1.31 y 4.88 nose_dc  +10.9 mm
+ 44 max-move knot x   7.25 y  5.00 phi -2.30 local 0.02 nose x  1.31 y 4.81 nose_dc  +19.0 mm
+ 45 max-move knot x   7.31 y  5.00 phi -2.27 local 0.02 nose x  1.31 y 4.88 nose_dc  +17.3 mm
+ 46 max-move knot x   1.94 y  5.00 phi -0.63 local 0.03 nose x  1.31 y 4.88 nose_dc  +25.9 mm
+ 47 max-move knot x   1.94 y  5.00 phi -0.57 local 0.03 nose x  1.38 y 4.75 nose_dc  +22.2 mm
+ 48 max-move knot x   1.88 y  5.00 phi -0.50 local 0.03 nose x  1.38 y 4.81 nose_dc  +22.7 mm
+ 49 max-move knot x   7.38 y  5.00 phi -2.31 local 0.01 nose x  1.38 y 4.94 nose_dc  +18.4 mm
+ 50 max-move knot x   1.94 y  4.94 phi -0.51 local 0.03 nose x  1.44 y 4.75 nose_dc  +19.6 mm
+ 51 max-move knot x   1.94 y  4.94 phi -0.52 local 0.03 nose x  1.44 y 4.81 nose_dc  +13.7 mm
+ 52 max-move knot x   7.50 y  4.94 phi -2.27 local 0.02 nose x  1.44 y 4.81 nose_dc   +9.3 mm
+ 53 max-move knot x   2.06 y  4.88 phi -0.51 local 0.01 nose x  1.44 y 4.81 nose_dc   +5.3 mm
+ 54 max-move knot x   2.06 y  4.88 phi -0.56 local 0.01 nose x  1.44 y 4.81 nose_dc   -7.3 mm
+ 55 max-move knot x   7.56 y  5.00 phi -2.32 local 0.01 nose x  1.44 y 4.69 nose_dc  -18.9 mm
+ 56 max-move knot x   7.75 y  4.81 phi -2.15 local 0.02 nose x  1.44 y 4.62 nose_dc  -16.4 mm
+ 57 max-move knot x   7.75 y  5.12 phi -2.19 local 0.03 nose x  1.38 y 4.69 nose_dc  -16.1 mm
+ 58 max-move knot x   2.19 y  4.75 phi -0.57 local 0.05 nose x  1.38 y 4.62 nose_dc  -19.6 mm
+ 59 max-move knot x   2.06 y  4.75 phi -0.58 local 0.05 nose x  1.38 y 4.56 nose_dc  -19.4 mm
+ 60 max-move knot x   1.88 y  4.75 phi -0.55 local 0.05 nose x  1.31 y 4.69 nose_dc  -18.4 mm
+ 61 max-move knot x   2.12 y  4.75 phi -0.67 local 0.06 nose x  1.31 y 4.56 nose_dc  -11.6 mm
+ 62 max-move knot x   2.12 y  4.75 phi -0.71 local 0.05 nose x  1.31 y 4.50 nose_dc  -14.3 mm
+ 63 max-move knot x   1.94 y  4.69 phi -0.63 local 0.05 nose x  1.31 y 4.44 nose_dc  -15.2 mm
+ 64 max-move knot x   1.94 y  4.69 phi -0.68 local 0.05 nose x  1.25 y 4.56 nose_dc  -13.6 mm
+ 65 max-move knot x   1.88 y  4.62 phi -0.63 local 0.04 nose x  1.25 y 4.44 nose_dc  -12.2 mm
+ 66 max-move knot x   1.88 y  4.62 phi -0.68 local 0.05 nose x  1.25 y 4.38 nose_dc   -6.8 mm
+ 67 max-move knot x   1.88 y  4.56 phi -0.65 local 0.03 nose x  1.19 y 4.44 nose_dc   -8.9 mm
+ 68 max-move knot x   1.88 y  4.56 phi -0.70 local 0.03 nose x  1.19 y 4.31 nose_dc  -17.7 mm
+ 69 max-move knot x   1.75 y  4.50 phi -0.62 local 0.02 nose x  1.12 y 4.38 nose_dc  -16.4 mm
+ 70 max-move knot x   1.75 y  4.50 phi -0.67 local 0.03 nose x  1.12 y 4.25 nose_dc  -14.9 mm
+ 71 max-move knot x   1.81 y  4.50 phi -0.71 local 0.03 nose x  1.06 y 4.31 nose_dc  -16.6 mm
+ 72 max-move knot x   8.19 y  5.25 phi -1.92 local 0.02 nose x  1.06 y 4.19 nose_dc  -12.7 mm
+ 73 max-move knot x   1.69 y  4.44 phi -0.67 local 0.04 nose x  1.00 y 4.25 nose_dc  +21.4 mm
+ 74 max-move knot x   1.69 y  4.44 phi -0.63 local 0.03 nose x  1.00 y 4.31 nose_dc  +22.5 mm
+ 75 max-move knot x   1.75 y  4.44 phi -0.63 local 0.03 nose x  1.06 y 4.19 nose_dc  +26.5 mm
+ 76 max-move knot x   1.81 y  4.44 phi -0.64 local 0.03 nose x  1.06 y 4.25 nose_dc  +26.4 mm
+ 77 max-move knot x   8.50 y  5.50 phi -1.66 local 0.01 nose x  1.12 y 4.19 nose_dc  +25.7 mm
+ 78 max-move knot x   8.31 y  5.19 phi -1.90 local 0.01 nose x  1.12 y 4.31 nose_dc  +26.0 mm
+ 79 max-move knot x   1.81 y  4.44 phi -0.53 local 0.04 nose x  1.19 y 4.25 nose_dc  -12.6 mm
+ 80 max-move knot x   1.81 y  4.44 phi -0.57 local 0.04 nose x  1.19 y 4.25 nose_dc  -16.6 mm
+ 81 max-move knot x   1.94 y  4.50 phi -0.62 local 0.04 nose x  1.19 y 4.25 nose_dc  -14.3 mm
+ 82 max-move knot x   1.94 y  4.50 phi -0.67 local 0.02 nose x  1.12 y 4.38 nose_dc  -10.3 mm
+ 83 max-move knot x   1.50 y  4.44 phi -0.41 local 0.02 nose x  1.12 y 4.31 nose_dc  -18.6 mm
+ 84 max-move knot x   8.56 y  5.38 phi -1.71 local 0.01 nose x  1.06 y 4.38 nose_dc  -15.4 mm
+ 85 max-move knot x   1.75 y  4.50 phi -0.63 local 0.02 nose x  1.06 y 4.25 nose_dc  -14.4 mm
+ 86 max-move knot x   1.75 y  4.50 phi -0.68 local 0.02 nose x  1.00 y 4.25 nose_dc  -15.7 mm
+ 87 max-move knot x   8.56 y  5.19 phi -1.79 local 0.02 nose x  0.94 y 4.31 nose_dc   -3.6 mm
+ 88 max-move knot x   8.50 y  5.06 phi -1.88 local 0.03 nose x  0.94 y 4.25 nose_dc   -0.4 mm
+ 89 max-move knot x   8.38 y  4.88 phi -2.04 local 0.04 nose x  0.88 y 4.31 nose_dc   +9.7 mm
+ 90 max-move knot x   8.69 y  5.19 phi -1.75 local 0.03 nose x  0.88 y 4.31 nose_dc  +14.0 mm
+ 91 max-move knot x   8.62 y  5.12 phi -1.84 local 0.05 nose x  0.88 y 4.38 nose_dc   -4.9 mm
+ 92 max-move knot x   8.69 y  5.12 phi -1.81 local 0.05 nose x  0.88 y 4.31 nose_dc  -13.9 mm
+ 93 max-move knot x   8.62 y  5.00 phi -1.89 local 0.05 nose x  0.88 y 4.25 nose_dc  -14.1 mm
+ 94 max-move knot x   8.56 y  4.88 phi -1.97 local 0.01 nose x  0.81 y 4.38 nose_dc  -26.6 mm
+ 95 max-move knot x   8.75 y  5.06 phi -1.79 local 0.02 nose x  0.81 y 4.19 nose_dc  -23.4 mm
+ 96 max-move knot x   8.75 y  4.94 phi -1.82 local 0.03 nose x  0.75 y 4.25 nose_dc  -12.9 mm
+ 97 max-move knot x   8.62 y  4.75 phi -1.97 local 0.03 nose x  0.75 y 4.19 nose_dc   +5.3 mm
+ 98 max-move knot x   8.94 y  5.06 phi -1.69 local 0.04 nose x  0.75 y 4.19 nose_dc   +8.5 mm
+ 99 max-move knot x   8.69 y  4.75 phi -1.96 local 0.03 nose x  0.75 y 4.19 nose_dc   +6.3 mm
+100 max-move knot x   9.06 y  5.12 phi -1.62 local 0.03 nose x  0.75 y 4.19 nose_dc  +13.8 mm
+101 max-move knot x   8.94 y  4.94 phi -1.78 local 0.02 nose x  0.75 y 4.25 nose_dc  +13.2 mm
+102 max-move knot x   9.06 y  5.06 phi -1.68 local 0.02 nose x  0.75 y 4.31 nose_dc  +15.6 mm
+103 max-move knot x   1.38 y  4.44 phi -0.54 local 0.04 nose x  0.75 y 4.38 nose_dc  +20.2 mm
+104 max-move knot x   1.31 y  4.44 phi -0.51 local 0.04 nose x  0.81 y 4.31 nose_dc  +19.8 mm
+105 max-move knot x   1.25 y  4.44 phi -0.44 local 0.04 nose x  0.81 y 4.38 nose_dc  +22.2 mm
+106 max-move knot x   1.19 y  4.44 phi -0.36 local 0.04 nose x  0.88 y 4.31 nose_dc  +23.3 mm
+107 max-move knot x   1.69 y  4.44 phi -0.44 local 0.03 nose x  0.88 y 4.38 nose_dc  +23.7 mm
+108 max-move knot x   1.69 y  4.50 phi -0.49 local 0.03 nose x  0.94 y 4.31 nose_dc  +24.8 mm
+109 max-move knot x   1.38 y  4.50 phi -0.37 local 0.05 nose x  0.94 y 4.38 nose_dc  -15.0 mm
+110 max-move knot x   1.38 y  4.50 phi -0.44 local 0.06 nose x  0.94 y 4.38 nose_dc  -14.2 mm
+111 max-move knot x   1.56 y  4.56 phi -0.45 local 0.04 nose x  0.88 y 4.50 nose_dc  -20.1 mm
+112 max-move knot x   1.31 y  4.56 phi -0.41 local 0.05 nose x  0.88 y 4.44 nose_dc  -16.9 mm
+113 max-move knot x   1.31 y  4.56 phi -0.48 local 0.04 nose x  0.88 y 4.38 nose_dc  -20.7 mm
+114 max-move knot x   1.25 y  4.62 phi -0.41 local 0.04 nose x  0.81 y 4.50 nose_dc  -21.6 mm
+115 max-move knot x   1.31 y  4.62 phi -0.48 local 0.05 nose x  0.81 y 4.44 nose_dc   -7.3 mm
+116 max-move knot x   1.31 y  4.62 phi -0.54 local 0.05 nose x  0.75 y 4.56 nose_dc   +7.4 mm
+117 max-move knot x   1.19 y  4.62 phi -0.40 local 0.04 nose x  0.75 y 4.62 nose_dc  +24.3 mm
+118 max-move knot x   9.25 y  5.06 phi -1.66 local 0.01 nose x  0.81 y 4.50 nose_dc  +20.2 mm
+119 max-move knot x   1.25 y  4.69 phi -0.40 local 0.02 nose x  0.81 y 4.62 nose_dc   -6.5 mm
+120 max-move knot x   1.25 y  4.69 phi -0.43 local 0.03 nose x  0.81 y 4.56 nose_dc  +22.3 mm
+121 max-move knot x   1.19 y  4.75 phi -0.31 local 0.04 nose x  0.81 y 4.62 nose_dc  -26.5 mm
+122 max-move knot x   1.06 y  4.69 phi -0.30 local 0.04 nose x  0.81 y 4.56 nose_dc  -26.6 mm
+123 max-move knot x   1.06 y  4.69 phi -0.34 local 0.04 nose x  0.75 y 4.56 nose_dc  -25.9 mm
+124 max-move knot x   1.06 y  4.69 phi -0.38 local 0.03 nose x  0.69 y 4.69 nose_dc  -24.7 mm
+125 max-move knot x   1.06 y  4.69 phi -0.41 local 0.04 nose x  0.69 y 4.56 nose_dc  -26.8 mm
+126 max-move knot x   1.06 y  4.69 phi -0.45 local 0.04 nose x  0.62 y 4.62 nose_dc  -28.6 mm
+127 max-move knot x   0.94 y  4.44 phi -0.20 local 0.04 nose x  0.62 y 4.50 nose_dc  -29.4 mm
+128 max-move knot x   1.06 y  4.69 phi -0.52 local 0.03 nose x  0.56 y 4.56 nose_dc  -25.3 mm
+129 max-move knot x   1.06 y  4.69 phi -0.56 local 0.03 nose x  0.56 y 4.50 nose_dc  -25.6 mm
+130 max-move knot x   1.00 y  4.69 phi -0.53 local 0.03 nose x  0.50 y 4.56 nose_dc  -24.7 mm
+131 max-move knot x   1.06 y  4.75 phi -0.57 local 0.03 nose x  0.44 y 4.62 nose_dc  -22.6 mm
+132 max-move knot x   0.88 y  4.75 phi -0.47 local 0.03 nose x  0.44 y 4.50 nose_dc  -22.1 mm
+133 max-move knot x   0.88 y  4.75 phi -0.51 local 0.03 nose x  0.38 y 4.62 nose_dc  -22.1 mm
+134 max-move knot x   0.88 y  4.75 phi -0.56 local 0.02 nose x  0.38 y 4.50 nose_dc  -20.2 mm
+135 max-move knot x   0.75 y  4.69 phi -0.47 local 0.03 nose x  0.31 y 4.56 nose_dc  -18.1 mm
+136 max-move knot x   9.50 y  5.25 phi -1.37 local 0.03 nose x  0.25 y 4.62 nose_dc   -1.5 mm
+137 max-move knot x   9.38 y  5.06 phi -1.52 local 0.03 nose x  0.25 y 4.56 nose_dc   +2.3 mm
+138 max-move knot x   9.38 y  5.06 phi -1.51 local 0.01 nose x  0.25 y 4.56 nose_dc  -11.1 mm
+139 max-move knot x   0.62 y  4.75 phi -0.44 local 0.02 nose x  0.19 y 4.62 nose_dc  -12.7 mm
+140 max-move knot x   0.62 y  4.75 phi -0.48 local 0.02 nose x  0.19 y 4.50 nose_dc  -18.9 mm
+141 max-move knot x   0.69 y  4.75 phi -0.56 local 0.05 nose x  0.12 y 4.56 nose_dc   +6.1 mm
+142 max-move knot x   0.94 y  4.69 phi -0.68 local 0.04 nose x  0.12 y 4.50 nose_dc   +2.1 mm
+143 max-move knot x   0.69 y  4.69 phi -0.59 local 0.04 nose x  0.12 y 4.44 nose_dc   +3.9 mm
+144 max-move knot x   0.56 y  4.62 phi -0.51 local 0.05 nose x  0.06 y 4.50 nose_dc   +7.1 mm
+145 max-move knot x   0.56 y  4.62 phi -0.54 local 0.05 nose x  0.06 y 4.44 nose_dc   +1.7 mm
+146 max-move knot x   0.81 y  4.62 phi -0.62 local 0.03 nose x  0.06 y 4.38 nose_dc   -0.6 mm
+147 max-move knot x   0.50 y  4.56 phi -0.50 local 0.07 nose x  0.00 y 4.44 nose_dc  +11.7 mm
+148 max-move knot x   0.56 y  4.56 phi -0.53 local 0.05 nose x  0.00 y 4.38 nose_dc   +8.1 mm
+149 max-move knot x   0.69 y  4.56 phi -0.54 local 0.08 nose x  0.00 y 4.31 nose_dc  +18.5 mm
+150 max-move knot x   0.81 y  4.56 phi -0.53 local 0.08 nose x  0.00 y 4.31 nose_dc  +15.5 mm
+151 max-move knot x   0.50 y  4.50 phi -0.44 local 0.06 nose x  0.00 y 4.31 nose_dc  +24.4 mm
+152 max-move knot x   1.31 y  4.62 phi -0.57 local 0.03 nose x  0.00 y 4.31 nose_dc  +29.1 mm
+153 max-move knot x   0.56 y  4.50 phi -0.39 local 0.04 nose x  0.00 y 4.38 nose_dc  +29.9 mm
+154 max-move knot x   1.38 y  4.62 phi -0.54 local 0.02 nose x  0.06 y 4.38 nose_dc  +29.2 mm
+155 max-move knot x   0.62 y  4.56 phi -0.28 local 0.05 nose x  0.12 y 4.31 nose_dc  +28.6 mm
+156 max-move knot x   1.38 y  4.62 phi -0.53 local 0.02 nose x  0.12 y 4.38 nose_dc  -26.5 mm
+157 max-move knot x   0.56 y  4.50 phi -0.31 local 0.04 nose x  0.12 y 4.31 nose_dc  -26.0 mm
+158 max-move knot x   0.94 y  4.56 phi -0.43 local 0.03 nose x  0.06 y 4.38 nose_dc  -26.8 mm
+159 max-move knot x   0.88 y  4.56 phi -0.44 local 0.03 nose x  0.00 y 4.44 nose_dc  -27.6 mm
+160 max-move knot x   0.88 y  4.56 phi -0.48 local 0.03 nose x  0.00 y 4.31 nose_dc  -27.3 mm
+161 max-move knot x   0.50 y  4.50 phi -0.44 local 0.04 nose x -0.06 y 4.38 nose_dc  -28.3 mm
+162 max-move knot x   0.44 y  4.50 phi -0.44 local 0.04 nose x -0.06 y 4.31 nose_dc  -28.5 mm
+163 max-move knot x   0.75 y  4.56 phi -0.54 local 0.03 nose x -0.12 y 4.38 nose_dc  -29.3 mm
+164 max-move knot x   0.44 y  4.50 phi -0.52 local 0.04 nose x -0.12 y 4.31 nose_dc  -29.0 mm
+165 max-move knot x   0.38 y  4.50 phi -0.52 local 0.04 nose x -0.19 y 4.38 nose_dc  -31.0 mm
+166 max-move knot x   0.38 y  4.50 phi -0.56 local 0.04 nose x -0.19 y 4.25 nose_dc  -30.8 mm
+167 max-move knot x   1.06 y  4.62 phi -0.66 local 0.02 nose x -0.25 y 4.31 nose_dc  -30.8 mm
+168 max-move knot x   1.06 y  4.62 phi -0.70 local 0.02 nose x -0.31 y 4.38 nose_dc  -29.5 mm
+169 max-move knot x   0.19 y  4.44 phi -0.54 local 0.04 nose x -0.31 y 4.25 nose_dc  -28.4 mm
+170 max-move knot x   0.19 y  4.44 phi -0.58 local 0.04 nose x -0.38 y 4.31 nose_dc  -26.8 mm
+171 max-move knot x   0.12 y  4.44 phi -0.56 local 0.03 nose x -0.38 y 4.19 nose_dc  -24.0 mm
+172 max-move knot x   0.12 y  4.44 phi -0.60 local 0.03 nose x -0.44 y 4.25 nose_dc  -20.8 mm
+173 max-move knot x   0.12 y  4.44 phi -0.63 local 0.03 nose x -0.50 y 4.38 nose_dc  -19.2 mm
+174 max-move knot x   0.06 y  4.50 phi -0.59 local 0.03 nose x -0.50 y 4.25 nose_dc  -18.1 mm
+175 max-move knot x  -0.19 y  4.44 phi -0.40 local 0.03 nose x -0.56 y 4.31 nose_dc  -15.6 mm
+176 max-move knot x  -0.31 y  4.50 phi -0.31 local 0.03 nose x -0.56 y 4.25 nose_dc  -13.9 mm
+177 max-move knot x   0.06 y  4.50 phi -0.67 local 0.02 nose x -0.62 y 4.31 nose_dc  -11.6 mm
+178 max-move knot x   0.00 y  4.50 phi -0.65 local 0.02 nose x -0.69 y 4.44 nose_dc   -8.7 mm
+179 max-move knot x   0.00 y  4.50 phi -0.68 local 0.02 nose x -0.69 y 4.31 nose_dc   -5.1 mm
+180 max-move knot x  -0.12 y  4.50 phi -0.63 local 0.03 nose x -0.75 y 4.50 nose_dc   -1.3 mm
+181 max-move knot x  -0.19 y  4.50 phi -0.58 local 0.03 nose x -0.75 y 4.38 nose_dc   +0.4 mm
+182 max-move knot x  -0.19 y  4.50 phi -0.56 local 0.02 nose x -0.75 y 4.31 nose_dc   -0.2 mm
+183 max-move knot x  -0.12 y  4.50 phi -0.59 local 0.02 nose x -0.75 y 4.31 nose_dc   +0.6 mm
+184 max-move knot x  -0.50 y  4.44 phi -0.32 local 0.03 nose x -0.81 y 4.38 nose_dc  -11.7 mm
+185 max-move knot x  -0.50 y  4.44 phi -0.36 local 0.03 nose x -0.81 y 4.31 nose_dc  -15.6 mm
+186 max-move knot x  -0.06 y  4.50 phi -0.64 local 0.02 nose x -0.88 y 4.31 nose_dc  -14.3 mm
+187 max-move knot x  -0.56 y  4.44 phi -0.39 local 0.03 nose x -0.94 y 4.38 nose_dc  -13.3 mm
+188 max-move knot x  -0.56 y  4.44 phi -0.43 local 0.03 nose x -0.94 y 4.25 nose_dc  -11.0 mm
+189 max-move knot x  -0.56 y  4.44 phi -0.47 local 0.03 nose x -1.00 y 4.31 nose_dc  -12.2 mm
+190 max-move knot x  -0.56 y  4.44 phi -0.50 local 0.03 nose x -1.06 y 4.38 nose_dc  -12.1 mm
+191 max-move knot x  -0.56 y  4.44 phi -0.54 local 0.03 nose x -1.06 y 4.25 nose_dc  -12.8 mm
+192 max-move knot x  -0.56 y  4.44 phi -0.58 local 0.02 nose x -1.12 y 4.31 nose_dc  -11.8 mm
+193 max-move knot x  -0.62 y  4.44 phi -0.54 local 0.03 nose x -1.19 y 4.38 nose_dc   -5.8 mm
+194 max-move knot x  -0.56 y  4.44 phi -0.55 local 0.03 nose x -1.19 y 4.25 nose_dc   -5.0 mm
+195 max-move knot x  -0.50 y  4.44 phi -0.57 local 0.03 nose x -1.19 y 4.19 nose_dc   -6.7 mm
+196 max-move knot x  -0.69 y  4.38 phi -0.52 local 0.03 nose x -1.25 y 4.25 nose_dc   -9.2 mm
+197 max-move knot x  -0.69 y  4.38 phi -0.57 local 0.03 nose x -1.25 y 4.12 nose_dc   -8.3 mm
+198 max-move knot x  -0.94 y  4.25 phi -0.38 local 0.03 nose x -1.31 y 4.19 nose_dc  -10.7 mm
+199 max-move knot x  -0.81 y  4.31 phi -0.51 local 0.04 nose x -1.31 y 4.06 nose_dc   -5.0 mm
+200 max-move knot x  -0.56 y  4.38 phi -0.56 local 0.03 nose x -1.38 y 4.12 nose_dc   -4.7 mm
+201 max-move knot x  -0.75 y  4.31 phi -0.53 local 0.04 nose x -1.38 y 4.06 nose_dc   -4.2 mm
+202 max-move knot x  -0.88 y  4.25 phi -0.50 local 0.05 nose x -1.44 y 4.12 nose_dc   -0.8 mm
+203 max-move knot x  -1.00 y  4.19 phi -0.46 local 0.03 nose x -1.44 y 4.00 nose_dc  -11.9 mm
+204 max-move knot x  -1.12 y  4.12 phi -0.38 local 0.04 nose x -1.50 y 4.06 nose_dc  -13.3 mm
+205 max-move knot x  -1.12 y  4.12 phi -0.43 local 0.03 nose x -1.50 y 3.94 nose_dc  -12.0 mm
+206 max-move knot x  -1.19 y  4.12 phi -0.40 local 0.03 nose x -1.56 y 4.00 nose_dc  -11.6 mm
+207 max-move knot x  -1.19 y  4.12 phi -0.44 local 0.03 nose x -1.62 y 4.06 nose_dc  -12.7 mm
+208 max-move knot x  -1.19 y  4.12 phi -0.48 local 0.03 nose x -1.62 y 3.94 nose_dc   -5.6 mm
+209 max-move knot x  -1.19 y  4.12 phi -0.51 local 0.03 nose x -1.69 y 4.06 nose_dc   -7.9 mm
+210 max-move knot x  -1.06 y  4.19 phi -0.52 local 0.03 nose x -1.69 y 4.00 nose_dc  -10.9 mm
+211 max-move knot x  -1.19 y  4.19 phi -0.50 local 0.03 nose x -1.75 y 4.06 nose_dc  -15.6 mm
+212 max-move knot x  -1.19 y  4.19 phi -0.55 local 0.03 nose x -1.81 y 4.12 nose_dc  -18.9 mm
+213 max-move knot x  -1.44 y  4.25 phi -0.40 local 0.04 nose x -1.81 y 4.00 nose_dc  -22.4 mm
+214 max-move knot x  -1.44 y  4.25 phi -0.45 local 0.04 nose x -1.88 y 4.06 nose_dc  -23.4 mm
+215 max-move knot x  -1.44 y  4.25 phi -0.50 local 0.04 nose x -1.94 y 4.12 nose_dc  -19.9 mm
+216 max-move knot x  -1.44 y  4.25 phi -0.55 local 0.03 nose x -1.94 y 4.06 nose_dc  -15.0 mm
+217 max-move knot x  -1.06 y  4.25 phi -0.61 local 0.02 nose x -2.00 y 4.19 nose_dc  -11.0 mm
+218 max-move knot x  -1.50 y  4.25 phi -0.53 local 0.03 nose x -2.00 y 4.12 nose_dc  -18.7 mm
+219 max-move knot x  -1.56 y  4.31 phi -0.53 local 0.03 nose x -2.06 y 4.12 nose_dc  -14.2 mm
+220 max-move knot x  -1.56 y  4.31 phi -0.58 local 0.03 nose x -2.12 y 4.25 nose_dc  -10.6 mm
+221 max-move knot x  -1.44 y  4.25 phi -0.63 local 0.03 nose x -2.12 y 4.12 nose_dc   -5.4 mm
+222 max-move knot x  -1.69 y  4.38 phi -0.52 local 0.04 nose x -2.19 y 4.25 nose_dc   -5.2 mm
+223 max-move knot x  -1.56 y  4.31 phi -0.60 local 0.08 nose x -2.19 y 4.19 nose_dc   +9.3 mm
+224 max-move knot x  -1.50 y  4.31 phi -0.61 local 0.05 nose x -2.19 y 4.25 nose_dc  +20.5 mm
+225 max-move knot x  -1.44 y  4.31 phi -0.60 local 0.06 nose x -2.19 y 4.31 nose_dc  +19.8 mm
+226 max-move knot x  -1.38 y  4.31 phi -0.58 local 0.07 nose x -2.19 y 4.38 nose_dc  +16.7 mm
+227 max-move knot x  -1.56 y  4.38 phi -0.51 local 0.05 nose x -2.19 y 4.50 nose_dc  +21.0 mm
+228 max-move knot x  -1.75 y  4.44 phi -0.38 local 0.07 nose x -2.12 y 4.38 nose_dc  +19.6 mm
+229 max-move knot x  -1.69 y  4.44 phi -0.41 local 0.07 nose x -2.12 y 4.44 nose_dc  +18.1 mm
+230 max-move knot x  -1.44 y  4.38 phi -0.47 local 0.06 nose x -2.12 y 4.50 nose_dc  +21.7 mm
+231 max-move knot x  -1.62 y  4.44 phi -0.38 local 0.10 nose x -2.06 y 4.44 nose_dc   +9.9 mm
+232 max-move knot x  -1.75 y  4.50 phi -0.29 local 0.04 nose x -2.06 y 4.44 nose_dc  -17.7 mm
+233 max-move knot x  -1.75 y  4.50 phi -0.33 local 0.04 nose x -2.12 y 4.44 nose_dc  -20.2 mm
+234 max-move knot x  -1.69 y  4.50 phi -0.38 local 0.04 nose x -2.19 y 4.50 nose_dc  -21.8 mm
+235 max-move knot x  -1.94 y  4.56 phi -0.30 local 0.04 nose x -2.19 y 4.38 nose_dc  -23.4 mm
+236 max-move knot x  -1.94 y  4.56 phi -0.35 local 0.04 nose x -2.25 y 4.44 nose_dc  -23.4 mm
+237 max-move knot x  -1.94 y  4.56 phi -0.40 local 0.04 nose x -2.31 y 4.44 nose_dc  -23.2 mm
+238 max-move knot x  -1.81 y  4.56 phi -0.47 local 0.04 nose x -2.38 y 4.50 nose_dc  -22.4 mm
+239 max-move knot x  -1.56 y  4.50 phi -0.54 local 0.07 nose x -2.38 y 4.44 nose_dc   -2.4 mm
+240 max-move knot x  -1.75 y  4.56 phi -0.53 local 0.07 nose x -2.44 y 4.62 nose_dc   -3.0 mm
+241 max-move knot x  -1.69 y  4.56 phi -0.55 local 0.12 nose x -2.44 y 4.56 nose_dc   +2.7 mm
+242 max-move knot x   0.06 y  4.50 phi -0.65 local 0.02 nose x -2.44 y 4.56 nose_dc   +6.2 mm
+243 max-move knot x  -1.50 y  4.56 phi -0.53 local 0.09 nose x -2.44 y 4.62 nose_dc   +9.9 mm
+244 max-move knot x  -1.44 y  4.56 phi -0.53 local 0.06 nose x -2.44 y 4.69 nose_dc  +12.3 mm
+245 max-move knot x  -1.94 y  4.69 phi -0.46 local 0.11 nose x -2.38 y 4.56 nose_dc   +9.8 mm
+246 max-move knot x  -1.81 y  4.69 phi -0.46 local 0.06 nose x -2.38 y 4.62 nose_dc  +17.5 mm

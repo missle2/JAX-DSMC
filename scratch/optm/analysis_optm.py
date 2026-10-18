@@ -1,10 +1,15 @@
-"""The 2026-10-15/16 ``optm`` runs (study.py --group optm): drag minimisation at fixed area in
+"""The 2026-10-15..17 ``optm`` runs (study.py --group optm): drag minimisation at fixed area in
 free space (``--boundary free``: every box face a free-stream face), S = 4 Adam, step smoothed
 over 8 knots, tangent area mode, long box (x -10..20 m, y 0..10 m, 1 m keep-out from every
-face), one H200 each.  Pulled mid-run 2026-10-16: Kn 0.5 M 0.32 236 iterates, free-molecular
-M 10 300 (done), Kn 0.5 M 10 68.
+face), one H200 each.  Pulled 2026-10-17: Kn 0.5 M 0.32 300 iterates, free-molecular M 10 300,
+Kn 0.5 M 10 247 (the 2026-10-16 pull had 236 / 300 / 68).
 
+    run_locked.sh cpu env JAX_PLATFORMS=cpu PYTHONPATH=. python3 scratch/optm/step_where.py \
+        circle_long_kn0.5_M10_S4_adam_tan_sm8_free
     run_locked.sh cpu env JAX_PLATFORMS=cpu PYTHONPATH=. python3 scratch/optm/analysis_optm.py
+
+``optm_kn0.5_M10_oscillation.png`` (from ``step_where.py``'s per-step motion of the nose): the
+Kn 0.5 M 10 drag's saw-tooth against the nose's normal motion and the gradient spikes.
 
 Per run (``figures/optc/optm_<run>.png``): drag / starting drag (±2 s.e.), the outlines, the
 adjoint check (observed drag change of each step, common random numbers -- the same 4 seeds
@@ -48,10 +53,12 @@ COLOURS = {"kn0.5": "#0072B2", "M10": "#D55E00", "kn0.5_M10": "#009E73"}  # Okab
 PHASES = {
     "kn0.5": ((0, "iterates 0-79"), (80, "80-159"), (160, "160+")),
     "M10": ((0, "0-149"), (150, "150-253"), (254, "254+: tail at the keep-out")),
-    "kn0.5_M10": ((0, "0-35"), (36, "36+: nose gradient spikes")),
+    "kn0.5_M10": ((0, "0-35"), (36, "36+: nose gradient spikes")),  # one fit: the saw-tooth
 }
 EVERY = 5
 WINDOW = 20
+SPIKE = 5.0  # a gradient spike: |g| above SPIKE x the median of the last 20 iterates
+NOSE_MOVE = 0.005  # m: a step that moves the nose region by more than this is advancing / receding
 MARGIN = 1.0
 
 
@@ -202,7 +209,11 @@ def plot_run(run, h, geo, adj):  # noqa: PLR0915 -- one six-panel figure
     keepout_span(ax, rows)
     g = np.array([x["grad_norm"] for x in rows])
     ax.semilogy(it, g / g[0], color=colour, lw=1.2, label="|gradient| / starting |gradient|")
-    _style(ax, "(e) gradient size (every step moves the largest knot exactly 0.05 m)", "optimisation iterate")
+    _style(
+        ax,
+        "(e) gradient size (every step moves the largest knot exactly 0.05 m)",
+        "optimisation iterate",
+    )
     ax.legend(fontsize=7.5, frameon=False, loc="upper left")
     # (f) body geometry
     ax = axes[1, 2]
@@ -211,11 +222,16 @@ def plot_run(run, h, geo, adj):  # noqa: PLR0915 -- one six-panel figure
     ax.plot(ks, [shapes[k]["length"] for k in ks], color=colour, lw=1.4, label="length (x) [m]")
     ax.plot(ks, [shapes[k]["height"] for k in ks], color=colour, lw=1.4, ls="--",
             label="thickness (y) [m]")  # fmt: skip
-    _style(ax, f"(f) body length and thickness (area fixed; the keep-out allows {hi[0] - lo[0] - 2 * MARGIN:.0f} m)", "optimisation iterate", "m")
+    _style(
+        ax,
+        f"(f) body length and thickness (area fixed; the keep-out allows {hi[0] - lo[0] - 2 * MARGIN:.0f} m)",
+        "optimisation iterate",
+        "m",
+    )
     ax.legend(fontsize=7.5, frameon=False, loc="center right")
     fig.suptitle(
         f"Drag minimisation at fixed area in free space, {TITLE[run]}: Adam, 4 DSMC seeds per "
-        f"iterate, {len(rows)} iterates so far (optm, H200, 2026-10-16)",
+        f"iterate, {len(rows)} iterates so far (optm, H200, pulled 2026-10-17)",
         fontsize=11.5,
     )
     fig.tight_layout()
@@ -223,6 +239,95 @@ def plot_run(run, h, geo, adj):  # noqa: PLR0915 -- one six-panel figure
     fig.savefig(path, dpi=130)
     plt.close(fig)
     print("wrote", path)
+
+
+def spikes(rows):
+    g = np.array([r["grad_norm"] for r in rows])
+    med = np.array([np.median(g[max(0, k - 20) : k + 1]) for k in range(len(g))])
+    return np.flatnonzero(g > SPIKE * med)
+
+
+def plot_oscillation(run, h):
+    """The saw-tooth: the drag's rises against the nose's motion (``step_where.py``: the mean
+    coefficient change over the surface knots within 1.5 m of the nose, + = the surface recedes)
+    and the gradient spikes."""
+    path = f"scratch/optm/step_where_{tag(run)}.json"
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        where = json.load(fh)
+    rows = h["rows"]
+    J0 = rows[0]["objective"]
+    J = np.array([r["objective"] for r in rows]) / J0
+    se = np.array([r["objective_se"] for r in rows]) / J0
+    g = np.array([r["grad_norm"] for r in rows])
+    n = min(len(where), len(J) - 1)
+    nose = np.array([w["nose_dc"] for w in where])[:n] * 1e3
+    obs = np.diff(J)[:n]
+    spk = spikes(rows)
+    it = np.arange(len(J))
+    fig, axes = plt.subplots(2, 2, figsize=(17, 8.6), width_ratios=(2.3, 1))
+    ax = axes[0, 0]
+    adv = nose < -NOSE_MOVE * 1e3
+    for k in np.flatnonzero(adv):
+        ax.axvspan(k, k + 1, color="#CC79A7", alpha=0.18, lw=0)
+    ax.fill_between(it, J - 2 * se, J + 2 * se, color=COLOURS[run], alpha=0.25, lw=0)
+    ax.plot(it, J, color=COLOURS[run], lw=1.5, label="drag / starting drag (±2 s.e.)")
+    for k in spk:
+        ax.axvline(k, color="0.25", lw=0.7, ls=":")
+    ax.plot(
+        [],
+        [],
+        color="#CC79A7",
+        alpha=0.4,
+        lw=6,
+        label="steps that move the nose forward (upstream)",
+    )
+    ax.plot(
+        [],
+        [],
+        color="0.25",
+        lw=0.7,
+        ls=":",
+        label=f"gradient spike (|g| > {SPIKE:g}x its running median)",
+    )
+    ax.set_ylim(0.1, 1.02)
+    _style(ax, "(a) drag: the rises happen while the steps push the nose upstream; the largest start "
+           "at a gradient spike (iterates 109, 156, 232)", "optimisation iterate", "drag / initial drag")  # fmt: skip
+    ax.legend(fontsize=8, frameon=False, loc="upper right")
+    ax = axes[1, 0]
+    ax.bar(np.arange(n), nose, width=1.0, color=np.where(nose < 0, "#CC79A7", "#56B4E9"), lw=0)
+    for k in spk:
+        ax.axvline(k, color="0.25", lw=0.7, ls=":")
+    ax.axhline(0, color="0.4", lw=0.6)
+    _style(ax, "(b) the step's motion of the nose region (mean coefficient change of the surface "
+           "knots within 1.5 m of the nose; + recedes, − advances)", "optimisation iterate",
+           "mm per iterate")  # fmt: skip
+    ax2 = axes[0, 1]
+    ax2.semilogy(it, g / g[0], color=COLOURS[run], lw=1.0)
+    ax2.semilogy(spk, g[spk] / g[0], "o", color="0.25", ms=4, label="spike")
+    _style(ax2, "(c) |gradient| / starting |gradient|", "optimisation iterate")
+    ax2.legend(fontsize=8, frameon=False)
+    ax = axes[1, 1]
+    c = np.corrcoef(obs[36:], nose[36:])[0, 1]
+    ax.scatter(nose, obs, c=np.arange(n), cmap="viridis", s=12, lw=0)
+    ax.axhline(0, color="0.6", lw=0.6)
+    ax.axvline(0, color="0.6", lw=0.6)
+    _style(ax, f"(d) drag change of a step vs its nose motion (correlation {c:.2f} after iterate 36)",
+           "nose motion [mm] (+ recedes)", "observed ΔD / initial drag")  # fmt: skip
+    fig.suptitle(
+        f"Why the drag saw-tooths, {TITLE[run]}: the nose's gradient is spiky and flips sign; Adam's "
+        "momentum keeps each direction for 5-25 iterates and the full 5 cm step drives the nose that way",
+        fontsize=11.5,
+    )
+    fig.tight_layout()
+    out = figure_path("optc", f"optm_{run}_oscillation.png")
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+    print("wrote", out)
+    return {"corr_obs_nose_after36": float(c), "spikes": spk.tolist(),
+            "mean_dD_nose_advancing": float(obs[adv].mean()),
+            "mean_dD_nose_receding": float(obs[nose > NOSE_MOVE * 1e3].mean())}  # fmt: skip
 
 
 def plot_drag(hist):
@@ -235,7 +340,7 @@ def plot_drag(hist):
                 f"lowest {J.min():.3f}")  # fmt: skip
     ax.set_ylim(0, 1.05)
     _style(ax, "Drag / starting drag at fixed area, free-space boundary, S = 4 Adam, smooth 8 "
-           "knots (optm, 2026-10-16)", "optimisation iterate", "drag / initial drag")  # fmt: skip
+           "knots (optm, pulled 2026-10-17)", "optimisation iterate", "drag / initial drag")  # fmt: skip
     ax.legend(fontsize=8, frameon=False)
     fig.tight_layout()
     path = figure_path("optc", "optm_drag.png")
@@ -301,6 +406,10 @@ def main():
         }  # fmt: skip
         print(run, json.dumps({k: v for k, v in out[run].items() if k != "shapes"}), flush=True)
         plot_run(run, h, geo, adj)
+        osc = plot_oscillation(run, h)
+        if osc:
+            out[run]["oscillation"] = osc
+            print(run, "oscillation", json.dumps(osc), flush=True)
     with open("scratch/optm/analysis_optm.json", "w") as fh:
         json.dump(out, fh, indent=1)
     plot_drag(hist)

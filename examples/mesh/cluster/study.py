@@ -85,6 +85,14 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   ``kn0.5`` (the deck's stream, M 0.32), ``M10`` (free-molecular) and ``kn0.5_M10``, in free
   space (``--boundary free``: every face a free-stream face), tags
   ``circle_long_{kn0.5_,M10_,kn0.5_M10_}S4_adam_tan_sm8_free``.
+* ``thingate`` (2026-10-17): the adjoint of bodies under ~2 DSMC cells thick at Kn 0.5 + M 10
+  (the squashkn2 cubic spike, the optm nose spikes), ``bash scratch/thingate/cluster_job.sh
+  <name>`` (its header documents each; results in ``scratch/thingate/cluster/``): the backward
+  fits (quadratic, cubic-in-v and three guarded cubics) paired on one forward against CRN FDs
+  -- squash at s = 0.193 .. 0.45 (``sq_M10_*``; a quarter cell off the cell faces ``sq_M10off_*``; a 2x finer
+  grid ``sqg2_*``; subsonic ``sq_M032_*``; free-molecular ``sq_FM10_*``) and the optm Kn 0.5
+  M 10 iterates with the optimiser's own seeds (``om_it*``, ``omg2_it*`` on the finer grid).
+  ``sq_*``: an rtx slice; ``sqg2_*`` / ``om*``: one H200 each.
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, to
   convergence (resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -191,6 +199,22 @@ def _gapgate_jobs(gpus_per_node: int) -> dict[str, str]:
     return {name: f"bash scratch/gapgate/cluster_job.sh {name}" for name in names}
 
 
+# thingate: the squash points (labels of cluster_job.sh's s_value) and optm iterates
+THIN_S = ("0.193", "0.25", "0.3", "0.45")
+THIN_ITERATES = (30, 58, 109, 156, 232, 246)
+
+
+def _thingate_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    names = [f"sq_M10_s{s}_b{j}" for s in THIN_S for j in range(2)]
+    names += [f"sq_M10off_s0.193_b{j}" for j in range(2)]
+    names += [f"sqg2_M10_s{s}_b{j}" for s in ("0.193", "0.3") for j in range(2)]
+    names += [f"sq_M032_s{s}_b{j}" for s in ("0.193", "0.3") for j in range(2)]
+    names += ["sq_FM10_s0.193_b0"]
+    names += [f"om_it{k}_b0" for k in THIN_ITERATES] + ["omg2_it156_b0"]
+    return {name: f"bash scratch/thingate/cluster_job.sh {name}" for name in names}
+
+
 def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     out = {}
@@ -277,6 +301,7 @@ NEW_GROUPS = {
     "optm": _optm_jobs,
     "cellgate": _cellgate_jobs,
     "gapgate": _gapgate_jobs,
+    "thingate": _thingate_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

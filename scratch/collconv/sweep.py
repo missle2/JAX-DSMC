@@ -16,15 +16,22 @@ the configured run's).  Every run records every
 
     PYTHONPATH=. python3 scratch/collconv/sweep.py OUT.jsonl S SEED0 SEED1 '{overrides}'
 overrides: the squash config (fnum_scale, knudsen, a_max, ...), ``settings`` (list),
-``fd_steps`` (default [0.2]; [] = none), ``timing_band`` (default 10).
+``fd_steps`` (default [0.2]; [] = none), ``timing_band`` (default 10).  Since 2026-10-17
+(scratch/thingate): ``case_centre`` [x, y] moves the case's body centre (the cut cells of a
+thin body: how much of each face's cell is flow), ``maps`` DIR writes the shipped variant's
+per-coefficient pathwise / tally terms of every (seed, setting) to
+``DIR/s<s>_seed<i>_<setting>.npz`` (float32), and every run records the carried value's rms /
+max / 99.99th percentile (``lambda_*``).
 """
 
 import functools
 import json
+import os
 import sys
 import time
 
 import jax
+import numpy as np
 
 sys.path.insert(0, "examples/mesh")
 import optimize_squash as OS  # noqa: E402
@@ -53,7 +60,16 @@ def setting_tag(st):
     return tag
 
 
-def terms_row(cfg, key, setting, tband):
+MAP_TERMS = ("pathwise_v", "pathwise_x", "pathwise_tally")
+
+
+def save_maps(path, t, grid_shape):
+    """The per-coefficient terms ``MAP_TERMS`` of one variant's ``ShapeTerms`` (float32)."""
+    arrays = {n: np.asarray(getattr(t, n), np.float32) for n in MAP_TERMS}
+    np.savez_compressed(path, shape=np.asarray(grid_shape), **arrays)
+
+
+def terms_row(cfg, key, setting, tband, maps=None):
     basis = setting.get("basis", "quadratic_full")
     if "grazing" in setting:
         cfg = dict(cfg, grazing=float(setting["grazing"]))
@@ -66,6 +82,9 @@ def terms_row(cfg, key, setting, tband):
         cfg, key, None, "squash_y", setting["k"], tband, tuple(shape.VARIANTS)
     )
     pick = functools.partial(EM.control_gradient, cfg, "squash_y", st["grid"])
+    if maps:
+        shipped = terms[cfg["variant"]]
+        save_maps(maps, shipped, np.shape(shipped.pathwise_v))
     one = terms["one"]
     out = {
         "objective": info["objective"],
@@ -79,6 +98,9 @@ def terms_row(cfg, key, setting, tband):
             n: {"x": pick(t.pathwise_x), "v": pick(t.pathwise_v), "sil": pick(t.silhouette)}
             for n, t in terms.items()
         },
+        "lambda_rms": info["lambda_rms"],
+        "lambda_absmax": info.get("lambda_absmax"),
+        "lambda_p9999": info.get("lambda_p9999"),
         "seconds": time.time() - t0,
         "seconds_backward": info["seconds_backward"],
         "seconds_shape": info["seconds_shape"],
@@ -94,15 +116,24 @@ def main():
     hs = over.pop("fd_steps", [0.2])
     tband = over.pop("timing_band", 10)
     extra = over.pop("extra_variants", True)
+    maps = over.pop("maps", None)
+    centre = over.pop("case_centre", None)
     if extra:
         shape.VARIANTS.update({n: v for n, v in EXTRA.items()})
     cfg = dict(OS.default_config(), squash=s, **over)
+    if centre is not None:
+        EM.F.CASES[cfg["case"]] = dict(EM.F.CASES[cfg["case"]], centre=[float(c) for c in centre])
+        over["case_centre"] = centre  # recorded with the rows
+    if maps:
+        os.makedirs(maps, exist_ok=True)
     for i in range(int(sys.argv[3]), int(sys.argv[4])):
         key = jax.random.key(cfg["seed_start"] + i)
         row = {"s": s, "seed": i, "config": over, "timing_band": tband, "runs": {}}
         t0 = time.time()
         for st in settings:
-            row["runs"][setting_tag(st)] = terms_row(cfg, key, st, tband)
+            tag = setting_tag(st)
+            path = f"{maps}/s{s:g}_seed{i}_{tag.replace(':', '-')}.npz" if maps else None
+            row["runs"][tag] = terms_row(cfg, key, st, tband, path)
         row["fd"] = EM.finite_differences(cfg, "squash_y", key, hs) if hs else []
         row["fd_steps"] = hs
         row["seconds"] = time.time() - t0
