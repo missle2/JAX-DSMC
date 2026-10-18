@@ -1,0 +1,59 @@
+[Sun Oct 18 16:34:37 MDT 2026] guardgate_sq_M10_s0.3_b1 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
+    MIG 1g.24gb     Device  0: (UUID: MIG-f407d675-fd59-5868-8e26-a52bc4652741)
+  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
+  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
+  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/guardgate/cluster_job.sh sq_M10_s0.3_b1
+E1018 16:38:56.608715 1858865 pjrt_stream_executor_client.cc:2916] Execution of replica 0 failed: INTERNAL: CpuCallback error calling callback: Traceback (most recent call last):
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 160, in <module>
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 150, in main
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 92, in terms_row
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 684, in shape_terms
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 549, in _backwards
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_inlet_shock.py", line 227, in device_backward
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/pjit.py", line 292, in cache_miss
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/pjit.py", line 153, in _python_pjit_helper
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/pjit.py", line 1877, in _pjit_call_impl_python
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/profiler.py", line 354, in wrapper
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/interpreters/pxla.py", line 1297, in __call__
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/callback.py", line 782, in _wrapped_callback
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/debugging.py", line 202, in _callback
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/debugging.py", line 88, in debug_callback_impl
+RuntimeError: jax.debug.callback failed to find a local CPU device to place the inputs on. Make sure "cpu" is listed in --jax_platforms or the JAX_PLATFORMS environment variable.
+jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 160, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 150, in main
+    row["runs"][tag] = terms_row(cfg, key, st, tband, map_path)
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 92, in terms_row
+    terms, info, st = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 684, in shape_terms
+    dev, dev_t = _backwards(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 549, in _backwards
+    _, dev = device_backward(*head, jnp.zeros((n, 2)), *tail, hit_reward=columns, **options)
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_inlet_shock.py", line 227, in device_backward
+    dev = ensemble_device.backward_virtual(
+jaxlib._jax.XlaRuntimeError: INTERNAL: CpuCallback error calling callback: Traceback (most recent call last):
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 160, in <module>
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 150, in main
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 92, in terms_row
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 684, in shape_terms
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 549, in _backwards
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_inlet_shock.py", line 227, in device_backward
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/pjit.py", line 292, in cache_miss
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/pjit.py", line 153, in _python_pjit_helper
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/pjit.py", line 1877, in _pjit_call_impl_python
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/profiler.py", line 354, in wrapper
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/interpreters/pxla.py", line 1297, in __call__
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/callback.py", line 782, in _wrapped_callback
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/debugging.py", line 202, in _callback
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/debugging.py", line 88, in debug_callback_impl
+RuntimeError: jax.debug.callback failed to find a local CPU device to place the inputs on. Make sure "cpu" is listed in --jax_platforms or the JAX_PLATFORMS environment variable.

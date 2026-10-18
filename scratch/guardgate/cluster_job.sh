@@ -12,7 +12,9 @@
 # Every job pairs the fits on ONE forward per seed against CRN central FDs:
 #   C    cell:cubicv:adapt1.5:align0.9:both          the shipped fit
 #   Q    cell:quad:adapt1.5:align0.9:both            its predecessor (2-4 % low)
-#   G<h> cell:cubicv:adapt1.5:guard<h>:align0.9:both  h = 2, 8, 32
+#   G<h> cell:cubicv:adapt1.5:guard<h>:align0.9:both  h = 8, 32, 128 (unit, 2026-10-18: h = 2
+#        moved the sparse inlet gates (N128) -13 / -20 % off C, h 8 -3 / -7 %, h 32 within 0.6 %;
+#        relax / Couette unchanged at every h)
 # Expected (stated before the runs): on the blunt squash G within 0.3 % of C (paired) and the
 # guard switching < ~5 % of queries; on the thin M 10 squash and the optm spike iterates G within
 # 2 s.e. of the FD, max |lambda| near Q's; the stored device gates unchanged.
@@ -25,13 +27,16 @@
 #                      gates, 4 seeds, C and G<h> paired with the stored per-query gradient.
 set -euo pipefail
 job="$1"
+# the guard's order counts (cell_fit.TRACE) are a jax.debug.callback, which needs a CPU device
+# beside the GPU (env.sh sets JAX_PLATFORMS=cuda); the GPU stays the default device
+export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda},cpu"
 out=scratch/guardgate/cluster
 Q="cell:quad:adapt1.5:align0.9:both"
 C="cell:cubicv:adapt1.5:align0.9:both"
-G2="cell:cubicv:adapt1.5:guard2:align0.9:both"
 G8="cell:cubicv:adapt1.5:guard8:align0.9:both"
 G32="cell:cubicv:adapt1.5:guard32:align0.9:both"
-FITS=("${C}" "${Q}" "${G2}" "${G8}" "${G32}")
+G128="cell:cubicv:adapt1.5:guard128:align0.9:both"
+FITS=("${C}" "${Q}" "${G8}" "${G32}" "${G128}")
 OPTM=examples/mesh/results/optimize/circle_long_kn0.5_M10_S4_adam_tan_sm8_free
 KN_M10='"fnum_scale": 1, "knudsen": 0.5, "a_max": 256, "mach": 10.0, "dt": 2.5e-5, "slots": 160000'
 KN_M032='"fnum_scale": 1, "knudsen": 0.5, "a_max": 64'
@@ -78,6 +83,6 @@ case "${job}" in
   unit)
     [ "${CHECK:-0}" = 1 ] && exit 0
     mkdir -p "${out}"
-    python3 scratch/cellfit/gates.py "${out}/unit.jsonl" 4 "${C},${G2},${G8},${G32}" ;;
+    python3 scratch/cellfit/gates.py "${out}/unit.jsonl" 4 "${C},${G8},${G32},${G128}" ;;
   *) echo "unknown job ${job}"; exit 1 ;;
 esac

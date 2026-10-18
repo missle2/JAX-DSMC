@@ -93,8 +93,8 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   grid ``sqg2_*``; subsonic ``sq_M032_*``; free-molecular ``sq_FM10_*``) and the optm Kn 0.5
   M 10 iterates with the optimiser's own seeds (``om_it*``, ``omg2_it*`` on the finer grid).
   ``sq_*``: an rtx slice; ``sqg2_*`` / ``om*``: one H200 each.
-* ``guardgate`` (2026-10-18): the leverage-guarded cubic (``cell:cubicv:...:guard<h>``, h = 2 /
-  8 / 32) against the shipped cubic and the quadratic, ``bash scratch/guardgate/cluster_job.sh
+* ``guardgate`` (2026-10-18): the leverage-guarded cubic (``cell:cubicv:...:guard<h>``, h = 8 /
+  32 / 128) against the shipped cubic and the quadratic, ``bash scratch/guardgate/cluster_job.sh
   <name>`` (results in ``scratch/guardgate/cluster/``): the blunt Kn 0.5 squash at s = 0.6
   (``sq_M032_s0.6_b*``, 16 seeds), thingate's thin M 10 squash (``sq_M10_*``), optm iterates
   30 / 58 / 156 / 246 (``om_it*``, one H200 each) and the stored device gates (``unit``).

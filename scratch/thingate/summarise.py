@@ -38,11 +38,12 @@ FIT_NAMES = {
     "cell:cubicv:adapt1.5:guard2:align0.9:both": "G2 cubic, leverage guard 2",
     "cell:cubicv:adapt1.5:guard8:align0.9:both": "G8 cubic, leverage guard 8",
     "cell:cubicv:adapt1.5:guard32:align0.9:both": "G32 cubic, leverage guard 32",
+    "cell:cubicv:adapt1.5:guard128:align0.9:both": "G128 cubic, leverage guard 128",
 }
 ORDER = list(FIT_NAMES.values())
 COLOURS = dict(
     zip(ORDER, ("#E69F00", "#0072B2", "#009E73", "#CC79A7", "#56B4E9", "#D55E00", "#000000",
-                "#999999"), strict=True)
+                "#999999", "#F0E442"), strict=True)
 )  # fmt: skip
 OPTM = "examples/mesh/results/optimize/circle_long_kn0.5_M10_S4_adam_tan_sm8_free"
 
