@@ -1,0 +1,42 @@
+[Sun Oct 18 00:06:24 MDT 2026] thingate_sqg2_M10_s0.3_b0 on c3gpu-e5-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA H200 NVL (UUID: GPU-afc1a4fb-442b-74db-28fb-eb4cf6d5df82)
+  GPU 1: NVIDIA H200 NVL (UUID: GPU-117c864d-1244-b84f-11f7-ff8b975be105)
+  GPU 2: NVIDIA H200 NVL (UUID: GPU-b2fe1c25-a2e6-9606-acba-0b1357d642eb)
+  GPU 3: NVIDIA H200 NVL (UUID: GPU-7a60ff60-58da-3d46-07fa-8a28191b9fd7)
+    MIG 2g.35gb     Device  0: (UUID: MIG-52afe405-8517-5166-a4ea-e45214817404)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/thingate/cluster_job.sh sqg2_M10_s0.3_b0
+2026-10-18 00:07:33.981077: W external/xla/xla/tsl/framework/bfc_allocator.cc:501] Allocator (GPU_0_bfc) ran out of memory trying to allocate 1.43GiB (rounded to 1536000000)requested by op 
+If the cause is memory fragmentation maybe the environment variable 'TF_GPU_ALLOCATOR=cuda_malloc_async' will improve the situation. 
+Current allocation summary follows.
+Current allocation summary follows.
+2026-10-18 00:07:33.982085: W external/xla/xla/tsl/framework/bfc_allocator.cc:512] ************************_******************************___*************************************____*
+E1018 00:07:33.982097 3971282 pjrt_stream_executor_client.cc:2916] Execution of replica 0 failed: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 1536000000 bytes. [tf-allocator-allocation-error='']
+jax.errors.SimplifiedTraceback: For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 146, in <module>
+    main()
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 136, in main
+    row["runs"][tag] = terms_row(cfg, key, st, tband, path)
+  File "/projects/aaja8389/JAX-DSMC/scratch/collconv/sweep.py", line 81, in terms_row
+    terms, info, st = EM.shape_terms(
+  File "/projects/aaja8389/JAX-DSMC/examples/ensemble_mesh.py", line 659, in shape_terms
+    value = float(jnp.sum(rep.hit_total))
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/shape.py", line 171, in hit_total
+    return _totals(self.hit_reward)
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/shape.py", line 182, in _totals
+    return rewards.totals()
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/shape.py", line 101, in totals
+    return jax.vmap(particle_sum)(self.values.head, self.values.tail, self.slot)
+  File "/projects/aaja8389/JAX-DSMC/jax_dsmc/wall_adjoint.py", line 196, in particle_sum
+    return total.at[_drop_slot(slot, n)].add(jnp.sum(tail_values, axis=0), mode="drop")
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/numpy/array_methods.py", line 853, in add
+    return scatter._scatter_update(self.array, self.index, values,
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/ops/scatter.py", line 92, in _scatter_update
+    return internal_scatter(x, y, dynamic_idx)
+  File "/projects/aaja8389/jax-env/lib/python3.10/site-packages/jax/_src/ops/scatter.py", line 145, in _scatter_impl
+    out = scatter_op(
+jaxlib._jax.XlaRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 1536000000 bytes.

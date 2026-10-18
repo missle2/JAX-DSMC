@@ -1,0 +1,37 @@
+[Sun Oct 18 01:58:47 MDT 2026] thingate_om_it246_b0 on c3gpu-e5-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA H200 NVL (UUID: GPU-afc1a4fb-442b-74db-28fb-eb4cf6d5df82)
+  GPU 1: NVIDIA H200 NVL (UUID: GPU-117c864d-1244-b84f-11f7-ff8b975be105)
+  GPU 2: NVIDIA H200 NVL (UUID: GPU-b2fe1c25-a2e6-9606-acba-0b1357d642eb)
+  GPU 3: NVIDIA H200 NVL (UUID: GPU-7a60ff60-58da-3d46-07fa-8a28191b9fd7)
+    MIG 2g.35gb     Device  0: (UUID: MIG-201ddb9b-e89b-516b-9674-16593f19c214)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/thingate/cluster_job.sh om_it246_b0
+seed 0 cell:cubicv:adapt1.5:align0.9:both_k32       g.shift -3.8839e+01 g.nose -3.3533e+01 lambda_rms [0.08513118242981771, 0.0017306776812136188, 0.0] |g| 2.4987e+02 (183 s, backward 19 s)
+seed 0 cell:quad:adapt1.5:align0.9:both_k32         g.shift -5.8706e-01 g.nose -1.8976e-01 lambda_rms [8.981890290158286e-06, 7.996485449367277e-06, 0.0] |g| 6.6848e-01 (101 s, backward 14 s)
+seed 0 cell:cubicv:adapt1.5:ridge1e-3:align0.9:both_k32 g.shift -5.5045e-01 g.nose -1.7306e-01 lambda_rms [1.9611184331987404e-05, 7.410663988844242e-06, 0.0] |g| 5.3558e-01 (105 s, backward 18 s)
+seed 0 cell:cubicv:adapt4:align0.9:both_k32         g.shift -2.1919e+01 g.nose -1.6868e+01 lambda_rms [0.08340345043481115, 0.0017554429929585048, 0.0] |g| 1.9175e+02 (105 s, backward 18 s)
+seed 0 cell:cubicv:adapt1.5:loo:align0.9:both_k32   g.shift -6.0299e-01 g.nose -2.1206e-01 lambda_rms [2.4364598197708605e-05, 1.9796297545014152e-05, 0.0] |g| 4.4778e-01 (130 s, backward 44 s)
+seed 0 FD shift [-0.6897632763843142]
+seed 0 FD nose [-0.19472282278207687]
+seed 1 cell:cubicv:adapt1.5:align0.9:both_k32       g.shift +1.2413e+00 g.nose +3.1046e+00 lambda_rms [0.005351846562144554, 0.00016363363425613174, 0.0] |g| 2.4718e+01 (102 s, backward 15 s)
+seed 1 cell:quad:adapt1.5:align0.9:both_k32         g.shift -7.2995e-01 g.nose -2.1244e-01 lambda_rms [6.607285595873759e-06, 8.302032136889496e-06, 0.0] |g| 6.1541e-01 (98 s, backward 11 s)
+seed 1 cell:cubicv:adapt1.5:ridge1e-3:align0.9:both_k32 g.shift -6.7767e-01 g.nose -1.7373e-01 lambda_rms [8.42180150080491e-06, 9.620407156967998e-06, 0.0] |g| 4.9769e-01 (102 s, backward 15 s)
+seed 1 cell:cubicv:adapt4:align0.9:both_k32         g.shift +3.8824e-01 g.nose +2.7002e+00 lambda_rms [0.005183737938929084, 0.00017051788519039998, 0.0] |g| 3.0004e+01 (102 s, backward 15 s)
+seed 1 cell:cubicv:adapt1.5:loo:align0.9:both_k32   g.shift -8.3090e-01 g.nose -2.9230e-01 lambda_rms [7.290321358966386e-05, 1.2825813657649266e-05, 0.0] |g| 1.0578e+00 (127 s, backward 40 s)
+seed 1 FD shift [-0.6698206648936333]
+seed 1 FD nose [-0.2627369622788095]
+seed 2 cell:cubicv:adapt1.5:align0.9:both_k32       g.shift +8.2630e-01 g.nose +1.2135e+00 lambda_rms [0.003999548638282563, 6.705072986514635e-05, 0.0] |g| 1.2481e+01 (102 s, backward 15 s)
+seed 2 cell:quad:adapt1.5:align0.9:both_k32         g.shift -6.8675e-01 g.nose -1.9707e-01 lambda_rms [1.1517099985910568e-05, 8.4494262066474e-06, 0.0] |g| 6.7550e-01 (98 s, backward 11 s)
+seed 2 cell:cubicv:adapt1.5:ridge1e-3:align0.9:both_k32 g.shift -6.1208e-01 g.nose -1.4317e-01 lambda_rms [2.8216090067953108e-05, 1.411410519721857e-05, 0.0] |g| 6.1086e-01 (102 s, backward 15 s)
+seed 2 cell:cubicv:adapt4:align0.9:both_k32         g.shift +3.5749e-01 g.nose +7.9147e-01 lambda_rms [0.004195237409666834, 6.95369052885911e-05, 0.0] |g| 1.1586e+01 (102 s, backward 15 s)
+seed 2 cell:cubicv:adapt1.5:loo:align0.9:both_k32   g.shift -7.2792e-01 g.nose -2.2062e-01 lambda_rms [1.0637930503354364e-05, 7.6218261532544215e-06, 0.0] |g| 4.2216e-01 (127 s, backward 40 s)
+seed 2 FD shift [-0.6800444448989951]
+seed 2 FD nose [-0.19517434255294341]
+seed 3 cell:cubicv:adapt1.5:align0.9:both_k32       g.shift -9.8434e-01 g.nose -1.4570e+00 lambda_rms [0.006735894347124448, 9.238440032513345e-05, 0.0] |g| 2.7946e+01 (102 s, backward 15 s)
+seed 3 cell:quad:adapt1.5:align0.9:both_k32         g.shift -7.0567e-01 g.nose -2.1751e-01 lambda_rms [9.043085009468055e-06, 8.40475114595812e-06, 0.0] |g| 5.7601e-01 (98 s, backward 11 s)
+seed 3 cell:cubicv:adapt1.5:ridge1e-3:align0.9:both_k32 g.shift -5.8015e-01 g.nose -1.3499e-01 lambda_rms [2.1549747272533586e-05, 7.857627270259363e-06, 0.0] |g| 7.6339e-01 (102 s, backward 15 s)
+seed 3 cell:cubicv:adapt4:align0.9:both_k32         g.shift +1.6896e+00 g.nose +2.3976e+00 lambda_rms [0.006552129128529911, 9.228932097197462e-05, 0.0] |g| 2.4991e+01 (102 s, backward 15 s)
+seed 3 cell:cubicv:adapt1.5:loo:align0.9:both_k32   g.shift -5.9034e-01 g.nose -1.5029e-01 lambda_rms [3.067570992367495e-05, 2.7224437226851816e-05, 0.0] |g| 5.6261e-01 (127 s, backward 40 s)
+seed 3 FD shift [-0.6635504965132022]
+seed 3 FD nose [-0.18657845706786413]
+[Sun Oct 18 02:51:41 MDT 2026] done
