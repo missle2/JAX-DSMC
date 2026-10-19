@@ -248,7 +248,7 @@ and every query in $c$ reads $\Lam(x_q, v_q) = \phi(\tilde p_q - \bar p_c)\cdot\
 \end{itemize}
 \codenote{\code{jax\_dsmc/cell\_fit.py}: \code{fit}, \code{fit\_split}, \code{cell\_normals},
 \code{evaluate}; \code{ensemble\_device.\_field} / \code{\_query} (\code{\_Hybrid} for the optional per-query
-fallback).  \code{ensemble\_backward.CELL\_BASIS} = \code{"cell:cubicv:adapt1.5:align0.9:both"} (2026-10-12; \code{cell:quad:\dots} before; default of
+fallback).  \code{ensemble\_backward.CELL\_BASIS} = \code{"cell:cubicv:adapt1.5:guard32:align0.9:both"} (2026-10-19: \code{guard32} takes, per query, the highest order whose leverage is $\le 32$; unguarded cubic from 10-12, \code{cell:quad:\dots} before; default of
 \code{configure} and every example's \code{-{}-backward-basis}; \code{quadratic\_full} = the per-query fit).
 Tests \code{tests/test\_cell\_fit.py}; record docs/PSEUDOCODE.md 9.7.2.}
 \end{frame}

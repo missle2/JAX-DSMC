@@ -244,12 +244,17 @@ def converged_objective(cfg, history) -> bool:
     return window_converged(values, cfg["converge_window"], cfg["converge_tol"])
 
 
+PHASES = ("build", "warmup", "capture", "replay", "backward", "shape")
+"""The per-seed phases of :func:`EM.shape_terms` whose wall-clock seconds the history keeps
+(``phase_seconds``, summed over the seeds)."""
+
+
 def seed_terms(cfg, ls, seeds, frames_for=None):
     """Per-seed coefficient gradient (pathwise + score), objective, hits and seconds of the
     seeds ``seeds`` (indices; key ``seed_start + i``), stacked.  The seed ``frames_for``
     (if in ``seeds``) also records the field movie of its forward (``cfg["frames_every"]``;
     keys ``frame_<name>``)."""
-    grads, objs, hits, secs, stuck = [], [], [], [], []
+    grads, objs, hits, secs, stuck, phases = [], [], [], [], [], []
     out = {}
     for i in seeds:
         key = jax.random.key(cfg["seed_start"] + int(i))
@@ -270,6 +275,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None):
         hits.append(info["hits"])
         stuck.append(info["stuck"])
         secs.append(time.time() - t0)
+        phases.append([info.get(f"seconds_{name}", np.nan) for name in PHASES])
         if s["frames"] is not None:
             out.update({f"frame_{name}": s["frames"][name] for name in FRAME_KEYS})
     out.update(
@@ -279,6 +285,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None):
             "hits": np.asarray(hits, dtype=float),
             "stuck": np.asarray(stuck, dtype=float),
             "seconds": np.asarray(secs, dtype=float),
+            "phase_seconds": np.asarray(phases, dtype=float),
         }
     )
     return out
@@ -299,7 +306,10 @@ def _combine(parts):
         # particles deleted in concave pockets (SPARTA stuck), summed over the seeds
         "stuck": float(np.concatenate([p.get("stuck", np.zeros(1)) for p in parts]).sum()),
         "seconds": float(np.concatenate([p["seconds"] for p in parts]).sum()),
-    }
+        "phase_seconds": dict(zip(PHASES, np.concatenate(
+            [p.get("phase_seconds", np.full((len(p["seconds"]), len(PHASES)), np.nan))
+             for p in parts]).sum(axis=0).tolist(), strict=True)),
+    }  # fmt: skip
 
 
 def averaged_terms(cfg, ls, seeds):
@@ -545,6 +555,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "keepout_knots": clipped,
             "predicted_decrease": predicted,
             "seconds": time.time() - t0,
+            "phase_seconds": avg["phase_seconds"],
         }
         if mode == "tangent":
             row.update(area_multiplier=nu, area_error=area_err)

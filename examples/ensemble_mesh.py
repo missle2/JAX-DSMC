@@ -386,10 +386,15 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
     many steps -- the RNG contract makes the run identical -- and puts a field snapshot of
     the state at every block end plus the final state (the fill of the flow around this
     body, then its steady state) into ``setup["frames"]`` (:func:`stack_frames`; per-cell
-    ``nrho``, ``u``, ``temp`` in float32, a few kB per frame).  The optimiser's movie."""
+    ``nrho``, ``u``, ``temp`` in float32, a few kB per frame).  The optimiser's movie.
+    ``setup["seconds"]``: wall-clock seconds of the build (cut-cell tables), the warm-up and
+    the captured steps (compilation included when it happens)."""
+    t0 = time.time()
     grid, mesh, sp, params, static, faces, res, wall, capacity = build(
         cfg, parameter, value, cfg["steps"], body
     )
+    seconds = {"build": time.time() - t0}
+    t0 = time.time()
     flow = FlowParams(
         nrho=jnp.float64(F.NRHO * knudsen_density(cfg)),
         temp=jnp.float64(F.TEMP),
@@ -412,8 +417,12 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
         warm = dataclasses.replace(static, n_steps=cfg["warmup"])
         (state, cstate), aux = _run(state, cstate, *common, warm, capacity, 0, False)
         require_valid(aux[1])
-    state0 = state
+    state0 = jax.block_until_ready(state)
+    seconds["warmup"] = time.time() - t0
+    t0 = time.time()
     (final, _), aux = _run(state0, cstate, *common, static, capacity, cfg["warmup"], capture)
+    final = jax.block_until_ready(final)
+    seconds["capture"] = time.time() - t0
     if frames_every > 0:
         frames.append(_frame(cfg["warmup"] + cfg["steps"], final, grid, params, sp))
     setup = {
@@ -425,6 +434,7 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
         "faces": faces,
         "wall": wall,
         "frames": stack_frames(frames) if frames else None,
+        "seconds": seconds,
     }
     return state0, final, aux[1], (aux[2] if capture else None), aux[-1], setup
 
@@ -604,6 +614,20 @@ def _volume_term(dev, rec, grid, mesh):
     return shape.volume_cotangent(shape.geometry(mesh), mesh, grid, weights)
 
 
+def _checked_replay(
+    rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, static, reward, jump, timing_band
+):  # fmt: skip
+    """:func:`shape.replay` of the captured steps (epsilon = acc_delta = 0), its replay error
+    checked against :data:`REPLAY_TOL`."""
+    rep = shape.replay(
+        rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, 0.0, 0.0, static,
+        reward=reward, timing_jump=jump, timing_band=timing_band,
+    )  # fmt: skip
+    if float(rep.replay_error) > REPLAY_TOL:
+        raise RuntimeError(f"replay error {float(rep.replay_error):g}")
+    return rep
+
+
 def shape_terms(
     cfg,
     key,
@@ -637,26 +661,12 @@ def shape_terms(
     first = cfg["warmup"] + m - w
     steps = cfg["warmup"] + jnp.arange(m, dtype=jnp.int32)
     reward, jump, timing_band = _drag_setup(cfg, float(mass), dim, first, scale_r, timing_band)
-    rep = shape.replay(
-        rec,
-        steps,
-        state0,
-        key,
-        grid,
-        s["faces"],
-        wall,
-        mass,
-        dt,
-        mesh,
-        0.0,
-        0.0,
-        static,
-        reward=reward,
-        timing_jump=jump,
-        timing_band=timing_band,
-    )
-    if float(rep.replay_error) > REPLAY_TOL:
-        raise RuntimeError(f"replay error {float(rep.replay_error):g}")
+    t0 = time.time()
+    rep = _checked_replay(
+        rec, steps, state0, key, grid, s["faces"], wall, mass, dt, mesh, static, reward, jump,
+        timing_band,
+    )  # fmt: skip
+    t_replay = time.time() - t0
     hit_reward = rep.hit_reward
     value = float(jnp.sum(rep.hit_total))
     # the timing rewards enter only the second backward, which needs each slot's per-step
@@ -740,6 +750,8 @@ def shape_terms(
         "lambda_p9999": float(np.percentile(np.abs(lam[alive]), 99.99)) if alive.any() else 0.0,
         "seconds_backward": t_backward,
         "seconds_shape": t_shape,
+        "seconds_replay": t_replay,
+        **{f"seconds_{k}": v for k, v in s["seconds"].items()},
     }
     return all_terms, info, s
 

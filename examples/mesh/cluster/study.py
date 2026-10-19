@@ -98,6 +98,9 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   <name>`` (results in ``scratch/guardgate/cluster/``): the blunt Kn 0.5 squash at s = 0.6
   (``sq_M032_s0.6_b*``, 16 seeds), thingate's thin M 10 squash (``sq_M10_*``), optm iterates
   30 / 58 / 156 / 246 (``om_it*``, one H200 each) and the stored device gates (``unit``).
+* ``shapeprof`` (2026-10-19): where a seed's time goes (``bash scratch/shapeprof/cluster_job.sh
+  <name>``): the optm Kn 0.5 M 10 iterates 30 / 156 with the run's own config, per phase, the
+  unguarded cubic and the plain k32 slope fit for comparison, and a perfetto trace.  One H200.
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, to
   convergence (resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -228,6 +231,11 @@ def _guardgate_jobs(gpus_per_node: int) -> dict[str, str]:
     return {name: f"bash scratch/guardgate/cluster_job.sh {name}" for name in names}
 
 
+def _shapeprof_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    return {f"optm_it{k}": f"bash scratch/shapeprof/cluster_job.sh optm_it{k}" for k in (30, 156)}
+
+
 def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     out = {}
@@ -316,6 +324,7 @@ NEW_GROUPS = {
     "gapgate": _gapgate_jobs,
     "thingate": _thingate_jobs,
     "guardgate": _guardgate_jobs,
+    "shapeprof": _shapeprof_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

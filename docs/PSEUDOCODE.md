@@ -2407,7 +2407,8 @@ The per-cell fit forms **one** least-squares polynomial per collision cell per s
 (`VIRTUAL_BASIS`, read by `device_backward` and the relaxation example), the CLI flag
 `--backward-basis` of every example, default `ensemble_backward.CELL_BASIS`:
 
-    CELL_BASIS = "cell:cubicv:adapt1.5:align0.9:both"   # 2026-10-12; cell:quad:... from 10-11
+    CELL_BASIS = "cell:cubicv:adapt1.5:guard32:align0.9:both"   # 2026-10-19 (guard: per-query
+    # leverage <= 32, scratch/guardgate); unguarded cubicv from 10-12; cell:quad:... from 10-11
 
 ```
 # ---- fit (cell_fit.fit), once per cell per substep (and per field evaluation of the

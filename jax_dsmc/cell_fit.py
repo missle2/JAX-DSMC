@@ -110,13 +110,13 @@ class CellField(NamedTuple):
     """A fitted per-cell field: ``centre f64[C, D+3]`` (scaled), ``beta f64[C, p]`` (or
     ``f64[C, p, R]`` fitted to value columns).  A ``guard`` fit also carries every order's fit
     ``levels f64[C, G, p(, R)]`` (zero above the order) and the inverse normal matrices
-    ``minv f64[C, G, p, p]`` (zero on masked columns) its query leverages come from, and the
+    whitening ``whiten f64[C, p, p]`` (``L^-1`` of the normal matrix: :func:`_fit_guard`), and the
     highest order ``adapt`` lets each cell fit, ``top int[C]``."""
 
     centre: jax.Array
     beta: jax.Array
     levels: jax.Array | None = None
-    minv: jax.Array | None = None
+    whiten: jax.Array | None = None
     top: jax.Array | None = None
 
 
@@ -267,22 +267,37 @@ def _loo_press(design, weights, vals, beta, m, d):
 
 
 def _fit_guard(design, weights, vals, keep, order, spec, squeeze, centre):
-    """A ``guard`` fit's :class:`CellField`: every order's fit and inverse normal matrix."""
-    levels, minvs = [], []
-    for g in range(max(orders(spec.poly, centre.shape[-1] - 3)) + 1):
-        keep_g = keep & (order[None, :] <= g)
-        beta, m, _ = _solve_masked(design, weights, vals, keep_g, spec.ridge)
-        mask = keep_g[:, :, None] & keep_g[:, None, :]
-        levels.append(beta)
-        minvs.append(jnp.where(mask, jnp.linalg.inv(m), 0.0))
+    """A ``guard`` fit's :class:`CellField`.  The monomials are ordered by degree, so every
+    lower order's design is a leading block of the full one, and with ``M = L L^T`` (Cholesky)
+    the leading block of ``W = L^-1`` whitens it: a query's leverage under order ``g`` is
+    ``sum_{i < p_g} (W f)_i^2`` and that order's fit ``W_g^T (W F^T w y)_g`` -- one factorisation
+    for every order (the ridge's scale is the full order's: < 1e-8 relative by default)."""
+    m, d = _masked_normal(design, weights, keep, spec.ridge)
+    eye = jnp.broadcast_to(jnp.eye(m.shape[-1]), m.shape)
+    whiten = jax.scipy.linalg.solve_triangular(jnp.linalg.cholesky(m), eye, lower=True)
+    u = jnp.einsum("cij,ckj,ck,ckr->cir", whiten, d, weights, vals)  # (C, p, R)
+    levels = []
+    for size in _prefix_sizes(spec.poly, centre.shape[-1] - 3):
+        w_g = whiten[:, :size, :size]
+        beta = jnp.einsum("cji,cjr->cir", w_g, u[:, :size])
+        levels.append(jnp.pad(beta, ((0, 0), (0, m.shape[-1] - size), (0, 0))))
     levels = jnp.stack(levels, axis=1)  # (C, G, p, R)
     return CellField(
         centre,
         levels[:, -1, :, 0] if squeeze else levels[:, -1],
         levels[..., 0] if squeeze else levels,
-        jnp.stack(minvs, axis=1),
+        # single precision: only compared with the guard (~1e-3 relative at cond 1e8), and
+        # the per-query gather of this matrix is the guard's cost
+        whiten.astype(jnp.float32),
         jnp.max(jnp.where(keep, order[None, :], 0), axis=1),
     )
+
+
+@functools.cache
+def _prefix_sizes(poly, dim):
+    """The column count of each order ``0 .. max`` (the monomials are ordered by degree)."""
+    o = orders(poly, dim)
+    return tuple(sum(1 for x in o if x <= g) for g in range(max(o) + 1))
 
 
 def fit(node_x, node_v, node_valid, node_val, scale, basis, own_x=None, own_valid=None, adapt=0.0):
@@ -396,16 +411,20 @@ def _record(counts):
 GUARD_BATCH = 8192
 
 
-def _leverage(args, minv):
+def _leverage(args, whiten, sizes):
+    """Every order's leverage at one query: prefix sums of its whitened design squared."""
     c, f = args
-    return jnp.einsum("i,gij,j->g", f, minv[c], f)
+    z2 = jnp.cumsum((whiten[c] @ f.astype(whiten.dtype)) ** 2)
+    return z2[jnp.asarray(sizes) - 1]
 
 
-def _guard_level(field, c, f, guard, q_valid):
+def _guard_level(field, c, f, guard, q_valid, sizes):
     """The order ``int[Q]`` a guard fit uses at each query (design ``f (Q, p)``)."""
-    # batched: one gathered (G, p, p) per query is ~2 kB x G
+    # batched: one gathered (p, p) whitening per query (576 floats for cubicv in 2-D)
     h = jax.lax.map(
-        functools.partial(_leverage, minv=field.minv), (c, f), batch_size=GUARD_BATCH
+        functools.partial(_leverage, whiten=field.whiten, sizes=sizes),
+        (c, f),
+        batch_size=GUARD_BATCH,
     )  # (Q, G)
     levels = jnp.arange(h.shape[1])
     ok = ((h <= guard) & (levels[None, :] <= field.top[c][:, None])) | (levels[None, :] == 0)
@@ -446,10 +465,12 @@ def evaluate(
     if spec.guard:
         f = features(o, spec.poly)
         valid = jnp.ones(c.shape, bool) if q_valid is None else q_valid
-        level = _guard_level(field, c, f, spec.guard, valid)
-        beta = jnp.take_along_axis(
-            field.levels[c], level.reshape((-1, 1) + (1,) * (field.levels.ndim - 2)), axis=1
-        )[:, 0]
+        level = _guard_level(
+            field, c, f, spec.guard, valid, _prefix_sizes(spec.poly, q_x.shape[-1])
+        )
+        # only the chosen order's coefficients: (C, G, ...) flattened to (C G, ...)
+        flat = field.levels.reshape((-1, *field.levels.shape[2:]))
+        beta = flat[c * field.levels.shape[1] + level]
     else:
         beta = field.beta[c]  # (Q, p[, R])
     squeeze = beta.ndim == 2
