@@ -98,6 +98,11 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   <name>`` (results in ``scratch/guardgate/cluster/``): the blunt Kn 0.5 squash at s = 0.6
   (``sq_M032_s0.6_b*``, 16 seeds), thingate's thin M 10 squash (``sq_M10_*``), optm iterates
   30 / 58 / 156 / 246 (``om_it*``, one H200 each) and the stored device gates (``unit``).
+* ``optrules`` (2026-10-19): the optimiser's step rules compared (``examples/mesh/optimizers.py``):
+  Adam, the trust region ``tr``, L-BFGS in the trust region ``lbfgs`` (the quasi-Newton SQP
+  step at constant area), MMA ``mma`` and ``tr`` with a 5 % perimeter penalty ``trper``, each
+  on the optm Kn 0.5 and Kn 0.5 + M 10 free-space problems with the guarded cubic backward
+  (tags ``*_g32``).  One H200 each, 24 h, resumable.
 * ``shapeprof`` (2026-10-19): where a seed's time goes (``bash scratch/shapeprof/cluster_job.sh
   <name>``): the optm Kn 0.5 M 10 iterates 30 / 156 with the run's own config, per phase, the
   unguarded cubic and the plain k32 slope fit for comparison, and a perfetto trace.  One H200.
@@ -294,6 +299,37 @@ def _optm_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# optrules (2026-10-19): the step rules compared on the optm free-space problems, every arm with
+# the guarded cubic backward (CELL_BASIS since 2026-10-19) -- arm -> optimiser flags
+OPTRULES = {
+    "adam": "--optimizer adam",
+    "tr": "--optimizer tr",
+    "lbfgs": "--optimizer lbfgs",
+    "mma": "--optimizer mma",
+    "trper": "--optimizer tr --perimeter 0.05",
+}
+OPTRULES_REGIMES = ("kn0.5", "kn0.5_M10")
+
+
+def _optrules_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optrules``: each arm of :data:`OPTRULES` on the optm Kn 0.5 and Kn 0.5 + M 10
+    problems (one H200 each, S = 4, the same seeds and settings as ``optm``)."""
+    del gpus_per_node
+    m10 = "--mach 10 --dt 2.5e-5"
+    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
+               "kn0.5_M10": f"--knudsen 0.5 {m10} --a-max 256 {KNPULLBACK}"}  # fmt: skip
+    return {
+        f"{name}_{arm}": (
+            f"python3 -m examples.mesh.optimize --tag circle_long_{name}_S4_{arm}_tan_sm8_free_g32 "
+            f"--iterations {MAX_ITERATIONS} --seeds-per-iterate 4 --workers 1 "
+            f"{COARSE} {LONG} --step 0.05 --smooth 8 --band 1.0 --keepout {KEEPOUT} "
+            f"--area-mode tangent --boundary free {flags} {regimes[name]}"
+        )
+        for name in OPTRULES_REGIMES
+        for arm, flags in OPTRULES.items()
+    }
+
+
 # optab: name -> extra flags (the later flag wins over COARSE's --levelset-h)
 OPTAB = {
     "ctl": "--smooth 2",
@@ -325,6 +361,7 @@ NEW_GROUPS = {
     "thingate": _thingate_jobs,
     "guardgate": _guardgate_jobs,
     "shapeprof": _shapeprof_jobs,
+    "optrules": _optrules_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

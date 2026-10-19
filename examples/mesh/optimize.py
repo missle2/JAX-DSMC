@@ -91,6 +91,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ellipsoid_reference as E
 import forward as F
+import optimizers as OZ
 
 from examples import ensemble_mesh as EM
 from jax_dsmc import ensemble_backward
@@ -143,6 +144,9 @@ def default_config():
             "area_mode": "projection",
             "area_penalty": 100.0,
             "area_linear": 0.0,
+            # perimeter penalty (2026-10-19): J + perimeter * J_0 * P / P_0 (J_0, P_0 the first
+            # iterate's drag and perimeter; 0 = off)
+            "perimeter": 0.0,
         }
     )
     return cfg
@@ -170,6 +174,81 @@ def area_and_gradient(ls, lo, hi):
     """``(A, dA/dcoef)`` of :func:`levelset.body_volume` (the measure the constraint uses)."""
     a, g = jax.value_and_grad(_area_of_coef)(ls.coef, ls, lo, hi)
     return float(a), np.asarray(g)
+
+
+def _perimeter_of_coef(coef, ls, lo, hi):
+    return L.body_perimeter(dataclasses.replace(ls, coef=coef), lo, hi, 4)
+
+
+def perimeter_and_gradient(ls, lo, hi):
+    """``(P, dP/dcoef)`` of :func:`levelset.body_perimeter`."""
+    p, g = jax.value_and_grad(_perimeter_of_coef)(ls.coef, ls, lo, hi)
+    return float(p), np.asarray(g)
+
+
+def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
+    """:func:`rule_step` for ``mma``: the subproblem on the band's coefficients (the full
+    gradient ``g_full`` against the area constraint, :mod:`optimizers`)."""
+    step, band = cfg["step"], cfg["band"] + ls.h
+    coef = np.asarray(ls.coef)
+    mask = np.asarray(L.coefficient_band(ls, band))
+    low, upp = OZ.mma_asymptotes(state, coef, step, k)
+    g0 = smooth(g_full)
+    area = float(L.body_volume(ls, lo, hi, 4))
+    xs, lam = OZ.mma_step(coef[mask], g0[mask], area, g_area[mask], float(state["area0"]),
+                          low[mask], upp[mask], step)  # fmt: skip
+    delta = np.zeros_like(coef)
+    delta[mask] = xs - coef[mask]
+    previous = state.get("mma_x1")
+    state = dict(state, mma_x1=coef, mma_low=low, mma_upp=upp)
+    if previous is not None:
+        state["mma_x2"] = previous  # the asymptote update's x_{k-2} at the next iterate
+    extra = {"mma_multipliers": lam.tolist(), "step_max": float(np.abs(delta).max())}
+    return ls, delta, float(np.sum(g * delta)), state, extra
+
+
+def rule_step(cfg, ls, g, g_full, g_area, objective, objective_se, state, k, lo, hi):
+    """One step of an :mod:`optimizers` rule (``tr``, ``lbfgs``, ``mma``) from the iterate
+    just evaluated (level set ``ls``, area-tangent gradient ``g``, the full one ``g_full``,
+    objective): the level set to
+    step from (the base point after a rejection), the coefficient step, its predicted change,
+    the updated state and the row's extra fields."""
+    rule, step = cfg["optimizer"], cfg["step"]
+    band = cfg["band"] + ls.h
+    smooth = functools.partial(smoothed_direction, ls=ls, sigma=cfg["smooth"], band=band)
+    coef = np.asarray(ls.coef)
+    extra = {}
+    if rule == "mma":
+        return _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi)
+    accepted, rho, radius = OZ.judge(state, objective, objective_se, step)
+    pairs = OZ.pairs_of(state)
+    if "base_coef" in state:
+        pairs, kept = OZ.add_pair(pairs, coef - state["base_coef"], g - state["base_g"])
+        extra["pair_kept"] = kept if rule == "lbfgs" else None
+    if accepted:
+        base, g_base, j_base = coef, g, objective
+    else:
+        base, g_base, j_base = state["base_coef"], state["base_g"], float(state["base_objective"])
+    base_ls = dataclasses.replace(ls, coef=jnp.asarray(base))
+    if not accepted:  # the step's metric and constraint at the base point
+        smooth = functools.partial(smoothed_direction, ls=base_ls, sigma=cfg["smooth"], band=band)
+        g_area = area_and_gradient(base_ls, lo, hi)[1]
+    if rule == "lbfgs":
+        direction, has_pairs = OZ.lbfgs_direction(g_base, pairs, smooth)
+    else:
+        direction, has_pairs = -smooth(g_base), False
+    direction, _ = tangent_component(direction, g_area)
+    if has_pairs:
+        delta, at_edge = OZ.fit_to_radius(direction, radius)
+    else:
+        delta, at_edge = direction * (radius / max(float(np.abs(direction).max()), 1e-300)), True
+    predicted = float(np.sum(g_base * delta))
+    state = dict(state, base_coef=base, base_g=g_base, base_objective=j_base, radius=radius,
+                 predicted=predicted, at_edge=at_edge, **OZ.pairs_state(pairs))  # fmt: skip
+    extra.update(accepted=accepted, rho=rho, radius=radius, at_edge=at_edge,
+                 lbfgs_pairs=len(pairs) if rule == "lbfgs" else None,
+                 step_max=float(np.abs(delta).max()))  # fmt: skip
+    return base_ls, delta, predicted, state, extra
 
 
 def initial_levelset(cfg):
@@ -482,7 +561,14 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     if history and cfg["optimizer"] == "adam" and (out / "adam_state.npz").exists():
         z = np.load(out / "adam_state.npz")
         adam_state = (z["m"], z["v"])
+    rule = cfg["optimizer"] in OZ.RULES
+    state_path = out / "opt_state.npz"
+    rule_state = OZ.load_state(state_path) if history else {}
+    rule_state["area0"] = area0
+    perimeter_ref = saved.get("perimeter_ref") if saved else None
     mode = cfg["area_mode"]
+    if rule and mode != "tangent":
+        raise ValueError(f"--optimizer {cfg['optimizer']} needs --area-mode tangent")
     if saved and saved["config"].get("area_mode", "projection") != mode:
         raise ValueError(f"{out} was run with area_mode {saved['config'].get('area_mode')}")
     if mode not in ("projection", "lagrangian", "penalty", "tangent"):
@@ -504,6 +590,16 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         else:
             avg = averaged_terms(cfg, ls, seeds)
         g = avg["gradient"]
+        objective = avg["objective"]
+        perimeter = None
+        if cfg["perimeter"] > 0.0:
+            perimeter, g_perimeter = perimeter_and_gradient(ls, lo, hi)
+            if perimeter_ref is None:
+                perimeter_ref = [avg["objective"], perimeter]
+            weight = cfg["perimeter"] * perimeter_ref[0] / perimeter_ref[1]
+            objective = objective + weight * perimeter
+            g = g + weight * g_perimeter
+        g_full = g
         area_err = 0.0
         if mode in ("lagrangian", "penalty"):
             area_now, g_area = area_and_gradient(ls, lo, hi)
@@ -514,7 +610,17 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             area_err = area_now - area0
             # the KKT gradient: Adam's moments then track the constrained gradient too
             g, nu = tangent_component(g, g_area)
-        direction = smoothed_direction(g, ls, cfg["smooth"], cfg["band"] + ls.h)
+        extra = {}
+        if rule:
+            from_ls, delta, predicted, rule_state, extra = rule_step(
+                cfg, ls, g, g_full, g_area, objective, avg["objective_se"], rule_state, k, lo, hi
+            )
+            OZ.save_state(state_path, rule_state)
+            scale, eta = float(np.abs(delta).max()), 1.0
+            stepped = dataclasses.replace(from_ls, coef=from_ls.coef + jnp.asarray(delta))
+            direction = None
+        else:
+            direction = smoothed_direction(g, ls, cfg["smooth"], cfg["band"] + ls.h)
         if cfg["optimizer"] == "adam":
             # Adam's elementwise-normalised step has unit scale: `step` is its learning
             # rate, i.e. the largest coefficient change per iterate, like the GD step
@@ -527,17 +633,18 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             # until the tracker's event budget runs out -- `wall_recrossed` on every optc Adam
             # run, 2026-09-23), so the step itself is smoothed again
             direction = smoothed_direction(direction, ls, cfg["smooth"], cfg["band"] + ls.h)
-        if mode == "tangent":
+        if mode == "tangent" and not rule:
             # the step itself: first-order area preserving
             direction, _ = tangent_component(direction, g_area)
-        scale = float(np.abs(direction).max())
-        eta = cfg["step"] / max(scale, 1e-300)
-        stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
+        if not rule:
+            scale = float(np.abs(direction).max())
+            eta = cfg["step"] / max(scale, 1e-300)
+            stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
+            # predicted first-order decrease: g . delta coef (before the area projection)
+            predicted = float(-eta * np.sum(g * direction))
         new, shift, clipped = after_step(stepped, mode, area0, lo, hi, cfg["keepout"])
         area = float(L.body_volume(new, lo, hi, 4))
         nu_next = nu + mu * (area - area0) if mode == "lagrangian" else nu
-        # predicted first-order decrease: g . delta coef (before the area projection)
-        predicted = float(-eta * np.sum(g * direction))
         row = {
             "iterate": k,
             "optimizer": cfg["optimizer"],
@@ -556,7 +663,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "predicted_decrease": predicted,
             "seconds": time.time() - t0,
             "phase_seconds": avg["phase_seconds"],
+            **extra,
         }
+        if perimeter is not None:
+            row.update(perimeter=perimeter, penalised_objective=objective)
         if mode == "tangent":
             row.update(area_multiplier=nu, area_error=area_err)
         if mode in ("lagrangian", "penalty"):
@@ -577,6 +687,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
                     "config": cfg,
                     "backward_basis": ensemble_backward.VIRTUAL_BASIS,
                     "area_target": area0,
+                    "perimeter_ref": perimeter_ref,
                     "converged": converged_objective(cfg, history),
                     "rows": history,
                     "elapsed": time.time() - t_start,

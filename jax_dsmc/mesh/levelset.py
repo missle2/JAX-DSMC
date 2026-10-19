@@ -789,6 +789,25 @@ def body_volume(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> j
     return jnp.sum(heaviside) * cell
 
 
+def body_perimeter(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:
+    """Perimeter (2-D; surface area in 3-D) of ``phi = 0`` inside the box, ``int delta_w(phi)
+    |grad phi| dx`` on :func:`body_volume`'s sub-grid with the derivative of its smoothed
+    Heaviside: differentiable in ``coef`` (the optimiser's optional perimeter penalty)."""
+    box = np.asarray(hi, dtype=np.float64) - np.asarray(lo, dtype=np.float64)  # static
+    lo = jnp.asarray(lo, dtype=jnp.float64)
+    hi = jnp.asarray(hi, dtype=jnp.float64)
+    d = lo.shape[0]
+    counts = [math.ceil(box[a] / ls.h) * sub for a in range(d)]
+    axes = [lo[a] + (hi[a] - lo[a]) * (jnp.arange(counts[a]) + 0.5) / counts[a] for a in range(d)]
+    grid = jnp.meshgrid(*axes, indexing="ij")
+    x = jnp.stack([g.ravel() for g in grid], axis=1)
+    w = ls.h / 2.0 if width is None else float(width)
+    phi, grad = value_and_grad(ls, x)
+    delta = 0.5 / w / jnp.cosh(phi / w) ** 2
+    cell = jnp.prod((hi - lo) / jnp.asarray(counts, dtype=jnp.float64))
+    return jnp.sum(delta * jnp.sqrt(jnp.sum(grad**2, axis=1))) * cell
+
+
 def coefficient_band(ls: LevelSet, width: float) -> jax.Array:
     """``bool[m_1, ..., m_D]``: coefficients whose knot lies within ``width`` of the
     surface (``|phi| <= width`` at the knot) -- the ones a shape step should move."""

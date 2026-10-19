@@ -457,6 +457,20 @@ def test_body_volume_and_band():
     assert outside_band.max() < 1e-4 * np.abs(np.asarray(g)).max()
 
 
+def _perimeter_of_coef(coef, ls):
+    return L.body_perimeter(dataclasses.replace(ls, coef=coef), [0.0, 0.0], [10.0, 10.0], 4)
+
+
+def test_body_perimeter_and_its_curvature_gradient():
+    """The circle's perimeter 2 pi r, and its shape derivative: a uniform outward move of
+    the boundary (phi down by 1) adds d P / d r = 2 pi."""
+    ls = _levelset(2)
+    per = float(L.body_perimeter(ls, [0.0, 0.0], [10.0, 10.0], sub=4))
+    assert abs(per - 2 * math.pi * 3.0) < 1e-2 * 2 * math.pi * 3.0
+    g = jax.grad(_perimeter_of_coef)(ls.coef, ls)
+    assert abs(-float(jnp.sum(g)) - 2 * math.pi) < 0.05 * 2 * math.pi
+
+
 def test_from_surface_matches_the_polygon_within_its_sagitta():
     """The level set of the SPARTA 50-gon: its signed distance differs from the circle's
     by at most the polygon's own chord error (plus the interpolation error)."""
