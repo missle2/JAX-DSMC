@@ -3,6 +3,8 @@ through ensemble_device.backward_virtual: exact on polynomials, the least-square
 the order guard, finite empty sides, exact sigma points, and the complex-cell fallback equal
 to the per-query one-sided fit."""
 
+import functools
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -30,7 +32,9 @@ def _poly(x, v, poly, seed=1):
     o = np.concatenate((x / 0.1, v / 2.0), -1)
     terms = cell_fit.monomials(poly, D)
     coef = np.random.default_rng(seed).normal(size=len(terms))
-    return sum(c * np.prod([o[..., a] for a in t], axis=0) for c, t in zip(coef, terms, strict=True))
+    return sum(
+        c * np.prod([o[..., a] for a in t], axis=0) for c, t in zip(coef, terms, strict=True)
+    )
 
 
 @pytest.mark.parametrize("poly", cell_fit.POLYS)
@@ -262,3 +266,66 @@ def test_leverage_guard_through_the_virtual_backward():
         cell_fit.TRACE = None
     assert np.all(np.isfinite(np.asarray(guarded)))
     assert counts is not None and counts.shape == (cells, 4) and counts.sum() > 0
+    # the backward's slot-aligned leverages through the cell tables == the per-query gather
+    real = cell_fit._guard_level
+    try:
+        cell_fit._guard_level = functools.partial(_without_layout, real)
+        jax.clear_caches()
+        gathered = lam0("cell:cubicv:adapt1.5:guard4")
+    finally:
+        cell_fit._guard_level = real
+        jax.clear_caches()
+    np.testing.assert_allclose(np.asarray(guarded), np.asarray(gathered), rtol=1e-12, atol=1e-15)
+
+
+def _without_layout(real, field, c, f, guard, q_valid, sizes, layout=None):
+    del layout
+    return real(field, c, f, guard, q_valid, sizes)
+
+
+def test_leverage_guard_through_the_cell_tables_is_the_gathered_one():
+    """Slot-aligned queries (the backward's): the per-cell table leverages choose the same
+    orders, so the values match the per-query gather exactly."""
+    n, npc = 600, 96
+    rng = np.random.default_rng(3)
+    grid = GridSpec(jnp.zeros(2), jnp.ones(2), (3, 3))
+    x = jnp.asarray(rng.uniform(0, 1, (n, 2)))
+    v = rng.normal(0, 1, (n, 3))
+    v[: n // 2, 0] += 8.0  # beam + cold gas: some queries extrapolate
+    v = jnp.asarray(v)
+    alive = jnp.asarray(rng.uniform(size=n) < 0.95)
+    ids, valid, cell, rank, _count = ensemble_device.cell_nodes(x, alive, grid, npc)
+    lam = jnp.asarray(rng.normal(size=n))
+    scale = jnp.asarray([1 / 3, 1 / 3, 1.0, 1.0, 1.0])
+    basis = "cell:cubicv:adapt1.5:guard32"
+    f = cell_fit.fit(x[ids], v[ids], valid, lam[ids], scale, basis)
+    c = jnp.minimum(cell, ids.shape[0] - 1)
+    qv = v + jnp.asarray(rng.normal(0, 4.0, (n, 3)))  # post-collision-like velocities
+    gathered = cell_fit.evaluate(f, c, x, qv, scale, basis)
+    tabled = cell_fit.evaluate(f, c, x, qv, scale, basis, layout=(ids, rank))
+    live = np.asarray(alive)
+    np.testing.assert_allclose(np.asarray(tabled)[live], np.asarray(gathered)[live], rtol=1e-12)
+
+
+@pytest.mark.parametrize("cap", [256, 2])
+def test_pooled_query_fits_widen_only_the_queried_cells(cap, monkeypatch):
+    """The shape adjoint's pooled slope fits at its hit queries: widening only the queried
+    cells (or, past the cap, every cell) gives the full call's fits at those slots."""
+    n, npc = 900, 96
+    rng = np.random.default_rng(5)
+    grid = GridSpec(jnp.zeros(2), jnp.asarray([6.0, 6.0]), (6, 6))
+    x = jnp.asarray(rng.uniform(0, 6, (n, 2)))
+    v = jnp.asarray(rng.normal(0, 1, (n, 3)))
+    alive = jnp.asarray(rng.uniform(size=n) < 0.95)
+    lam = jnp.asarray(rng.normal(size=n))
+    scale = jnp.asarray([1.0, 1.0, 1.0, 1.0, 1.0])
+    direction = jnp.asarray(np.tile([1.0, 0.0, 0.0], (n, 1)))
+    near = np.where(np.linalg.norm(np.asarray(x) - 3.0, axis=1) < 1.2)[0][:40]
+    queries = jnp.asarray(np.concatenate([near, -np.ones(24, int)]))
+    args = (x, v, alive, lam, grid, npc, scale, 32, "quadratic_full", 4096, direction, 1)
+    full = ensemble_device.node_gradients(*args, halfspace=0.25)
+    monkeypatch.setattr(ensemble_device, "POOL_QUERY_CELLS", cap)
+    gx, gv = ensemble_device.node_gradients(*args, queries=queries, halfspace=0.25)
+    for got, want in ((gx, full[0]), (gv, full[1])):
+        np.testing.assert_allclose(np.asarray(got)[near], np.asarray(want)[near], rtol=1e-9,
+                                   atol=1e-12)  # fmt: skip

@@ -466,14 +466,17 @@ def _unchunk(a, q):
     return a.reshape(-1, *a.shape[2:])[:q]
 
 
-def pooled_tables(tables, grid, pool):
+def pooled_tables(tables, grid, pool, cells=None):
     """Per-cell node tables ``(C, P, .)`` widened to the ``(2 pool + 1)^D`` block of cells
     around each cell, ``(C, B P, .)``: the pooled fit draws its ``k`` nearest nodes from the
     neighbourhood instead of the cell alone (more nodes and a wider position range for the
     slope, at the cost of a farther, less local kernel).  Block positions outside the box
-    contribute no valid nodes."""
+    contribute no valid nodes.  ``cells`` ``i32[K]`` widens only those cells (row ``j`` of the
+    result is ``cells[j]``'s block)."""
     node_x, node_v, node_valid, node_val, *rest = tables
     nbr, exists = grid_neighbourhood(grid, pool)  # (C, B)
+    if cells is not None:
+        nbr, exists = nbr[cells], exists[cells]
     c, b = nbr.shape
 
     def widen(t):
@@ -545,6 +548,11 @@ def node_gradients(
     tables = (x[ids], v[ids], valid, lam[ids])
     if klass is not None:
         tables = (*tables, klass[ids])
+    if pool and queries is not None:
+        return _pooled_query_gradients(
+            tables, grid, pool, c, x, v, alive, scale, k, basis, chunk, direction, klass,
+            queries, halfspace,
+        )  # fmt: skip
     if pool:
         tables = pooled_tables(tables, grid, pool)
     if queries is None:
@@ -553,6 +561,18 @@ def node_gradients(
             q_class=klass, halfspace=halfspace,
         )  # fmt: skip
         return jnp.where(alive[:, None], grad_x, 0.0), jnp.where(alive[:, None], grad_v, 0.0)
+    return _query_gradients(tables, c, x, v, alive, scale, k, basis, chunk, direction, klass,
+                            queries, halfspace)  # fmt: skip
+
+
+POOL_QUERY_CELLS = 256
+"""Cells widened per step by the pooled slope fits at the hit queries (the cells next to the
+body; a step with more distinct query cells widens every cell instead, exactly)."""
+
+
+def _query_gradients(tables, c, x, v, alive, scale, k, basis, chunk, direction, klass, queries,
+                     halfspace):  # fmt: skip
+    """:func:`node_gradients`' query branch on prepared ``tables`` indexed by ``c``."""
     n = x.shape[0]
     used = queries >= 0
     q = jnp.where(used, queries, 0)
@@ -566,6 +586,30 @@ def node_gradients(
     grad_x = jnp.zeros((n, x.shape[1])).at[target].set(jnp.where(keep, qx, 0.0), mode="drop")
     grad_v = jnp.zeros((n, 3)).at[target].set(jnp.where(keep, qv, 0.0), mode="drop")
     return grad_x, grad_v
+
+
+def _pooled_query_gradients(tables, grid, pool, c, x, v, alive, scale, k, basis, chunk,
+                            direction, klass, queries, halfspace):  # fmt: skip
+    """The pooled fits at the queries with only the queried cells widened (at most
+    :data:`POOL_QUERY_CELLS` of them; more, and every cell is widened): the same fits, without
+    widening the whole grid every step."""
+    n_cells = tables[0].shape[0]
+    used = queries >= 0
+    cq = jnp.where(used, c[jnp.where(used, queries, 0)], n_cells)
+    cap = min(POOL_QUERY_CELLS, n_cells)
+    cells = jnp.unique(cq, size=cap, fill_value=n_cells)  # sorted; n_cells = none
+    pos = jnp.clip(jnp.searchsorted(cells, c), 0, cap - 1)  # every slot's row (queries' exact)
+    fits = cells[jnp.clip(jnp.searchsorted(cells, cq), 0, cap - 1)] == cq
+    common = (x, v, alive, scale, k, basis, chunk, direction, klass, queries, halfspace)
+
+    def compact(_):
+        wide = pooled_tables(tables, grid, pool, jnp.minimum(cells, n_cells - 1))
+        return _query_gradients(wide, pos, *common)
+
+    def full(_):
+        return _query_gradients(pooled_tables(tables, grid, pool), c, *common)
+
+    return lax.cond(jnp.all(fits | ~used), compact, full, None)
 
 
 def value_query(
@@ -688,9 +732,10 @@ def _n_cells(field):
     return field[2].shape[0]
 
 
-def _query(field, cell, q_x, q_v, q_normal, scale, k, basis, chunk):
+def _query(field, cell, q_x, q_v, q_normal, scale, k, basis, chunk, layout=None):
     """Field values at queries in cells ``cell`` (the sentinel ``C`` for dead slots) with
-    their surface normals ``q_normal`` (``None``: two-sided) from :func:`_field`'s output."""
+    their surface normals ``q_normal`` (``None``: two-sided) from :func:`_field`'s output.
+    ``layout = (ids, rank)``: the queries are slot-aligned (:func:`cell_fit.evaluate`)."""
     n_cells = _n_cells(field)
     c = jnp.minimum(cell, n_cells - 1)
     direction = _side(q_v, q_normal)
@@ -698,9 +743,11 @@ def _query(field, cell, q_x, q_v, q_normal, scale, k, basis, chunk):
         return cell_query(field, c, q_x, q_v, scale, k, basis, chunk, direction=direction)
     live = cell < n_cells
     if not isinstance(field, _Hybrid):
-        return cell_fit.evaluate(field, c, q_x, q_v, scale, basis, q_normal=q_normal, q_valid=live)
+        return cell_fit.evaluate(
+            field, c, q_x, q_v, scale, basis, q_normal=q_normal, q_valid=live, layout=layout
+        )
     value = cell_fit.evaluate(
-        field.split, c, q_x, q_v, scale, basis, q_normal=q_normal, q_valid=live
+        field.split, c, q_x, q_v, scale, basis, q_normal=q_normal, q_valid=live, layout=layout
     )
     q = q_x.shape[0]
     need = field.split.complex[c] & live
@@ -759,7 +806,9 @@ def _partner_pass(
         vi_pts, vj_pts = (vi_n,), (vj_n,)
     # j shares i's cell (the sentinel for a dead i, whose increment is dropped)
     normal_j = None if normals is None else normals[j]
-    query = functools.partial(_query, field, scale=scale, k=k, basis=basis, chunk=chunk)
+    query = functools.partial(
+        _query, field, scale=scale, k=k, basis=basis, chunk=chunk, layout=(ids, rank)
+    )
     f_i = sum(query(cell, x, p, normals) for p in vi_pts) / len(vi_pts)
     f_j = sum(query(cell, x[j], p, normal_j) for p in vj_pts) / len(vj_pts)
     four = f_i + f_j - f_node - f_node[j]
@@ -815,13 +864,14 @@ def _side(v, normals):
 
 
 def _boundary_move(
-    lam, x, v_prev, v_nodes, ids, valid, cell, moved, normals, scale, k, basis, chunk, grid,
-    split, fallback,
+    lam, x, v_prev, v_nodes, ids, valid, cell, rank, moved, normals, scale, k, basis, chunk,
+    grid, split, fallback,
 ):  # fmt: skip
     tables = (x[ids], v_nodes[ids], valid, lam[ids])
     field = _field(tables, scale, basis, grid, split, fallback)
-    f_prev = _query(field, cell, x, v_prev, normals, scale, k, basis, chunk)
-    f_here = _query(field, cell, x, v_nodes, normals, scale, k, basis, chunk)
+    layout = (ids, rank)
+    f_prev = _query(field, cell, x, v_prev, normals, scale, k, basis, chunk, layout)
+    f_here = _query(field, cell, x, v_nodes, normals, scale, k, basis, chunk, layout)
     return jnp.where(_per_slot(moved, lam), lam + f_prev - f_here, lam)
 
 
@@ -859,7 +909,7 @@ def _substep(
     v_nodes, v_prev = xs
     key, sub = jax.random.split(key)
     field = _field((x[ids], v_nodes[ids], valid, lam[ids]), scale, basis, grid, split, fallback)
-    f_node = _query(field, cell, x, v_nodes, normals, scale, k, basis, chunk)
+    f_node = _query(field, cell, x, v_nodes, normals, scale, k, basis, chunk, (ids, rank))
     body = functools.partial(
         _partner_pass,
         x=x,
@@ -905,6 +955,7 @@ def _substep(
         ids,
         valid,
         cell,
+        rank,
         moved,
         normals,
     )

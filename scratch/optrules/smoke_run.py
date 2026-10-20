@@ -20,7 +20,7 @@ LO, HI = tuple(np.asarray(GRID.lo)), tuple(np.asarray(GRID.hi))
 F = jax.jit(jax.value_and_grad(objective), static_argnums=(2, 3))
 
 
-def fake_terms(cfg, ls, seeds):
+def fake_terms(cfg, ls, seeds, out=None):
     j, g = F(ls.coef, ls, LO, HI)
     return {"frames": None, "gradient": np.asarray(g), "gradient_seed_sd": 0.0,
             "objective": float(j), "objective_se": 1e-6, "hits": 0.0, "stuck": 0.0,

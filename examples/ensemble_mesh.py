@@ -73,6 +73,9 @@ def default_config():
         "case": "circle",
         "fnum_scale": 4.0,
         "warmup": 700,
+        # the optimiser's warm start (forward(restart=)): steps re-equilibrating a previous
+        # iterate's final state on the new body, instead of the cold warm-up (0 = always cold)
+        "restart_steps": 0,
         "steps": 300,
         "window": 200,
         "radius_cells": 1,
@@ -378,7 +381,20 @@ def stack_frames(frames):
     return {key: np.stack([f[key] for f in frames]) for key in ("step", "nrho", "u", "temp")}
 
 
-def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
+def _carried(state, cstate, mesh):
+    """A previous run's final ``(state, cstate)`` as the start of a run on ``mesh``: the
+    particles the new body now covers removed (the rest of the gas is kept, and the freed
+    region refills during the re-equilibration)."""
+    if mesh.kind == "levelset":
+        covered = levelset_mod.inside(mesh.body, state.x)
+    else:
+        from jax_dsmc.mesh import analytic  # noqa: PLC0415
+
+        covered = analytic.inside(mesh.body, state.x)
+    return dataclasses.replace(state, alive=state.alive & ~covered), cstate
+
+
+def forward(cfg, parameter, value, key, capture, body=None, frames_every=0, restart=None):
     """Empty start, ``warmup`` uncaptured steps, then the captured steps.  Returns
     ``(state0, final, diag, rec, tallies, setup)`` with ``setup`` the run's objects.
 
@@ -388,7 +404,14 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
     body, then its steady state) into ``setup["frames"]`` (:func:`stack_frames`; per-cell
     ``nrho``, ``u``, ``temp`` in float32, a few kB per frame).  The optimiser's movie.
     ``setup["seconds"]``: wall-clock seconds of the build (cut-cell tables), the warm-up and
-    the captured steps (compilation included when it happens)."""
+    the captured steps (compilation included when it happens).
+
+    ``restart = (state, cstate)`` (the optimiser's warm start, 2026-10-19): instead of the
+    empty box and ``warmup`` steps, a previous run's final state (another iterate's body:
+    the particles inside this body removed, :func:`_carried`) re-equilibrated for the last
+    ``cfg["restart_steps"]`` steps before the capture -- the same absolute step indices, so
+    the captured window draws the same random numbers as a cold run.  ``setup["final"]`` is
+    this run's ``(final state, final collide state)``, the next warm start."""
     t0 = time.time()
     grid, mesh, sp, params, static, faces, res, wall, capacity = build(
         cfg, parameter, value, cfg["steps"], body
@@ -404,7 +427,16 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
     cstate = initialize.initial_collide_state(flow, grid, sp, static)
     common = (grid, sp, params, key, faces, wall, res, mesh)
     frames = []
-    if frames_every > 0:
+    if restart is not None:
+        state, cstate = _carried(*restart, mesh)
+        settle = min(int(cfg["restart_steps"]), cfg["warmup"])
+        if settle:
+            warm = dataclasses.replace(static, n_steps=settle)
+            (state, cstate), aux = _run(
+                state, cstate, *common, warm, capacity, cfg["warmup"] - settle, False
+            )
+            require_valid(aux[1])
+    elif frames_every > 0:
         if cfg["warmup"] % frames_every:
             raise ValueError(f"frames_every {frames_every} must divide warmup {cfg['warmup']}")
         frames.append(_frame(0, state, grid, params, sp))
@@ -420,7 +452,9 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
     state0 = jax.block_until_ready(state)
     seconds["warmup"] = time.time() - t0
     t0 = time.time()
-    (final, _), aux = _run(state0, cstate, *common, static, capacity, cfg["warmup"], capture)
+    (final, cstate_final), aux = _run(
+        state0, cstate, *common, static, capacity, cfg["warmup"], capture
+    )
     final = jax.block_until_ready(final)
     seconds["capture"] = time.time() - t0
     if frames_every > 0:
@@ -435,6 +469,7 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0):
         "wall": wall,
         "frames": stack_frames(frames) if frames else None,
         "seconds": seconds,
+        "final": (final, cstate_final),
     }
     return state0, final, aux[1], (aux[2] if capture else None), aux[-1], setup
 
@@ -637,14 +672,16 @@ def shape_terms(
     timing_band=0.2,
     variants=None,
     frames_every=0,
+    restart=None,
 ):
     """One seed: forward, traced replay (hit rewards), value-form backward, shape terms
     on the geometry (all four ``grad_x lambda`` variants, or the ``variants`` named).
     Returns ``(all_terms, info, setup)``; ``info`` carries the objective, the hit count and
-    the timings; ``setup["frames"]`` the field movie of the forward (``frames_every``)."""
+    the timings; ``setup["frames"]`` the field movie of the forward (``frames_every``),
+    ``setup["final"]`` its final gas (the next warm start: ``restart``, :func:`forward`)."""
     value0 = nominal(cfg, parameter)
     state0, final, diag, rec, tallies, s = forward(
-        cfg, parameter, value0, key, True, body, frames_every
+        cfg, parameter, value0, key, True, body, frames_every, restart
     )
     _check(diag)
     static, grid, mesh, wall, sp, params = (

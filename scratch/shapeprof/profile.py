@@ -4,7 +4,7 @@ backwards, the shape VJP), each setting run twice (the first compiles) and the s
 then the shape step's estimator share (the shipped along_pool_plane against the plain k32
 own-cell fit) and the backward's guard cost (CELL_BASIS against the unguarded cubic).  The
 last timed call of the shipped setting is also traced (jax.profiler, perfetto) into
-``<out>.trace/``.
+``<out>.trace/``.  ``warm500``: the shipped setting's second call warm-started (2026-10-19).
 
     PYTHONPATH=. python3 scratch/shapeprof/profile.py OUT.json RUN_DIR ITERATE [overrides]
 """
@@ -28,17 +28,23 @@ UNGUARDED = "cell:cubicv:adapt1.5:align0.9:both"
 PHASES = ("build", "warmup", "capture", "replay", "backward", "shape")
 
 
-def timed(cfg, ls, key, basis, variant, trace=None):
-    """The phases of two calls (compile, then timed) of one setting."""
+def timed(cfg, ls, key, basis, variant, trace=None, warm=0):
+    """The phases of two calls (compile, then timed) of one setting; ``warm > 0``: the second
+    call warm-started from the first's final gas with ``warm`` re-equilibration steps."""
     ensemble_backward.configure("virtual", 4, 8, "staged", basis)
     out = {}
+    final = None
     for label in ("first", "second"):
         if trace and label == "second":
             jax.profiler.start_trace(trace, create_perfetto_trace=True)
+        restart = final if warm and label == "second" else None
+        run_cfg = dict(cfg, restart_steps=warm) if restart is not None else cfg
         t0 = time.time()
-        _terms, info, _s = EM.shape_terms(
-            cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (variant,)
-        )
+        _terms, info, s = EM.shape_terms(
+            run_cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (variant,),
+            0, restart,
+        )  # fmt: skip
+        final = s["final"]
         total = time.time() - t0
         if trace and label == "second":
             jax.profiler.stop_trace()
@@ -59,13 +65,15 @@ def main():
     key = jax.random.key(cfg["seed_start"])
     shipped = ensemble_backward.CELL_BASIS
     result = {"iterate": it, "config": cfg, "runs": {}}
-    for name, basis, variant, trace in (
-        ("shipped", shipped, cfg["variant"], path[: -len(".json")] + ".trace"),
-        ("unguarded", UNGUARDED, cfg["variant"], None),
-        ("plain_k32", shipped, "one", None),
+    for name, basis, variant, trace, warm in (
+        ("shipped", shipped, cfg["variant"], path[: -len(".json")] + ".trace", 0),
+        ("unguarded", UNGUARDED, cfg["variant"], None, 0),
+        ("plain_k32", shipped, "one", None, 0),
+        # the second call warm-started from the first's gas (the optimiser's --restart-steps)
+        ("warm500", shipped, cfg["variant"], None, 500),
     ):
-        result["runs"][name] = {"basis": basis, "variant": variant,
-                                **timed(cfg, ls, key, basis, variant, trace)}  # fmt: skip
+        result["runs"][name] = {"basis": basis, "variant": variant, "restart_steps": warm,
+                                **timed(cfg, ls, key, basis, variant, trace, warm)}  # fmt: skip
         with open(path, "w") as fh:
             json.dump(result, fh, indent=1, default=str)
 

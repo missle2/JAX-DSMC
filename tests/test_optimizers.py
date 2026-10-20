@@ -70,3 +70,24 @@ def test_mma_subproblem_decreases_a_linear_objective_at_the_area_bound():
     assert float(g_area @ dx) >= -1e-6 * area0  # the area does not fall (to first order)
     assert np.abs(dx).max() <= 0.05 + 1e-12
     assert lam[0] > 0.0  # the constraint is active
+
+
+def test_warm_state_round_trip(tmp_path):
+    """The optimiser's per-seed warm start file restores the gas exactly."""
+    import jax.numpy as jnp  # noqa: PLC0415
+    import optimize as O  # noqa: PLC0415
+
+    from jax_dsmc.state import CollideState, ParticleState  # noqa: PLC0415
+
+    rng = np.random.default_rng(1)
+    state = ParticleState(jnp.asarray(rng.normal(size=(7, 2))), jnp.asarray(rng.normal(size=(7, 3))),
+                          jnp.zeros(7, jnp.int32), jnp.asarray(rng.uniform(size=7) < 0.5),
+                          jnp.zeros(7))  # fmt: skip
+    cstate = CollideState(jnp.asarray(rng.uniform(size=(4, 1, 1))), jnp.zeros((4, 1, 1)))
+    path = tmp_path / "warm" / "seed0.npz"
+    assert O.load_warm(path) is None
+    O.save_warm(path, (state, cstate))
+    s2, c2 = O.load_warm(path)
+    for a, b in ((state.x, s2.x), (state.v, s2.v), (state.alive, s2.alive),
+                 (cstate.vremax, c2.vremax), (cstate.remainder, c2.remainder)):  # fmt: skip
+        np.testing.assert_array_equal(np.asarray(a), np.asarray(b))

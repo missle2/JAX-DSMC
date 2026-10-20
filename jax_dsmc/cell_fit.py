@@ -418,14 +418,32 @@ def _leverage(args, whiten, sizes):
     return z2[jnp.asarray(sizes) - 1]
 
 
-def _guard_level(field, c, f, guard, q_valid, sizes):
-    """The order ``int[Q]`` a guard fit uses at each query (design ``f (Q, p)``)."""
-    # batched: one gathered (p, p) whitening per query (576 floats for cubicv in 2-D)
-    h = jax.lax.map(
-        functools.partial(_leverage, whiten=field.whiten, sizes=sizes),
-        (c, f),
-        batch_size=GUARD_BATCH,
-    )  # (Q, G)
+def _leverage_tables(whiten, f, sizes, layout):
+    """Every order's leverage at slot-aligned queries through the cell tables: ``layout =
+    (ids, rank)`` (:func:`ensemble_device.cell_nodes`: the slots of each cell, each slot's
+    place in its cell) puts the queries' designs in a ``(C, P, p)`` table, so each cell's
+    whitening multiplies its own queries at once -- no per-query gather of a ``(p, p)``."""
+    ids, rank = layout
+    n_cells, per = ids.shape
+    table = f.astype(whiten.dtype)[ids]  # (C, P, p)
+    z2 = jnp.cumsum(jnp.einsum("cij,cpj->cpi", whiten, table) ** 2, axis=-1)
+    h = z2[..., jnp.asarray(sizes) - 1]  # (C, P, G)
+    return h, (n_cells, per, rank)
+
+
+def _guard_level(field, c, f, guard, q_valid, sizes, layout=None):
+    """The order ``int[Q]`` a guard fit uses at each query (design ``f (Q, p)``); ``layout``
+    (slot-aligned queries, :func:`_leverage_tables`) avoids the per-query gather."""
+    if layout is not None:
+        h_tab, (_n_cells, per, rank) = _leverage_tables(field.whiten, f, sizes, layout)
+        h = h_tab[c, jnp.clip(rank, 0, per - 1)]  # back to the queries
+    else:
+        # batched: one gathered (p, p) whitening per query (576 floats for cubicv in 2-D)
+        h = jax.lax.map(
+            functools.partial(_leverage, whiten=field.whiten, sizes=sizes),
+            (c, f),
+            batch_size=GUARD_BATCH,
+        )  # (Q, G)
     levels = jnp.arange(h.shape[1])
     ok = ((h <= guard) & (levels[None, :] <= field.top[c][:, None])) | (levels[None, :] == 0)
     level = jnp.max(jnp.where(ok, levels[None, :], 0), axis=1)
@@ -437,20 +455,23 @@ def _guard_level(field, c, f, guard, q_valid, sizes):
 
 
 def evaluate(
-    field, c, q_x, q_v, scale, basis, gradients=False, q_normal=None, q_valid=None
+    field, c, q_x, q_v, scale, basis, gradients=False, q_normal=None, q_valid=None, layout=None
 ):  # fmt: skip
     """The fitted value at ``Q`` queries in cells ``c`` -- ``f64[Q]`` (``f64[Q, R]`` for a
     field fitted to value columns) -- and with ``gradients`` its ``(grad_x, grad_v)`` per
     unscaled coordinate (``f64[Q, D]``, ``f64[Q, 3]``, trailing ``R`` likewise).  A
     :class:`SplitField` needs the queries' own surface normals ``q_normal (Q, 3)`` (zero
     rows: no surface near, the ``both`` field).  ``q_valid bool[Q]`` only masks a ``guard`` fit's
-    :data:`TRACE` counts (dead slots' sentinel queries)."""
+    :data:`TRACE` counts (dead slots' sentinel queries).  ``layout = (ids, rank)`` declares the
+    queries slot-aligned (query ``i`` belongs to slot ``i`` of cell ``c[i]``, rank ``rank[i]``):
+    a ``guard`` fit then forms its leverages per cell (:func:`_leverage_tables`), the same
+    numbers without the per-query gather."""
     if isinstance(field, SplitField):
         near = jnp.any(q_normal != 0.0, axis=1)
         side_normal = q_normal.astype(q_v.dtype) if parse(basis).own else field.normal[c]
         ahead = jnp.sum(q_v * side_normal, axis=1) > 0.0
         parts = [
-            evaluate(f, c, q_x, q_v, scale, basis, gradients, q_valid=q_valid)
+            evaluate(f, c, q_x, q_v, scale, basis, gradients, q_valid=q_valid, layout=layout)
             for f in (field.ahead, field.behind, field.both)
         ]
         sided = jax.tree.map(functools.partial(_pick, ahead), parts[0], parts[1])
@@ -463,10 +484,11 @@ def evaluate(
     q = jnp.concatenate((q_x, q_v), axis=-1) / scale
     o = q - field.centre[c]
     if spec.guard:
-        f = features(o, spec.poly)
+        # the leverage only gates the order: single precision (its whitening is float32 too)
+        f = features(o.astype(jnp.float32), spec.poly)
         valid = jnp.ones(c.shape, bool) if q_valid is None else q_valid
         level = _guard_level(
-            field, c, f, spec.guard, valid, _prefix_sizes(spec.poly, q_x.shape[-1])
+            field, c, f, spec.guard, valid, _prefix_sizes(spec.poly, q_x.shape[-1]), layout
         )
         # only the chosen order's coefficients: (C, G, ...) flattened to (C G, ...)
         flat = field.levels.reshape((-1, *field.levels.shape[2:]))

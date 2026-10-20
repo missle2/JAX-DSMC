@@ -89,3 +89,4 @@ iterate 79: J = 0.90728 ± 0.0015  area 28.2769 -> 28.2769 (shift +0.0117)  |g| 
 iterate 80: J = 0.88864 ± 0.001  area 28.2769 -> 28.2769 (shift +0.0102)  |g| 1.17  predicted dJ -0.0754  hits 49889  stuck 0  513s
 iterate 81: J = 0.89154 ± 0.0025  area 28.2769 -> 28.2769 (shift +0.0111)  |g| 1.25  predicted dJ -0.0883  hits 50910  stuck 0  507s
 iterate 82: J = 0.89296 ± 0.0012  area 28.2769 -> 28.2769 (shift +0.0129)  |g| 1.26  predicted dJ -0.0939  hits 50860  stuck 0  788s
+iterate 83: J = 0.86007 ± 0.0018  area 28.2769 -> 28.2769 (shift +0.0120)  |g| 1.17  predicted dJ -0.0686  hits 49650  stuck 0  508s

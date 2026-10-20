@@ -4,7 +4,8 @@
 # Output scratch/shapeprof/cluster/<job>.json (+ <job>.trace/, a perfetto trace of one seed).
 #   optm_it{k}   the optm Kn 0.5 M 10 run's iterate k with its own config (4 x 8 pull-back),
 #                seed 0: per-phase seconds of the shipped setting, the unguarded cubic and the
-#                plain k32 slope fit (scratch/shapeprof/profile.py).  H200, ~30 min.
+#                plain k32 slope fit and a warm-started seed (scratch/shapeprof/profile.py).
+#                H200, ~40 min.
 set -euo pipefail
 job="$1"
 out=scratch/shapeprof/cluster

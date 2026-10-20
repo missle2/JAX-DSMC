@@ -55,6 +55,16 @@ per visible GPU (``ROCR_VISIBLE_DEVICES`` / ``CUDA_VISIBLE_DEVICES`` round-robin
 re-invocation of this script in worker mode (``--eval-coef`` ...); the combination is the
 same mean, so ``W`` changes the wall time only.
 
+``--restart-steps R`` (2026-10-19, default 0 = every iterate cold) warm-starts each seed from
+its own final gas of the previous iterate (``<tag>/warm/seed<i>.npz``): the particles inside
+the new body are removed and the gas re-equilibrates for ``R`` steps before the captured window
+(the same absolute steps as a cold run) instead of the ``--warmup`` steps from an empty box.
+Measured locally (scratch/warmstart, Kn 0.5 circle_long): after a shape change that halves the
+drag the carried gas reads within 3.0 +- 0.5 % of a cold run in its first 50 steps and within
+noise after; on adjacent iterates the windowed drag is unbiased (+0.4 +- 1.9 %, 8 seeds) and the
+iterate-to-iterate coupling is as good as the cold runs' (the spread of J(k+1) - J(k) 5.6 %
+against 6.1 % cold, per-seed sd 6.3 %).  R = 500 replaces 2800 warm-up steps.
+
 The run stops when it has converged -- the objective (the Lagrangian with
 ``--area-mode lagrangian``) of the last ``--converge-window`` iterates spread by at most
 ``--converge-tol`` of its mean (:func:`window_converged`) -- or at ``--iterations``,
@@ -98,6 +108,7 @@ from jax_dsmc import ensemble_backward
 from jax_dsmc.mesh import cut
 from jax_dsmc.mesh import levelset as L
 from jax_dsmc.mesh.types import LevelSet
+from jax_dsmc.state import CollideState, ParticleState
 
 RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "optimize")
 from figure_paths import figure_path  # noqa: E402
@@ -257,14 +268,18 @@ def initial_levelset(cfg):
     return grid, ls
 
 
+@functools.partial(jax.jit, static_argnames=("lo", "hi"))
 def _volume_at_shift(c, ls, lo, hi):
+    """One compilation per box (``lo``, ``hi`` static tuples): the level set is an argument,
+    so the iterates share it (a closure over ``ls`` recompiled at every projection)."""
     return L.body_volume(dataclasses.replace(ls, coef=ls.coef + c), lo, hi, 4)
 
 
 def project_area(ls: LevelSet, target: float, lo, hi, n_bisect: int = 40) -> tuple[LevelSet, float]:
     """The uniform shift ``c`` of ``phi`` (a uniform normal displacement) that restores the
     body area ``target``; bisection on the monotone ``body_volume``."""
-    vol = jax.jit(functools.partial(_volume_at_shift, ls=ls, lo=lo, hi=hi))
+    box = (tuple(float(a) for a in lo), tuple(float(b) for b in hi))
+    vol = functools.partial(_volume_at_shift, ls=ls, lo=box[0], hi=box[1])
     a, b = -ls.h * 4.0, ls.h * 4.0
     # body_volume decreases with c (phi up = body shrinks)
     for _ in range(n_bisect):
@@ -324,24 +339,61 @@ def converged_objective(cfg, history) -> bool:
 
 
 PHASES = ("build", "warmup", "capture", "replay", "backward", "shape")
+
+
+def _warm_path(out, i):
+    return Path(out) / "warm" / f"seed{int(i)}.npz"
+
+
+def save_warm(path, final):
+    """A seed's final gas ``(ParticleState, CollideState)`` (the next iterate's warm start)."""
+    state, cstate = final
+    path.parent.mkdir(parents=True, exist_ok=True)
+    arrays = {f"p_{f.name}": np.asarray(getattr(state, f.name)) for f in dataclasses.fields(state)}
+    arrays.update({f"c_{f.name}": np.asarray(getattr(cstate, f.name))
+                   for f in dataclasses.fields(cstate)})  # fmt: skip
+    tmp = path.with_suffix(".tmp.npz")
+    np.savez(tmp, **arrays)
+    tmp.replace(path)  # a job killed mid-write leaves the previous warm start
+
+
+def load_warm(path):
+    """:func:`save_warm`'s ``(state, cstate)``, or ``None`` (no file: a cold start)."""
+    if not path.exists():
+        return None
+    z = np.load(path)
+    state = ParticleState(**{k[2:]: jnp.asarray(z[k]) for k in z.files if k.startswith("p_")})
+    cstate = CollideState(**{k[2:]: jnp.asarray(z[k]) for k in z.files if k.startswith("c_")})
+    return state, cstate
+
+
 """The per-seed phases of :func:`EM.shape_terms` whose wall-clock seconds the history keeps
 (``phase_seconds``, summed over the seeds)."""
 
 
-def seed_terms(cfg, ls, seeds, frames_for=None):
+def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
     """Per-seed coefficient gradient (pathwise + score), objective, hits and seconds of the
     seeds ``seeds`` (indices; key ``seed_start + i``), stacked.  The seed ``frames_for``
     (if in ``seeds``) also records the field movie of its forward (``cfg["frames_every"]``;
-    keys ``frame_<name>``)."""
+    keys ``frame_<name>``).  With ``cfg["restart_steps"] > 0`` and a run directory ``run_dir``,
+    each seed starts from its own final gas of the previous iterate (``<run_dir>/warm/``,
+    :func:`EM.forward`'s ``restart``) instead of the empty box: the warm-up shrinks to
+    ``restart_steps`` re-equilibration steps on the new body."""
     grads, objs, hits, secs, stuck, phases = [], [], [], [], [], []
     out = {}
     for i in seeds:
         key = jax.random.key(cfg["seed_start"] + int(i))
         t0 = time.time()
         every = cfg["frames_every"] if frames_for is not None and int(i) == frames_for else 0
+        warm = cfg.get("restart_steps", 0) > 0 and run_dir is not None
+        restart = load_warm(_warm_path(run_dir, i)) if warm else None
         all_terms, info, s = EM.shape_terms(
-            cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],), every
-        )
+            cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],), every,
+            restart,
+        )  # fmt: skip
+        if warm:
+            save_warm(_warm_path(run_dir, i), s["final"])
+        info["warm"] = restart is not None
         terms = all_terms[cfg["variant"]]
         # the window-edge timing term is part of the windowed objective's derivative
         grad = terms.pathwise + terms.score + terms.silhouette + terms.timing
@@ -391,10 +443,10 @@ def _combine(parts):
     }  # fmt: skip
 
 
-def averaged_terms(cfg, ls, seeds):
+def averaged_terms(cfg, ls, seeds, out=None):
     """Mean over the seeds of the coefficient gradient and the objective, in this process;
-    the field movie of the first seed."""
-    return _combine([seed_terms(cfg, ls, seeds, seeds[0])])
+    the field movie of the first seed (``out``: the run directory of the warm starts)."""
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0], out)])
 
 
 def visible_devices():
@@ -461,12 +513,12 @@ def parallel_terms(cfg, ls, seeds, out: Path, k: int, argv):
     return _combine(parts)
 
 
-def evaluate_worker(cfg, coef_path: str, seeds, out_path: str, frames_for=None):
+def evaluate_worker(cfg, coef_path: str, seeds, out_path: str, frames_for=None, out=None):
     """Worker entry: the level set of ``coef_path`` on the seeds ``seeds`` -> ``out_path``
     (the field movie too if ``frames_for`` is one of them)."""
     _grid, ls = initial_levelset(cfg)
     ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(coef_path)))
-    np.savez(out_path, **seed_terms(cfg, ls, seeds, frames_for))
+    np.savez(out_path, **seed_terms(cfg, ls, seeds, frames_for, out))
 
 
 def surface_polyline(ls: LevelSet, lo, hi, n: int = 400):
@@ -588,7 +640,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         if cfg["workers"] > 1:
             avg = parallel_terms(cfg, ls, seeds, out, k, argv)
         else:
-            avg = averaged_terms(cfg, ls, seeds)
+            avg = averaged_terms(cfg, ls, seeds, out)
         g = avg["gradient"]
         objective = avg["objective"]
         perimeter = None
@@ -810,7 +862,9 @@ def main(argv=None):
     basis = resumed_basis(out, args.backward_basis)
     ensemble_backward.configure(args.pullback, args.substeps, args.partners, "staged", basis)
     if args.eval_coef is not None:
-        evaluate_worker(cfg, args.eval_coef, args.eval_seeds, args.eval_out, args.eval_frames_for)
+        evaluate_worker(
+            cfg, args.eval_coef, args.eval_seeds, args.eval_out, args.eval_frames_for, out
+        )
         return
     if args.plot:
         plot(cfg, out, figure_path("optc", f"optimize_{cfg['tag']}.png"))
