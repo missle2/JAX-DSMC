@@ -1,0 +1,73 @@
+[Tue Oct 20 01:28:46 MDT 2026] optrules_kn0.5_M10_trper on c3gpu-e5-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA H200 NVL (UUID: GPU-afc1a4fb-442b-74db-28fb-eb4cf6d5df82)
+  GPU 1: NVIDIA H200 NVL (UUID: GPU-117c864d-1244-b84f-11f7-ff8b975be105)
+  GPU 2: NVIDIA H200 NVL (UUID: GPU-b2fe1c25-a2e6-9606-acba-0b1357d642eb)
+  GPU 3: NVIDIA H200 NVL (UUID: GPU-7a60ff60-58da-3d46-07fa-8a28191b9fd7)
+    MIG 2g.35gb     Device  0: (UUID: MIG-b5ea67fa-1b3d-591c-ab5e-48b966f1614d)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_long_kn0.5_M10_S4_trper_tan_sm8_free_g32 --iterations 300 --seeds-per-iterate 4 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --case circle_long --fnum-scale 2 --warmup 2800 --step 0.05 --smooth 8 --band 1.0 --keepout 1.0 --area-mode tangent --boundary free --optimizer tr --perimeter 0.05 --knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 --substeps 4 --partners 8
+iterate 0: J = 1.757 ± 0.0015  area 28.2769 -> 28.2769 (shift +0.0000)  |g| 0.142  predicted dJ -0.0662  hits 58640  stuck 0  555s
+iterate 1: J = 1.6812 ± 0.0034  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.155  predicted dJ -0.0954  hits 57908  stuck 0  495s
+iterate 2: J = 1.5752 ± 0.0038  area 28.2769 -> 28.2769 (shift +0.0005)  |g| 0.185  predicted dJ -0.126  hits 56990  stuck 0  498s
+iterate 3: J = 1.4611 ± 0.0026  area 28.2769 -> 28.2769 (shift +0.0022)  |g| 0.231  predicted dJ -0.167  hits 56062  stuck 0  496s
+iterate 4: J = 1.3375 ± 0.0028  area 28.2769 -> 28.2769 (shift +0.0009)  |g| 0.301  predicted dJ -0.098  hits 55083  stuck 0  501s
+iterate 5: J = 1.258 ± 0.004  area 28.2769 -> 28.2769 (shift +0.0041)  |g| 0.307  predicted dJ -0.121  hits 54277  stuck 0  496s
+iterate 6: J = 1.203 ± 0.0031  area 28.2769 -> 28.2769 (shift +0.0021)  |g| 0.337  predicted dJ -0.194  hits 53862  stuck 0  504s
+iterate 7: J = 1.2079 ± 0.002  area 28.2769 -> 28.2769 (shift +0.0004)  |g| 0.317  predicted dJ -0.0971  hits 54550  stuck 0  496s
+iterate 8: J = 1.1512 ± 0.0032  area 28.2769 -> 28.2769 (shift +0.0012)  |g| 0.336  predicted dJ -0.066  hits 53556  stuck 0  492s
+iterate 9: J = 1.1118 ± 0.0018  area 28.2769 -> 28.2769 (shift +0.0008)  |g| 0.366  predicted dJ -0.0781  hits 53354  stuck 0  496s
+iterate 10: J = 1.0881 ± 0.0028  area 28.2769 -> 28.2769 (shift +0.0002)  |g| 0.362  predicted dJ -0.0664  hits 53436  stuck 0  496s
+iterate 11: J = 1.0622 ± 0.0017  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.391  predicted dJ -0.0472  hits 53160  stuck 0  500s
+iterate 12: J = 1.0392 ± 0.004  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.378  predicted dJ -0.0437  hits 53382  stuck 0  495s
+iterate 13: J = 1.0304 ± 0.0024  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.393  predicted dJ -0.0252  hits 53312  stuck 0  494s
+iterate 14: J = 1.0071 ± 0.0014  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.396  predicted dJ -0.0303  hits 53484  stuck 0  496s
+iterate 15: J = 0.984 ± 0.0028  area 28.2769 -> 28.2769 (shift +0.0011)  |g| 0.378  predicted dJ -0.0555  hits 53722  stuck 0  494s
+iterate 16: J = 0.93602 ± 0.001  area 28.2769 -> 28.2769 (shift +0.0006)  |g| 0.449  predicted dJ -0.082  hits 53560  stuck 0  493s
+iterate 17: J = 0.91704 ± 0.001  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.42  predicted dJ -0.0392  hits 54771  stuck 0  495s
+iterate 18: J = 0.88937 ± 0.0016  area 28.2769 -> 28.2769 (shift +0.0002)  |g| 0.432  predicted dJ -0.039  hits 54968  stuck 0  499s
+iterate 19: J = 0.85835 ± 0.0026  area 28.2769 -> 28.2769 (shift +0.0006)  |g| 0.471  predicted dJ -0.059  hits 55319  stuck 0  495s
+iterate 20: J = 0.80825 ± 0.0016  area 28.2769 -> 28.2769 (shift +0.0012)  |g| 0.545  predicted dJ -0.092  hits 55804  stuck 0  493s
+iterate 21: J = 0.72913 ± 0.0023  area 28.2769 -> 28.2769 (shift +0.0019)  |g| 0.553  predicted dJ -0.121  hits 56493  stuck 0  495s
+iterate 22: J = 0.65109 ± 0.00062  area 28.2769 -> 28.2769 (shift +0.0016)  |g| 0.479  predicted dJ -0.19  hits 57066  stuck 0  499s
+iterate 23: J = 0.69053 ± 0.00099  area 28.2769 -> 28.2769 (shift +0.0002)  |g| 0.43  predicted dJ -0.095  hits 59220  stuck 0  500s
+iterate 24: J = 0.61744 ± 0.00064  area 28.2769 -> 28.2769 (shift +0.0006)  |g| 0.44  predicted dJ -0.0973  hits 56870  stuck 0  498s
+iterate 25: J = 0.6025 ± 0.00052  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.416  predicted dJ -0.0514  hits 56966  stuck 0  502s
+iterate 26: J = 0.56938 ± 0.0013  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.384  predicted dJ -0.0209  hits 56715  stuck 0  494s
+iterate 27: J = 0.55335 ± 0.00094  area 28.2769 -> 28.2769 (shift +0.0003)  |g| 0.364  predicted dJ -0.0355  hits 56611  stuck 0  495s
+iterate 28: J = 0.53963 ± 0.00073  area 28.2769 -> 28.2769 (shift +0.0000)  |g| 0.356  predicted dJ -0.0529  hits 56518  stuck 0  498s
+iterate 29: J = 0.52669 ± 0.0009  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.341  predicted dJ -0.0244  hits 56308  stuck 0  498s
+iterate 30: J = 0.51534 ± 0.00066  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.344  predicted dJ -0.0174  hits 56222  stuck 0  493s
+iterate 31: J = 0.50528 ± 0.00074  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.332  predicted dJ -0.0185  hits 56206  stuck 0  500s
+iterate 32: J = 0.49671 ± 0.00042  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.328  predicted dJ -0.014  hits 56026  stuck 0  496s
+iterate 33: J = 0.48929 ± 0.00071  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.308  predicted dJ -0.015  hits 55966  stuck 0  494s
+iterate 34: J = 0.48184 ± 0.00045  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.326  predicted dJ -0.0155  hits 56019  stuck 0  502s
+iterate 35: J = 0.47442 ± 0.00094  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.306  predicted dJ -0.0127  hits 55821  stuck 0  495s
+iterate 36: J = 0.46716 ± 0.0013  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.305  predicted dJ -0.0123  hits 55842  stuck 0  496s
+iterate 37: J = 0.46203 ± 0.00042  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.287  predicted dJ -0.0126  hits 55846  stuck 0  495s
+iterate 38: J = 0.45635 ± 0.00027  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.277  predicted dJ -0.0143  hits 55676  stuck 0  499s
+iterate 39: J = 0.4515 ± 0.00045  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.252  predicted dJ -0.0146  hits 55720  stuck 0  494s
+iterate 40: J = 0.44671 ± 0.00038  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.274  predicted dJ -0.0126  hits 55494  stuck 0  500s
+iterate 41: J = 0.44176 ± 0.00044  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.25  predicted dJ -0.0126  hits 55593  stuck 0  495s
+iterate 42: J = 0.43851 ± 0.0004  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.272  predicted dJ -0.00651  hits 55391  stuck 0  498s
+iterate 43: J = 0.43318 ± 0.00074  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.263  predicted dJ -0.0072  hits 55361  stuck 0  494s
+iterate 44: J = 0.43034 ± 0.00074  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.254  predicted dJ -0.0083  hits 55512  stuck 0  499s
+iterate 45: J = 0.42548 ± 0.00069  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.29  predicted dJ -0.00826  hits 55346  stuck 0  496s
+iterate 46: J = 0.42257 ± 0.0006  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.251  predicted dJ -0.00727  hits 55400  stuck 0  495s
+iterate 47: J = 0.41868 ± 0.0006  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.28  predicted dJ -0.00691  hits 55398  stuck 0  494s
+iterate 48: J = 0.41554 ± 0.0007  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.247  predicted dJ -0.00724  hits 55424  stuck 0  496s
+iterate 49: J = 0.41264 ± 0.00094  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.319  predicted dJ -0.00603  hits 55214  stuck 0  494s
+iterate 50: J = 0.4114 ± 0.001  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.3  predicted dJ -0.0038  hits 55382  stuck 0  495s
+iterate 51: J = 0.40986 ± 0.00045  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.331  predicted dJ -0.00291  hits 55374  stuck 0  495s
+iterate 52: J = 0.40899 ± 0.00069  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.347  predicted dJ -0.00318  hits 55315  stuck 0  497s
+iterate 53: J = 0.408 ± 0.001  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.387  predicted dJ -0.00285  hits 55279  stuck 0  495s
+iterate 54: J = 0.40664 ± 0.00098  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.388  predicted dJ -0.00272  hits 55196  stuck 0  495s
+iterate 55: J = 0.40425 ± 0.00061  area 28.2769 -> 28.2769 (shift -0.0003)  |g| 0.383  predicted dJ -0.00414  hits 55146  stuck 0  496s
+iterate 56: J = 0.40197 ± 0.0002  area 28.2769 -> 28.2769 (shift -0.0003)  |g| 0.409  predicted dJ -0.00428  hits 54978  stuck 0  496s
+iterate 57: J = 0.40055 ± 0.00082  area 28.2769 -> 28.2769 (shift -0.0003)  |g| 0.428  predicted dJ -0.00442  hits 54888  stuck 0  497s
+iterate 58: J = 0.39621 ± 0.00029  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.418  predicted dJ -0.00732  hits 54804  stuck 0  503s
+iterate 59: J = 0.39652 ± 0.0012  area 28.2769 -> 28.2769 (shift -0.0002)  |g| 0.464  predicted dJ -0.00366  hits 54547  stuck 0  498s
+iterate 60: J = 0.39617 ± 0.001  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.44  predicted dJ -0.00289  hits 54750  stuck 0  497s
+iterate 61: J = 0.39646 ± 0.00029  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.44  predicted dJ -0.00289  hits 54690  stuck 0  495s
+iterate 62: J = 0.39646 ± 0.00029  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.44  predicted dJ -0.00289  hits 54690  stuck 0  486s
+converged after 63 iterates
+slurmstepd: error: *** JOB 34647033 ON c3gpu-e5-u1 CANCELLED AT 2026-10-20T13:16:11 ***

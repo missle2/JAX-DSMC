@@ -1,0 +1,20 @@
+[Mon Oct 19 01:28:36 MDT 2026] optrules_kn0.5_trper on c3gpu-e5-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA H200 NVL (UUID: GPU-afc1a4fb-442b-74db-28fb-eb4cf6d5df82)
+  GPU 1: NVIDIA H200 NVL (UUID: GPU-117c864d-1244-b84f-11f7-ff8b975be105)
+  GPU 2: NVIDIA H200 NVL (UUID: GPU-b2fe1c25-a2e6-9606-acba-0b1357d642eb)
+  GPU 3: NVIDIA H200 NVL (UUID: GPU-7a60ff60-58da-3d46-07fa-8a28191b9fd7)
+    MIG 2g.35gb     Device  0: (UUID: MIG-201ddb9b-e89b-516b-9674-16593f19c214)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_long_kn0.5_S4_trper_tan_sm8_free_g32 --iterations 300 --seeds-per-iterate 4 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --case circle_long --fnum-scale 2 --warmup 2800 --step 0.05 --smooth 8 --band 1.0 --keepout 1.0 --area-mode tangent --boundary free --optimizer tr --perimeter 0.05 --knudsen 0.5 --a-max 64 --substeps 4 --partners 8
+iterate 0: J = 0.0084024 ± 0.00011  area 28.2769 -> 28.2769 (shift +0.0000)  |g| 0.00117  predicted dJ -0.000171  hits 27171  stuck 0  637s
+iterate 1: J = 0.0083689 ± 0.00013  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00112  predicted dJ -8.77e-05  hits 27242  stuck 0  347s
+iterate 2: J = 0.0080333 ± 0.0001  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.0012  predicted dJ -0.000118  hits 27249  stuck 0  347s
+iterate 3: J = 0.0080457 ± 5.3e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.0012  predicted dJ -5.89e-05  hits 27134  stuck 0  346s
+iterate 4: J = 0.0081346 ± 0.00011  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00104  predicted dJ -3.93e-05  hits 27341  stuck 0  345s
+iterate 5: J = 0.0080911 ± 4.9e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00112  predicted dJ -3.93e-05  hits 27193  stuck 0  345s
+iterate 6: J = 0.0080911 ± 4.9e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00112  predicted dJ -3.93e-05  hits 27193  stuck 0  335s
+iterate 7: J = 0.0080911 ± 4.9e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00112  predicted dJ -3.93e-05  hits 27193  stuck 0  335s
+iterate 8: J = 0.0080911 ± 4.9e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00112  predicted dJ -3.93e-05  hits 27193  stuck 0  336s
+iterate 9: J = 0.0080911 ± 4.9e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00112  predicted dJ -3.93e-05  hits 27193  stuck 0  338s
+converged after 10 iterates
+[Mon Oct 19 02:30:43 MDT 2026] done

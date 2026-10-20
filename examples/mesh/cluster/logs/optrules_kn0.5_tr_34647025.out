@@ -1,0 +1,49 @@
+[Mon Oct 19 01:28:36 MDT 2026] optrules_kn0.5_tr on c3gpu-e5-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA H200 NVL (UUID: GPU-afc1a4fb-442b-74db-28fb-eb4cf6d5df82)
+    MIG 2g.35gb     Device  0: (UUID: MIG-f359585e-7d17-53ae-81ab-6cb7e3aa297e)
+  GPU 1: NVIDIA H200 NVL (UUID: GPU-117c864d-1244-b84f-11f7-ff8b975be105)
+  GPU 2: NVIDIA H200 NVL (UUID: GPU-b2fe1c25-a2e6-9606-acba-0b1357d642eb)
+  GPU 3: NVIDIA H200 NVL (UUID: GPU-7a60ff60-58da-3d46-07fa-8a28191b9fd7)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+python3 -m examples.mesh.optimize --tag circle_long_kn0.5_S4_tr_tan_sm8_free_g32 --iterations 300 --seeds-per-iterate 4 --workers 1 --fnum-scale 1 --grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --case circle_long --fnum-scale 2 --warmup 2800 --step 0.05 --smooth 8 --band 1.0 --keepout 1.0 --area-mode tangent --boundary free --optimizer tr --knudsen 0.5 --a-max 64 --substeps 4 --partners 8
+iterate 0: J = 0.0084024 ± 0.00011  area 28.2769 -> 28.2769 (shift +0.0000)  |g| 0.00117  predicted dJ -0.000171  hits 27171  stuck 0  648s
+iterate 1: J = 0.0082023 ± 0.00011  area 28.2769 -> 28.2769 (shift +0.0002)  |g| 0.00104  predicted dJ -0.000244  hits 27321  stuck 0  353s
+iterate 2: J = 0.0081439 ± 8.9e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00115  predicted dJ -0.000114  hits 27256  stuck 0  352s
+iterate 3: J = 0.0080542 ± 8e-05  area 28.2769 -> 28.2769 (shift +0.0000)  |g| 0.00108  predicted dJ -0.000173  hits 27255  stuck 0  352s
+iterate 4: J = 0.0078376 ± 0.00014  area 28.2769 -> 28.2769 (shift +0.0002)  |g| 0.00111  predicted dJ -0.000244  hits 27319  stuck 0  349s
+iterate 5: J = 0.0075786 ± 0.00012  area 28.2769 -> 28.2769 (shift +0.0005)  |g| 0.0012  predicted dJ -0.000345  hits 27332  stuck 0  350s
+iterate 6: J = 0.007319 ± 0.00014  area 28.2769 -> 28.2769 (shift +0.0017)  |g| 0.00124  predicted dJ -0.000468  hits 27374  stuck 0  349s
+iterate 7: J = 0.0068941 ± 1.3e-05  area 28.2769 -> 28.2769 (shift +0.0010)  |g| 0.00115  predicted dJ -0.000421  hits 27522  stuck 0  349s
+iterate 8: J = 0.0066216 ± 7.2e-05  area 28.2769 -> 28.2769 (shift +0.0005)  |g| 0.00119  predicted dJ -0.000381  hits 27728  stuck 0  392s
+iterate 9: J = 0.0063189 ± 8.2e-05  area 28.2769 -> 28.2769 (shift +0.0003)  |g| 0.00135  predicted dJ -0.000396  hits 28008  stuck 0  348s
+iterate 10: J = 0.006011 ± 2.5e-05  area 28.2769 -> 28.2769 (shift +0.0004)  |g| 0.00114  predicted dJ -0.000393  hits 28474  stuck 0  345s
+iterate 11: J = 0.0056746 ± 1.5e-05  area 28.2769 -> 28.2769 (shift +0.0006)  |g| 0.0012  predicted dJ -0.000392  hits 28597  stuck 0  348s
+iterate 12: J = 0.0053897 ± 0.0001  area 28.2769 -> 28.2769 (shift +0.0009)  |g| 0.00127  predicted dJ -0.000368  hits 29085  stuck 0  348s
+iterate 13: J = 0.0051747 ± 0.00011  area 28.2769 -> 28.2769 (shift +0.0011)  |g| 0.00123  predicted dJ -0.000359  hits 29400  stuck 0  354s
+iterate 14: J = 0.0050049 ± 6.3e-05  area 28.2769 -> 28.2769 (shift +0.0024)  |g| 0.00138  predicted dJ -0.000393  hits 29854  stuck 0  351s
+iterate 15: J = 0.0045319 ± 8.7e-05  area 28.2769 -> 28.2769 (shift +0.0013)  |g| 0.00141  predicted dJ -0.000357  hits 30281  stuck 0  346s
+iterate 16: J = 0.0043156 ± 2.5e-05  area 28.2769 -> 28.2769 (shift +0.0020)  |g| 0.00131  predicted dJ -0.000353  hits 30944  stuck 0  351s
+iterate 17: J = 0.0041224 ± 8.4e-05  area 28.2769 -> 28.2769 (shift +0.0031)  |g| 0.00139  predicted dJ -0.000445  hits 31512  stuck 0  345s
+iterate 18: J = 0.0038245 ± 0.00012  area 28.2769 -> 28.2769 (shift +0.0043)  |g| 0.00134  predicted dJ -0.000523  hits 32189  stuck 0  351s
+iterate 19: J = 0.0035747 ± 5.9e-05  area 28.2769 -> 28.2769 (shift +0.0031)  |g| 0.0015  predicted dJ -0.000932  hits 32928  stuck 0  344s
+iterate 20: J = 0.0035935 ± 8e-05  area 28.2769 -> 28.2769 (shift +0.0006)  |g| 0.00156  predicted dJ -0.000466  hits 33485  stuck 0  345s
+iterate 21: J = 0.0034076 ± 3e-05  area 28.2769 -> 28.2769 (shift +0.0003)  |g| 0.00152  predicted dJ -0.000157  hits 33103  stuck 0  347s
+iterate 22: J = 0.0033426 ± 4e-05  area 28.2769 -> 28.2769 (shift +0.0004)  |g| 0.0014  predicted dJ -0.000157  hits 33454  stuck 0  350s
+iterate 23: J = 0.0031207 ± 4e-05  area 28.2769 -> 28.2769 (shift +0.0017)  |g| 0.00147  predicted dJ -0.000241  hits 33815  stuck 0  348s
+iterate 24: J = 0.0030549 ± 4e-05  area 28.2769 -> 28.2769 (shift +0.0010)  |g| 0.00152  predicted dJ -0.000374  hits 34276  stuck 0  347s
+iterate 25: J = 0.0029409 ± 2.3e-05  area 28.2769 -> 28.2769 (shift +0.0008)  |g| 0.00143  predicted dJ -0.000415  hits 34922  stuck 0  355s
+iterate 26: J = 0.0028675 ± 3.8e-05  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.00151  predicted dJ -0.000261  hits 35411  stuck 0  347s
+iterate 27: J = 0.0027243 ± 5.9e-05  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.00159  predicted dJ -0.000104  hits 35457  stuck 0  346s
+iterate 28: J = 0.002682 ± 6.5e-05  area 28.2769 -> 28.2769 (shift +0.0001)  |g| 0.00155  predicted dJ -8.14e-05  hits 35492  stuck 0  344s
+iterate 29: J = 0.0026313 ± 3.6e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.0015  predicted dJ -8.18e-05  hits 35642  stuck 0  344s
+iterate 30: J = 0.0026142 ± 3.1e-05  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.00147  predicted dJ -4.88e-05  hits 36007  stuck 0  347s
+iterate 31: J = 0.0026884 ± 7.2e-05  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.00159  predicted dJ -2.44e-05  hits 36007  stuck 0  352s
+iterate 32: J = 0.0026613 ± 4.4e-05  area 28.2769 -> 28.2769 (shift -0.0001)  |g| 0.00163  predicted dJ -1.63e-05  hits 36007  stuck 0  342s
+iterate 33: J = 0.0026138 ± 1.2e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00152  predicted dJ -1.84e-05  hits 35867  stuck 0  346s
+iterate 34: J = 0.0026215 ± 3.2e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00149  predicted dJ -1.84e-05  hits 35955  stuck 0  342s
+iterate 35: J = 0.0026215 ± 3.2e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00149  predicted dJ -1.84e-05  hits 35955  stuck 0  336s
+iterate 36: J = 0.0026215 ± 3.2e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00149  predicted dJ -1.84e-05  hits 35955  stuck 0  334s
+iterate 37: J = 0.0026215 ± 3.2e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00149  predicted dJ -1.84e-05  hits 35955  stuck 0  333s
+iterate 38: J = 0.0026215 ± 3.2e-05  area 28.2769 -> 28.2769 (shift -0.0000)  |g| 0.00149  predicted dJ -1.84e-05  hits 35955  stuck 0  335s
+converged after 39 iterates
+[Mon Oct 19 05:20:00 MDT 2026] done
