@@ -27,7 +27,10 @@ for p in "${PATHS[@]}" "${SCRATCH[@]}"; do
   if [ -e "${p}" ]; then cp -al --parents "${p}" "${backup}/"; fi
 done
 echo "backup (hard links): ${backup}"
-git rm -r -q --cached --ignore-unmatch "${PATHS[@]}" "${SCRATCH[@]}"
+# -f: some of these may be staged already (an earlier `git add` on the cluster) with content
+# the running jobs have since rewritten; --cached never touches the files, -f only lets git
+# drop those stale staged copies
+git rm -r -q --cached -f --ignore-unmatch "${PATHS[@]}" "${SCRATCH[@]}"
 if ! git diff --cached --quiet; then
   git commit -q -m "untrack run data (cluster side, transitional)"
 fi

@@ -805,3 +805,45 @@ def test_compact_record_keeps_every_later_pass_event(kind):
     np.testing.assert_array_equal(diffuse, np.asarray(dense.diffuse)[:rows])
     _short, lost = wall_adjoint.compact_record(split, n_later - 1)
     assert int(lost) == 1
+
+
+def test_unresolved_particle_heading_into_a_sliver_is_deleted_not_moved_inside():
+    """2026-10-21 (optrules2 M 10, iterate 68): after its last allowed bounce a particle's
+    remaining move ended in a sliver of the level-set body thinner than the search reach's
+    sample spacing (``h / 2``); the post-loop query sampled the whole reach, missed it, and
+    the final move put the particle inside (``inside_body``, fatal).  The query now samples the
+    remaining move itself.  Here: a disk and, beside it, a blob ~0.03 across (one negative
+    knot value; spacing 0.0625), particles reflecting off the disk with one bounce allowed --
+    none may end inside, and the reach-sampled query provably misses some of the hits that the
+    unresolved ones have left."""
+    from jax_dsmc.mesh import levelset as L  # noqa: PLC0415 -- only this case needs it
+
+    grid = GridSpec(lo=jnp.array([0.0, 0.0]), hi=jnp.array([4.0, 4.0]), n=(16, 16))
+    h = 0.125
+    lo, m = L.grid_for_box(grid.lo, grid.hi, h, margin=3)
+    template = L.LevelSet(coef=jnp.zeros(m), lo=jnp.asarray(lo), h=h)
+    values = np.array(L.analytic_distance(jnp.array([2.0, 2.0]), 1.0, L.knots(template)))
+    values = values.reshape(m)
+    blob = tuple(round((c - lo[a]) / h) for a, c in enumerate((3.25, 2.0)))
+    values[blob] = -0.02  # the sliver: phi < 0 only within ~0.015 of this knot
+    ls = L.from_values(values, lo, h, n_sample=16)
+    mesh = cut.build_mesh(ls, grid, radius=1, sub=4)
+    key_x, key_a = jax.random.split(jax.random.PRNGKey(5))
+    n = 100_000
+    # starts right of the disk, moving left at it: reflections fan out over the blob
+    x = jnp.stack([jax.random.uniform(key_x, (n,), minval=3.05, maxval=3.45),
+                   jax.random.uniform(jax.random.fold_in(key_x, 1), (n,), minval=1.6,
+                                      maxval=2.4)], axis=1)  # fmt: skip
+    ang = jax.random.uniform(key_a, (n,), minval=0.75 * math.pi, maxval=1.25 * math.pi)
+    speed = 1000.0
+    v = jnp.stack([speed * jnp.cos(ang), speed * jnp.sin(ang), jnp.zeros(n)], axis=1)
+    alive = jnp.ones(n, bool) & ~L.inside(ls, x)
+    dt = 0.45 / speed  # below the search reach (16 h / 2 = 1.0)
+    out = _advance(x, v, alive, grid, _closed(2), _wall(2), mesh, "stencil", dt, max_bounces=1)
+    xo, vo, ao, counts = out[0], out[1], out[2], out[3]
+    assert int(counts.inside_body) == 0 and int(counts.exhausted) > 0
+    stuck = np.asarray(alive & ~ao)
+    reach_hit = np.asarray(L.hit_body(xo, vo, ls))  # the old query: samples the whole reach
+    move_hit = np.asarray(L.hit_body(xo, vo, ls, jnp.full(n, dt)))
+    missed = stuck & np.isinf(reach_hit) & np.isfinite(move_hit)
+    assert missed.sum() > 0

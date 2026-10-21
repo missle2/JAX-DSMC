@@ -791,20 +791,35 @@ def _next_surface(x, v, grid, mesh, exclude, remaining, tables=None):
 
 
 def _dense_distance(args, grid, mesh):
-    """The post-loop surface query over every slot."""
-    x, v, exclude, _slot = args
+    """The post-loop surface query over every slot (the full search reach: the conditional
+    time's upper end)."""
+    x, v, exclude, _slot, _left = args
     return _next_surface(x, v, grid, mesh, exclude, None)[0]
 
 
+def _left_distance(args):
+    """The post-loop query of the remaining moves themselves (``args[-1]``), when ``epsilon
+    = 0`` makes it the only one needed."""
+    return args[-1]
+
+
 def _lane_distance(args, grid, mesh):
-    """The post-loop surface query over the lane only, ``inf`` elsewhere: with ``epsilon =
-    0`` the query decides only which particles are still unresolved (``exhausted``), and a
-    slot outside the lane had no event in pass 0 -- whose search covered its whole move --
-    so it has nothing left to resolve."""
-    x, v, exclude, slot = args
+    """The post-loop surface query over the lane only, ``inf`` elsewhere, along each lane
+    particle's REMAINING move (``remaining``, ``f64[N]``): it decides which particles are
+    still unresolved (``exhausted``), and a slot outside the lane had no event in pass 0 --
+    whose search covered its whole move -- so it has nothing left to resolve.
+
+    The remaining move, not the search reach: a level set's hit search samples its length at
+    ``n_sample`` points, so over the reach (0.5 m at h = 0.0625) the spacing is 3 cm and a
+    re-entry into a sliver of the body closer than that goes unseen -- the particle is then
+    not counted unresolved and its final move ends inside (2026-10-21, optrules2 M 10
+    iterate 68: 32 specular bounces along a concave stretch behind the nose, the 33rd hit
+    1 cm away, ``inside_body`` fired).  Over the remaining move the end point is a sample, so
+    a move that ends inside is always bracketed."""
+    x, v, exclude, slot, remaining = args
     n = x.shape[0]
     take = jnp.maximum(slot, 0)
-    d, _ = _next_surface(x[take], v[take], grid, mesh, exclude[take], None)
+    d, _ = _next_surface(x[take], v[take], grid, mesh, exclude[take], remaining[take])
     return jnp.full((n,), jnp.inf).at[_drop_slot(slot, n)].set(d, mode="drop")
 
 
@@ -1354,7 +1369,10 @@ def _advance_impl(  # noqa: PLR0915 -- the three trackers' dispatch and one shar
         carry = jax.lax.fori_loop(0, max_bounces, body, init)
         x, v, alive, elapsed, logp, had_hit, tally, events, _, exclude, overrun, n_surf = carry
         distance, _ = _next_surface(x, v, grid, mesh, exclude, None)
-        exhausted = alive & (elapsed + distance <= budget)
+        # unresolved: a hit left within the REMAINING move, searched along that move (its
+        # end point a sample; :func:`_lane_distance`)
+        left, _ = _next_surface(x, v, grid, mesh, exclude, budget - elapsed)
+        exhausted = alive & (elapsed + left <= budget)
         if mesh is not None:
             # SPARTA `MAXSTUCK`: a particle still bouncing in a concave pocket after
             # `max_bounces` passes is deleted and counted (`surface_stuck`), not left with
@@ -1376,16 +1394,17 @@ def _advance_impl(  # noqa: PLR0915 -- the three trackers' dispatch and one shar
             dim if trace else None,
         )
         x, v, alive, elapsed, logp, had_hit, tally, events, _, exclude, overrun, n_surf = carry
-        # the next surface: over every slot when epsilon > 0 (the conditional time's upper
-        # end), else over the lane alone (only its particles can be left unresolved)
+        # the lane particles' remaining moves (only they can be left unresolved), and the
+        # next surface over every slot when epsilon > 0 (the conditional time's upper end)
+        left = _lane_distance((x, v, exclude, events.slot, budget - elapsed), grid, mesh)
         distance = jax.lax.cond(
             jnp.asarray(epsilon) > 0.0,
             functools.partial(_dense_distance, grid=grid, mesh=mesh),
-            functools.partial(_lane_distance, grid=grid, mesh=mesh),
-            (x, v, exclude, events.slot),
+            _left_distance,
+            (x, v, exclude, events.slot, left),
         )
         # SPARTA MAXSTUCK, as for the stencil: the lane particles still unresolved
-        exhausted = alive & (elapsed + distance <= budget)
+        exhausted = alive & (elapsed + left <= budget)
         alive = alive & ~exhausted
     elif tracker == "walk":
         from jax_dsmc.mesh.walk import walk  # noqa: PLC0415 -- walk imports this module
