@@ -218,12 +218,14 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
     return ls, delta, float(np.sum(g * delta)), state, extra
 
 
-def rule_step(cfg, ls, g, g_full, g_area, objective, objective_se, state, k, lo, hi):
+def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     """One step of an :mod:`optimizers` rule (``tr``, ``lbfgs``, ``mma``) from the iterate
     just evaluated (level set ``ls``, area-tangent gradient ``g``, the full one ``g_full``,
-    objective): the level set to
-    step from (the base point after a rejection), the coefficient step, its predicted change,
-    the updated state and the row's extra fields."""
+    the per-seed objectives ``objectives``): the level set to step from (the base point
+    after a rejection), the coefficient step, its predicted change, the updated state and the
+    row's extra fields.  A rejection at the trust region's floor returns a zero step from the
+    base point and ``state["seed_shift"]`` advanced by the seed count: the base is evaluated
+    again on new seeds (:func:`optimizers.judge`)."""
     rule, step = cfg["optimizer"], cfg["step"]
     band = cfg["band"] + ls.h
     smooth = functools.partial(smoothed_direction, ls=ls, sigma=cfg["smooth"], band=band)
@@ -231,15 +233,16 @@ def rule_step(cfg, ls, g, g_full, g_area, objective, objective_se, state, k, lo,
     extra = {}
     if rule == "mma":
         return _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi)
-    accepted, rho, radius = OZ.judge(state, objective, objective_se, step)
+    verdict = OZ.judge(state, objectives, step)
+    accepted, radius = verdict["accepted"], verdict["radius"]
     pairs = OZ.pairs_of(state)
     if "base_coef" in state:
         pairs, kept = OZ.add_pair(pairs, coef - state["base_coef"], g - state["base_g"])
         extra["pair_kept"] = kept if rule == "lbfgs" else None
     if accepted:
-        base, g_base, j_base = coef, g, objective
+        base, g_base, j_base = coef, g, np.asarray(objectives, float)
     else:
-        base, g_base, j_base = state["base_coef"], state["base_g"], float(state["base_objective"])
+        base, g_base, j_base = state["base_coef"], state["base_g"], state["base_objectives"]
     base_ls = dataclasses.replace(ls, coef=jnp.asarray(base))
     if not accepted:  # the step's metric and constraint at the base point
         smooth = functools.partial(smoothed_direction, ls=base_ls, sigma=cfg["smooth"], band=band)
@@ -253,10 +256,18 @@ def rule_step(cfg, ls, g, g_full, g_area, objective, objective_se, state, k, lo,
         delta, at_edge = OZ.fit_to_radius(direction, radius)
     else:
         delta, at_edge = direction * (radius / max(float(np.abs(direction).max()), 1e-300)), True
+    shift = int(state.get("seed_shift", 0))
+    if verdict["rebase"]:
+        # rejected at the floor: the base point again, on the next seeds
+        delta, at_edge, shift = np.zeros_like(delta), False, shift + len(objectives)
     predicted = float(np.sum(g_base * delta))
-    state = dict(state, base_coef=base, base_g=g_base, base_objective=j_base, radius=radius,
-                 predicted=predicted, at_edge=at_edge, **OZ.pairs_state(pairs))  # fmt: skip
-    extra.update(accepted=accepted, rho=rho, radius=radius, at_edge=at_edge,
+    state = dict(state, base_coef=base, base_g=g_base, base_objectives=j_base, radius=radius,
+                 predicted=predicted, at_edge=at_edge, rebase=verdict["rebase"],
+                 seed_shift=shift, **OZ.pairs_state(pairs),
+                 **OZ.window_state(verdict["window"]))  # fmt: skip
+    extra.update(accepted=accepted, rho=verdict["rho"], rho_pooled=verdict["rho_pooled"],
+                 rho_se=verdict["rho_se"], rho_window=len(verdict["window"][0]),
+                 rebase=verdict["rebase"], seed_shift=shift, radius=radius, at_edge=at_edge,
                  lbfgs_pairs=len(pairs) if rule == "lbfgs" else None,
                  step_max=float(np.abs(delta).max()))  # fmt: skip
     return base_ls, delta, predicted, state, extra
@@ -432,6 +443,7 @@ def _combine(parts):
         "gradient": grads.mean(axis=0),
         "gradient_seed_sd": float(grads.std(axis=0, ddof=1).mean()) if n > 1 else float("nan"),
         "objective": float(objs.mean()),
+        "objectives": objs.tolist(),
         "objective_se": float(objs.std(ddof=1) / np.sqrt(n)) if n > 1 else float("nan"),
         "hits": float(np.concatenate([p["hits"] for p in parts]).mean()),
         # particles deleted in concave pockets (SPARTA stuck), summed over the seeds
@@ -637,12 +649,18 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         cut.build_mesh(
             ls, dataclasses.replace(grid, volume=jnp.zeros(0)), radius=cfg["radius_cells"]
         )
+        # the trust region's re-evaluation on new seeds after a rejection at its floor
+        # (optimizers.judge) moves every later iterate to the next seeds; the warm starts of
+        # the new seed indices begin from the empty box
+        shift = int(rule_state.get("seed_shift", 0)) if rule else 0
+        iterate_seeds = [shift + i for i in seeds]
         if cfg["workers"] > 1:
-            avg = parallel_terms(cfg, ls, seeds, out, k, argv)
+            avg = parallel_terms(cfg, ls, iterate_seeds, out, k, argv)
         else:
-            avg = averaged_terms(cfg, ls, seeds, out)
+            avg = averaged_terms(cfg, ls, iterate_seeds, out)
         g = avg["gradient"]
         objective = avg["objective"]
+        objectives = np.asarray(avg["objectives"], float)
         perimeter = None
         if cfg["perimeter"] > 0.0:
             perimeter, g_perimeter = perimeter_and_gradient(ls, lo, hi)
@@ -650,6 +668,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
                 perimeter_ref = [avg["objective"], perimeter]
             weight = cfg["perimeter"] * perimeter_ref[0] / perimeter_ref[1]
             objective = objective + weight * perimeter
+            objectives = objectives + weight * perimeter
             g = g + weight * g_perimeter
         g_full = g
         area_err = 0.0
@@ -665,7 +684,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         extra = {}
         if rule:
             from_ls, delta, predicted, rule_state, extra = rule_step(
-                cfg, ls, g, g_full, g_area, objective, avg["objective_se"], rule_state, k, lo, hi
+                cfg, ls, g, g_full, g_area, objectives, rule_state, k, lo, hi
             )
             OZ.save_state(state_path, rule_state)
             scale, eta = float(np.abs(delta).max()), 1.0
@@ -702,6 +721,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "optimizer": cfg["optimizer"],
             "objective": avg["objective"],
             "objective_se": avg["objective_se"],
+            "objectives": avg["objectives"],
+            "seeds": iterate_seeds,
             "gradient_seed_sd": avg["gradient_seed_sd"],
             "hits": avg["hits"],
             "stuck": avg["stuck"],
@@ -874,3 +895,9 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
+    # everything is on disk (history.json, coef_k, opt_state); leave without the interpreter's
+    # teardown: the converged M 10 optrules jobs (2026-10-19, H200 MIG) printed "converged"
+    # and then hung in it until the job's time limit
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)

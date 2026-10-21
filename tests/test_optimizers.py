@@ -1,5 +1,6 @@
 """The optimiser's step rules (examples/mesh/optimizers.py) on small numpy problems: the trust
-region's judgement, L-BFGS on a quadratic, and one MMA subproblem under the area constraint."""
+region's judgement (paired per-seed differences, pooled rho, the floor's re-evaluation on new
+seeds), L-BFGS on a quadratic, and one MMA subproblem under the area constraint."""
 
 import os
 import sys
@@ -10,21 +11,80 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "exa
 import optimizers as OZ
 
 
+def _trial(state, change, noise, step=0.05):
+    """Judge a trial whose four seeds change by ``change`` +- ``noise`` against the base."""
+    base = np.asarray(state["base_objectives"])
+    return OZ.judge(state, base + change + noise * np.array([1.0, -1.0, 1.0, -1.0]), step)
+
+
+BASE = {"radius": 0.05, "base_objectives": np.ones(4), "predicted": -0.1, "at_edge": True}
+
+
 def test_trust_region_grows_on_agreement_shrinks_and_rejects_on_a_rise():
-    state = {"radius": 0.05, "base_objective": 1.0, "predicted": -0.1, "at_edge": True}
-    ok, rho, radius = OZ.judge(state, 0.91, 1e-4, 0.05)
-    assert ok and abs(rho - 0.9) < 1e-12 and radius == 0.05 * OZ.GROW
-    ok, rho, radius = OZ.judge(state, 0.99, 1e-4, 0.05)
-    assert ok and radius == 0.05 * OZ.SHRINK
-    ok, rho, radius = OZ.judge(state, 1.02, 1e-4, 0.05)
-    assert not ok and rho < 0 and radius == 0.05 * OZ.SHRINK
-    # a prediction below the seed noise is inconclusive
-    ok, rho, radius = OZ.judge(dict(state, predicted=-1e-5), 1.02, 1e-3, 0.05)
-    assert ok and np.isnan(rho) and radius == 0.05
+    """The 2026-10-20 judge: paired per-seed differences, a symmetric x2 / x0.5 update."""
+    v = _trial(BASE, -0.09, 1e-4)
+    assert v["accepted"] and abs(v["rho"] - 0.9) < 1e-9 and v["radius"] == 0.05 * OZ.GROW
+    assert v["window"] == [[], [], []]  # the radius changed: pool again
+    v = _trial(BASE, -0.01, 1e-4)
+    assert v["accepted"] and v["radius"] == 0.05 * OZ.SHRINK
+    v = _trial(BASE, 0.02, 1e-4)
+    assert not v["accepted"] and not v["rebase"] and v["radius"] == 0.05 * OZ.SHRINK
+    # rho centred on 0.5 keeps the radius (the earlier x1.5 / x0.5 drifted it down)
+    v = _trial(BASE, -0.05, 1e-4)
+    assert v["accepted"] and v["radius"] == 0.05 and len(v["window"][0]) == 1
+
+
+def test_trust_region_noise_neither_rejects_nor_resizes():
+    """A rise within the seed noise is accepted; a noisy rho is inconclusive (radius kept)."""
+    v = _trial(BASE, 0.01, 0.1)  # paired se 0.058 > the rise; rho -0.1 +- 0.58
+    assert v["accepted"] and v["radius"] == 0.05
+    v = _trial(BASE, -0.01, 0.2)  # rho 0.1 +- ~1: no evidence either way
+    assert v["accepted"] and v["radius"] == 0.05
+
+
+def test_trust_region_pools_rho_over_the_window():
+    """Trials individually inconclusive (rho 0.1 +- 0.29) become conclusive pooled (4 trials:
+    +- 0.14) and shrink the radius (the window then restarts); at most RHO_WINDOW are held."""
+    state = dict(BASE)
+    radii = []
+    for _ in range(OZ.RHO_WINDOW):
+        v = _trial(state, -0.01, 0.05)
+        assert v["accepted"]
+        radii.append(v["radius"])
+        state.update(radius=v["radius"], **OZ.window_state(v["window"]))
+    assert radii[:3] == [0.05] * 3 and radii[3:] == [0.05 * OZ.SHRINK] * 2
+    state = dict(BASE)
+    for _ in range(OZ.RHO_WINDOW + 3):
+        v = _trial(state, -0.05, 1e-4)
+        state.update(radius=v["radius"], **OZ.window_state(v["window"]))
+    assert len(v["window"][0]) == OZ.RHO_WINDOW and v["radius"] == 0.05
+
+
+def test_trust_region_one_seed_uses_the_window_scatter():
+    """One seed per iterate: no decision before RHO_MIN_ONE_SEED trials, then the scatter of
+    the window's changes about rho * predicted is the noise."""
+    state = {"radius": 0.05, "base_objectives": np.ones(1), "predicted": -0.1, "at_edge": True}
+    for n, change in enumerate((-0.09, -0.095, -0.085, -0.09), start=1):
+        v = OZ.judge(state, np.ones(1) + change, 0.05)
+        if n < OZ.RHO_MIN_ONE_SEED:
+            assert v["accepted"] and np.isnan(v["rho_se"]) and v["radius"] == 0.05
+            state.update(**OZ.window_state(v["window"]))
+    assert v["radius"] == 0.05 * OZ.GROW  # rho 0.9 +- 0.03 by the third trial
+    rho, se, se_now = OZ.pooled_rho([-0.09, -0.01, -0.05], [-0.1] * 3, [np.nan] * 3)
+    assert abs(rho - 0.5) < 1e-12 and se > 0.0 and se_now > 0.0
+
+
+def test_trust_region_rejection_at_the_floor_rebases_instead_of_repeating():
+    """At the floor a rejection cannot shrink: the verdict asks for the base point on new
+    seeds, and the re-evaluated base is its own base (no judgement)."""
+    lo, _hi = OZ.radius_bounds(0.05)
+    v = _trial(dict(BASE, radius=lo), 0.02, 1e-4)
+    assert not v["accepted"] and v["rebase"] and v["radius"] == lo
+    v = OZ.judge(dict(BASE, radius=lo, rebase=True), np.full(4, 3.0), 0.05)
+    assert v["accepted"] and not v["rebase"] and np.isnan(v["rho"])
     # the radius stays within its bounds
-    lo, hi = OZ.radius_bounds(0.05)
-    assert OZ.judge(dict(state, radius=lo), 1.02, 1e-4, 0.05)[2] == lo
-    assert OZ.judge(dict(state, radius=hi), 0.91, 1e-4, 0.05)[2] == hi
+    _lo, hi = OZ.radius_bounds(0.05)
+    assert _trial(dict(BASE, radius=hi), -0.09, 1e-4)["radius"] == hi
 
 
 def test_lbfgs_solves_a_quadratic_with_the_identity_preconditioner():

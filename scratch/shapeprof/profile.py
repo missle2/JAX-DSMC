@@ -4,7 +4,8 @@ backwards, the shape VJP), each setting run twice (the first compiles) and the s
 then the shape step's estimator share (the shipped along_pool_plane against the plain k32
 own-cell fit) and the backward's guard cost (CELL_BASIS against the unguarded cubic).  The
 last timed call of the shipped setting is also traced (jax.profiler, perfetto) into
-``<out>.trace/``.  ``warm500``: the shipped setting's second call warm-started (2026-10-19).
+``<out>.trace/``.  ``warm500``: the shipped setting's second and third calls warm-started
+(2026-10-19/20; the third is the timed one).
 
     PYTHONPATH=. python3 scratch/shapeprof/profile.py OUT.json RUN_DIR ITERATE [overrides]
 """
@@ -30,14 +31,17 @@ PHASES = ("build", "warmup", "capture", "replay", "backward", "shape")
 
 def timed(cfg, ls, key, basis, variant, trace=None, warm=0):
     """The phases of two calls (compile, then timed) of one setting; ``warm > 0``: the second
-    call warm-started from the first's final gas with ``warm`` re-equilibration steps."""
+    call warm-started from the first's final gas with ``warm`` re-equilibration steps, and a
+    third warm call from the second's gas -- the second compiles the warm path (its own
+    ``n_steps``; 2026-10-20: the persistent cache had the cold path, so the second's warm-up
+    was mostly compilation), the third is the steady cost."""
     ensemble_backward.configure("virtual", 4, 8, "staged", basis)
     out = {}
     final = None
-    for label in ("first", "second"):
+    for label in ("first", "second", *(("third",) if warm else ())):
         if trace and label == "second":
             jax.profiler.start_trace(trace, create_perfetto_trace=True)
-        restart = final if warm and label == "second" else None
+        restart = final if warm and label != "first" else None
         run_cfg = dict(cfg, restart_steps=warm) if restart is not None else cfg
         t0 = time.time()
         _terms, info, s = EM.shape_terms(

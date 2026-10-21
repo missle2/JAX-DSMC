@@ -100,9 +100,16 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   30 / 58 / 156 / 246 (``om_it*``, one H200 each) and the stored device gates (``unit``).
 * ``optrules`` (2026-10-19): the optimiser's step rules compared (``examples/mesh/optimizers.py``):
   Adam, the trust region ``tr``, L-BFGS in the trust region ``lbfgs`` (the quasi-Newton SQP
-  step at constant area), MMA ``mma`` and ``tr`` with a 5 % perimeter penalty ``trper``, each
-  on the optm Kn 0.5 and Kn 0.5 + M 10 free-space problems with the guarded cubic backward
-  (tags ``*_g32``).  One H200 each, 24 h, resumable.
+  step at constant area) and MMA ``mma``, each on the optm Kn 0.5 and Kn 0.5 + M 10
+  free-space problems with the guarded cubic backward (tags ``*_g32``).  One H200 each, 24 h.
+  Done 2026-10-20 (scratch/optrules/analysis.py): the reference runs, not to be resubmitted
+  (the tags would resume); ``trper`` (a 5 % perimeter penalty) dropped from the group.
+* ``optrules2`` (2026-10-20): the reworked trust region (``tr``: rho pooled over 5 trials from
+  paired per-seed differences, x2 / x0.5, re-evaluation on new seeds at the floor) on the same
+  two problems, S = 4, warm-started (``--restart-steps 500``); tags ``*_S4_tr2_*_w500``.
+* ``optrules1seed`` (2026-10-20): Adam, ``tr``, ``lbfgs`` and ``mma`` with ONE seed per iterate
+  (gradient and objective noise x2) on the same two problems, warm-started, up to 1200
+  iterates (the S = 4 runs' 300 x 4 seed evaluations); tags ``*_S1_<arm>_*_w500``.
 * ``shapeprof`` (2026-10-19): where a seed's time goes (``bash scratch/shapeprof/cluster_job.sh
   <name>``): the optm Kn 0.5 M 10 iterates 30 / 156 with the run's own config, per phase, the
   unguarded cubic and the plain k32 slope fit for comparison, and a perfetto trace.  One H200.
@@ -306,24 +313,69 @@ OPTRULES = {
     "tr": "--optimizer tr",
     "lbfgs": "--optimizer lbfgs",
     "mma": "--optimizer mma",
-    "trper": "--optimizer tr --perimeter 0.05",
 }
 OPTRULES_REGIMES = ("kn0.5", "kn0.5_M10")
+
+
+def _optrules_tagged(name, arm, flags, seeds=4, suffix="", extra=""):
+    """One optrules-family job: the optm problem ``name`` (``OPTRULES_REGIMES``), arm tag
+    ``arm``, optimiser ``flags``."""
+    m10 = "--mach 10 --dt 2.5e-5"
+    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
+               "kn0.5_M10": f"--knudsen 0.5 {m10} --a-max 256 {KNPULLBACK}"}  # fmt: skip
+    return (
+        f"python3 -m examples.mesh.optimize --tag circle_long_{name}_S{seeds}_{arm}"
+        f"_tan_sm8_free_g32{suffix} --seeds-per-iterate {seeds} --workers 1 "
+        f"{COARSE} {LONG} --step 0.05 --smooth 8 --band 1.0 --keepout {KEEPOUT} "
+        f"--area-mode tangent --boundary free {flags} {regimes[name]} {extra}"
+    ).strip()
 
 
 def _optrules_jobs(gpus_per_node: int) -> dict[str, str]:
     """``optrules``: each arm of :data:`OPTRULES` on the optm Kn 0.5 and Kn 0.5 + M 10
     problems (one H200 each, S = 4, the same seeds and settings as ``optm``)."""
     del gpus_per_node
-    m10 = "--mach 10 --dt 2.5e-5"
-    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
-               "kn0.5_M10": f"--knudsen 0.5 {m10} --a-max 256 {KNPULLBACK}"}  # fmt: skip
     return {
-        f"{name}_{arm}": (
-            f"python3 -m examples.mesh.optimize --tag circle_long_{name}_S4_{arm}_tan_sm8_free_g32 "
-            f"--iterations {MAX_ITERATIONS} --seeds-per-iterate 4 --workers 1 "
-            f"{COARSE} {LONG} --step 0.05 --smooth 8 --band 1.0 --keepout {KEEPOUT} "
-            f"--area-mode tangent --boundary free {flags} {regimes[name]}"
+        f"{name}_{arm}": _optrules_tagged(name, arm, flags, extra=f"--iterations {MAX_ITERATIONS}")
+        for name in OPTRULES_REGIMES
+        for arm, flags in OPTRULES.items()
+    }
+
+
+# the warm start of every later optrules group (2026-10-19 relaxation / CRN checks)
+WARM = "--restart-steps 500"
+
+
+def _optrules2_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optrules2``: the reworked trust region (2026-10-20), S = 4, warm-started."""
+    del gpus_per_node
+    return {
+        f"{name}_tr2": _optrules_tagged(
+            name,
+            "tr2",
+            "--optimizer tr",
+            suffix="_w500",
+            extra=f"--iterations {MAX_ITERATIONS} {WARM}",
+        )
+        for name in OPTRULES_REGIMES
+    }
+
+
+# one seed per iterate: 4x the iterates of the S = 4 runs for the same seed evaluations
+ONE_SEED_ITERATIONS = 4 * MAX_ITERATIONS
+
+
+def _optrules1seed_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optrules1seed``: every rule but the perimeter one with one seed per iterate."""
+    del gpus_per_node
+    return {
+        f"{name}_S1_{arm}": _optrules_tagged(
+            name,
+            arm,
+            flags,
+            seeds=1,
+            suffix="_w500",
+            extra=f"--iterations {ONE_SEED_ITERATIONS} {WARM}",
         )
         for name in OPTRULES_REGIMES
         for arm, flags in OPTRULES.items()
@@ -362,6 +414,8 @@ NEW_GROUPS = {
     "guardgate": _guardgate_jobs,
     "shapeprof": _shapeprof_jobs,
     "optrules": _optrules_jobs,
+    "optrules2": _optrules2_jobs,
+    "optrules1seed": _optrules1seed_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

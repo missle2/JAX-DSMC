@@ -8,13 +8,28 @@ the largest normal displacement, ``|grad phi| = 1`` -- the rule chooses.
 
 * ``tr``: steepest descent in the smoothed metric inside a **trust region** of radius
   ``Delta`` (the largest normal displacement).  Each evaluated trial is compared with its
-  base point: ``rho = (J_trial - J_base) / predicted``.  The objective is evaluated on the
-  same seeds every iterate (common random numbers), so this difference is far less noisy
-  than either value -- ``rho`` is the quantity a stochastic objective lets us measure well.
-  ``rho > 0.75`` (and the step at the radius) grows ``Delta`` x1.5, ``rho < 0.25`` shrinks
-  it x0.5, ``rho < 0`` also **rejects** the trial: the next step starts again from the base
-  point (its gradient is kept).  A prediction smaller than half the objective's seed
-  standard error is inconclusive: accepted, ``Delta`` kept.
+  base point on the same seeds (common random numbers): per seed ``d_s = J_s(trial) -
+  J_s(base)``, the change ``mean(d)`` with standard error ``sd(d) / sqrt(S)`` -- the paired
+  difference is far less noisy than either value (:func:`judge`, 2026-10-20 form):
+
+  - **pooled rho**: ``rho = sum(actual) / sum(predicted)`` over the last ``RHO_WINDOW`` (5)
+    trials at the current radius, its standard error from the trials' paired errors (with
+    one seed per iterate, from the scatter of the window's changes about ``rho`` times the
+    prediction; no decision before 3 trials).  2026-10-20 optrules: a single trial's rho was
+    noise once the predicted change fell to the seed noise, and noise alone walked the radius
+    to its floor.
+  - **symmetric radius update**: ``x2`` when ``rho - se > 0.75`` (and the step at the edge),
+    ``x0.5`` when ``rho + se < 0.25``, else kept: a rho centred on 0.5 (steepest descent at
+    the right length) leaves the radius where it is (the earlier ``x1.5 / x0.5`` drifted it
+    down ~6-10 % per iterate).  The window restarts at every change (rho depends on the
+    radius).
+  - **rejection**: the trial is rejected only when it is worse than its base beyond the
+    noise (``mean(d) > se``); the radius halves and the next step starts again from the base
+    point (its gradient kept).
+  - **at the floor**: a rejection there cannot shrink, so retrying would repeat the identical
+    trial on the identical seeds forever (the 2026-10-19 runs' "convergence").  Instead the
+    base point is **re-evaluated on new seeds** (``seed_shift`` += S; zero step), a fresh
+    objective and gradient, and the run goes on from it.
 * ``lbfgs``: the same trust region around a limited-memory BFGS direction -- with one
   (exactly restored) area equality this is the quasi-Newton SQP step on the constant-area
   set.  The initial inverse Hessian is ``gamma S`` (the smoothing as preconditioner, ``gamma
@@ -43,8 +58,10 @@ import numpy as np
 from scipy.optimize import minimize
 
 RULES = ("tr", "lbfgs", "mma")
-GROW, SHRINK = 1.5, 0.5
+GROW, SHRINK = 2.0, 0.5
 RHO_GOOD, RHO_POOR = 0.75, 0.25
+RHO_WINDOW = 5  # trials pooled into rho (at the current radius)
+RHO_MIN_ONE_SEED = 3  # one seed per iterate: trials before the scatter gives an error
 LBFGS_MEMORY = 5
 
 
@@ -68,24 +85,70 @@ def radius_bounds(step: float) -> tuple[float, float]:
     return step / 4.0, step * 4.0
 
 
-def judge(state, objective, objective_se, step):
-    """Compare the trial just evaluated (``objective``) with its base point.  Returns
-    ``(accepted, rho, radius)``; the first evaluation is its own base."""
+def _window(state):
+    """The pooled trials ``(actual, predicted, variance)`` at the current radius."""
+    if "win_actual" not in state:
+        return [], [], []
+    return [list(np.atleast_1d(np.asarray(state[k], float))) for k in
+            ("win_actual", "win_pred", "win_var")]  # fmt: skip
+
+
+def window_state(window):
+    actual, pred, var = window
+    return {"win_actual": np.asarray(actual, float), "win_pred": np.asarray(pred, float),
+            "win_var": np.asarray(var, float)}  # fmt: skip
+
+
+def pooled_rho(actual, pred, var):
+    """``(rho, se of rho, se of the newest trial's change)`` of the window.  ``var``: each
+    trial's paired-difference variance of the mean (NaN with one seed: then the window's
+    scatter about ``rho * predicted`` stands in, from ``RHO_MIN_ONE_SEED`` trials on)."""
+    a, p, v = (np.asarray(x, float) for x in (actual, pred, var))
+    rho = float(a.sum() / p.sum())
+    if np.isnan(v).any():
+        n = a.size
+        if n < RHO_MIN_ONE_SEED:
+            return rho, float("nan"), float("nan")
+        v = np.full(n, float(np.sum((a - rho * p) ** 2)) / (n - 1))
+    return rho, float(np.sqrt(v.sum()) / abs(p.sum())), float(np.sqrt(v[-1]))
+
+
+def judge(state, objectives, step):
+    """Judge the trial just evaluated (per-seed ``objectives``) against its base point (module
+    docstring, ``tr``).  Returns a dict: ``accepted``, ``rebase`` (rejected at the floor: the
+    base point is evaluated again on new seeds), ``radius`` (for the next step), the trial's
+    own ``rho``, the window's ``rho_pooled`` / ``rho_se`` / ``window`` (lists, at the
+    returned radius).  The first evaluation, and a base re-evaluated on new seeds, is its
+    own base (accepted, no judgement)."""
     radius = float(state.get("radius", step))
-    if "base_objective" not in state:
-        return True, float("nan"), radius
+    window = _window(state)
+    out = {"accepted": True, "rebase": False, "radius": radius, "rho": float("nan"),
+           "rho_pooled": float("nan"), "rho_se": float("nan"), "window": window}  # fmt: skip
+    if "base_objectives" not in state or bool(state.get("rebase", False)):
+        return out
     lo, hi = radius_bounds(step)
-    predicted = float(state["predicted"])
-    actual = objective - float(state["base_objective"])
-    if abs(predicted) < 0.5 * objective_se:
-        return True, float("nan"), radius  # inconclusive: below the seed noise
-    rho = actual / predicted
-    at_edge = bool(state.get("at_edge", True))
-    if rho < RHO_POOR:
-        radius = max(lo, radius * SHRINK)
-    elif rho > RHO_GOOD and at_edge:
-        radius = min(hi, radius * GROW)
-    return rho >= 0.0, rho, radius
+    d = np.asarray(objectives, float) - np.asarray(state["base_objectives"], float)
+    actual, predicted = float(d.mean()), float(state["predicted"])
+    var = float(d.var(ddof=1) / d.size) if d.size > 1 else float("nan")
+    actual_w, pred_w, var_w = (x[-(RHO_WINDOW - 1) :] for x in window)
+    window = [[*actual_w, actual], [*pred_w, predicted], [*var_w, var]]
+    rho_pooled, rho_se, se_now = pooled_rho(*window)
+    # worse than the base beyond the noise (NaN: no error yet -> not rejected)
+    accepted = not actual > se_now
+    if not accepted:
+        new = max(lo, radius * SHRINK)
+        out["rebase"] = radius <= lo
+    elif rho_pooled + rho_se < RHO_POOR:
+        new = max(lo, radius * SHRINK)
+    elif rho_pooled - rho_se > RHO_GOOD and bool(state.get("at_edge", True)):
+        new = min(hi, radius * GROW)
+    else:
+        new = radius
+    if new != radius:
+        window = [[], [], []]  # rho depends on the radius: pool again from here
+    out.update(accepted=accepted, radius=new, rho=actual / predicted, rho_pooled=rho_pooled,
+               rho_se=rho_se, window=window)  # fmt: skip
+    return out
 
 
 def fit_to_radius(direction, radius):

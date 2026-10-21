@@ -56,18 +56,37 @@ for rule in ("tr", "lbfgs", "mma"):
             _a, g_area = O.area_and_gradient(ls, lo, hi)
             g_full = g
             g, _nu = O.tangent_component(g, g_area)
-            base, delta, pred, state, extra = O.rule_step(cfg, ls, g, g_full, g_area, j, 1e-6,
+            # four "seeds": the objective plus a fixed per-seed offset (common random numbers)
+            per_seed = j + 1e-6 * np.arange(4.0)
+            base, delta, pred, state, extra = O.rule_step(cfg, ls, g, g_full, g_area, per_seed,
                                                           state, k, lo, hi)  # fmt: skip
             OZ.save_state(path, state)
             state = OZ.load_state(path)
             stepped = dataclasses.replace(base, coef=base.coef + jnp.asarray(delta))
             ls, shift, clipped = O.after_step(stepped, "tangent", area0, lo, hi, 1.0)
             area = float(L.body_volume(ls, lo, hi, 4))
-            keep = {k2: v for k2, v in extra.items() if k2 in ("accepted", "rho", "radius",
-                                                                "lbfgs_pairs", "step_max")}  # fmt: skip
+            keep = {k2: v for k2, v in extra.items() if k2 in ("accepted", "rho", "rho_pooled",
+                                                                "radius", "rebase", "step_max")}  # fmt: skip
             print(
                 f"{rule} {k}: J {j:.4f} pred {pred:+.4f} area err {area / area0 - 1:+.1e} {keep}",
                 flush=True,
             )
         assert js[-1] < js[0], (rule, js)
+        if rule == "tr":
+            # a rejection at the floor: the base point again on the next seeds (zero step),
+            # then the re-evaluated base is its own base and the run steps on from it
+            lo_r, _hi_r = OZ.radius_bounds(cfg["step"])
+            state = dict(state, radius=lo_r, rebase=False)
+            j, g = f(ls.coef, ls, tuple(lo), tuple(hi))
+            g, _nu = O.tangent_component(np.asarray(g), O.area_and_gradient(ls, lo, hi)[1])
+            worse = np.asarray(state["base_objectives"]) + 10.0
+            _a, g_area = O.area_and_gradient(ls, lo, hi)
+            base, delta, pred, state, extra = O.rule_step(cfg, ls, g, g, g_area, worse, state,
+                                                          6, lo, hi)  # fmt: skip
+            assert extra["rebase"] and not extra["accepted"] and not np.abs(delta).any()
+            assert int(state["seed_shift"]) == 4 and extra["seed_shift"] == 4
+            base2, delta2, _p, state, extra = O.rule_step(cfg, base, g, g, g_area, worse - 5.0,
+                                                          state, 7, lo, hi)  # fmt: skip
+            assert extra["accepted"] and not extra["rebase"] and np.abs(delta2).max() > 0
+            print("tr floor rejection -> rebase on new seeds -> steps on: ok")
 print("ok")
