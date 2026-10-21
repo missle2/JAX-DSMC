@@ -107,14 +107,18 @@ for group in "${GROUPS_TO_RUN[@]}"; do
   esac
   # the finer circle (240 k slots x 300 captured steps) peaks above a 24 GB MIG slice: the
   # captured forward alone is 18.7 GB after rematerialisation and ran out of memory on every
-  # rtx opt job (2026-09-23).  The sphere (50 k slots) fits.
+  # rtx opt job (2026-09-23).  The sphere (50 k slots) fits.  optrules2 / optrules1seed
+  # (2026-10-20): the optm free-box problems, ~18 GB on the H200 slices per the user's Slurm
+  # reports -- allowed on rtx; an out-of-memory job fails in its first iterate and resumes
+  # elsewhere (a100 / h200).
   if [ "${GPU_KIND}" = "rtx" ] && [ "${group}" != "sphere" ] && [ "${group}" != "optc" ] \
       && [ "${group}" != "squash" ] && [ "${group}" != "squashkn" ] \
       && [ "${group}" != "biasgate" ] && [ "${group}" != "cellgate" ] \
       && [ "${group}" != "gapgate" ] && [ "${group}" != "thingate" ] \
       && [ "${group}" != "guardgate" ] && [ "${group}" != "shapeprof" ] \
       && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] && [ "${group}" != "optab" ] \
-      && [ "${group}" != "squashkn2" ]; then
+      && [ "${group}" != "squashkn2" ] && [ "${group}" != "optrules2" ] \
+      && [ "${group}" != "optrules1seed" ]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi
