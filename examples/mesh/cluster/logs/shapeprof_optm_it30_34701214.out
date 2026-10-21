@@ -1,0 +1,19 @@
+[Tue Oct 20 13:26:53 MDT 2026] shapeprof_optm_it30 on c3gpu-e5-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
+  GPU 0: NVIDIA H200 NVL (UUID: GPU-afc1a4fb-442b-74db-28fb-eb4cf6d5df82)
+    MIG 2g.35gb     Device  0: (UUID: MIG-f93e83fa-7463-5f94-a507-be4e83ee47c2)
+  GPU 1: NVIDIA H200 NVL (UUID: GPU-117c864d-1244-b84f-11f7-ff8b975be105)
+  GPU 2: NVIDIA H200 NVL (UUID: GPU-b2fe1c25-a2e6-9606-acba-0b1357d642eb)
+  GPU 3: NVIDIA H200 NVL (UUID: GPU-7a60ff60-58da-3d46-07fa-8a28191b9fd7)
+jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
+bash scratch/shapeprof/cluster_job.sh optm_it30
+cell:cubicv:adapt1.5:guard32:align0.9:both along_pool_plane first {"total": 199.24852776527405, "build": 6.2326743602752686, "warmup": 61.10461163520813, "capture": 19.276631832122803, "replay": 4.5755908489227295, "backward": 38.257246255874634, "shape": 67.12000608444214, "hits": 52491}
+2026-10-20 13:30:22.638491: E external/xla/xla/python/profiler/internal/python_hooks.cc:412] Can't import tensorflow.python.profiler.trace
+2026-10-20 13:32:29.872432: E external/xla/xla/python/profiler/internal/python_hooks.cc:412] Can't import tensorflow.python.profiler.trace
+cell:cubicv:adapt1.5:guard32:align0.9:both along_pool_plane second {"total": 127.206778049469, "build": 0.23533320426940918, "warmup": 52.88547396659851, "capture": 8.424386978149414, "replay": 3.2087013721466064, "backward": 33.32772755622864, "shape": 27.1604585647583, "hits": 52491}
+cell:cubicv:adapt1.5:align0.9:both along_pool_plane first {"total": 97.3872013092041, "build": 0.16892123222351074, "warmup": 47.42466616630554, "capture": 7.64124321937561, "replay": 2.675034761428833, "backward": 15.714855670928955, "shape": 21.954084157943726, "hits": 52491}
+cell:cubicv:adapt1.5:align0.9:both along_pool_plane second {"total": 96.996098279953, "build": 0.17844867706298828, "warmup": 47.43641233444214, "capture": 7.63765025138855, "replay": 2.685060739517212, "backward": 15.321944236755371, "shape": 21.90672254562378, "hits": 52491}
+cell:cubicv:adapt1.5:guard32:align0.9:both one first {"total": 119.16775822639465, "build": 0.1781165599822998, "warmup": 47.402052879333496, "capture": 7.639354228973389, "replay": 2.6752970218658447, "backward": 32.40381622314453, "shape": 27.039222955703735, "hits": 52491}
+cell:cubicv:adapt1.5:guard32:align0.9:both one second {"total": 110.06105518341064, "build": 0.16154980659484863, "warmup": 47.447808027267456, "capture": 7.639999866485596, "replay": 2.6869099140167236, "backward": 32.406272649765015, "shape": 17.879841566085815, "hits": 52491}
+cell:cubicv:adapt1.5:guard32:align0.9:both along_pool_plane first {"total": 114.15627193450928, "build": 0.1671760082244873, "warmup": 47.4353883266449, "capture": 7.639324903488159, "replay": 2.676647663116455, "backward": 32.392627477645874, "shape": 22.02093005180359, "hits": 52491}
+cell:cubicv:adapt1.5:guard32:align0.9:both along_pool_plane second {"total": 156.1334354877472, "build": 0.16836118698120117, "warmup": 89.440664768219, "capture": 7.629887104034424, "replay": 2.6806747913360596, "backward": 32.45481252670288, "shape": 21.905479907989502, "hits": 52540}
+[Tue Oct 20 13:44:59 MDT 2026] done
