@@ -1,3 +1,0 @@
-jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
-level-set circle, tiny run: J 2.432e-20, hits 102, |dJ/dcoef| 1.63e-20, 124s
-environment ok

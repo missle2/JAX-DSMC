@@ -245,3 +245,21 @@ examples/mesh/figures/movie/*/
 scratch/profile/
 *.xplane.pb
 *.trace.json.gz
+
+# Cluster-written run data: moved by rsync ONLY (examples/mesh/cluster/pull_results.sh), never
+# by git (2026-10-21).  Tracking it re-committed every history.json / opt_state.npz on every
+# pull (.git reached 2.1 GB) and the laptop's commits of files the cluster keeps writing
+# (logs, histories of running jobs) conflicted with the cluster's `git pull`.  Git carries
+# code, docs, figures and the analyses; the data lives on the cluster and in the laptop's
+# pulled copy.
+examples/mesh/results/optimize/
+examples/mesh/results/optimize_squash/
+examples/mesh/cluster/logs/
+examples/mesh/cluster/bad_nodes.txt
+scratch/*/cluster/
+# optimiser warm starts (per-seed gas, ~0.2 GB each) and rule state, wherever they land
+**/warm/seed*.npz
+**/opt_state.npz
+# profiler traces
+*.trace/
+perfetto_trace.json.gz

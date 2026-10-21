@@ -381,16 +381,32 @@ def stack_frames(frames):
     return {key: np.stack([f[key] for f in frames]) for key in ("step", "nrho", "u", "temp")}
 
 
-def _carried(state, cstate, mesh):
+def _carried(state, cstate, mesh, fresh, grid):
     """A previous run's final ``(state, cstate)`` as the start of a run on ``mesh``: the
     particles the new body now covers removed (the rest of the gas is kept, and the freed
-    region refills during the re-equilibration)."""
+    region refills during the re-equilibration).  The collide state keeps the Cartesian
+    cells' majorant and remainder; the split cells' sub-cells (numbered after the Cartesian
+    cells, per mesh: their count and order change with the body) start from ``fresh``, this
+    run's a-priori state -- 2026-10-21, a carried ``f64[1200]`` met a mesh with 4 more
+    sub-cells and the collide step's ``maximum`` failed to broadcast."""
+    slots = fresh[0].x.shape[0]
+    if state.x.shape[0] != slots:
+        raise ValueError(
+            f"warm start: {state.x.shape[0]} particle slots carried, the run has {slots}"
+        )
     if mesh.kind == "levelset":
         covered = levelset_mod.inside(mesh.body, state.x)
     else:
         from jax_dsmc.mesh import analytic  # noqa: PLC0415
 
         covered = analytic.inside(mesh.body, state.x)
+    fresh_c = fresh[1]
+    n = n_cartesian(grid)
+    cstate = dataclasses.replace(
+        fresh_c,
+        vremax=fresh_c.vremax.at[:n].set(cstate.vremax[:n]),
+        remainder=fresh_c.remainder.at[:n].set(cstate.remainder[:n]),
+    )
     return dataclasses.replace(state, alive=state.alive & ~covered), cstate
 
 
@@ -428,7 +444,7 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0, rest
     common = (grid, sp, params, key, faces, wall, res, mesh)
     frames = []
     if restart is not None:
-        state, cstate = _carried(*restart, mesh)
+        state, cstate = _carried(*restart, mesh, (state, cstate), grid)
         settle = min(int(cfg["restart_steps"]), cfg["warmup"])
         if settle:
             warm = dataclasses.replace(static, n_steps=settle)

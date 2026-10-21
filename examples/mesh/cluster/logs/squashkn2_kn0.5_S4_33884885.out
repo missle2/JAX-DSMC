@@ -1,9 +1,0 @@
-[Mon Oct 12 10:19:07 MDT 2026] squashkn2_kn0.5_S4 on c3gpu-e7-u1: gpus=1 ROCR_VISIBLE_DEVICES=0 CUDA_VISIBLE_DEVICES=0
-  GPU 0: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-d38bf5e3-1d5a-c374-1eb3-12eca24ebb21)
-  GPU 1: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-5cf5aa92-7418-a987-b3e3-0a210c91b1c0)
-  GPU 2: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-a2c5c18e-f3f5-12f9-19a2-5703daa6bf84)
-    MIG 1g.24gb     Device  0: (UUID: MIG-54fd6e27-f8d6-5482-aec5-7deb4967b979)
-  GPU 3: NVIDIA RTX PRO 6000 Blackwell Server Edition (UUID: GPU-c4135065-4054-085e-be8e-baa50a37e745)
-jax 0.6.2  backend gpu  devices [CudaDevice(id=0)]
-python3 -m examples.mesh.optimize_squash --seeds-per-iterate 4 --iterations 100 --knudsen 0.5 --a-max 64
-slurmstepd: error: *** JOB 33884885 ON c3gpu-e7-u1 CANCELLED AT 2026-10-12T10:21:02 ***

@@ -151,3 +151,36 @@ def test_warm_state_round_trip(tmp_path):
     for a, b in ((state.x, s2.x), (state.v, s2.v), (state.alive, s2.alive),
                  (cstate.vremax, c2.vremax), (cstate.remainder, c2.remainder)):  # fmt: skip
         np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+
+
+def test_warm_start_carries_the_cartesian_cells_onto_a_mesh_with_more_sub_cells():
+    """2026-10-21: the gas of a mesh with 2 sub-cells carried onto one with 6 (the body moved:
+    more split cells).  The particles inside the new body are dropped, the Cartesian cells
+    keep their majorant and remainder, the new mesh's sub-cells start from its fresh state."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    import jax.numpy as jnp  # noqa: PLC0415
+
+    from examples import ensemble_mesh as EM  # noqa: PLC0415
+    from jax_dsmc.mesh.types import AnalyticBody  # noqa: PLC0415
+    from jax_dsmc.state import CollideState, ParticleState  # noqa: PLC0415
+
+    n_cart, old_sub, new_sub = 12, 2, 6
+    x = jnp.asarray([[0.0, 0.0], [5.0, 5.0], [0.5, 0.0]])
+    state = ParticleState(x, jnp.zeros((3, 3)), jnp.zeros(3, jnp.int32), jnp.ones(3, bool),
+                          jnp.zeros(3))  # fmt: skip
+    old = CollideState(jnp.full((n_cart + old_sub, 1, 1), 7.0),
+                       jnp.full((n_cart + old_sub, 1, 1), 0.25))  # fmt: skip
+    fresh_c = CollideState(jnp.full((n_cart + new_sub, 1, 1), 1.0),
+                           jnp.zeros((n_cart + new_sub, 1, 1)))  # fmt: skip
+    fresh = (state, fresh_c)
+    mesh = SimpleNamespace(kind="analytic",
+                           body=AnalyticBody(jnp.zeros(2), jnp.asarray(1.0)))  # fmt: skip
+    grid = SimpleNamespace(n=(3, 4), n_sub=new_sub)
+    s, c = EM._carried(state, old, mesh, fresh, grid)
+    np.testing.assert_array_equal(np.asarray(s.alive), [False, True, False])
+    assert c.vremax.shape == fresh_c.vremax.shape
+    np.testing.assert_array_equal(np.asarray(c.vremax[:n_cart]), 7.0)
+    np.testing.assert_array_equal(np.asarray(c.vremax[n_cart:]), 1.0)
+    np.testing.assert_array_equal(np.asarray(c.remainder[:n_cart]), 0.25)
+    np.testing.assert_array_equal(np.asarray(c.remainder[n_cart:]), 0.0)
