@@ -26,10 +26,10 @@ import dataclasses  # noqa: E402
 
 import jax.numpy as jnp  # noqa: E402
 import optimize as O  # noqa: E402
-from analysis import ARMS, COLOURS, LABELS, REGIMES, load, run_dir  # noqa: E402
+from analysis import ARMS, COLOURS, LABELS, NOISE_ARMS, REGIMES, load, run_dir  # noqa: E402
 from figure_paths import figure_path  # noqa: E402
 
-SHOWN = ("base", *ARMS)
+GROUPS = {"rules": ("base", *ARMS), "noise": ("adam", *NOISE_ARMS)}
 
 
 def polylines(regime, arm, d, cfg, ls0, lo, hi, iterates):
@@ -48,30 +48,35 @@ def main():
     ap.add_argument("regime", choices=list(REGIMES))
     ap.add_argument("--stride", type=int, default=2)
     ap.add_argument("--fps", type=float, default=10.0)
+    # "noise": the S4 Adam reference against optrules2 / optrules1seed (2026-10-21); every curve
+    # over the S4 initial drag (a one-seed J0 is itself noisy)
+    ap.add_argument("--group", choices=list(GROUPS), default="rules")
     args = ap.parse_args()
     regime = args.regime
-    data = {a: load(regime, a) for a in SHOWN}
+    shown = GROUPS[args.group]
+    data = {a: load(regime, a) for a in shown}
+    j0 = {a: (data[shown[0]]["J"][0] if args.group == "noise" else data[a]["J"][0]) for a in shown}
     cfg = dict(O.default_config(), **data["adam"]["hist"]["config"])
     grid, ls0 = O.initial_levelset(cfg)
     lo, hi = np.asarray(grid.lo), np.asarray(grid.hi)
     n = max(len(d["J"]) for d in data.values())
     iterates = list(range(0, n + 1, args.stride))
     lines, stops = {}, {}
-    for arm in SHOWN:
+    for arm in shown:
         stops[arm], lines[arm] = polylines(regime, arm, data[arm], cfg, ls0, lo, hi, iterates)
         print(arm, "shapes", len(lines[arm]), flush=True)
     init = O.surface_polyline(ls0, lo, hi)
-    pts = np.concatenate([s for arm in SHOWN for segs in lines[arm].values() for s in segs])
+    pts = np.concatenate([s for arm in shown for segs in lines[arm].values() for s in segs])
     centre = 0.5 * (pts.min(0) + pts.max(0))
     half = 0.52 * (pts.max(0) - pts.min(0))
-    frames = Path(figure_path("movie", f"optrules_{regime}"))
+    frames = Path(figure_path("movie", f"optrules_{regime}" + ("" if args.group == "rules" else f"_{args.group}")))
     if frames.exists():
         shutil.rmtree(frames)
     frames.mkdir(parents=True)
     for i, k in enumerate(iterates):
         fig = plt.figure(figsize=(16, 6.0))
         gs = fig.add_gridspec(2, 5, width_ratios=(1, 1, 1, 0.15, 2.2))
-        for col, arm in enumerate(SHOWN):
+        for col, arm in enumerate(shown):
             ax = fig.add_subplot(gs[col // 3, col % 3])
             kk = min(k, stops[arm])
             for seg in init:
@@ -80,7 +85,7 @@ def main():
                 ax.fill(seg[:, 0], seg[:, 1], color=COLOURS[arm], alpha=0.3, lw=0)
                 ax.plot(seg[:, 0], seg[:, 1], color=COLOURS[arm], lw=1.3)
             d = data[arm]
-            jk = d["J"][min(kk, len(d["J"]) - 1)] / d["J"][0]
+            jk = d["J"][min(kk, len(d["J"]) - 1)] / j0[arm]
             state = "" if k <= stops[arm] else "  (stopped)"
             name = "Adam (earlier)" if arm == "base" else LABELS[arm]
             ax.set_title(f"{name}\nJ/J0 {jk:.3f}{state}", fontsize=8)
@@ -90,10 +95,10 @@ def main():
             ax.set_xticks([])
             ax.set_yticks([])
         ax = fig.add_subplot(gs[:, 4])
-        for arm in SHOWN:
+        for arm in shown:
             d = data[arm]
             end = min(stops[arm] + 1, len(d["J"]))
-            j = d["J"][:end] / d["J"][0]
+            j = d["J"][:end] / j0[arm]
             ax.plot(np.arange(end), j, color=COLOURS[arm], lw=0.8, alpha=0.35,
                     ls="--" if arm == "base" else "-")  # fmt: skip
             m = min(k + 1, end)
@@ -103,7 +108,8 @@ def main():
         ax.axvline(k, color="#52514e", lw=0.6)
         ax.set_yscale("log")
         ax.set_xlim(0, n)
-        ax.set_xlabel("iterate (same seconds per iterate for every arm)")
+        ax.set_xlabel("iterate (same seconds per iterate for every arm)" if args.group == "rules"
+                      else "iterate (an S1 iterate costs 1/4 of an S4 one)")
         ax.set_ylabel("drag J / J0")
         ax.grid(alpha=0.3, which="both")
         ax.legend(fontsize=7, loc="upper right")
@@ -111,7 +117,7 @@ def main():
                      "left; dashed: initial circle)", fontsize=10)  # fmt: skip
         fig.savefig(frames / f"f_{i:04d}.png", dpi=80)
         plt.close(fig)
-    mp4 = figure_path("movie", f"optrules_{regime}.mp4")
+    mp4 = figure_path("movie", f"optrules_{regime}" + ("" if args.group == "rules" else f"_{args.group}") + ".mp4")
     subprocess.run(
         ["ffmpeg", "-y", "-loglevel", "error", "-framerate", f"{args.fps}",
          "-i", str(frames / "f_%04d.png"), "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",

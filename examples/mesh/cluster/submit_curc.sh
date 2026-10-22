@@ -41,7 +41,7 @@
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|optrules|optrules2|optrules1seed|optckn|optc2|optab|optm|squashkn2|all|check|preflight <group>..."; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|optrules|optrules2|optrules1seed|optax1seed|optckn|optc2|optab|optm|squashkn2|all|check|preflight <group>..."; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 [ "${GROUPS_TO_RUN[0]}" = "preflight" ] && PREFLIGHT_GROUPS=("${GROUPS_TO_RUN[@]:1}")
@@ -101,7 +101,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     sphere) HOURS=8 ;;
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
-    squash|squashkn|squashkn2|optckn|optc2|optab|optm|optrules|optrules2|optrules1seed) HOURS=24 ;;
+    squash|squashkn|squashkn2|optckn|optc2|optab|optm|optrules|optrules2|optrules1seed|optax1seed) HOURS=24 ;;
     biasgate|cellgate|gapgate|thingate|guardgate|shapeprof) HOURS=12 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
@@ -118,7 +118,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
       && [ "${group}" != "guardgate" ] && [ "${group}" != "shapeprof" ] \
       && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] && [ "${group}" != "optab" ] \
       && [ "${group}" != "squashkn2" ] && [ "${group}" != "optrules2" ] \
-      && [ "${group}" != "optrules1seed" ]; then
+      && [ "${group}" != "optrules1seed" ] && [ "${group}" != "optax1seed" ]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi

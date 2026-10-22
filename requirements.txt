@@ -1,0 +1,11 @@
+# Runtime and example dependencies (tested versions, 2026-10-21).  JAX itself: install the
+# build for your accelerator first (https://docs.jax.dev/en/latest/installation.html), e.g.
+#   pip install "jax[cuda12]==0.6.2"      # NVIDIA GPU
+#   pip install "jax==0.6.2"              # CPU only
+jax>=0.4.36
+numpy>=2.0
+scipy>=1.13
+matplotlib>=3.8       # figures and movies (Pillow comes with it; ffmpeg for MP4 movies)
+optax>=0.2.8          # the shape optimiser's step rules (examples/mesh/optax_rules.py)
+pytest>=8             # the test suite
+# optional: h5py (jax_dsmc.output's HDF5 writer)

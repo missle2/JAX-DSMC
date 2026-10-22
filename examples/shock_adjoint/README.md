@@ -1,5 +1,15 @@
 # `shock_adjoint` — do the gradients agree with finite differences?
 
+Status: **reference** (M6, 2026-09; the pathwise half of the adjoint verified against finite
+differences on the real 1-D / 2-D / 3-D reflected-shock solve, plus the score-estimator
+variance study).  The production gradient path is the particle-carried ensemble adjoint
+(`jax_dsmc/ensemble_backward.py`, `examples/gradient_bench`); the score-estimator results below
+(mode B, variance) are the measurements that ruled the score routes out and are kept as a
+historical record (see the banner of [`VARIANCE.md`](VARIANCE.md)).  Mode A (pathwise vs FD)
+remains a valid check of the frozen-randomness pathwise gradient.  Run from the repository root;
+flags: `--mode pathwise|ensemble|both`, `--dims`, `--params`, `--keys`, `--fd-factor`, `--chunk`,
+`--npc`, `--steps`, `--seed`, `--no-plot`, `--save`.
+
 Reuses the reflected-shock case that reproduced Bird's §12.11 thickness in
 [`examples/shock`](../shock/) and asks the adjoint question of it: **is
 `jax.grad` of the forward solve the gradient it claims to be?**
@@ -72,7 +82,7 @@ The cases here sit at `N·C·M` = `1.3e6` (D=1), `5.1e6` (D=2), `2.0e7` (D=3).
 ## Results — mode A, `D = 1, 2, 3`
 
 > Regenerated on the branch 2026-09-15 (`python3 -m examples.shock_adjoint --mode pathwise`,
-> log `scratch/bench/refresh_shock_adjoint_pathwise.log`): the branch changed the NTC
+> command in `scratch/bench/refresh_figures.sh`; the log was not kept): the branch changed the NTC
 > random stream (per-slot streams) and pins this example to the terminal-label score
 > (`score_mode="paper"`); all nine cases still PASS, worst case 1.5 (ratio to the
 > tolerance).  The mode-B / variance figures further down are pre-branch — see the banner

@@ -98,14 +98,14 @@ P = 9 * npc_max (ensemble_device.py:329-345). `cell_query` then `lax.map`s chunk
 
 [E] That is about 60-80 B per (query, node) plus ~100-140 MB fixed per chunk. At npc_max 64 to 119,
 P = 576 to 1071, giving 2.4 to 4.4 M (query, node) pairs and about 250-450 MB. This matches the measured
-about 360 MB and the review's own attribution (ADJOINT_BRANCH_REVIEW.md:1846-1848). The backward fits
+about 360 MB and the review's own attribution (ADJOINT_BRANCH_REVIEW.md §7.10). The backward fits
 (pool 0, k 32, chunk = min(4096, pow2 N), ensemble_inlet_shock.py:199-201) are 9x smaller, which matches
 the ~85 MB backward transient.
 
 **The spike is not fixed. It scales with particles per cell.** npc_max >= 4*max_alive/C
 (ensemble_mesh.py:481-485). At the fine circle (240k slots, about 190k alive, C = 400) that gives
 npc_max ~1900, P ~17 100, and about 70 M pairs per chunk, **~4-6 GB** [E]. The review's "≈ 15 GB at 240k"
-(ADJOINT_BRANCH_REVIEW.md:1849-1850) assumed a fixed 300 MB. Grid 2 (C = 1600, same density) is not
+(ADJOINT_BRANCH_REVIEW.md §7.10) assumed a fixed 300 MB. Grid 2 (C = 1600, same density) is not
 affected in P; only the 4x N matters.
 
 Removal (all exact up to summation order):

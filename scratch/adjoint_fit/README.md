@@ -27,7 +27,7 @@ the same results as two, with every fit carrying two right-hand sides.
 
 `ensemble_device.backward_virtual` with `λ f64[N, R]`, `field_query` value columns and the
 unrolled Cholesky `_spd_solve`; `examples/ensemble_mesh._backwards` as one `R = 2` call
-(PSEUDOCODE 9.7.1, HANDOFF 1.10).
+(PSEUDOCODE 9.7.1, HANDOFF 2.5).
 
 * `gate_columns.py save|compare` (KN=0.5, PULL=1x2): two backwards 90.5 -> 43.3 s; lam vs
   the old code max |diff| / rms 2.9e-7 (`LU=1`: the column sweep with the old LU, 1.3e-7 --

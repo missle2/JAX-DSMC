@@ -1,41 +1,58 @@
 # docs/math
 
-Mathematical notes on the estimators, written to be cited from code comments by
-equation number (`docs/math/ensemble_adjoint.tex eq. (3.7)`).  Equation numbers are
-section-scoped; do not renumber sections without updating the comments that cite them.
+**Summary.**  These are the mathematical notes behind the particle-carried ensemble adjoint (the
+production gradient path of JAX-DSMC) and the level-set shape gradient built on it.  They establish:
+the adjoint of the DSMC Markov chain (wall maps, tallies, scores, and the three collision pull-backs, of
+which the substepped virtual-partner form is the default); the per-cell polynomial fit that supplies
+the carried value inside the pull-back (default `CELL_BASIS = cell:cubicv:adapt1.5:guard32:align0.9:both`,
+with a leverage guard since 2026-10-19); the seven terms of the shape gradient and its default
+estimator (`along_pool_plane`); and the validation record (forward gates, parameter gradients, shape
+gradients against finite differences, the 2026-10 bias study).  The notes are cited from code comments
+by equation number (`docs/math/ensemble_adjoint.tex eq. (3.7)`); equation numbers are section-scoped,
+so do not renumber sections without updating the comments that cite them.
+
+| deck | purpose | status / last verified against code |
+|---|---|---|
+| `ensemble_adjoint.tex` | article: the adjoint reference (see below) | 2026-10-19 (leverage guard added) |
+| `shape_derivation.tex` | beamer, presentation of the shape gradient, no code references | 2026-10-19 |
+| `shape_derivation_code.tex` | same frames plus code references and an implementation appendix | 2026-10-19; defaults table checked against `ensemble_mesh`, `optimize`, `optimize_squash`, `study.py` |
+| `shape_validation.tex` | beamer, the whole validation history | 2026-10-19; contains superseded results, each marked as such |
+| `shape_slides_style.tex`, `shape_audit_gate.tex`, `shape_bias_{fm,diffuse,kn}.tex` | shared preamble; generated table inputs | n/a |
+
+Rule for new material: derivation changes go in `shape_derivation_body.tex` only (shared by both derivation decks;
+`\codenote{}` is shown only in the code deck); new findings go in `shape_validation.tex`, and results
+that a later change replaces are kept but marked "superseded" with the replacement and date.
+
+Details of each file:
 
 | file | content |
 |---|---|
-| `ensemble_adjoint.tex` | The particle-carried ensemble adjoint as implemented in `jax_dsmc/ensemble_backward.py` / `ensemble_device.py`: forward notation, objectives, the three collision pull-backs (sequential, linearised, virtual-partner substepped), the field interpolants (the per-cell guarded quadratic of the collision pull-back since 2026-10-11, the per-query kNN quadratic of the shape slopes and the host), the score terms, births/deaths, the validation table (numbers from `docs/ADJOINT_BRANCH_REVIEW.md`), the shape adjoint, the shape optimiser and its status, and (appendix A) a primer on the DSMC forward solver for CFD readers (NTC, VSS, sources, tracking, cut/split cells).  Cites the equation labels of P3 (`papers_reference/arXiv-2603.20946v2/main.tex`). |
+| `ensemble_adjoint.tex` | The particle-carried ensemble adjoint as implemented in `jax_dsmc/ensemble_backward.py` / `ensemble_device.py`: forward notation, objectives, the three collision pull-backs (sequential, linearised, virtual-partner substepped), the field interpolants (the per-cell order- and leverage-guarded cubic-in-$v$ fit of the collision pull-back (quadratic from 2026-10-11, cubic from 10-12, leverage guard from 2026-10-19), the per-query kNN quadratic of the shape slopes and the host), the score terms, births/deaths, the validation table (numbers from `docs/ADJOINT_BRANCH_REVIEW.md`), the shape adjoint, the shape optimiser and its status, and (appendix A) a primer on the DSMC forward solver for CFD readers (NTC, VSS, sources, tracking, cut/split cells).  Cites the equation labels of P3 (`papers_reference/arXiv-2603.20946v2/main.tex`). |
 | `shape_derivation.tex` | Beamer, presentation level (2026-10-09): the shape gradient as implemented on main, derived from the Boltzmann problem and the windowed drag -- DSMC as a Markov chain, the particle-carried value and its move / virtual-partner collision pull-backs, the state-based fits, the first variation of a step, and the seven terms (pathwise with the along-flight identity incl. $\mathcal L^*\lambda$, tally, diffuse normal, silhouette, window edges, hit/collision order, cut-cell volume), assembly, optimiser, approximations.  No code references, no superseded estimators. |
 | `shape_derivation_code.tex` | The same frames as `shape_derivation.tex`, frame for frame, each with the code that implements it (functions, settings, defaults), plus an appendix (settings table, data flow of one gradient, the tests that pin each term).  Both decks `\input` the frames from `shape_derivation_body.tex` (`\codenote{}` is shown only in this one); edit the derivation there. |
-| `shape_validation.tex` | Beamer reference deck: the whole validation history -- forward gates (Couette viscosity, shocks, SPARTA bodies, free-molecular drag), the parameter gradients (trajectory adjoint, score-estimator benchmark, P3 replication, route (b), walls as kernels, VSS kernel parameters, sequential and virtual-partner pull-backs, RH acceptance), the shape-gradient development (oracles, G1--G3, estimators of $\nabla_x\lambda$, circle/sphere/mode gates, grazing and diffuse terms, the future-class episode, `optc` and squash cluster studies), and the 2026-10 bias study (findings 1--7, free-molecular horizon, the open Kn 0.5 gap, the effect on squashkn), the cubic-fit optimisation runs (`squashkn2`, `optab`), and (section VII, 2026-10-16) the free-space boundary's gates and the `optm` runs.  Inputs `shape_audit_gate.tex`, `shape_bias_{fm,diffuse,kn}.tex` (generated by `scratch/bias/latex_tables.py`); figures from `examples/`. |
+| `shape_validation.tex` | Beamer reference deck: the whole validation history -- forward gates (Couette viscosity, shocks, SPARTA bodies, free-molecular drag), the parameter gradients (trajectory adjoint, score-estimator benchmark, P3 replication, route (b), walls as kernels, VSS kernel parameters, sequential and virtual-partner pull-backs, RH acceptance), the shape-gradient development (oracles, G1--G3, estimators of $\nabla_x\lambda$, circle/sphere/mode gates, grazing and diffuse terms, the future-class episode, `optc` and squash cluster studies), and the 2026-10 bias study (findings 1--7, free-molecular horizon, the open Kn 0.5 gap, the effect on squashkn), the cubic-fit optimisation runs (`squashkn2`, `optab`), and (section VII, 2026-10-16) the free-space boundary's gates and the `optm` runs, and the 2026-10-19 leverage guard.  Inputs `shape_audit_gate.tex`, `shape_bias_{fm,diffuse,kn}.tex` (generated by `scratch/bias/latex_tables.py`); figures from `examples/`. |
 | `shape_slides_style.tex` | Shared beamer preamble of the three decks. |
 
 ## Building
 
-Only `amsmath`, `amssymb` and `hyperref` are used; any TeX Live from 2020 on suffices.
-Run from the repository root (two passes so cross-references and the hyperref
-bookmarks resolve):
+Only standard beamer/`amsmath`/`amssymb`/`hyperref` are needed (TeX Live 2020 or later; on a machine without TeX,
+`sudo apt install texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended`).
+The beamer style uses `\usefonttheme[onlymath]{serif}` because sans math fonts are unavailable on some installs.
+Build products (`*.aux`, `*.log`, `*.out`, `*.nav`, `*.snm`, `*.toc`, and the committed PDFs at times)
+should go to a separate output directory, with explicit paths so nothing depends on the working directory.
+Set `R` to the repository root; `shape_validation.tex` reads figures from `examples/` and the decks `\input` each other,
+so `TEXINPUTS` must list `docs/math` and `examples` (trailing `//` searches subdirectories):
 
 ```sh
-cd docs/math
-pdflatex -interaction=nonstopmode ensemble_adjoint.tex
-pdflatex -interaction=nonstopmode ensemble_adjoint.tex
-```
-
-`latexmk -pdf ensemble_adjoint.tex` does the same.  On a machine without TeX,
-`sudo apt install texlive-latex-recommended texlive-latex-extra` provides everything
-needed (`hyperref` is in `texlive-latex-recommended`).
-
-The slide decks build the same way from `docs/math` (`pdflatex` twice; `shape_validation.tex`
-reads figures from `../../examples/` through `\graphicspath`):
-
-```sh
-cd docs/math
-for f in shape_derivation shape_derivation_code shape_validation; do
-  pdflatex -interaction=nonstopmode $f.tex && pdflatex -interaction=nonstopmode $f.tex
+R=/path/to/JAX-DSMC; B=$(mktemp -d)          # or any scratch directory
+for f in ensemble_adjoint shape_derivation shape_derivation_code shape_validation; do
+  for pass in 1 2; do                         # two passes: references and bookmarks
+    TEXINPUTS=$R/docs/math//:$R/examples//: pdflatex -interaction=nonstopmode \
+      -output-directory=$B $R/docs/math/$f.tex
+  done
 done
 ```
 
-The build products (`*.aux`, `*.log`, `*.out`, `*.nav`, `*.snm`, `*.toc`) are not committed.  Without a TeX install, `tectonic -X compile shape_derivation.tex` (the standalone Tectonic binary) builds a deck.
+Run at most one or two LaTeX processes at a time on a shared machine.  Do not name a stdout redirect `*.out` in the
+output directory (it clashes with hyperref).  `latexmk -pdf -output-directory=$B $R/docs/math/<deck>.tex` is equivalent;
+without TeX, `tectonic -X compile <deck>.tex` builds a deck.  The committed PDFs were rebuilt on 2026-10-21 from these sources (all four decks: no errors, no undefined references).

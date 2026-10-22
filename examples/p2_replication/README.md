@@ -1,5 +1,9 @@
 # Replicating [P2]'s numerical tests
 
+Status: **reference / historical** (2026-09; 0-D re-implementation of [P2]'s §6 tests used to
+validate the adjoint estimators; the production gradient is the ensemble adjoint, whose 0-D
+relaxation artifacts are in `examples/gradient_bench`).
+
 [P2] = `papers_reference/arXiv-2207.11579v2/main.tex`. Its §6 (`:1401`) is the only
 published, external validation available for the whole adjoint estimator. This example
 reproduces it in the production solver.

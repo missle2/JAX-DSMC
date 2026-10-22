@@ -14,8 +14,8 @@
 \graphicspath{{../../examples/}}
 
 \title{Adjoint and shape-gradient validation in JAX-DSMC}
-\subtitle{Every gate, study and finding, 2026-09-05 to 2026-10-11}
-\date{2026-10-11}
+\subtitle{Every gate, study and finding, 2026-09-05 to 2026-10-19}
+\date{2026-10-19}
 
 \newcommand{\fig}[2]{\includegraphics[width=#1\linewidth]{#2}}
 
@@ -970,7 +970,7 @@ per-query, two-sided $k = 32$ & $-0.0024$ & $+0.018$\\
 \code{cell:quad}, two-sided (unguarded) & $-0.0028$ & $-0.027$\\
 \code{cell:quad:adapt1.5}, two-sided & $\mathbf{-0.0049}$ & $\mathbf{-0.0044}$\\
 \code{cell:quad:adapt1.5}, split everywhere & $-0.0040$ & $+0.0033$\\
-\code{cell:quad:adapt1.5:align0.9:both} (shipped) & $\mathbf{-0.0035}$ & $\mathbf{-0.0038}$\\
+\code{cell:quad:adapt1.5:align0.9:both} (shipped 10-11 to 10-12) & $\mathbf{-0.0035}$ & $\mathbf{-0.0038}$\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -982,7 +982,7 @@ a gate --- the cluster \code{cellgate} runs six shapes $\times$ 16 seeds.
 \begin{frame}{Selection}
 \small
 \textbf{Shipped} (\code{ensemble\_backward.CELL\_BASIS}, 2026-10-19): \code{cell:cubicv:adapt1.5:guard32:align0.9:both}
-(the leverage guard: section VII; 2026-10-12 to 10-18 unguarded)
+(the leverage guard: section VII, last frames before the status table; 2026-10-12 to 10-18 unguarded)
 (2026-10-11: \code{cell:quad:\dots}; the cubic-in-$v$ columns are the only change, next frames)
 \begin{itemize}
 \item one quadratic (cubic in $v$) per cell, its columns capped at count$/1.5$ (else plane, else mean);
@@ -1009,7 +1009,7 @@ and against the seed's CRN FD ($h = 0.2$); \code{scratch/cellfit/cluster\_analys
 \end{center}
 \begin{itemize}
 \item \textbf{FD} (64 seeds): $h = 0.1$ / $0.2$: $0.01633\pm0.00010$ / $0.01631\pm0.00006$, paired difference $+0.14\pm0.67\,\%$.
-\item $s = 1$ / $0.6$: shipped $-3.7\pm0.8$ / $-2.8\pm1.2\,\%$; per-query $k = 32$ $-3.4$ / $-2.3$; unguarded \code{quad} $-3.2$ / $-2.8$
+\item $s = 1$ / $0.6$: the 10-11 quadratic (superseded) $-3.7\pm0.8$ / $-2.8\pm1.2\,\%$; per-query $k = 32$ $-3.4$ / $-2.3$; unguarded \code{quad} $-3.2$ / $-2.8$
   (stable at this density); \textbf{\code{cubicv:adapt1.5} $-0.7\pm0.8$ / $+0.1\pm1.1\,\%$} (paired $+3.1\pm0.2$ / $+3.0\pm0.3\,\%$
   over the shipped fit; 50 vs 46\,s a seed; the per-query fit 1100\,s).
 \item \textbf{Horizon}: the whole run captured adds $+2.8\pm0.8\,\%$ at Kn 0.5 (4 seeds), $+0.3$ / $+0.6\,\%$ free-molecular.  Basis order and horizon are each the gap's size; additivity: \code{gapgate}, below.
@@ -1225,8 +1225,26 @@ pulled 2026-10-16 (Kn 0.5 236, free-mol.\ M 10 300 = done, Kn 0.5 + M 10 68 iter
   stalls at 0.324 (iterate 55) and creeps to 0.344.
 \item The spikes sit at the nose (x $\approx$ 1.5, y $\approx$ 4.2\,m, just inside the surface): Adam's $v$ there $\sim$790$\times$ the
   surface median, so the nose's steps starve while the rest move.  Same signature as the squash \code{cubicv} spike; the per-step
-  gradient is not saved, so the term is not yet identified.
+  gradient is not saved, so the term is not yet identified.  \emph{Diagnosed 2026-10-18/19: the unguarded \code{cubicv} fit;
+  see the next frame.  These runs were unguarded.}
 \end{itemize}
+\end{frame}
+
+\begin{frame}{The leverage guard (\code{guard32}, 2026-10-18/19)}
+\footnotesize
+\begin{itemize}
+\item \textbf{Cause}: the cubic-in-$v$ fit, per cell, is evaluated at post-collision queries that can lie in the empty velocity
+  gap between a M 10 beam and the wall-reflected gas; there the fitted value's variance is $\sim10^3$ node-noise variances
+  (leverage $h$), next to bodies under $\sim$2 cells thick.  The backward recursion compounds the extrapolation every substep
+  (squash M 10 $\dd D/\dd s = -19.6$ against FD $+1.48$; \code{optm} nose; max $|\lambda|$ up to 380).
+\item \textbf{Fix}: per query the highest order (within the \code{adapt1.5} cap) with $h\le32$, else lower orders, else the cell mean.
+  Studies: \code{scratch/thingate}, \code{scratch/guardgate}.
+\item \textbf{Result}: every thin / \code{optm} case within $\sim$2 s.e.\ of FD, max $|\lambda|\le10^{-3}$; blunt Kn 0.5 squash unchanged
+  ($-1.4\pm1.1\,\%$ vs FD; quadratic $-4.3\,\%$; $<0.3\,\%$ of queries lowered); the stored device gates within $0.6\,\%$ of the
+  unguarded cubic.  Tighter thresholds ($h = 2$ / $8$) moved the sparse inlet gates $13$--$20$ / $3$--$7\,\%$: $h=32$ kept.
+\item \textbf{Open}: \code{optm} iterate 58 nose direction $-3.8\pm0.6\,\%$ of the shift FD (quadratic $+0.7\pm1.1\,\%$).
+\end{itemize}
+Source: the docstring of \code{ensemble\_backward.CELL\_BASIS}; the \code{scratch/} studies' raw outputs were not re-read for this deck.
 \end{frame}
 
 \begin{frame}{Validation status of the current estimator}
@@ -1246,6 +1264,7 @@ squash $s = 1$, diffuse & $-1.4\pm3.3\,\%$ & free-mol.\\
 cut-volume machinery & $z = -1.2$ (all cells), $+0.8$ (cut cells) & Kn 0.5\\
 squash Kn 0.5, $f_{\mathrm{num}}\times2$ (vs Richardson FD) / $\times4$ (12 seeds) & $-7.5$ / $-1.9\pm2.3\,\%$ & superseded\\
 squash $s = 1$, Kn 0.5, $f_{\mathrm{num}}\times1$, $T = 1000$ / $2000$: quad / \code{cubicv} & $-3.7$, $-5.0$ / $-0.7$, $-1.8\,\%$ ($\pm0.8$) & Kn 0.5\\
+squash $s = 1$, Kn 0.5, shipped \code{cubicv} + \code{guard32} (2026-10-19) & $-1.4\pm1.1\,\%$; thin M 10 cases within $\sim2$ s.e. & Kn 0.5 / M 10\\
 optc circle shift, Kn 0.5 $T = 1000$ / $2000$; free-mol. & $-14\pm3$ / $-1\pm4\,\%$; $+1\pm2\,\%$ & both\\
 free-space boundary: Cd $R = 1.5$ / $0.75$; radius gradient (8 seeds) & $z = 0.8$ / $2.2$; $+2.2\pm2.7\,\%$ (FD $-0.9\pm3.6$) & free-mol.\\
 \bottomrule
@@ -1279,13 +1298,16 @@ collisional flows: $\le1\,\%$, either fit.
 \end{enumerate}
 \end{frame}
 
-\begin{frame}{Open items (2026-10-16)}
+\begin{frame}{Open items (2026-10-16; item 8 updated 2026-10-19)}
 \footnotesize
 \begin{enumerate}\setcounter{enumi}{6}
 \item \textbf{Free space} (\code{-{}-boundary free}, 2026-10-15): gated; used by \code{optm}.  Retrofit to \code{optc2}, \code{optckn},
   \code{optab} and the squash groups (new tags) still to do.  The 10\,m box leaves 2\,m between the faces and a 6\,m body.
-\item \textbf{Gradient blow-ups}: squash M 10 \code{cubicv} below $\sim$2 cells thick (\code{pathwise\_v}); \code{optm} Kn 0.5 + M 10 at
-  the nose from iterate 36.  Locate the term (save the per-knot gradient), then a guard; Adam's $v$ starves steps after a spike.
+\item \textbf{Gradient blow-ups} --- \emph{superseded 2026-10-19}: the cause was the unguarded \code{cubicv} extrapolating at
+  post-collision queries in the empty velocity gap (leverage $\sim10^3$); fixed by the leverage guard \code{guard32}
+  (now the default).  Guarded, every thin-body and \code{optm} case is within $\sim$2 s.e.\ of FD (squash M 10 $\dd D/\dd s$
+  $-19.6$ unguarded vs FD $+1.48$).  Still open: \code{optm} iterate 58's nose direction $-3.8\pm0.6\,\%$ of the shift FD
+  (quadratic $+0.7\pm1.1\,\%$); the \code{optm} runs above were made unguarded and are not repeated; Adam's $v$ starves steps after a spike.
 \item \textbf{Box-bound optima}: free-molecular M 10 moves area into the drag-free base until the keep-out stops it (\code{optm} 254).
   A bigger box or a base constraint before quoting the wedge's drag.
 \item \textbf{Step}: fixed 5\,cm per iterate; slope falls to 0.05--0.2 late in every run.  Step decay not built.

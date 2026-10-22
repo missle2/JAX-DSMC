@@ -37,11 +37,19 @@ LABELS = {"adam": "Adam", "tr": "trust region (TR)", "trper": "TR + perimeter 0.
 COLOURS = {"adam": "#0072B2", "tr": "#D55E00", "trper": "#CC79A7", "lbfgs": "#009E73",
            "mma": "#E69F00", "base": "#8a8a86"}  # fmt: skip
 STEP, MOVE_FLOOR = 0.05, 0.05 / 4
+# the 2026-10-20/21 groups (optrules2, optrules1seed): arm keys "S<seeds>_<rule>", warm-started
+NOISE_ARMS = ("S4_tr2", "S1_adam", "S1_tr", "S1_lbfgs", "S1_mma")
+LABELS.update({"S4_tr2": "S4 TR reworked", "S1_adam": "S1 Adam", "S1_tr": "S1 TR",
+               "S1_lbfgs": "S1 L-BFGS", "S1_mma": "S1 MMA"})  # fmt: skip
+COLOURS.update({"S4_tr2": "#D55E00", "S1_adam": "#56B4E9", "S1_tr": "#E69F00",
+                "S1_lbfgs": "#009E73", "S1_mma": "#CC79A7"})  # fmt: skip
 
 
 def run_dir(regime, arm):
     if arm == "base":
         return f"{ROOT}/circle_long_{regime}_S4_adam_tan_sm8_free"
+    if arm in NOISE_ARMS:
+        return f"{ROOT}/circle_long_{regime}_{arm}_tan_sm8_free_g32_w500"
     return f"{ROOT}/circle_long_{regime}_S4_{arm}_tan_sm8_free_g32"
 
 

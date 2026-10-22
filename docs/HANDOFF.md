@@ -1,1147 +1,652 @@
-# Handoff — state of play
+# Handoff — state of play (rewritten 2026-10-21)
 
-> Adjoint implementation update: see [corrections, P3 methods, and validation limits](ADJOINT_CORRECTIONS.md). That document supersedes historical estimator-validity claims below.
->
-> **2026-09-15 review of that update:** [ADJOINT_BRANCH_REVIEW.md](ADJOINT_BRANCH_REVIEW.md)
-> — verdicts on each change, nine defects (B1-B9, most fixed there), the gap list to general
-> meshes, and the measured estimator variances.  Three traps it adds to this file's list:
->
-> * **The forward random stream changed on this branch** (per-slot `fold_in` in `ntc.collide`,
->   inverse-CDF inlet sampling, one draw per wall pass).  Every artifact produced before it
->   (BKW, shock, Couette, VARIANCE.md) is statistically but not bitwise reproducible; the
->   forward gates were re-run (review §4.7).
-> * **`terminal_objective` / `windowed_objective` default to `score_mode="trajectory"`**,
->   `run` / `dice_reward` to `"paper"`.  `examples/shock_adjoint` pins `"paper"` explicitly;
->   do the same in any example whose numbers are documented.
-> * **`baseline="mean"` is rejected** — it was biased.  A baseline must come from independent
->   seeds (the `gradient_bench` pilots show how).
-> * **The production gradient for decision-driven parameters is the ensemble adjoint**
->   (`simulate.run(capture=True)` + `jax_dsmc/ensemble_backward.py`, review §5), not a
->   score.  It is validated on the inlet shock against 384-seed finite differences for
->   reservoir temperature and density, wall speed / temperature, `diam` / `omega`; the
->   device port, the pathwise-inside-ensemble terms and shape are open (review §5.0).
->   Two rules learned the hard way: the ghost interpolant must be at least quadratic
->   (affine: −8 % at 30 particles/cell), and the collision pull-back must be the
->   sequential one (`SEQUENTIAL=True`; the Δt-linearised form was −10 % at 0.16
->   collisions/particle/step).  Every per-step event (wall bounces, newborn hits) is
->   recorded individually — do not reintroduce "last event × count" shortcuts.
-> * **The shipped collision pull-back is the virtual-partner one** (`ensemble_backward`
->   defaults `VIRTUAL = (4, 8)`, `VIRTUAL_NODES = "staged"`; device
->   `ensemble_device.backward_virtual`; runners `--pullback virtual`, artifacts tagged
->   `_virt{S}x{K}st`).  Against 1200–1800-seed FD arbiters it is unbiased to < 1 % at
->   S = 4 (residual O(Δt/S)) with a per-seed sd 5–56× below the sequential form's, which
->   blows up above ~0.5 collisions/particle/step (review §5.12, `pullback_scan.png`).
->   Two rules: the fit nodes must be the NTC step's **staged** intermediate states (the
->   end-of-step state at every substep is −6 % biased, and no substep count fixes it), and
->   the partner count K is a *stability* knob on long horizons, not only a variance one
->   (K = 2 blew up 1e5× over 300 steps at 40 particles/cell where K = 8 decayed; the
->   device path refuses a backward whose rms λ grows > 100×).  The sequential form
->   (`configure("sequential")`) stays the exact reference; untagged artifacts are its.
->   `examples/gradient_bench/provenance.py` re-evaluates seed 0 of every artifact against
->   the current code; run it before trusting a figure.  Never run more than two JAX CPU
->   processes at once on this machine (a 3.5 h stall on 2026-09-16 came from four).
-> * **Embedded surfaces (2026-09-17, `jax_dsmc/mesh/`)**: SPARTA-style cut cells on the
->   Cartesian grid.  Conventions that everything relies on — element normals point **into
->   the flow** (SPARTA `z x (p2 - p1)` / `(p2 - p1) x (p3 - p1)`; `data.circle` is listed
->   counter-clockwise with each line running from point `k + 1` to `k`); surface ids are
->   `2D + e` after the `2D` box faces, an analytic body is id `2D`; `WallParams` rows
->   `2D + model` carry each element model's `diffuse T acc` (`acc = 0` = specular, as
->   SPARTA's `diffuse 300 0.0`); `GridSpec.volume` (empty = uniform) carries the cut
->   volumes so NTC, moments and the fill see them with no other change; **split cells are
->   refused** (`SplitCellError`; since 2026-09-23 they get sub-cells, PSEUDOCODE §4.5); two
->   trackers share one element branch (since 2026-09-24 a third, the **lane tracker**,
->   `tracker="lane"`, `K_bounce = 32`, is the default of the mesh examples — PSEUDOCODE
->   §9.6.1, review §7.10; `SimStatic`'s own default stays `"stencil"`) — the stencil
->   (`mesh.candidates`, dilation `radius` cells, diagnostic `stencil_overrun` must be 0)
->   and SPARTA's cell walk (`mesh/walk.py`, `SimStatic.tracker="walk"`, `K_walk`, exact
->   for any move length, `walk_exhausted` must be 0; agrees with the stencil to roundoff,
->   not bitwise, because it advances to every cell face); `inside_body` is the catch-all
->   (killed and counted).  SPARTA's `compute grid temp` is the **un-centred** `(m/3k)<v^2>`.
->   The GPU under WSL segfaults in XLA's CUDA-graph command buffers on the mesh step with
->   an inflow source: `examples/mesh/forward.py` sets `XLA_FLAGS=--xla_gpu_enable_command_buffer=`.
->   Gates: `examples/mesh/geometry_checks.py` (cell counts 264/88/48 and 7256/304/440,
->   per-cell volumes vs SPARTA dumps), `tests/test_mesh_*.py`, `examples/mesh/report.py`
->   (FG1–FG4, FG7 vs the rebuilt argon SPARTA runs), `free_molecular.py` (FG5),
->   `tests/test_mesh_forward.py` (FG6, FG8), `record_budget.py` (G9),
->   `scratch/mesh/probe_window_score.py` (G3a).  Plan: `~/.claude/plans/jolly-exploring-knuth.md`.
-> * **Mesh-aware adjoint (2026-09-18, phase C; PSEUDOCODE §9.7)**: value-form rewards
->   (`backward[_virtual](phi_step=, hit_reward=)`; a hit's score weight is the reward-to-go
->   **from its own draw onward**, `lam + r_j + r_{j+1} + …`), `field_query` → `(value, grad_x,
->   grad_v)` + `node_gradients`, and `jax_dsmc/shape.py` — the traced replay of the step's
->   wall map (`advance(trace=True)` fills `WallEvents.x_hit/v_in/normal`; `None` in records)
->   and its `jax.vjp` w.r.t. the geometry with the backward's cotangents; the diffuse
->   re-emission velocity is `stop_gradient` in the post-hit state and the events (kernels
->   enter the VALUE by score, incl. the normal via `sampling.log_diffuse_density`), but
->   **the surface tally is formed from the traced sample** (2026-09-21, review §7.8 GP):
->   the hit's own reward is pathwise through the reparameterised sampler (frame
->   parallel-transported from the primal one — the incident-velocity frame's derivative
->   has a `1/|v_t,in|` tail) and the normal score is weighted by the value-to-go *after*
->   the hit; this cut the plate's normal-term seed sd 4×.  `grazing = eps` on both bodies
->   floors the hit-time derivative's `1/(v·n)` and the score's `1/(v_out·n)` (tangent only).
->   **The `∇λ` fits are stratified by the hit-ahead class** (2026-09-22, review §7.9;
->   `shape.hit_ahead`, `node_gradients(klass=)`, `gradient(value_class=)`): a slot's
->   nodes are the slots with the same "body hit at a later captured step" — the
->   one-sided velocity rule alone mixes the populations at a curved cap (specular
->   capsule −27 % → z = +0.08).  Artifacts of the stratified fit carry `_vchit`; the
->   plane runner keeps `"none"`.  `replay_error` is relative and roundoff (`< 1e-12`), not
->   bitwise: same arithmetic, another compilation (2026-09-24: a flipped outcome reports 1,
->   the mesh runners allow `REPLAY_TOL = 1e-9` of round-off, review §7.10).  Gates: G1/G2 `examples.ensemble_couette
->   --objective energy-window|shear-window --device`, G3 `examples.mesh.ensemble_plane`
->   (rectangle body whose left face is the moving Couette wall; control = translation);
->   tables/figure from `examples/mesh/report.py` (`adjoint_gates`).  Not in the VJP: the
->   cut-volume term (G5) and the polygon edge-band score (phase E).  **Open issue
->   (2026-09-20)**: no `∇_xλ` estimator (one-sided / pooled / along-flight) resolves the
->   x/v-part of a translated flat wall; shape controls are restricted to normal
->   displacements of curved surfaces (radius-type), first optimisation case circle →
->   airfoil-like shape by normal displacements only (review §7.6 item 5).  **Shape
->   representation = C1 level set** (`jax_dsmc/mesh/levelset.py`, cubic B-spline
->   coefficients, `kind == "levelset"`, single surface id like the analytic body); the
->   polygon edge-band score is not built (representation-induced, vanishes on a C1
->   surface).  Trap: the ray–surface bisection has zero derivative — the final Newton
->   step (the bracket search a function of `stop_gradient` inputs) is what carries
->   `∂t/∂coef`.  Gates LS0 (`tests/test_mesh_levelset.py`), LS2 radius and `cos 2θ`
->   mode (`ensemble_mesh --body levelset`, z = −1.4 / +0.7 at 4 seeds, review §7.7);
->   the per-seed entry point for an optimiser is `ensemble_mesh.shape_terms(cfg, key,
->   body, variants=(...))`, the optimiser `examples/mesh/optimize.py`.  Run the circle
->   gradients with `--substeps 1 --partners 2` (collisionless: partners only cost).
-> * **The P3 paper's Test-3 value 0.1517 is not a target**: the transcribed forward
->   differs from the paper's at the inlet (review §4.12); the transcription's own gradient
->   is 0.144-0.147 by a 1600-seed FD and by both adjoint routes.
+For someone (human or agent) picking the project up cold. It says what works, what is in progress,
+which decisions stand and **why** (with the measurement that settled each), which invariants and
+traps will bite, and how to run things. The play-by-play history was removed on 2026-10-21; where a
+decision came from a long episode, the episode survives as one or two lines of evidence. The full
+measurement ledgers are `docs/PSEUDOCODE.md` (sections 17-23), `docs/ADJOINT_BRANCH_REVIEW.md`,
+`docs/math/shape_validation.tex` (the validation deck) and the probes in `scratch/`.
 
-Written for someone picking this up cold. It covers what exists, what is in flight, and — mostly
-— **the traps**, because this project has already produced two defects that would have shipped
-silently wrong physics and survived a careful reading of the spec.
+Working rules that explain the shape of everything below: **gates are measured before the code they
+constrain** (twice a gate bundled into the implementing agent's task changed the design it was
+meant to check); **a confident numerical claim gets a probe, not an argument** (several of this
+project's confident conclusions were reversed by measurement); **never trust a Monte Carlo number
+without seeds and a standard error**.
+
+## Summary
+
+**What works.**
+- A SPARTA-style DSMC forward solver in JAX (NTC + VSS, f64, 1-3 D, periodic / specular / diffuse /
+  inflow / outflow, multi-device x-slab decomposition). Validated against Bird/Alsmeyer shock
+  thickness, Taylor-Green and Couette viscosity (Chapman-Enskog), BKW relaxation, two-sided-inflow
+  Rankine-Hugoniot, and (with embedded bodies) SPARTA argon circle / sphere runs.
+- Embedded bodies on the Cartesian grid: cut and split cells, polygon / analytic / **C1 level-set**
+  surfaces, three trackers (stencil, SPARTA cell walk, **lane** = the examples' default).
+- Pathwise AD adjoint, exact against hand-coded [P1]/[P2] recursions (oracles) and fixed-key FD.
+- **The production gradient: the particle-carried ensemble adjoint** ("route b", decided
+  2026-09-15), with the virtual-partner collision pull-back and the per-cell guarded cubic-in-v
+  field fit (`ensemble_backward.CELL_BASIS = "cell:cubicv:adapt1.5:guard32:align0.9:both"` since
+  2026-10-19), plus the shape adjoint (`jax_dsmc/shape.py`). Validated against CRN finite
+  differences on inlet shock, Couette walls, VSS parameters, circle / sphere radius, `cos 2 theta`,
+  and the Kn 0.5 squash (-0.7 +- 0.8 % vs paired FD, 16 seeds).
+- A level-set shape optimiser (`examples/mesh/optimize.py`) and a cluster workflow (CURC Alpine).
+  Best runs reach 0.20 (Kn 0.5) and 0.10 (M 10) of the circle's drag at fixed area.
+
+**Production path.** forward `simulate.run(capture=True, mesh=...)` -> `ensemble_device.backward_virtual`
+(value columns) -> `shape.gradient` (replay VJP + terms) -> `examples/ensemble_mesh.shape_terms` ->
+`examples/mesh/optimize.py` (Adam as an optax chain, `--optimizer ox_adam`, the default since
+2026-10-21) -> cluster via `examples/mesh/cluster/`.
+
+**In progress (2026-10-21).** The optimiser comparison. Done (`optrules`, `optrules2`,
+`optrules1seed`): Adam is robust even with one seed per iterate and stays the reference; the reworked
+trust region (`tr`) is fastest early but parks at its radius floor; L-BFGS curvature pairs are seed
+noise; MMA has a gradient-scaling problem and fragments shapes at one seed. Running (`optax1seed`):
+optax step rules that change Adam's step SIZE - a cosine step schedule, schedule-free Adam, Prodigy -
+plus AdEMAMix and the optax Adam control (section 2.6). Two fixes from these runs landed 2026-10-21: the warm start's
+sub-cell collide state and the tracker's post-loop `inside_body` query (section 4.3).
+
+**Known open problems.**
+1. Optimised shapes grow **sub-DSMC-cell roughness**: the level set has ~400 boundary degrees of
+   freedom, 0.5 m DSMC cells resolve ~50 of them. Step smoothing (`--smooth 8`) hides it, it does
+   not remove it. A curvature penalty was proposed, not built.
+2. The Kn 0.5 adjoint-vs-FD gap is closed only to about -1 % +- 1 %, and the **optimum is
+   ill-conditioned** (squash `s*` moves 0.84 -> 0.62 between fits); thin bodies (< ~2 cells) stay
+   about -4 % in every fit.
+3. Translation-type controls (x/v part of a moved flat wall) are unresolved; controls are normal
+   displacements only.
+4. Free-molecular M 10 optimum is bounded by the box (the body slides into the keep-out).
+5. Diffuse-wall circle gate (GD) reads 9 % below the precise FD (z -2.3) - not closed.
+6. Multi-device scaling has never run on real multi-GPU; 3-D shape optimisation and hierarchical
+   grids are not started (`docs/PLAN.md`).
 
 ---
 
 ## 1. Where things stand
 
-**Phase 0 (specification) is complete and structurally verified.** `docs/PSEUDOCODE.md` is at
-revision 3, ~2150 lines, and is the authoritative contract. It has *not* been formally approved,
-so treat open questions in it as genuinely open.
+### 1.1 Components
 
-**Milestone 1 implementation: the forward collision path is built and tested.** The waves below
-existed for a reason -- `state.py` is a hard dependency of nearly everything, and a first attempt
-that launched all four scopes simultaneously left three agents coding against a module that did
-not exist.
-
-| Scope | Files | State |
+| component | where | state |
 |---|---|---|
-| **Gates U1 + U3** | `tests/test_gaps.py`, `scratch/gate_U*.py` | **CLOSED 2026-09-04** — see §1.1 |
-| Foundations | `constants.py`, `safe.py`, `state.py` | done |
-| RNG contract | `rng.py` | done |
-| Mesh & sampling | `grid.py`, `sampling.py`, `sort.py`, `initialize.py` | done |
-| Collision kernel | `collide/vss.py`, `collide/ntc.py` | done |
-| Transport | `move.py`, `boundary.py` (periodic/specular/outflow) | done |
-| Time loop | `simulate.py` | done |
-| **M1 gate** | `examples/bkw.py` | **runs and passes** — see §1.2 |
-| BKW analytic, output | `bkw.py`, `sample.py`, `viz.py`, `output.py` | agent-written, **not second-passed** |
+| Collision (NTC, VSS, thermal majorant) | `jax_dsmc/collide/` | validated (BKW, Taylor-Green, shocks) |
+| Transport, BCs, inflow | `move.py`, `boundary.py`, `inflow.py` | validated; `inflow_shortfall` must be 0 |
+| Adaptive attempt capacity | `simulate.run_adaptive` | host-side; not inside a gradient |
+| Embedded surfaces | `jax_dsmc/mesh/` | gated vs SPARTA (geometry, forward); level set gated (LS0-LS3) |
+| Pathwise + score surrogates | `adjoint.py` | oracles exact; score routes not used for production |
+| Ensemble adjoint | `ensemble_backward.py` (host reference), `ensemble_device.py` (JIT), `cell_fit.py` | production |
+| Shape adjoint | `shape.py`, `wall_adjoint.py` | production; terms listed in 2.4 |
+| Optimiser | `examples/mesh/optimize.py`, `optimizers.py`, `optimize_squash.py` | running on the cluster |
+| Multi-device | `decomp.py` (works), `parallel.py` (kept as the negative result) | not benchmarked on real GPUs |
+| Fast SPARTA-faithful forward | branch `sparta-match` only | never merge into main |
 
-**344 tests pass** in ~4 minutes.
+### 1.2 Numbers worth remembering (details in the example READMEs and the validation deck)
 
-`ruff check` and `ruff format --check` both pass across `jax_dsmc/` and `tests/`.
-
-**What is NOT done.** The M1 acceptance gate itself — a 0D relaxation at `omega = 1` compared
-against the exact Bobylev–Krook–Wu solution — has not been run end to end. `bkw.py` and
-`test_bkw.py` exist but were written by an agent that was cut off mid-task, and `simulate.py`
-(the time loop, §12) does not exist at all, so nothing yet steps the solver forward more than one
-collision step. That is the next piece of work.
-
-### 1.1 The two gates, and what they changed
-
-Both closed by measurement on 2026-09-04. **U3 changed the design**, which is exactly why the
-gates were run before the code they gate.
-
-**U1 — is `EPS_REL_VR2 = 1e-8` right?** Yes, keep it. Two agent passes recommended raising it to
-`1e-6` on a peak-ratio metric `D = sup/rms`. That was measured and **rejected**: `safe_pow` falls
-back to a *constant* below the clamp, so both value and gradient are exactly zero there, and every
-configuration the `D` argument named (duplicated parcel, zero-`T` IC, the inactive scratch-row
-slots) sits below the clamp and injects nothing. Over 40e6 equilibrium pairs neither value clamps
-even once, and the gradient standard error is identical to 4 significant figures. The only measured
-differences favour `1e-8`. Full evidence: spec §17.4.
-
-**U3 — can a 2-5x majorant margin be held?** Yes, **but not with SPARTA's seed.** SPARTA's
-`vremax = 2*cxs*vscale` plus a stale-max ratchet measured a `1.0e-2` violation rate on a
-counter-streaming IC with a minimum margin of `0.62` — `Sigma` sitting *below* the true maximum,
-and every violated pair contributes a zero score and biases the gradient. The adopted rule is an
-**a-priori thermal majorant**: `q` is monotone in `|vr|`, so its supremum over the reachable
-interval is bounded by the cell temperature, which is known at the *start* of the step and
-therefore cannot lag a transient. Zero violations across all six IC x transient cases, minimum
-margin `2.15`. It costs attempts but **not physics** — collision count is `Sigma`-invariant,
-measured flat over a 20x sweep. Full evidence: spec §17.5; the rule itself is §7.2.3, implemented
-as `thermal_majorant` / `vremax_init` in `collide/ntc.py`.
-
-**Consequence for anyone touching `ntc.py`:** do not "simplify" `Sigma` back to
-`cstate.vremax[:, 0, 0]`. The thermal floor is load-bearing, and removing it fails no test
-loudly — it just raises the violation count that `min_majorant_margin` reports.
+| gate | result |
+|---|---|
+| BKW rate bias, N = 2.56e6, 24 seeds | -0.08 +- 0.12 %, sd ~ N^-0.500 |
+| Bird normal shock L/lambda_1 (D = 1/2/3) | 5.98 / 6.12 / 6.18 vs 6.2; vs Alsmeyer 4.8: 4.53 / 4.64 / 4.68 |
+| 2-D Taylor-Green viscosity | +0.38 %, R^2 = 0.9994 (exact NS solution, no free parameter) |
+| Couette | gate is the Kn -> 0 intercept, with dx -> 0 correction, consistent with Chapman-Enskog; live numbers in `examples/couette/RESULTS.md` |
+| SPARTA argon circle duplicate | drag +0.3 % (z = 1.4), surface collision rate 139 vs 140.5 per step, fields agree |
+| Free-molecular circle Cd, free box | 12.245 +- 0.036 vs closed form (R 1.5), `scratch/freebox/` |
+| Radius gradient, analytic circle | 1.44 +- 0.09 e-20 vs CRN FD 1.40 +- 0.01 (z 0.5) |
+| Sphere radius gradient (LS3) | z = -1.75 / -0.91 vs FD (7 seeds) |
+| Kn 0.5 squash, shipped fit | -0.7 +- 0.8 % vs paired FD (16 seeds, 300 captured steps, 2026-10-12) |
 
 ---
 
-### 1.2 Milestone 1 passes, and how it was verified
+## 2. Decisions that stand, with reasons
 
-`python -m examples.bkw` relaxes a 0D Maxwell-molecule gas from the BKW initial condition
-and compares the normalised fourth-moment excess against the exact solution. The gate quantity is
-`E(t) = 1 - <|v|^4>/(15 vth^4) = (1-K0)^2 exp(-nu t/3)` — a pure exponential, dimensionless, and
-independent of `temp`, `mass` and `nrho`, so it tests both the amplitude and the rate.
+### 2.1 Forward solver
 
-**Sample size is the trap here, and it caught me three times.** The gate quantity is a fitted
-decay rate — itself a random variable with a wide spread — so any small number of seeds produces
-a confident-looking wrong answer:
+- **Stochastic rounding of the attempt count plus a `log P(n given f)` score term** (spec 8.1). The
+  deterministic remainder carry froze the path from `dt`, `fnum`, `cell_volume` to the collision
+  rate: measured `jax.grad = [0, 0, 0]` against a healthy `||dJ/dv|| = 9.5`.
+- **Stale-max NTC (dsmcFoam+ rule), floored by an a-priori thermal majorant** (`ntc.thermal_majorant`,
+  `vremax_init`, `K_EV = 5`, `F_UP = 2`; spec 7.2.3, 17.5). SPARTA's own seed measured a 1e-2
+  violation rate (min margin 0.62) on a counter-streaming IC; the thermal floor gave zero violations
+  across six IC x transient cases, min margin 2.15. Collision counts are `Sigma`-invariant. **Do not
+  "simplify" `Sigma` back to `cstate.vremax`**: removing the floor fails no test loudly.
+- `EPS_REL_VR2 = 1e-8` stays (spec 17.4): raising it to 1e-6 was measured and rejected.
+- **Move, then collide** (SPARTA order), transport term outside `B_k`; [P3] collides first. Pinned
+  by Oracle 3 (1.3e-16 vs 9.8e-2) and `test_production_step_moves_before_it_collides`.
+- **`A_max` is measured, not guessed** (`simulate.run_adaptive` grows it on `attempts_clipped` and
+  re-runs the chunk). Every a-priori rule failed: the cold count was 5.4x too small, and a
+  converging wave reached density ratio 11, not Rankine-Hugoniot's 4. Differentiated runs need the
+  capacity settled first (host control flow cannot sit inside `jax.grad`).
+- **Scale the cell count with N** (`--particles-per-cell`, default 1000): `A_max` is per cell, so
+  pinned cells made 640k particles 39x slower (26.4 s vs 0.68 s). Below ~3e5 particles the CPU beats
+  the GPU; above ~6e5 the GPU wins 3-4x. Rates agree to every digit across backends.
+- `GridSpec.transverse` carries the suppressed extents so `cell_volume` is a volume at D = 1, 2.
+- **Diffuse walls**: flux-weighted half-Maxwellian, closed-form hit time on a static mesh (the
+  `K_bounce` sub-move scan was 1.65 s vs > 7 min with identical results). Corner handling: resolve
+  the first face in time, then a statically gated second pass (applying faces in turn heated a cold
+  gas to 350-386 K). Residual: two thermal faces on different axes leave a 3.3e-4 recrossing rate;
+  exactly zero for Couette and shock geometries. The ordering in `apply_faces` is load-bearing.
+- **Free-space box** (`forward.build(boundary="free")`, 2026-10-15): every face injects the drifting
+  Maxwellian's inward flux. Why: the specular channel holds a half-range stream (free-molecular Cd
+  17.2-17.7 vs 12.22) and at Kn 0.5 + M 10 chokes for D/H >= 0.3. Not retrofitted to the older
+  `optc2` / `optckn` / `optab` / `squash` runs.
+- **Output is fields, not particles** (`viz.FieldMovie`; 50 KB/frame vs 1.7 MB at N = 1e6).
+- **Multi-device**: x-slab decomposition (`decomp.py`). Sharding the particle axis does not
+  parallelise DSMC (global `argsort` replicates the table; collide 6.8 / 13.0 / 25.2 ms at 1/2/4
+  devices) - `parallel.py` stays as the measured negative result. Re costs `Re^D` in cells: 4 x H200
+  reach Re ~ 1500 in 2-D, ~66 in 3-D.
 
-| seeds | what it appeared to show | what it actually was |
+### 2.2 Which gradient estimator
+
+- **Pathwise AD is exact** for parameters that reach `J` through the reparameterised sampler (`temp`,
+  `vstream`, `alpha`, wall `T`, wall velocity): fixed-key FD to 1e-11, Couette closed form. Parameters
+  that act only through decisions (`diam`, `omega`, `tref`, `nrho`, accommodation) read **exactly 0**
+  pathwise and need a score or the ensemble adjoint.
+- **Score-function / DiCE routes are dead for production** (measured 2026-09-10..15): the per-particle
+  attribution is biased low and the bias grows with trajectory length (FD/AD = 1.13, 1.32, 1.57,
+  1.95, 2.82 at M = 2, 5, 10, 20, 40; exact with collisions off), the trajectory score's SE grows as
+  M^2.8, count scores for inlet density are 200-1300x the FD noise, and the shock density-ratio
+  gradient has the wrong sign (`docs/ATTRIBUTION.md`, review sections 4 and 5). Terminal-label and
+  trajectory scores remain in `adjoint.py`; `baseline="mean"` is rejected (biased).
+- **Production: the particle-carried ensemble adjoint, route (b)** (2026-09-15). Carry the value `lambda`
+  on particles, use the realised forward pairs as the collision quadrature, interpolate only one
+  "ghost" per collided particle. Verified vs fixed-count FD to 0.5 % at 240 seeds; P3's
+  retained-frame route (a) has a ~1 % reconstruction bias even at full retention. On the real solver:
+  inlet temperature and density vs 384-seed FD (density at 0.43x the FD noise). Pathwise-inside-ensemble
+  was measured and rejected (biased, noisier).
+- Rules learned the hard way: the ghost interpolant must be at least quadratic (affine: -8 % at 30
+  particles/cell); record **every** wall bounce and newborn hit individually (no "last event x count"
+  shortcuts); the P3 paper's Test-3 value 0.1517 is not a target (the transcribed forward differs at
+  the inlet; its own gradient is 0.144-0.147).
+- **Collision pull-back**: the *sequential* form (`configure("sequential")`, ghosts on the current
+  chained field) is the exact reference but its noise blows up above ~0.5 collisions/particle/step.
+  The shipped default is the **virtual-partner substepped** pull-back, `VIRTUAL = (4, 8)`,
+  `VIRTUAL_NODES = "staged"` (2026-09-16): unbiased to < 1 % at S = 4 (residual O(dt/S): +1.8 / +0.7 /
+  +0.1 % at S = 2/4/8), per-seed sd 5-56x below the sequential form's. Fit nodes **must** be the NTC
+  step's staged intermediate states (end-of-step nodes are -6 % biased, no substep count fixes it).
+  The partner count K is a *stability* knob on long horizons (K = 2 blew up 1e5x over 300 steps at 40
+  particles/cell; the device path refuses a backward whose rms lambda grows > 100x). Collisionless
+  runs use `--substeps 1 --partners 2` (partners only cost) - this is a *setting*, not a code shortcut.
+- Variance facts (2026-09-05, score route, still instructive): `sd ~ N^-0.5` verified for four parameters;
+  noise is mostly pathwise (3-5x the score half), so a baseline caps at 1.02-1.07x and **more particles
+  is the lever**; a spatial window costs signal (up to 6.3x SNR), not variance; at [P2]'s 10 % FD step the
+  AD/FD gap is truncation.
+- **Never verify an `alpha` gradient near 1.4**: `dT_y/d(alpha)` is stationary at `alpha = sqrt(2)` and
+  argon's tabulated 1.40 sits 1 % away. Helium is the best-conditioned gas
+  (`species_data.best_for_alpha_study()`); even there the FD check is low-power.
+
+### 2.3 The backward's field fit (`jax_dsmc/cell_fit.py`)
+
+Default `CELL_BASIS = "cell:cubicv:adapt1.5:guard32:align0.9:both"`: ONE least-squares fit per
+collision cell (quadratic in x, cubic in v), order capped by node count (`adapt1.5`) and per query by
+leverage (`guard32`), with surface normals splitting ahead / behind populations and complex cells
+(resultant < 0.9) left two-sided (`both`). History of why:
+
+- 2026-10-11: per-cell fits replaced the per-query kNN fit (`"quadratic_full"`, kept for parity tests
+  and old artifact names). A Kn 0.5 squash seed went 985 s -> 95 s (backward 897 -> 13 s). Unguarded
+  per-cell quadratics were unstable (seed 11 +97 %, seed 10 -40 %); `adapt1.5` fixed it; the shipped
+  one-sided per-query backward was itself unstable on optc iterates (lambda rms ~150x).
+- 2026-10-12 (`gapgate`): cubic-in-v closed the Kn 0.5 gap: quadratic -3.7 +- 0.8 %, cubic -0.7 +- 0.8 %
+  vs paired FD (paired +3.0 +- 0.2 %). The older "7-9 % gap" was FD noise (64-seed FD: h = 0.1 and 0.2
+  agree to 0.14 +- 0.67 %); horizon (1000 vs 300 captured steps) adds +2.1 % and is additive-ish.
+- 2026-10-18/19 (`thingate`, `guardgate`): the cubic **blows up on thin bodies at M 10** (squash M 10
+  dD/ds -19.6 vs FD +1.48; optm nose spikes, lambda up to 380). Cause: velocity-space *extrapolation* at
+  post-collision queries in the empty gap between the beam and wall-reflected gas (leverage ~1e3 for the
+  cubic vs ~30 for the quadratic). `guard32` fixes it (max lambda <= 2e-3, blunt squash unchanged,
+  < 0.6 % of queries lowered); guard thresholds 2 / 8 hurt the sparse inlet gates; ridge cures but is
+  -4 %. Spline fits were judged worse (no data in the gap, 5-D, noise).
+- Residuals after the guard: thinnest squash (0.58 m) -3.5..-4.2 % in *every* fit including the quadratic;
+  optm iterate 58 nose direction -3.8 +- 0.6 % (quadratic +0.7 +- 1.1 %).
+- `value_class="hit_ahead"` (stratified fits, 2026-09-22) fixed the specular capsule but is **biased by
+  construction** (drops `grad P (lam1 - lam0)`: mode2 +40 %); it conditions on the future, is unrepairable,
+  and now warns. The default everywhere is `"none"`. Note `shape.gradient` is jitted: a new string option
+  must be added to `static_argnames`.
+- Rejected: the exact-angle `rb` option (+0.48 +- 0.22 %, +13 s/seed; the forward noise dominates), the
+  Delta-t-linearised and end-of-step pull-backs (-10 %, -23 %), skipping the fits when attempts are zero
+  (rule below).
+- **Rule: no runtime collisionless shortcuts.** Collisionlessness is a property of the setup; tests and
+  smoke runs exercise the real collisional forward and backward so lowering Kn changes no code.
+- A resumed optimiser run keeps its recorded basis (`history.json` `backward_basis`; `PRE_CUBIC_BASIS`
+  for old histories); asking for another raises.
+
+### 2.4 Embedded surfaces and the shape gradient
+
+- **Direction: SPARTA-style Cartesian cut / split cells** (not dsmcFoam+ polyhedra: tet-walking is
+  hostile to static shapes). Split cells get sub-cells (`GridSpec.n_sub`, `grid.collision_cell`; 2026-09-23).
+  Hierarchical grids are deliberately not built; mesh tables are per leaf cell so adding them is
+  contained (`docs/PLAN.md`).
+- **Controls are normal displacements of curved surfaces only** (2026-09-20). None of four `grad_x lambda`
+  estimators resolves the x/v part of a translated flat wall (exact +0.003 on the shear probe; pooled /
+  along-flight read 0 with understated SEs). Radius-type controls are FD-consistent only because the tally
+  term is exact. Do not propose tangential translations of flat walls.
+- **Representation: C1 level set** (`mesh/levelset.py`, uniform cubic B-spline coefficients, single surface
+  id), not the 50-gon (its vertex edge-band term is representation-induced) and not density/porous
+  bodies (no kinetic meaning for an impermeable wall). Hit search = sampled bracket + bisection + one
+  Newton step with the bracket under `stop_gradient` - **the bisection has zero derivative, the Newton
+  step carries `d t/d coef`**.
+- **Terms of the shape gradient** (`shape.py`, assembled in `ensemble_mesh.shape_terms`): pathwise VJP of
+  the replayed wall map; exact tally term; diffuse normal term in the *hybrid* form (the hit's own reward
+  pathwise through the reparameterised sampler, value-to-go after the hit on the score; seed sd 3.1 ->
+  0.77 e-21); silhouette band term for diffuse walls (count ONE passing per trajectory - counting every
+  particle-step in the band over-estimated 5x); window-edge timing term (10-step band default; the 0.2-step
+  band's apparent gain was a noise fluke); hit/collision order term (+0.4 % at Kn 0.5); cut-cell volume term
+  (-2.9 % at Kn 0.5, gated by volume scaling); along-flight identity with `L* lambda` (fit agrees with T + L*
+  to 0.8 %, T alone off by 3.2 %). Default variant `along_pool_plane` (pooled one-sided fits with the
+  half-space cut that stops a pool reaching across a thin body: `one_pool` was -19 % at s = 0.35).
+  `grazing = eps` floors `1/(v.n)`: it is the *variance* lever (sd ratio scales with it), not the bias;
+  0.05 is the default of the cluster jobs.
+- **Evidence for the gradient** (details: validation deck): analytic circle radius z 0.5; `cos 2 theta`
+  mode z +0.7 / -0.2 (4 seeds); sphere z -1.75 / -0.91; specular capsule 1.356 +- 0.011 vs 1.35 (hit-ahead
+  era; now `none`); plate (GP) 1.191 +- 0.068 vs 1.169 +- 0.096; free-molecular squash within ~2 % at
+  s = 0.35 / 0.6 / 1; free-box circle radius gradient -0.9 +- 3.6 % vs FD.
+  - Compare against the **truncated-horizon FD** and report the horizon separately: on the collisionless
+    plane the estimator equals the truncated FD (+0.003 vs +0.0017 +- 0.0026) while the full FD differs by
+    the horizon (H = 72 captured steps recovers it).
+  - Free-molecular residual -1.5..-2 % is mostly horizon (300 -> 600 captured steps: +0.8 / +1.1 %, y-wall
+    re-hits) and not grazing, FD curvature or the tally; unlocated remainder ~ -1 %.
+  - Pair every estimator term against the CRN FD **seed by seed** before touching the formulation (that
+    decomposition located the hit-ahead bias in one table).
+- **Trackers**: `lane` (SPARTA's move loop: pass 0 over all particles, later passes on a compacted
+  buffer; `K_BOUNCE = 32`) is the default of the mesh examples, `SimStatic.tracker` itself defaults to
+  `"stencil"`. Particles still stuck after the bounce budget are deleted and counted
+  (`Diagnostics.surface_stuck`, SPARTA MAXSTUCK); optimised shapes grow concave windward notches
+  (curvature to -10) where 5-7 specular bounces happen in one step, which killed a bounded tracker.
+  `inside_body` (killed and counted) is the catch-all and must be 0 for a valid run; `inflow_shortfall`
+  likewise. Replay check: `replay_error` is relative round-off (~1e-12 on concave shapes), a flipped
+  outcome reports 1, runners allow `REPLAY_TOL = 1e-9`.
+- **Conventions that must not drift**: element normals point **into the flow** (SPARTA
+  `z x (p2 - p1)`); surface ids `2D + e` after the `2D` box faces, an analytic / level-set body is id
+  `2D`; `WallParams` row `2D + model` carries `diffuse T acc` (`acc = 0` = specular); `GridSpec.volume`
+  carries cut volumes (NTC, moments, fill see them with no other change); SPARTA's `compute grid temp` is
+  the un-centred `(m/3k)<v^2>` (`temp_kinetic`); the cell walk agrees with the stencil to round-off,
+  not bitwise (it advances to every cell face); the diagnostics `stencil_overrun` and `walk_exhausted`
+  must be 0.
+
+### 2.5 Performance
+
+**Forward** (SPARTA circle deck, argon, 1000 steps from empty, this laptop, 2026-10-01; harness
+`scratch/perf/bench_forward.py`, SPARTA serial 0.52 s):
+
+| 1000 steps | main code, 1 CPU core, polygon / level set | GPU (RTX 3050 Ti, WSL flags), polygon / level set |
 |---|---|---|
-| 1 | 4.13% / 7.50% / 2.17% error at N = 20k/45k/80k — "not converging" | noise; sd is ~13% at these N |
-| 5 | bias grows to **+11%** at N = 5k, and a monotone dt trend | noise |
-| 8 | **+5.78%** bias at N = 40k (z ≈ 3.4), dt trend −4.1% → +2.6% | noise |
-| 16 | +3.39 ± 1.28%, and the dt trend **gone** (−1.21, −2.16, +0.25) | consistent with zero |
+| 2026-09-28 | 67.6 / 98.3 s | 15.1 / 20.8 s |
+| 2026-10-01 | **6.3 / 11.6 s** (12x / 22x SPARTA) | **4.5 / 6.8 s** |
 
-At 16 seeds, with three independent rate estimators applied to the same trajectories (OLS over the
-full trajectory; OLS over the first half only, where the relative noise is small; and a two-point
-log-ratio with no fit at all):
+The non-differentiable SPARTA-faithful port on branch `sparta-match` runs 1.30 s on one core (2.5x SPARTA):
+the floor, set by XLA per-op overhead and lock-step padding, not extra work. What changed (each gated by
+`scratch/perf/noise_gate.py`, |z| < 3, all < 1): Halley inverse-CDF inflow speed; level-set search with block
+cull + safeguarded Newton; compacted rows for polygon search and inside check; on XLA:CPU a
+SPARTA-structured pass 0 (`wall_adjoint._first_pass_routed`; GPU keeps `_first_pass_dense`, since the lane's
+gathers cost more launches there); NTC without scratch-row copies; `SimStatic.sort = "partition"` (carried
+partition sort; same cells, different within-cell order, so seed-level draws differ - tested in
+distribution); `inflow.revive_at`.
+- **Remaining (2026-10-02 study, `scratch/xla_ops/`)**: ~70 % of a CPU step is ~100 large memory-bound
+  passes; *passes* matter, not op count (removing 685 of ~2200 tiny ops was time-neutral in an interleaved
+  A/B and was reverted; the host tracer inflates tiny ops). Bounded options total ~20 %
+  (6.3 -> ~5 s per 1000 steps); < 5x SPARTA needs the tracker-bookkeeping rewrite. **Paused by the user
+  2026-10-02** (risk to verified behaviour). The GPU step is launch-bound (5.3 ms wall, 2.1 ms kernels).
+- Use `scratch/xla_ops/ab.sh` / `blocks.py` (interleaved untraced A/B); single 100-step blocks vary +-10 %.
+  `jax_dsmc/fusion.py` (`materialise`) holds the one XLA:CPU fusion workaround.
 
-| N (dt·ν = 0.15) | OLS full | OLS half | log-ratio |
-|---|---|---|---|
-| 10,000 | −2.31 ± 3.24 | −0.36 ± 2.10 | +1.28 ± 2.36 |
-| 20,000 | −2.16 ± 2.11 | −4.19 ± 1.23 | −3.73 ± 1.77 |
-| 40,000 | +3.39 ± 1.28 | +1.49 ± 1.16 | +1.60 ± 1.31 |
+**Adjoint** (one optimiser seed, optc settings):
 
-(bias in % of the exact rate 1/3; ± is the standard error of the mean over 16 seeds.)
+| date | seed wall time | change |
+|---|---|---|
+| 2026-10-01 | 99 s | forward work above |
+| 2026-10-02 | 64 s | two value backwards as one two-column sweep (`ensemble_device` value columns + unrolled Cholesky `_spd_solve`) |
+| 2026-10-15 | 38 s | per-cell fit: value backwards 30.3 -> 2.8 s; shape gradient 26.9 s now 70 % of the seed (launch-bound, ~6950 kernels/step) |
+| 2026-10-19 | (H200 2g.35gb slice) warm-up 53-58 s, guarded backward 40 s (unguarded 16), shape 28 s, capture + replay 12 s | guard costs time; leverage via cell tables |
 
-**Verdict: no systematic bias is detectable.** Every deviation is within ~±4% and mostly within
-two standard errors of zero, the sign is inconsistent between N values, and the three estimators
-agree — so the residual is Monte Carlo scatter, not a defect. Zero majorant violations and zero
-clipped attempts throughout. Resolving a genuine few-percent effect would need ~100 seeds; if
-someone wants to tighten this, that is the cost.
+- **Warm start** (`--restart-steps R`, 2026-10-19): each seed restarts from its previous iterate's final gas,
+  particles inside the new body removed. After a drag-halving shape change the carried gas is within
+  3.0 +- 0.5 % of a cold run in 50 steps and within noise after; coupling across iterates as good as cold
+  (5.6 vs 6.1 % spread); unbiased (+0.4 +- 1.9 %). R = 500 replaces 2800 warm-up steps. M 10 S4:
+  516 -> 307 s/iterate. Default 0 (cold), set by the `optrules2`/`optrules1seed` groups.
+- Basis is not the cost driver for kNN fits (assembly is basis-independent; affine only 1.37x cheaper and
+  moves lambda 73 %). f64 runs at 1/64 rate on consumer/RTX GPUs vs 1/2 on A100/H200: collisional adjoint
+  runs belong on A100/H200. Enabling XLA command buffers on the cluster (after a smoke run) is the cheapest
+  untried speed-up there; `cluster/env.sh` still exports the WSL guard flag (harmless, but disables them).
+- Memory: full adjoint 64 kB per slot per captured step (lean record, 2026-09-24); the fine circle
+  (240 k slots x 300 steps) needs > 18.7 GB; the coarse `optc` fits a 24 GB RTX MIG slice.
+- Recompiles: `npc_max` (backward's per-cell table width) is rounded to `ensemble_mesh.NPC_BUCKET = 64` and
+  is static; each new bucket recompiles backward and shape gradient (~1200 s on H200). A larger bucket or
+  a configured floor trades padding for fewer compiles.
+- Test-suite performance (CPU default, XLA persistent cache `.pytest_cache/jax`): see section 5.
 
-Reproduce with `scratch/m1_convergence.py` (sweep) and `scratch/m1_rate_estimator.py` (estimator
-cross-check). **Do not quote a rate from a handful of seeds** — this file's own history is the
-argument.
+### 2.6 The shape optimiser (`examples/mesh/optimize.py`)
 
-### 1.2.1 Two traps when running it
+- **Step**: coefficient gradient smoothed on the coefficient grid (Gaussian of `--smooth` knots; the H1
+  gradient), restricted to a band, `phi <- phi - eta g` with the largest knot moving exactly `--step`
+  (0.05 m; normalised, so late iterates dither without decay). `reinitialise` every iterate (it must
+  project the band knots all the way: stopping short polluted the surface cloud and made spurious zero
+  crossings at iterate 2). Adam's elementwise normalisation discards H1 smoothing, so Adam's step is
+  re-smoothed (otherwise overhangs -> `wall_recrossed`).
+- **Area**: `--area-mode tangent` (exact area): gradient and step projected off `grad A` (Lagrange
+  multiplier per iterate), a uniform shift restores the O(step^2) remainder (0.5 mm vs 1-2 cm per Adam
+  iterate in `projection`). `lagrangian` is **void** (multiplier wound up ~400x the price, area 4-220 % of
+  A0 with a fixed-size step); `penalty` is built but unused. `projection` remains the code default.
+- **Smoothing**: `--smooth 8` (50 cm) chosen 2026-10-15 (`optab` round 2: smoothest shapes, best adjoint
+  check - observed / predicted step 0.88 vs 0.45 in the projection era). A coarser level set equals
+  smoothing at equal width (no gain).
+- **Box**: `--case circle_long` (x in [-10, 20] m, centred on the body, `fnum x2`, 120 k slots, warm-up 2800
+  steps; 90 k slots overflowed -> `inflow_shortfall`), `--keepout 1.0`, `--boundary free` for the `optm`
+  family.
+- **Stops**: converged when the last 5 objectives lie within 0.125 % of their mean (`window_converged`),
+  cap `study.MAX_ITERATIONS = 300`. A constant-step Adam/GD random-walks near the optimum, so these stops
+  are at the noise level. `optimize.py` ends with `os._exit(0)` (converged M 10 jobs hung at interpreter
+  teardown).
+- **Defaults (2026-10-21).** `default_config()` is `optimizer="ox_adam"`, `area_mode="tangent"`,
+  `step=0.05`, `variant="along_pool_plane"`, `timing_band=10`; but still `smooth=2`, `restart_steps=0`,
+  `seeds_per_iterate=2`, which are NOT the production settings. The cluster groups (`cluster/study.py`)
+  pass the production flags: `--step 0.05 --smooth 8 --band 1.0 --keepout 1.0 --area-mode tangent
+  --boundary free --case circle_long --fnum-scale 2 --warmup 2800 --grazing 0.05 --levelset-h 0.0625
+  --levelset-samples 16` plus `--restart-steps 500` from `optrules2` on (the old `opt`/`optc` groups pin
+  `--area-mode projection`). `--optimizer` accepts `gd`, `adam` (numpy), `tr`, `lbfgs`, `mma`
+  (`optimizers.RULES`) and the optax arms `ox_adam`, `ox_ademamix`, `ox_adamcos`, `ox_sfadam`,
+  `ox_prodigy` (`optax_rules.ARMS`; optax imported only for these); all but `gd`/`adam` need
+  `--area-mode tangent`.
+- **optax (2026-10-21, `examples/mesh/optax_rules.py`, `scratch/optax/`).** Our Adam core equals
+  `optax.scale_by_adam(eps=1e-30, eps_root=0)` and our L-BFGS two-loop equals `optax.scale_by_lbfgs`
+  (1e-16); the whole shipped Adam step (smooth -> Adam -> smooth -> area tangent -> max-norm `step`) as an
+  optax chain (`ox_adam`) reproduces `adam` row for row. optax's default `eps = 1e-8` is ~1 % of a Kn 0.5
+  coefficient gradient - a drop-in `optax.adam` is NOT our Adam. The optimiser step costs ~60-90 ms
+  against 90-500 s per DSMC iterate: speed is irrelevant, optax buys flexibility. **The max-norm rescale
+  to `step` erases any rule's step magnitude** (schedules, learning-rate-free estimates, AMSGrad/RAdam
+  denominators): only direction changes survive it, so magnitude rules need a schedule on `step`
+  (`ox_adamcos`), an averaged wrapper (`ox_sfadam`) or a capped learning rate (`ox_prodigy`, whose
+  estimate starts at `0.1 step` and can only grow).
+- **Optimiser comparison** (optrules, S = 4, best J/J0 at Kn 0.5 deck speed / Kn 0.5 + M 10; 2026-10-20):
+  Adam 0.203 / 0.105; trust region 0.311 / 0.222; L-BFGS 0.80 / 0.41; MMA 0.65 / 0.45.
+  - Adam: fixed step + momentum is noise-robust; overshoots near the optimum (M 10 rises after iterate 128).
+    **Kept unchanged as the reference** (user decision).
+  - `tr`: fastest per iterate (0.35 vs Adam 0.61 at iterate 25), but the radius random-walked to its floor
+    (x1.5 / x0.5 on a rho centred at 0.5) and a rejection at the floor retried the identical trial on the
+    identical seeds forever - the "converged" flag was fake. **Rework 2026-10-20** (user-chosen): rho
+    pooled over 5 trials at the radius from paired per-seed differences, radius x2 / x0.5 only beyond rho's
+    error, rejection only beyond the noise, a floor rejection re-evaluates the base on new seeds
+    (`seed_shift`, `optimizers.judge`). Partial results 2026-10-21: still parks at the floor in 58-86 % of
+    iterates; at M 10 the pooled rho is significantly negative near J/J0 0.24; S1 `tr` and L-BFGS drift up
+    after iterate ~50.
+  - L-BFGS: `y` is seed noise (cos(s, y) ~ 1e-3); steps move 1-3 coefficients. Kept as a reference.
+  - MMA: |g| ~ 1e-6 per coefficient is far below Svanberg's 1e-5/span regulariser at Kn 0.5; no
+    acceptance at M 10. No GCMMA (forward too expensive; user decision).
+  - One seed per iterate: S1 Adam tracks S4 Adam per iterate at 4x lower cost per iterate - gradient noise is
+    not Adam's limit. Judge rules by noise robustness first (3-D gradients will be noisier). Final S1 reading
+    (2026-10-21): S1 Adam at M 10 reaches ~0.10-0.11 J0 at ~iterate 150 then climbs to ~0.19 by 330, the
+    S4 overshoot again - Adam's limit is its fixed step SIZE (too small early: `tr` was 2x faster to 0.35;
+    too large late), which is what `optax1seed` tests. S1 MMA fragments (15 pieces at M 10) and roughens
+    (total turning 25 at Kn 0.5). Figures `optrules_noise*.png`, movies `figures/movie/optrules_*_noise.mp4`.
+- **Regime findings** (`optm`): Kn 0.5: 0.21 of circle drag, flat since ~140; the observed dD vs adjoint
+  slope S/(S + rho) with rho 4.8 is noise dilution, not bias. Free-molecular M 10: a wedge whose flat base
+  receives no hits, so area migrates into the shadow and the body slides downstream into the keep-out
+  (iterate 254, then drag rises 0.104 -> 0.15) - the box bounds this optimum; enlarge it or constrain the
+  base before quoting the wedge. Kn 0.5 + M 10: nose gradient spikes 70-14000x, Adam's momentum carries a
+  spike's direction 5-25 iterates; the nose grows a sting < 2 cells thick (the thin-body regime fixed by
+  `guard32`; re-check after the guard).
+- **Roughness** (2026-10-21, `scratch/optrules/roughness.py`, `reinit_drift.py`, `noise_shapes.py`;
+  figures `examples/mesh/figures/optc/optrules_roughness.png`, `optrules_noise_shapes.png`): see open
+  problem 1 in the summary.
 
-**The `types.py` shadowing trap is fixed** — the module is now `jax_dsmc/state.py`. It used to be
-`types.py`, which shadowed the *standard library's* `types` module whenever the working directory
-was `jax_dsmc/` (Python puts the cwd first on `sys.path`), and since `functools`, `dataclasses` and
-`enum` all import stdlib `types`, the interpreter failed to start with a message pointing nowhere
-near the cause. **Rule: no module here may take the name of a stdlib module.**
+### 2.7 Cluster and process
 
-**Scale the cell count with N, do not pin it.** `A_max` is *per cell*, so a fixed cell count makes
-the sequential scan grow with N while the parallel axis stays fixed. `--particles-per-cell`
-(default 1000) derives the cell count so `npc` stays constant. See §1.3.
-
-### 1.4 M2: periodic transport, and the `A_max` question settled
-
-**`A_max` cannot be guessed, and no longer has to be.** It is the trip count of the attempt-slot
-`scan`, so it is baked into the compiled program — but the right value is a property of the flow.
-Every a-priori rule tried failed: the cold uniform count is 5.4x too small at the shock time; the
-majorant inflation U4 describes accounts for only 1.10x of that (compression contributes ~4.5x);
-and bounding compression by Rankine–Hugoniot at 4x is simply **wrong** for a converging wave, which
-measured a density ratio of **11**.
-
-`simulate.run_adaptive` resolves it by measuring. Restarting is nearly free — the state is just
-arrays, so continuing after a recompile costs only the compile — so the run proceeds in chunks,
-reads `attempts_clipped` on the host, and on overflow grows `A_max` and re-runs **that chunk only**.
-From a deliberately absurd `A_max = 64` it converged in two resizes and finished in **41.9 s against
-48.6 s for a single over-provisioned run**: measuring beats guessing high. `run(..., step0=)` keeps
-the RNG stream identical, so `x` and `v` are bitwise equal to an unchunked run (`logh_acc` agrees to
-6e-14 — float reassociation, not a decision difference).
-
-Neither reference code helps here: SPARTA has no `A_max` at all (a CPU `for` loop over `nattempt`),
-and its `reset_vremax()` is only called from `init()`. Its MCF option (`n ~ Poisson(f)`) is a
-different *count distribution*, not a different capacity rule, and its tail makes `A_max` harder.
-Spec §8.5.1.
-
-**A reformulation that would remove the bound was verified and deliberately parked.** Fixing `A` and
-folding the count into the acceptance probability (`p = 0.5 npc(npc-1) dt fnum q / (A V)`) is exactly
-NTC with a derived majorant; it matches collision counts to 0.4 %, needs 2.3x fewer slots, and
-carries the `dt`/`fnum`/`V` gradient through `log p` alone — which would delete §8.1's stochastic
-rounding entirely. It is **not adopted**: it changes the core acceptance probability, and the
-verification is single-group, so multi-species, Larsen–Borgnakke and chemistry would each need the
-equivalence re-derived. Spec §8.5.2; probes in `scratch/probe_fixed_attempts*.py`.
-
-**A real spec defect M2 exposed:** `cell_volume = prod(dx)` is a *length* at `D=1` and an *area* at
-`D=2`. `GridSpec.transverse` now carries the suppressed extents. It does not cancel — rescaling
-`fnum` to fix the collision rate leaves `nrho` wrong by the square. Spec §4.
-
-**Output is fields, not particles.** A field PNG is ~50 KB and scales with cell count; one
-already-subsampled particle frame at `N=1e6` is 1.7 MB and scales with `N`. `viz.FieldMovie` writes
-three PNGs per frame in 3-D (`x=0`, `y=0`, `z=0` faces). Spec §10.1.1.
-
-### 1.3 Performance: the parallel axis is cells, not attempt slots
-
-Full numbers in spec §8.6. Four things worth knowing before touching `collide`:
-
-**Do not draw random numbers inside the attempt-slot scan.** §1 rule 3 requires one batched
-`(A_max, C)` draw per stage, consumed as the scan's `xs`. An early version drew per slot; hoisting
-it cut compile 17.0s → 2.4s, halved per-slot cost, and took the **whole test suite from 26 minutes
-to 4**. `tests/test_perf.py` asserts structurally that no RNG primitive appears in the scan body.
-
-**Scale cells with N.** `A_max` is per cell, so pinning the cell count grows the *sequential* axis
-and starves the *parallel* one. Measured at N=640,000: 26.4 s pinned versus **0.68 s** with `npc`
-held at ~1000, and 10⁷ particles goes from unreachable to 10.6 s on a 4 GB laptop GPU. Cost per
-particle falls from 36 µs at N=10⁴ to ~1 µs above N≈6×10⁵ and then stays flat.
-
-**Below ~3×10⁵ particles, use `JAX_PLATFORMS=cpu`** — the GPU is purely launch-latency bound there
-and the CPU is up to 4.5× faster. Above ~6×10⁵ the GPU wins by 3–4×. Rates agree to every digit on
-both backends.
-
-**Two audited non-issues**, recorded so nobody re-investigates them: the scratch-row `concatenate`
-is fused by XLA and costs nothing; and the scan carry *is* updated in place for any cell count
-≥ 8 — the O(N)-per-slot copy exists only at `C == 1`, which no production configuration uses.
-`fori_loop`, `.at[].add` and a compact `(C,K,3)` workspace were all measured and none beats plain
-`scan`.
-
-**Benchmarking discipline:** never run these benchmarks alongside another GPU job. Doing so
-produced a phantom 36× "cliff" that does not exist.
-
-## 2. The two defects that nearly shipped
-
-Both were in the spec, both read as correct, and **both were found only by running a number.**
-They are the reason this project's working method is "measure it" rather than "reason about it".
-
-**The collision-count gradients were exactly zero** (§8.1). `n = floor(f)` froze the path from
-`dt`, `fnum` and `cell_volume` into the collision rate, and the spec asserted that "the score
-terms carry it". They don't — `log h` depends on velocities and VSS parameters and on none of
-those three. Measured `jax.grad = [0.0, 0.0, 0.0]` against a healthy `‖∂J/∂v‖ = 9.5`. Fixed with
-stochastic rounding plus a `log P(n|f)` score term.
-
-**Empty cells corrupted real collisions** (§8.4.1). 176 of 300 runs violated momentum
-conservation. `jax.random.randint(key, shape, 0, 0)` returns 0 rather than erroring, so empty
-cells indexed into a *neighbouring* cell's particles, and the second scatter wrote stale data
-over a legitimate collision. Fixed with a clamp and a scratch row at index `N`.
-
-**What they have in common, and why it matters more than the fixes:** neither raised an error,
-produced a `NaN`, or tripped any diagnostic. They are the *silent-failure* class. The spec's §19
-register marks three outstanding claims (U4, U6, U7) as having the same shape, and they are
-flagged blocking for that reason.
-
-There is also a third, subtler failure worth knowing: **the finite-difference cross-check could
-not have caught the first defect.** At fixed randomness `J` is a step function, so FD read
-`0.000000e+00` for every perturbation that didn't flip `n` — FD and AD agreed, on a broken
-gradient. §13.4 now mandates two explicit FD modes.
+- **Cluster = CURC Alpine** (`examples/mesh/cluster/`: `study.py` job matrix by group, `submit_curc.sh`,
+  `job.sbatch`, `env.sh`, `preflight.sh`, `pull_results.sh`, `collect.py`, `check_env.*`). JAX from a CUDA
+  venv at `/projects/$USER/jax-env` (jax 0.6.2; the MI100 `jax` module is 0.4.7 and the code needs >= 0.4.36).
+  `submit_curc.sh` and `env.sh` default to `GPU_KIND=a100` (the default since 2026-10-21; jobs that need
+  more than 40 GB or speed go to `GPU_KIND=h200`, capped at 4 concurrent jobs); recent groups used `h200` (the
+  default there is the 2g.35gb MIG slice; `grid_scale 2` needs `GRES_TYPE=h200`); `rtx` = RTX PRO 6000 MIG
+  slices (24 GB, one per job).
+- **Since 2026-10-21 run data is not in git.** `examples/mesh/results/optimize*/`, `cluster/logs/`,
+  `bad_nodes.txt`, `scratch/*/cluster/`, warm starts and `opt_state.npz` are gitignored and move **only**
+  by `bash examples/mesh/cluster/pull_results.sh` (`DRY=1` to list, `WARM=1` for warm starts, optional path
+  arguments; one ssh connection, pull only, `--update`). The cluster checkout only `git pull`s. One-time
+  adoption of the untracking on the cluster: `adopt_untracked.sh`. Git carries code, docs, figures,
+  analyses. (Reason: tracking re-committed every history on every pull; `.git` reached 2.1 GB.)
+- **GPU node failure (2026-09-22)**: all `ah200` jobs landed on one node whose driver refuses `cuInit`;
+  JAX fell back to CPU silently (6900 s vs ~1800 s per seed; results valid). Now `env.sh` pins
+  `JAX_PLATFORMS`, `job.sbatch` runs `check_env --quick`, failing nodes go to `bad_nodes.txt`, which
+  `submit_curc.sh` excludes.
+- **Preflight policy** (user, 2026-10-17): no long local toy runs before handing over cluster commands.
+  `CHECK=1` resolution of each job plus `bash -n` is enough; `submit_curc.sh preflight <group>` runs the
+  heavy version on the cluster as an option. Preflight toys cannot catch slot limits or memory.
+- Every cluster command resumes from its artifact; a job that hits its time limit is resubmitted with the
+  same `submit_curc.sh <group>` line. Groups: `sphere mode2 opt optc squash squashkn squashkn2 biasgate
+  cellgate gapgate thingate guardgate shapeprof optckn optc2 optab optm optrules optrules2 optrules1seed`.
+- **This laptop is shared and weak**: at most 1-2 JAX CPU processes at once (four concurrent host pilots
+  stalled everything for 3.5 h on 2026-09-16); never chain multi-hour GPU jobs unattended (2026-09-20: the
+  machine was unusable for 5+ h); benchmarks alone on the machine (a concurrent GPU job produced a phantom
+  36x "cliff"). `/home/aakash/jax_dsmc/run_locked.sh gpu|cpu CMD...` (outside the repo) serialises JAX work
+  (one GPU job, two CPU slots; sets the WSL flags).
+- Math documentation: `docs/math/` - derivation deck (current estimator only), code twin (same frames with
+  code references; edit `shape_derivation_body.tex` only) and the validation deck (full history; new
+  findings go there). Build with explicit paths, not `cd`.
 
 ---
 
 ## 3. Invariants you must not break
 
-These are what make `jax.grad` reproduce the published adjoint. Violating any one produces wrong
-gradients rather than an error.
+These make `jax.grad` and the ensemble adjoint reproduce the published algorithms; violating one gives
+wrong gradients, not an error.
 
-1. **The RNG contract (§1).** Keys derive only from `(base_key, step, STAGE_ID)` via `fold_in`,
-   never from traced state, and are recomputed rather than carried. This is what gives common
-   random numbers for FD checks and bit-identical replay under `jax.checkpoint`.
-2. **Frozen decisions (§0.5).** Cell membership, sort permutation, attempt count, pair choice,
-   accept/reject, face crossing. These are integers and carry no gradient *by design* — that is
-   what the papers specify. Their sensitivity travels via score terms, not through the decision.
-3. **Static shapes.** No `while_loop` with a data-dependent trip count anywhere. Every loop is a
-   `scan`/`fori_loop` with a static bound: `n_steps`, `A_max`, `K_bounce`. Data-dependent counts
-   use static capacity plus an `alive` mask.
-4. **No nested function definitions (§0.6).** JAX pushes you toward closures for `scan` bodies;
-   use module-level functions bound with `functools.partial` instead. Enforced by review, and it
-   is why `_collide_slot` is written the way it is.
-5. **The mesh interface is narrow (§4).** Only `cell_of`, `cell_volume`, `cell_bounds`,
-   `apply_bc`. M5 replaces everything behind those four names with cut/split cells; if cell-index
-   arithmetic leaks into `collide` or `sample`, that rewrite breaks them.
-6. **f64 throughout.** Energy-conservation tests assert ~1e-14; f32 cannot deliver it.
+1. **The RNG contract (spec 1).** Keys derive only from `(base_key, step, STAGE_ID)` via `fold_in`, never
+   from traced state, and are recomputed rather than carried: common random numbers for FD, bit-identical
+   replay under `jax.checkpoint`, no gradient path through the RNG. One batched draw per stage, consumed as
+   the scan's `xs` - **no RNG inside the attempt-slot scan** (hoisting it cut compile 17 s -> 2.4 s and the
+   whole suite 26 min -> 4; `tests/test_perf.py` asserts it structurally).
+2. **Frozen decisions (spec 0.5).** Cell membership, sort permutation, attempt count, pair choice,
+   accept/reject, face crossing are integers and carry no gradient by design; their sensitivity travels by
+   score terms or the ensemble adjoint.
+3. **Static shapes.** Loops are `scan` / `fori_loop` with static bounds (`n_steps`, `A_max`, `K_bounce`);
+   data-dependent counts use a static capacity plus an `alive` mask. The two sanctioned `while_loop`s are
+   never differentiated through: the lane tracker's forward (the traced replay uses `fori_loop`) and the
+   level-set hit search (under `stop_gradient`).
+4. **No nested function definitions (spec 0.6).** Scan bodies are module-level functions bound with
+   `functools.partial`, so they are independently testable and their captured state is explicit. (This is
+   the rule `jax_dsmc/mesh/walk.py` cites as "HANDOFF section 3".)
+5. **The mesh interface is narrow (spec 4)**: `cell_of`, `cell_volume`, `cell_bounds`, `apply_bc`.
+   Cell-index arithmetic must not leak into `collide` or `sample`. New `jax_dsmc.mesh` tables are laid out
+   per leaf cell, never by `grid.n` arithmetic.
+6. **f64 throughout** (`jax_dsmc` enables `jax_enable_x64` on import); conservation tests assert ~1e-14.
+7. **No module may take a stdlib module's name** (`types.py` once shadowed `types` whenever the cwd was
+   `jax_dsmc/`; the module is now `state.py`).
+8. **Main stays differentiable.** Anything that would break `jax.grad` of the main forward lives on a
+   branch (`sparta-match`), never in main; port only differentiability-preserving ideas.
+9. **Every captured event is recorded individually** (wall bounces, newborn hits), and **the collisional
+   code path is always exercised** (no "skip when zero" shortcuts, section 2.3).
+10. **Thermal majorant floor, mesh conventions, tracker diagnostics at zero** - see 2.1 and 2.4.
+11. A flip guard (`Diagnostics.decision_checksum`) must cover every discrete decision and **weight none by
+    zero** (see 4.2).
 
 ---
 
-## 4. The unverified-claims register
+## 4. Traps (each cost real time)
 
-`PSEUDOCODE.md` §19 lists nine assertions that are **reasoned but not measured**, each pinned to
-the milestone that makes it live. It is executable:
+### 4.1 Statistics
+
+- **Seed counts.** BKW's fitted rate has ~13 % sd at N = 1e4: 1, 5 and 8 seeds each showed a confident wrong
+  trend (+5.78 % at 8 seeds, z 3.4; 16 seeds: +3.4 +- 1.3 % with the dt trend gone). Use >= 16 seeds,
+  quote the standard error, and use independent estimators (`ols_full`, `ols_half`, `ratio`).
+  `examples/couette` raises on `seeds < 2` and sets warm-up in diffusion times (`L^2/nu`), not steps; its
+  gate is the `Kn -> 0` intercept (the "0.24 % from Chapman-Enskog" claim was retracted: one draw of a
+  quantity with several per cent scatter, then misattributed four times). A 2-seed SE is not an error bar;
+  use >= 4 for anything quoted. Numbers live in `examples/couette/RESULTS.md`, regenerated from logs.
+- **"Flat" from an under-powered study** hid a 1.35 % cell-size bias (dx/lambda 0.6 / 0.3 / 0.15 read
+  0.935 / 0.973 / 0.983 once ensembles were used).
+- **Which mean free path** (spec 21.1): three definitions differ by up to 60 %; Bird's (4.52) is
+  `[(alpha+1)(alpha+2)/(6 alpha)] lambda_HS(d_ref)`, a function of `alpha` only. A wrong factor gave a
+  24 % false discrepancy that took a day. Reproducing one quoted number is not verification.
+- **Noise floors** (turbulence): on a scalar subtract the constant floor `1.5 v_th^2/npc`
+  (`validate.energy_history`); on a **spectrum never subtract it** (survivorship sets the slope: -0.71 vs
+  -2) - lower it (`--ensemble M` = M x npc). The floor is usually not the binding limit: a single-mode IC
+  combs `E(k)` (factor 12; use `--ic broadband`), Re = 61 puts dissipation at k ~ 10 (check
+  `validate.dissipation_wavenumber`, `Re ~ Ma`), and a 1-D shell holds two modes so `E(k)` has ~100 %
+  scatter whatever N (use `--ic-ensemble R`, quote `fit_slope`'s error bar). Fit windows must be chosen
+  independent of the data (`validate.clean_window`: contiguous from k = 1, above the spectral peak).
+- **Benchmarks at small size are noise** (ratios 1.02 / 1.40 / 1.69 / 0.14 for one configuration); the box
+  varies ~1.6x run-to-run. Per-test pytest durations are not cost attribution (a shared XLA compile is
+  billed to whichever test reaches it first).
+- **A Python float argument recompiles per value** (150x slowdown in a 13-point sweep); wrap sweeps in
+  `jnp.asarray`.
+
+### 4.2 Numerics and AD
+
+- **Silent failures** (no error, no NaN, no diagnostic): the zero collision-count gradients (exactly
+  `[0, 0, 0]`); empty cells indexing a neighbour (`randint(key, shape, 0, 0)` returns 0 - 176/300 runs broke
+  momentum; fixed with a clamp and a scratch row); `inflow.inject` dropping entrants when dead slots ran
+  out (-46 % density ratio at Mach 4); `A_max` clipping (a hand-picked 64 against a peak of 73 ran with
+  `attempts_clipped = 9` every step); per-device capacity / migration overflow in `decomp` (lost or duplicated
+  particles while reporting zero overflow; invisible in 1-D). **Test by counting.**
+- **FD at frozen randomness is meaningless unless no decision flips.** At fixed randomness `J` is a step
+  function in any parameter feeding a discrete decision (FD read 0.0 on a broken gradient). The flip guard
+  needed the specular boundary fold index and `scatter`'s degenerate-frame branch, and had weighted index 0
+  by `mod(0*phi, 1) = 0`, dropping all of cell 0 (FD 346 vs true 127 with the guard silent). Diagnosis route
+  that worked: scan `J(theta)` finely to prove a jump, bisect on `n_steps`, diff every intermediate array.
+  Spec 13.4 mandates both FD modes.
+- **Where branches are guarded**, make the denominator safe *first* (`d_safe = where(d > eps, d, 1)`);
+  `where` alone still yields NaN gradients. `safe.py` is the highest-risk module.
+- **Oracle 1 cannot run against `vss.scatter`**: [P1]'s `A` is rank 4 (lab-frame sigma); SPARTA samples the
+  deflection in the `v_r` frame, giving a rank-6 pair Jacobian (53-81 % different at Maxwell molecules).
+  Oracle 1 runs [P1]'s own lab-frame map. Which reparameterisation has lower gradient variance is
+  unmeasured (U10).
+- **Oracle 3 needs both `x_M` and `v_M` in the objective**, else `alpha == 0` and it degenerates into Oracle 1
+  while still passing. The oracle alone does not pin production: `test_production_step_moves_before_it_collides`
+  does.
+- **Reverse-pass cost** of plain AD is 3-5x forward (the "17x" was a `vmap` artifact; `collide` is 90 % of the
+  forward). AD memory ~4300 bytes/particle at `A_max` 256 (~30x forward) - the cap on AD-route runs; the
+  ensemble adjoint's records are the production budget (2.5).
+- **Forward random stream changed on the adjoint branch** (per-slot `fold_in` in `ntc.collide`, inverse-CDF
+  inlet sampling, one draw per wall pass). Artifacts older than 2026-09-15 are statistically, not bitwise,
+  reproducible. `examples/gradient_bench/provenance.py` re-evaluates seed 0 of every stored artifact against
+  the current code; run it before trusting a figure. Artifact names carry the estimator (`_virt{S}x{K}st`,
+  basis tag from `ensemble_backward.basis_tag`; untagged = sequential / per-query).
+- **`terminal_objective` / `windowed_objective` default to `score_mode="trajectory"`**, `dice_reward` to
+  `"paper"`; pin `"paper"` explicitly in any example whose numbers are documented.
+- A pair of weak-signal checks is not a verification (helium alpha: `abs(FD)/SE = 0.57`).
+
+### 4.3 Mesh, tracker, shape
+
+- **Reward-to-go**: a hit's score weight must include the hit's *own* reward (from its own draw onward) or
+  the windowed-shear gate reads 40x too small.
+- **Translation controls** are unresolved (2.4); compare shape estimators against *truncated* FD.
+- **Warm start and sub-cells (2026-10-21)**: `examples/ensemble_mesh._carried` must keep only the Cartesian
+  cells of the carried `CollideState` (it was sized for the previous mesh's sub-cells).
+- **`inside_body` after the bounce budget (2026-10-21)**: the tracker's post-loop "unresolved?" query sampled
+  the whole reach (spacing h/2) and missed a sliver re-entry after the last allowed bounce (32 specular
+  bounces along the M 10 nose); it now samples the remaining move (`wall_adjoint._lane_distance`). An
+  earlier `inside_body` source was the level-set search starting ON the surface after a reflection
+  (`levelset.hit_body` now counts a leaving on-surface start as phi = +0).
+- **Cluster inflow slots**: optimised bodies change the box's filling; capacity too small -> `inflow_shortfall`
+  (Invalid DSMC trajectory) mid-run, which preflight toys cannot catch.
+- **`jax.clear_caches()` between gates** in one process: `ensemble_couette` re-jits a nested `score` per seed
+  and gates in one process OOM. `cell_fit.TRACE` needs `JAX_PLATFORMS=cuda,cpu` (a `debug.callback`).
+- Laptop GPU: 4 GB (RTX 3050 Ti): `fnum` 1 Kn 0.5 squash does not fit, M 300 is the max; one `shape_terms` per
+  process; chain timings belong on the cluster (`shapeprof` group). A WSL `CUDA_ERROR_UNKNOWN` killed one batch.
+- **The WSL CUDA-graph crash**: XLA command buffers crash in the WSL driver on the polygon-mesh step with
+  an inflow source. Run with `XLA_FLAGS=--xla_gpu_enable_command_buffer=` (+
+  `XLA_PYTHON_CLIENT_PREALLOCATE=false`); `forward.py`, `ensemble_mesh.py`, `optimize.py`,
+  `optimize_squash.py` set it themselves.
+
+### 4.4 Optimiser
+
+- Never accept a `tr` "converged" flag without checking for repeated identical rows.
+- Judge a rule by seed-noise robustness first; do not conclude from 2 seeds (the restitution test flipped).
+- `lagrangian` area mode is void; use `tangent`.
+- Optimised shapes: check both `inside_body` and `surface_stuck` per run (section 2.4) and the keep-out
+  against the box (the M 10 wedge).
+
+### 4.5 Process
+
+- **A gate runs BEFORE the deliverable it gates**, as separate standalone work: U1 and U3 were bundled into
+  the agents implementing `safe.py` / `ntc.py`, and U3's answer changed `ntc.py`'s design.
+- A subagent study can be correct and still recommend the wrong action if it measured a conditional peak
+  rather than a probability-weighted quantity - re-read the gate, not just the recommendation.
+- **Verify that a described fix is wired**: three fixes were explained in prose while the pseudocode still had
+  the defect (`logP` computed and dropped). A named check per fix caught it; spot-checking did not.
+- Never `pkill -f <script>` / `pgrep -f` from an agent shell (the pattern matches the agent's own shell and
+  kills it; a `pgrep -fc` wait loop never ends). Wait on a PID or `/proc/<pid>` or a log marker.
+- Batch edits that abort before writing lose everything applied earlier in the batch; write per edit.
+- Parallel agents hit usage limits repeatedly; sequence by dependency and keep parallel width modest.
+- Background jobs die with the session: relaunch with `nohup` and resume artifacts.
+
+---
+
+## 5. How to run things
+
+All from the repository root; the environment is the venv described in `README.md`.
 
 ```bash
-python3 docs/phase0_verification.py --milestone M3   # exit 1 if any M1-M3 gap is open
+pytest -q                          # CPU, 4 host devices, XLA cache in .pytest_cache/jax
+pytest --gpu -q                    # on the accelerator: before a milestone, not in the edit loop
+pytest tests/test_perf.py tests/test_perf_budget.py            # structure + XLA cost budgets
+python3 -m tests.test_perf_budget --print-baseline             # refresh budgets (per backend)
+python3 -m tests.test_perf_budget --compile-time               # report, not a gate
+python3 docs/phase0_verification.py [--milestone M3]           # structural checks + gap register
+ruff check . && ruff format --check .
 ```
 
-The gate is cumulative. A row's gate is part of its milestone's definition of done — checked
-*before* that deliverable is written. A row may only be deleted by moving its evidence into §17.
-
-`U4`, `U6`, `U7` are tagged `[SILENT-FAILURE RISK]` and are blocking, not advisory.
-
----
-
-## 5. How decisions were made
-
-Worth knowing, because it explains why the spec is unusually long and why §17/§18/§19 exist.
-
-- **Where the two reference codes disagree, each divergence forced an explicit decision.** §18 is
-  the ledger: which we followed, and why. The most consequential is the NTC majorant (§18.1),
-  where dsmcFoam+ is right and SPARTA is not — but adopting it carries a cost (§7.2.1) that was
-  only discovered by measuring afterwards.
-- **Claims were measured, not argued.** §17 is the table of what was actually verified;
-  `scratch/` holds the probes, indexed by which decision each settled.
-- **Several confident conclusions were reversed by measurement**, including some of the author's
-  own: gradient variance *falls* with the majorant rather than rising; a never-decaying `vremax`
-  *improves* the gradient; `eps=1e-30` is harmless where it was flagged and dangerous elsewhere;
-  FD-vs-AD disagreement is an artifact of step size, not a law. If you find yourself reasoning
-  confidently about a numerical property here, write the probe.
-
----
-
-## 6. Process traps already hit
-
-- **Batch edits that abort before writing lose everything applied earlier in the batch.** This
-  silently dropped four edits once, and left a §12.1 that three cross-references pointed at but
-  which did not exist. Write per edit, and sweep afterwards.
-- **Benchmarks at small problem sizes are noise.** The same configuration gave ratios of 1.02,
-  1.40, 1.69 and once 0.14. Any performance claim needs a repeat count and a spread.
-- **A gap's gate runs BEFORE the deliverable it gates, not alongside it.** This was violated
-  once already: U1 was bundled into the agent implementing `safe.py`, and U3 into the agent
-  implementing `ntc.py` — the very code whose design U3's answer determines. Gates that could
-  change a design decision must be separate, standalone work that completes first. The §19 rule
-  says this; it is easy to skip when it feels like the same subject matter.
-- **Fanning out parallel agents needs the dependency order respected.** Four simultaneous scopes
-  meant three of them coded against a `state.py` that did not exist yet. Sequence by dependency,
-  and keep the parallel width modest — a burst of four long-running agents also hit a session
-  rate limit and lost most of its work.
-- **Verify that a described fix is actually wired.** Three fixes were correctly explained in prose
-  while the pseudocode still contained the defect — `logP` was computed and dropped on the floor.
-  A named check per fix caught it; spot-checking did not.
+- **Why the suite runs on CPU**: every test is a tiny correctness case where GPU compilation dominates, and
+  `tests/test_decomp.py` needs >= 2 devices (four forced host devices under the CPU default). Measured
+  599 s (GPU) vs 329 s (CPU) for identical tests (2026-09, since trimmed; do not trust old totals).
+- **Perf budgets** (`tests/test_perf_budget.py`) gate XLA's `cost_analysis` / `memory_analysis` (flops,
+  bytes, peak temp) of the compiled program - bit-identical across runs, per-backend baselines. Wall-clock
+  and compile-time are not gated (shared hardware, in-process caches).
+- **Unverified-claims register** (`docs/phase0_verification.py`, spec 19): open rows are U4 (`A_max` sizing
+  from the inflated `Sigma`), U7 (non-uniform `fnum` mass guard), U8, U9, U10; U2 and U11 are settled (score
+  route biased; ensemble adjoint is the answer); U1, U3, U5, U6 closed. U4 / U6 / U7 are the silent-failure
+  class and blocking. A row is deleted only by moving its evidence into the spec.
+- **Shape gradient locally** (GPU; one process at a time):
+  `python3 -m examples.ensemble_mesh --body levelset --parameter radius|mode2 --substeps 1 --partners 2`;
+  per seed ~515 s (level set, all four variants + FD) on the laptop. Collisional cases use the default
+  `--substeps 4 --partners 8`. `--backward-basis` selects the field fit (default `CELL_BASIS`).
+- **Optimiser locally**: `python3 -m examples.mesh.optimize --iterations K --seeds-per-iterate S [--optimizer
+  ox_adam] --tag T` (resumable under `examples/mesh/results/optimize/<tag>/`; `--plot` draws the figure;
+  `examples.mesh.movie --tag T` makes the GIF/MP4). Production flags: section 2.6.
+- **Cluster**: see `examples/mesh/cluster/README.md` and `submit_curc.sh` header. Typical session:
+  `git pull` on the cluster; `[GPU_KIND=h200|rtx] bash examples/mesh/cluster/submit_curc.sh <group>` (default A100) on a login
+  node (`module load slurm/alpine`); later `bash examples/mesh/cluster/pull_results.sh` on the laptop, then
+  the group's analysis script in `scratch/<group>/`.
+- **Gradient estimator artifacts / provenance**: `python3 -m examples.gradient_bench.report`;
+  `examples/gradient_bench/provenance.py`.
+- **Math decks**: `docs/math/README.md`.
 
 ---
 
-## 7. What to do next
+## 6. Open problems and next steps
 
-1. Land M1: get the four scopes integrated, `pytest -q` green, and the BKW gate passing against
-   the analytic solution.
-2. Close **U1** and **U3** before calling M1 done (`--milestone M1` enforces this).
-3. Build **Oracle 3** (§13.3) before M2. The 0D oracles provably cannot detect the intra-step
-   ordering, so without it the ordering question stays untested until M4.
-4. Re-read §19 at the start of every milestone.
+Ordered roughly by value.
 
+1. **Finish the optimiser comparison** (`optax1seed` running; `optrules*` done): decide the rule for
+   noisier 3-D gradients. Step-size control is the open lever (`ox_adamcos`, `ox_sfadam`, `ox_prodigy`);
+   not built: a curvature penalty or shape filter (roughness), momentum reset on gradient spikes.
+2. **Roughness / design-space size**: ~400 boundary DOF vs ~50 resolvable by 0.5 m cells.
+   `scratch/optrules/roughness.py` measures total |turning| per run; `reinit_drift.py` tests whether
+   reinitialisation alone roughens a shape. Candidates: coarser control (`--levelset-h`), wider `--smooth`,
+   a curvature penalty.
+3. **Thin-body residuals** (-4 % at 0.58 m, optm nose -3.8 %): unexplained; hypotheses not yet tested beyond
+   the fit order.
+4. **Enlarge the free-molecular M 10 box** (or constrain the base) before quoting the wedge.
+5. **Cluster speed**: try XLA command buffers on native-Linux GPUs; shape gradient (28 s) is the largest
+   phase and launch-bound.
+6. **Retrofit `--boundary free`** to the older studies if they are to be compared (`optc2`, `optckn`, `optab`,
+   `squash`).
+7. 3-D shape optimisation (sphere gradient is gated; no optimiser run), hierarchical grids, real multi-GPU
+   scaling numbers, thermal-wall epsilon adjoint: `docs/PLAN.md`.
 
 ---
 
-## 1.5 M2 physics gates pass: Bird normal shock, all dimensions (2026-09-05)
-
-**Not** a full M2 close: gap **U5** (Oracle 3 discriminates the intra-step ordering) remains open
-and needs M6's adjoint oracles. The two gates below are the physics half.
-
-**Result.** `L/lambda_1 = 5.98 / 6.12 / 6.18` at D = 1/2/3 against Bird §12.11's **6.2**, and
-`4.53 / 4.64 / 4.68` against Alsmeyer's experimental **4.8** — both simultaneously. Jump
-conditions 0.1-0.7 %, shock speed 0.3 %, temperature leads density by 2.07-2.10 lambda_1 in every
-dimension. Resolution-converged over a 3.2x range in cell size (spec §21.3). Figure:
-`examples/shock/figures/bird_normal_shock.png`.
-
-**The one thing to know before touching this.** There are three different "mean free paths" in
-this problem and they differ by up to 60 %. Bird's eqn (4.52) is
-`[(alpha+1)(alpha+2)/(6 alpha)] * lambda_HS(d_ref)` — a function of **alpha only**, no omega.
-Getting it wrong cost a day and a 24 % false discrepancy; the wrong factor
-(`alpha(5-2w)(7-2w)/[4(alpha+1)(alpha+2)]`) is a *cross-section* ratio that happens to reproduce a
-number quoted in Bird's text. Spec §21.1. Reproducing one quoted number is not verification.
-
-**New guards, all of which caught something real:**
-
-- `report()` refuses to present a shock profile when the fitted shock speed misses
-  Rankine-Hugoniot by >5 % or the alignment residual exceeds one mean free path. At `npc = 30` the
-  tracking collapses and prints a plausible `L/lambda = 20.7` otherwise.
-- `run()` refuses to sample after the far-boundary expansion (which travels at `u_p + a_1`,
-  *faster* than the shock) reaches the wave.
-- `test_vss.py` asserts `<sigma_T v_r>` equals the hard-sphere rate at `T_ref` for six values of
-  `omega`. M1 exercises only `omega == 1`; every transport result uses 0.81. Spec §21.4.
-- `test_decomp.py` asserts exact particle conservation in D=1,2,3.
-
-## 1.6 Turbulence cases (M2, second batch)
-
-`examples/turbulence/` — one case per dimension, each with a numeric reference:
-1-D compressive sinusoid (`E(k) ~ k^-2`), 2-D Taylor-Green (**exact** NS decay), 3-D Taylor-Green
-(DNS at matched Re).
-
-**The 2-D case is now the strongest quantitative gate in the project:** it measures the viscosity
-against Chapman-Enskog with no free parameter and no fitted slope, and gets **+0.38 %**
-(R^2 = 0.9994). It is the check that ruled the collision model out as the cause of the shock
-discrepancy above, and it should be run after any change to `collide/`.
-
-**Trap 1 (scalar):** the measured energy carries a *constant* noise floor `1.5 v_th^2 / npc` while
-the signal decays exponentially. Fitting without subtracting it biases the rate low, reports a
-viscosity too small, and the fit still looks excellent. `validate.energy_history` subtracts it
-from the actual per-cell counts. That subtraction is safe here because the signal stays far above
-the floor over the fitted window.
-
-**Trap 2 (spectral), and it is the opposite conclusion:** do **not** subtract the floor from
-`E(k)`. Near the crossover `E - noise` fluctuates through zero, half the shells survive any
-positivity test by chance, and the fitted slope is set by that survivorship — measured: "usable to
-k = 507", slope **-0.71** against a true Burgers **-2**, with no diagnostic firing. Lower the
-floor instead: raise `npc`, or use `--ensemble M`, which averages M velocity fields (deterministic
-ICs, so only the noise differs) and is exactly equivalent to `M x npc` at the same cost. The floor
-also **rises** as `k^(D-1)` after shell binning, so it can pass for a cascade.
-
-**Trap 3 — the ensemble was run and the verdict did not change.** 16 seeds, floor down by exactly
-16x, and the 1-D gate is still not established, because the floor was never the binding limit. Two
-other things were:
-
-* *the initial condition combs `E(k)`.* A single Fourier mode imprints its own symmetry: measured
-  `E(7)/E(6) = 11.9` at shells 90x and 7.6x clear of the floor. No shell slope survives a factor-12
-  comb. Fix: `--ic broadband` (random phases over `1 <= |k| <= k_max`, solenoidal in 2-D/3-D).
-  Taylor-Green stays the default — the viscosity gate needs an exact NS solution.
-* *`Re = 61` puts dissipation at `k ~ 10`*, against a peak at `k = 2`. **Check `Re` before the
-  floor.** `validate.dissipation_wavenumber` is printed up front. `Re ∝ Ma`, so `--mach 1.0` is the
-  cheap knob (`Re ~ 200`) — cheaper than `--side 3200`, which is ~10x the work for the same Re.
-
-**Trap 5 — both fixes were applied, and 1-D still fails, irreducibly.** At `Re = 204` with a
-broadband IC the signal stands 885x above the floor over `k = 5..19` and the slope is
-**-2.87 +- 0.65**: 1.3 sigma from Burgers -2, so consistent and not a test. The limit is that **a
-1-D shell holds exactly two modes at every `k`**, so `E(k)` carries ~100 % scatter whatever the
-particle count (measured `std(log E) = 1.00`, theory 1.28). `--ensemble` cannot touch it — that
-averages fields of the *same* flow. Use `--ic-ensemble R` (different IC phases, spectra averaged,
-error `~1/sqrt(R)`). **Always quote `fit_slope`'s error bar**: sub-windows of that run give -1.69,
--3.07 and -2.87, which is scatter, not disagreement. Spec §22.7.
-
-**Trap 4 (window selection):** `validate.clean_window`. A fit window chosen using the data being
-fitted returns a slope whatever the data is. Two rules, each of which moved a headline number on
-the ensemble run: the window must be **contiguous** from `k = 1` (scattered "passes the threshold"
-selection gave **-3.06**, contiguous gave **-1.76**), and it must lie **above the spectral peak**
-(which reduces this run to three shells — the correct answer of no measurable range). Spec §22.5.
-
-## 1.7 Multi-device
-
-`jax_dsmc/decomp.py` — 1-D x-slab domain decomposition, `lax.ppermute` neighbour exchange.
-`jax_dsmc/parallel.py` is kept as the **negative result**: array-sharding the particle axis does
-not parallelise DSMC, because the global `argsort` replicates `table.order` and every device then
-redundantly runs the whole collision (measured: collide 6.8 / 13.0 / 25.2 ms at 1/2/4 devices on a
-fixed problem). Spec §20.
-
-Two capacities can overflow silently — per-device particle capacity and the migration buffer — and
-both bugs found during development lost or duplicated particles while reporting **zero** overflow.
-One of them was invisible in 1-D and appeared only in 2-D. Test by counting, not by comparing
-profiles.
-
-Run the scaling harness with `python3 -m examples.scaling --devices 1 2 4`; verify it without a
-multi-GPU node using `XLA_FLAGS=--xla_force_host_platform_device_count=4 JAX_PLATFORMS=cpu`.
-
-**Sizing:** Reynolds number costs `Re^D` in cells. 4 x H200 reaches `Re ~ 1500` in 2-D (where the
-exact NS solution applies) but only `Re ~ 66` in 3-D. The 3-D `Re = 1600` benchmark is
-supercomputer-scale and is not claimed.
-
-## 1.8 M6: the adjoint, and two things that need watching (2026-09-05)
-
-`jax_dsmc/adjoint.py` is 4 real lines of construction (`magic`, `objective`, `surrogate`,
-`dice_reward`); everything else in it is entry points and objective functionals. The bet of
-§11 holds up: **no hand-written backward pass exists in the production path.**
-
-### What is verified
-
-| check | where | result |
-|---|---|---|
-| [P1] Algorithm 2, hand-coded, vs `jax.grad` | `tests/test_adjoint_oracle.py` | exact (rtol 1e-11) |
-| [P2] Algorithm 3 incl. all three `eta` branches | same | exact (rtol 1e-10), both `phi = v_l^2` and `v_l^4` |
-| dropping the reject-branch score is detected | same | asserted to *disagree* |
-| pathwise gradient vs flip-free FD, `D = 1, 2, 3` | `tests/test_adjoint.py`, `examples/shock_adjoint` | see the example README |
-| score-only parameters are 0 pathwise, nonzero scored | `tests/test_adjoint.py` | the §8.1 regression guard |
-
-### Trap 1: Oracle 1 cannot be run against `vss.scatter`
-
-[P1] eq. `AB_def` assumes `delta sigma = 0`. SPARTA draws the deflection **in the `v_r` frame**,
-so our pair Jacobian is **rank 6** where `A` is rank 4, and they differ by 53–81% *at Maxwell
-molecules*. Oracle 1 therefore runs [P1]'s own lab-frame map. Neither is wrong — they are
-different reparameterisations of the same distribution — but §17.1's "if `A` ever goes full rank
-the physics changed" was misleading and is corrected in §17.1.1. Registered as **U10**: nobody
-has measured which reparameterisation gives the lower-variance gradient.
-
-### Trap 2: a flip guard is only as good as its weakest weight
-
-Finite-difference checking at frozen randomness is meaningless unless *no discrete decision
-flips*, and the guard for that (`Diagnostics.decision_checksum`) had **two holes**, both found by
-a failing test rather than by reading:
-
-1. **§13.4.1's list of decisions is incomplete.** It omits the specular **boundary fold index**
-   (whose parity flips `v`'s sign, and which is invisible in `cell_of` because both sides of the
-   wall fold into cell 0) and `scatter`'s **degenerate-frame branch**.
-2. **The checksum weighted index `i` by `mod(i*phi, 1)`, which is exactly 0 at `i = 0`** — so
-   every decision in **cell 0** vanished. In a reflected shock that is the cell against the wall.
-   The guard passed an FD estimate that was wrong by a factor of three.
-
-Both fixed. The diagnosis route that worked, for next time: scan `J(theta)` on a fine grid to
-prove it is a *jump* and not curvature, bisect on `n_steps` to find the step, then diff every
-intermediate array of that step.
-
-### Trap 3: `A_max` calibration does not happen automatically inside a gradient
-
-`run_adaptive` grows `A_max` with **host-side Python control flow**, so it cannot appear inside a
-differentiated call — `adjoint.terminal_objective` uses plain `run`. The documented pattern is
-calibrate first, then differentiate at the settled capacity, and `examples/shock_adjoint.calibrate`
-now does it. A hand-picked `A_max = 64` against a peak of 73 ran with `attempts_clipped = 9`
-every step: gradients correct for a silently under-collided gas.
-
-### Two concerns raised on review — both now settled by measurement
-
-- ~~**Reverse-pass cost.**~~ **SETTLED: ~4-5x, not 17x** (§23.4). The 17x was a benchmarking
-  artifact — measured under `vmap` over 128 keys, where the reverse pass goes memory-bound (a
-  512-key batch asks XLA for 4.0 GiB). Un-batched it is **3.1-5.0x** and flat in `N` from 160 to
-  64 000. Both structural hypotheses were **refuted by measurement**: the ratio *plateaus* in
-  `A_max` rather than growing linearly (so it is not the scan retaining its velocity carry), and
-  all four remat policies land in 3.94-4.48 (so it is not `nothing_saveable`). `collide` is
-  **90 %** of the forward, so the reverse pass is essentially the VJP of the attempt-slot scan —
-  the "AD also transposes the sort and the moments" story is real but worth only ~10 %.
-
-  The comparison to [P1] was not like-for-like either: their `0.58` *excludes* the forward run
-  that must happen first, so their gradient costs ~1.6 forwards against our ~5.
-
-  **If it ever needs to be faster**, the lever is a `jax.custom_vjp` on `scatter` exploiting
-  `|v_r'| == |v_r|` and the mass-weighted CM decomposition — which is exactly what makes [P1]'s
-  stored `6x6` matrix cheap — and Oracle 2 already exists to check it. Not done; at 5x a gradient
-  is affordable.
-- **Memory is what caps an adjoint run, not time.** Measured from two independent XLA
-  allocation failures agreeing to 0.3 %: **~4300 bytes per particle** for one gradient at
-  `A_max = 256`, `M = 16` (§23.4.1). That is **~30x the forward solve's per-particle cost**, so
-  the 4x H200 node that §20.4 sizes at `~1e9` particles forward-only holds `~1.3e8` for a
-  gradient — and one H200 holds `3.3e7`. Plan adjoint-driven optimisation against that number,
-  not against the forward capacity. Scales with `A_max`; roughly flat in `M` because the time
-  loop is rematerialised.
-
-- **Score-term variance obeys `N^-1/2`, measured.** `probe_variance.py` §A, `D = 2` widened
-  transversely so `A_max` stays 256 while `N` and `C` grow together, 128 keys per point,
-  `phi = T_y` ([P2]'s objective). Over `N = 4e3 -> 2.56e5` the fitted exponent of `sd ~ N^p` is
-  **-0.508 (temp), -0.464 (ux), -0.495 (alpha), -0.499 (diam)** against [P2]'s predicted `-0.5`
-  — and that holds for a pathwise parameter, a mixed one, and a pure-score one alike. `diam`'s
-  ensemble *mean* is stable to ~10% across the 64x range while its error bar shrinks 8x
-  (9.7% -> 1.2% relative). The estimator is behaving as published; the variance is a budget.
-
-  **One earlier reading was wrong and the sweep is what caught it.** `alpha`'s huge *relative*
-  error is a near-zero denominator, not a struggling estimator: its mean is consistent with
-  **zero** at every `N` (`|z|` = 0.9, 1.3, 0.4, 0.4) while its absolute error bar falls 8x on
-  the same law. For this objective `E[dJ/d(alpha)]` is simply weak — `|mean| <~ 30` against a
-  per-run `sd = 244` at `N = 2.56e5`. Not to be confused with §23.2's *pathwise* `alpha` check,
-  a different objective at frozen randomness, exact to `4e-6`.
-
-  **[P2] §6 does report this, and budgets for it** — a first draft of this section wrongly said
-  otherwise. `main.tex:1425` averages **`M_s = 100`** i.i.d. runs for *both* the AD and the FD
-  gradient; `main.tex:1431` states the random error as **`O((sqrt(N M_s) |Delta m|)^-1)`** and
-  fixes **`Delta m = 0.1`** — a 10% finite-difference step — as "nearly optimal for `N = 1e6`
-  Maxwellian particles, `M_s = 100`"; `main.tex:1502` reports the standard deviations growing as
-  `O(sqrt(M))` in the step count. So a large FD step plus a big ensemble *is* the published
-  protocol, not a workaround.
-
-  Their sampling budget is `N * M_s = 1e8`. The first probe here was `N * M_s = 2000 * 512 =
-  1e6` — **a hundredfold less**, which on the `1/sqrt(N M_s)` law alone predicts error bars 10x
-  wider. Two further asymmetries: [P2] differentiates only `m = (T_x^0, T_y^0, T_z^0)`, i.e. our
-  `temp`, which is the parameter that *does* come out at 0.2% — it never differentiates a
-  collision-model constant; and our `phi` is spatially windowed, so most particles carry score
-  noise and no signal where the papers' 0-D `phi = v_l^2` is carried by every particle.
-
-  **It is not a correctness problem**: Oracle 2 matches [P2] Algorithm 3 exactly, particle by
-  particle, on a shared forward pass. What is open is sample efficiency. `scratch/adjoint/
-  probe_variance.py` tests the `1/sqrt(N)` and `sqrt(M)` scalings directly. `1/sqrt(N)` is
-  measured and confirmed (above).
-
-- **The noise is mostly *pathwise*, and that settles the baseline question.**
-  `probe_split_variance.py` measures `sd(pathwise)`, `sd(score)` and their correlation
-  separately: for every parameter with a pathwise route the pathwise half carries **3-5x** more
-  noise than the score half, with correlation within `+-0.2` of zero. `alpha` is `1014` against
-  `197` — previously an inference, now a measurement. Because the halves are uncorrelated their
-  *variances* add, so the score's share of the **variance** — what a baseline removes — is only
-  **3.1% (`alpha`), 5.5% (`ux`), 11.9% (`temp`)**, capping a perfect baseline at 1.016-1.065x.
-
-  **Do not read that as explaining §11.4's ~1.2x** — a first draft did, and it is wrong: 1.2x
-  *exceeds* the 1.016x ceiling, so they are not the same quantity. §11.4 was measured on a
-  windowed `phi` at `D = 1, N = 2000`, a different configuration. What holds is directional:
-  wherever a pathwise route exists the score is a minority of the variance, so a baseline is
-  limited; the 84x applies only where the score is the *whole* variance (the count score alone,
-  and score-only parameters like `diam`). The lever for the dominant term is **more particles**.
-
-- **At [P2]'s own protocol the AD/FD gap is truncation, not noise.** At `N = 2.56e5`,
-  `M_s = 100`, `Delta m = 0.1`, the `|z|` between AD and FD is 11 (`temp`), 43.5 (`ux`), 6.4
-  (`diam`). That is the **10% step**, not a defect: `Delta m = 0.1` is "nearly optimal" in [P2]
-  at *their* noise level, and our AD standard error here is 0.03-0.25%, so truncation dominates.
-  `ux` is worst because a 10% step moves the case from `Ma = 2.0` to `Ma = 2.2`. Mode A is the
-  precision test; mode B's step is chosen to flip decisions. [P2]'s "AD ~10x less noisy than FD"
-  partially reproduces: 5.4x / 2.9x / 1.5x for `temp` / `ux` / `diam`.
-
-- **[P2]'s `sd ~ sqrt(M)` does not hold here — and the raw exponent is the wrong comparison.**
-  Their `M`-sweep is a 0-D relaxation, so the signal saturates and `sd` growth is pure score
-  accumulation. Ours is a *developing* shock where `dJ/dm` itself grows with `M`, so
-  `probe_M_scaling.py` measures the mean too. `diam` is the clean case: signal and noise grow at
-  the **same** rate to three digits (`M^0.720` vs `M^0.721`), so relative precision is **flat**
-  in run length. `temp` is the only parameter in [P2]'s regime (saturated signal, `q = 0.017`),
-  and there `q(sd) = 0.291` — noise growing **more slowly** than the published `0.5`. For `ux`
-  the relative spread *falls* as `M^-0.275`. `alpha`'s row is unreadable (its mean flips sign).
-
-### `dJ/d(alpha)` reads zero on the argon shock because argon sits on a stationary point
-
-**Resolved, analytically and by measurement** — `examples/p2_replication`. Anisotropy
-relaxation is driven by the second Legendre moment of the VSS deflection, and for
-`cos chi = 2 u^(1/alpha) - 1`,
-
-    `<cos^2 chi> = 4a/(a+2) - 4a/(a+1) + 1`,  `d/da = 8/(a+2)^2 - 4/(a+1)^2 = 0` at `a = sqrt(2)`.
-
-**Argon's tabulated VSS `alpha = 1.40` is 1.0 % from `sqrt(2) = 1.41421`.** So a
-temperature-like objective has structurally near-zero `alpha` sensitivity there, and
-`E[dT_y/d(alpha)] ~ 0` is the *right answer*, not a defect. Measured in 0-D homogeneous
-relaxation: `dT_y/d(alpha)` changes sign between `alpha = 1.4` and `1.5`, AD tracks FD at
-every point (`|z| <= 0.96`), and regressing on the analytic curve with one free constant
-gives **r = 0.973-0.992**.
-
-**Practical rule: never verify an `alpha` gradient at `alpha ~ 1.4`.** Across Bird's five
-monatomic gases (`jax_dsmc/species_data.py`) the resolvability `|AD|/SE` at
-`N = 32000, M_s = 200` is **He 4.7, Ne 3.1, Kr 2.6, Ar 0.3, Xe 0.0** — argon is the
-**worst** available choice and helium the best, at 12.6x argon's conditioning.
-`species_data.best_for_alpha_study()` returns helium; a test pins the ordering.
-
-**In the 2-D shock the gain is real but heavily discounted.** All of the above is 0-D; the
-verification target adds transport, a specular wall and a developing flow. Measured directly
-(`scratch/adjoint/probe_gas_alpha.py`, 256 keys, `N = 16000`, `phi = T_y`):
-`|AD|/SE` goes **0.8 (Ar) -> 2.7 (He)** — a 3.4x realised gain against 12.6x analytic, where
-0-D realised 15.7x. Helium is *marginally* usable, not comfortably; 10 sigma needs ~14x the
-ensemble (~3500 keys, or `N ~ 2.2e5`).
-
-Two consequences that matter more than the headline:
-
-- **The FD cannot do this at all.** Helium's finite difference sits at `|FD|/SE = 0.57`, so the
-  `|z| = 0.24` AD-vs-FD agreement is a **low-power** check, not a verification. Never quote it
-  as one. FD needs ~28x the ensemble to reach 3 sigma.
-- **`SE_FD/SE_AD = 8.4x` for helium** — the first configuration here where [P2]'s claimed ~10x
-  AD noise advantage actually shows up (the 0-D replication measured 1.7-2.0x on average). It appears where
-  the pathwise term dominates, consistent with the split-variance finding above.
-
-Argon's `|FD|/SE = 1.45` beating its `|AD|/SE = 0.8` is not evidence against AD — argon's true
-derivative is ~0, so both are fluctuations about zero. Report:
-`python3 -m examples.shock_adjoint.gas_report`; see `PSEUDOCODE.md` §23.3.8.
-
-### Why `alpha` reads worse than `temp` in mode A — three effects, not one
-
-Worth writing down because the first two explanations were each *partly* right, and taking
-either as complete would have stopped the investigation early.
-
-1. **Truncation above `h ~ 1e-5`.** `alpha` flips fewer frozen decisions than a velocity does, so
-   its flip-free window is wide and bisection stopped at the harness `h0` cap, not at `h_crit`.
-   Clean `O(h^2)` on an `h` sweep. Cap tightened to `1e-5`.
-2. **Near-stationary sweep points.** Predicted a uniform 100x gain from (1); got **26x at
-   `D = 1` and ~1.6x at `D = 2, 3`**. A fix that works in one dimension of three is evidence the
-   diagnosis is incomplete. Across all 21 points the error tracks `|AD|` (Spearman
-   `rho = -0.835`, `p < 1e-4`) and **not** `h` (`rho = +0.025`, `p = 0.92`): `alpha`'s sweep
-   crosses points where `|dJ/dalpha|` falls to ~10 against a sweep-typical 100-700.
-   `verify.scaled_error` now reports `err/medAD` beside `max rel err`; it moves `alpha` by
-   2.5-6.1x and leaves `temp`/`vstream` unchanged to two digits — the control it needed.
-3. **Genuinely larger higher derivatives**, worth the remaining ~100x. Truncation is
-   `(h^2/6)|J'''|`, so at a common *relative* step the parameter with larger `|J'''|/|J'|` pays
-   more — and `vstream` enters `J` **linearly**, `temp` through a **square root**, `alpha`
-   through `cos chi = 2 u^(1/alpha) - 1`, i.e. **all orders in `1/alpha`**. This also explains
-   the null `h` correlation: after bisection `h` spans only 4x while the errors span 1000x, so
-   `J'''` variation swamps the `h` lever.
-
-All nine cases PASS throughout; worst-case agreement is `2e-6` relative (`3.2e-7` on `err/medAD`).
-
-- **The spatial window costs signal, not variance** — the earlier suspicion was right in outcome,
-  wrong in mechanism. The window *lowers* absolute sd in every case; it lowers the mean faster.
-  For `diam` the spread falls 2.4x while the signal falls 15x, a net **6.3x** SNR loss. Note also
-  that the §11.4 baseline gives only ~1.2x here, not the 84x it gave on the count score alone.
-
-### The test suite runs on the CPU, and that is a measured decision
-
-`pytest tests/` was 599 s. It is now ~170 s, running **more** tests than before, with
-nothing deleted that carried unique coverage. Four findings, in order of size:
-
-**1. Per-test durations are not cost attribution.** `test_no_nan_in_any_gradient` bills
-**0.0 s** inside a full run and **39 s** when it is the only test in the process. The
-duration column charges a shared XLA compile to whichever test reaches it first, so
-deleting an "expensive" test usually moves the bill rather than removing it. Any future
-attempt to trim the suite on the strength of `--durations` output should start here.
-
-**2. The CPU is faster than the GPU for this suite, and covers more.** 599 s (GPU) vs
-329 s (CPU) for identical tests. Every test here is a correctness check on a tiny case,
-where GPU compilation dominates execution; nothing asserts device throughput
-(`test_perf.py` inspects jaxprs and recompilation counts, both platform-independent).
-Separately, `test_decomp.py` needs `>= 2` devices and **skipped all six of its tests on
-the single GPU** — the CPU default runs them under
-`--xla_force_host_platform_device_count=4`. `pytest --gpu` still runs everything on the
-accelerator; that check belongs before a milestone, not in the edit loop.
-
-**3. A Python float argument to a JAX function recompiles per value.** `bkw.distribution_K`
-called with a weakly-typed Python `K` bakes it in as an XLA literal: a 13-point sweep cost
-**1.53 s** that way and **0.01 s** with `jnp.asarray(K)` — same numbers, 150x the wall
-time. Worth remembering anywhere a scalar sweeps in a loop.
-
-**4. `np.polynomial.legendre.leggauss` is not cheap and was recomputed every call.**
-0.53 s at `n = 400`, **2.57 s** at `n = 800`. It was called once per quadrature evaluation
-in `test_bkw.py`, which alone accounted for that file's entire runtime: **46 s -> 5.7 s**
-from one `functools.cache`.
-
-Also: `test_ntc.py::test_stochastic_rounding_is_unbiased` now vmaps over its 4000 seeds
-instead of dispatching 4000 eager calls (4.2 s -> 1.7 s, identical keys), and
-`test_vss.py::test_momentum_and_energy_conserved` lost its four-value `omega` axis
-because `scatter` never reads `omega` — that axis ran four bit-identical copies of every
-case (36 -> 9, the only test cases removed in this pass).
-
-Config lives in `tests/conftest.py`: CPU default, four host devices, and a persistent XLA
-compilation cache in `.pytest_cache/jax` (303 s cold, 167 s warm; `--no-jax-cache` to
-disable). **Caution on totals**: this box shows ~1.6x run-to-run variance on the full
-suite (161 s, 166 s and 264 s for identical code), so per-file aggregates are the
-trustworthy comparison, not a single wall-clock number.
-
-### Performance regressions: what is gated and what is not
-
-**Was a gap.** `test_perf.py` asserts only the *shape* of the compiled program (no
-`while_loop`, one scan, no RNG inside it, no recompilation) and says so deliberately --
-"a timing threshold in CI is a flaky test on shared hardware", which is right: this box
-shows ~1.6x run-to-run variance. But that left nothing catching the *symptom*. A change
-that kept the jaxpr shape and still did five times the work would have passed everything.
-`PLAN.md` also advertised `pytest tests/ -m perf --benchmark`, which **collected zero
-tests** -- there was no `perf` marker and never had been.
-
-**Now gated, without wall-clock.** `tests/test_perf_budget.py` budgets XLA's own
-`cost_analysis()` and `memory_analysis()`: flops, bytes accessed and peak temp allocation
-of the compiled program. These are properties of the HLO, **bit-identical across runs**,
-so a 5x slower kernel moves them and noise does not. Verified to fail with an actionable
-message on a synthetic 40 % regression, and to pass on both backends (9 tests, 10 s CPU /
-29 s GPU). Baselines are per backend -- the forward solve is 9.6e5 flops on CPU and 2.3e6
-on GPU, because XLA counts a fused GPU kernel differently -- and refresh with
-`python3 -m tests.test_perf_budget --print-baseline`. Two of the tests are ratio-based and
-so backend-independent; they pin section 23.4's reverse-pass claims directly (measured:
-flops 1.96x forward on CPU, 1.81x on GPU; temp memory 6.6x / 7.5x).
-
-**Compile time is checked by hand, not gated** -- a deliberate call. It cannot be measured
-reproducibly in a test: JAX caches compiled programs in process, so only the first
-`compile()` is real (5.28 s, then 0.00 s three times running), and `conftest.py`'s
-persistent cache makes even that a deserialisation on a warm run. It also does not need a
-gate, because a compile-time blow-up surfaces immediately in any real run, especially one
-that sweeps `A_max`. Report it with `python3 -m tests.test_perf_budget --compile-time`
-after any change to the attempt-slot scan; for scale, drawing RNG per slot once cost 7x
-in compile time (spec section 8.6).
-
-### Oracle 3 is built; gap U5 is closed (2026-09-08)
-
-`docs/phase0_verification.py --milestone M2` goes from `BLOCKED: U5` to
-`gating on M2: 0 gap(s)`.
-
-The 0-D oracles could never have caught this: with a single cell `alpha == 0`, both candidate
-adjoint forms collapse to `beta_k = B_k beta_{k+1}`, and the ordering is invisible. Oracle 3 is
-1-D, 2 cells, 2 steps, periodic, with `B_k` taken analytically from [P1] eq. `AB_def` rather
-than from `jax.jacobian` (which would be circular). Our `move -> collide` loop matches
-`beta_k = B_k beta_{k+1} + dt P* alpha_{k+1}` to **1.33e-16** and misses [P3]'s inside-`B_k`
-form by **9.85e-02**; reordering the forward loop swaps both, which is what makes it a
-discriminator rather than a coincidence. `alpha_k = alpha_{k+1}` holds to 0.0e+00 in both.
-
-Two traps worth remembering, both found by building it:
-
-- **A velocity-only objective makes this oracle vacuous.** `alpha == 0`, the transport term
-  vanishes, and it degenerates into Oracle 1 *while still passing*. The objective carries an
-  `x_M` term and a nonzero-`alpha` guard is asserted first.
-- **The oracle alone does not pin production.** It validates the recursion against its own 1-D
-  forward pass, so a reordering of `simulate._step` would leave it passing while it validated a
-  loop we no longer run. `test_production_step_moves_before_it_collides` closes that
-  behaviourally: under `move -> collide` the new positions come from **pre**-collision
-  velocities, measured 0.0e+00 against 1.31e-02 for the post-collision form.
-
-It also corrected §13.3: two steps is **not** the minimum that discriminates (one step gives
-2.66e-2), though two remains the right choice for margin and for testing `B_k` composition.
-
-### The Couette viscosity gate, and how it was got wrong four times (2026-09-09)
-
-**Read this before quoting any ratio from `examples/couette`.**
-
-The M4 gate compares the measured shear viscosity against Chapman-Enskog (Bird 4.64). The
-final form of that gate is the **`Kn -> 0` intercept of a Knudsen sweep**, with every point
-an ensemble over independent seeds. It reached that form only after four successive
-explanations of an apparent viscosity deficit turned out to be wrong:
-
-| # | explanation offered | what actually killed it |
-|---|---|---|
-| 1 | "DSMC under-resolution at coarse cells" | the coarse point was `A_max` clipping (gap U4), not resolution |
-| 2 | "cell size" | **partly right, and initially dismissed wrongly** -- see below |
-| 3 | "finite-Kn physics" (first attempt) | the sweep's widest case had run 1.7 % of a diffusion time |
-| 4 | "under-convergence" | ruled out properly: warm-up 1.0 -> 3.0 diffusion times moves the gate `+0.0041 +- 0.0065`, `\|z\| = 0.63` |
-
-**The single root cause: a quantity with no error bar was treated as a measurement, four
-times over.** `mu_meas/mu_CE` carries several per cent of Monte Carlo scatter at any
-affordable particle count. The one-line check that would have caught this at the very
-outset -- before any of the four explanations were constructed -- is *run the same
-configuration twice with different seeds*.
-
-**The resolution is explanation 3, done properly.** The whole offset is finite-Knudsen
-physics. A converged sweep (4 seeds per point, warm-up scaled per case) gives
-
-| Kn | ratio |
-|---|---|
-| 1/10 | 0.9225 +- 0.0028 |
-| 1/15 | 0.9411 +- 0.0069 |
-| 1/22 | 0.9561 +- 0.0048 |
-| 1/30 | 0.9779 +- 0.0032 |
-
-fitting to `ratio = 0.9971 +- 0.0095 - (0.777 +- 0.143) Kn`, i.e. **-0.29 % from
-Chapman-Enskog at Kn -> 0, |t| = 0.31 on 2 dof: the gate passes.** The slope's sign is
-what first-order slip theory predicts.
-
-**Explanation 2 was dismissed on a study that could not see the effect.** The cell-size
-sweep was read as flat and used to rule resolution out. Re-run with per-case warm-up and
-ensembles it is *not* flat: `0.9352 +- 0.0266` / `0.9728 +- 0.0024` / `0.9829 +- 0.0031` at
-`dx/lambda = 0.60 / 0.30 / 0.15`, with the two finest points separated by `|z| = 2.58`.
-`O(dx^2)` fits and extrapolates to `0.9863` at `dx -> 0`, i.e. **the gate configuration
-carries a 1.35 % resolution bias.** "Flat" is exactly what an under-powered study of a
-noisy quantity looks like, which is why this one survived the longest.
-
-The two corrections compose because the Knudsen sweep holds `dx/lambda` fixed at 0.30 at
-every point, making cell-size error a constant offset that moves that sweep's intercept and
-not its slope. **The gate is therefore the double extrapolation:**
-`Kn -> 0` gives `0.9971 +- 0.0095`, `dx -> 0` adds `+0.0135 +- 0.0039`, total
-**`1.0105 +- 0.0103`, i.e. +1.05 % from Chapman-Enskog, |t| = 1.03: consistent.**
-
-**And explanation 4 was doubly wrong -- including in its retraction.** Warm-up was first
-dismissed on a single-draw study, then briefly *re*-blamed on the strength of a 2-seed
-point reading `0.9872 +- 0.0004` where 4 seeds at the same configuration give
-`0.9779 +- 0.0032`. The 2-seed SE was a fluke of two draws landing close together. Measured
-against the ensembles, moving warm-up from 1.0 to 3.0 diffusion times shifts the gate by
-`+0.0041 +- 0.0065`, `|z| = 0.63` -- **not significant**, which means the original
-measurement that the shear rate settles by ~0.3 of a diffusion time was right all along.
-Reading a 2-seed error bar as precision is the same error one level up, committed while
-documenting the error.
-
-Three structural fixes now make each failure unrepeatable, and all three live in the code
-rather than in this document:
-
-1. **No single-seed mode.** `examples/couette.__main__.run_case` raises on `seeds < 2`.
-   Every ratio in every log and table carries a standard error and a seed count.
-2. **Warm-up in diffusion times, never steps.** `diffusion_steps(case)` returns `L^2/nu` in
-   units of `dt`; `--warm-diff` defaults to 3 of them, per case. This matters specifically
-   because a Knudsen sweep *must* change `L`, so a constant step budget under-converges
-   the wide end as `L^2` and manufactures a smooth trend. The justification is the *first*
-   sweep, not a measured shift at the gate: it ran gaps of 15-120 lambda at a flat 4 000
-   steps, where the widest case needs 232 105 -- short by a factor of 58. At the gate
-   configuration itself the ratio is already converged at 1.0 diffusion times (see above),
-   so 3.0 is margin, not necessity.
-3. **The gate is the intercept.** Chapman-Enskog is a continuum limit, so comparing any
-   single finite-Kn run to it and calling the difference an error is a category mistake.
-   The measured slope is about `-0.9` per unit Kn -- the apparent viscosity falls as
-   Knudsen layers eat into the sheared bulk, which is the sign first-order slip theory
-   predicts.
-
-A fourth point worth carrying forward: **an SE from 2 seeds is not a usable error bar.**
-The 2-seed version of the sweep put points 5.6 and 9.2 "sigma" off a visually excellent
-line; the 4-seed version puts the same points within 0.6-2.1 sigma of it, with a smaller
-rms residual (0.0051 against 0.0082). Nothing about the physics changed -- only whether the
-error bars meant anything. `kn_extrapolation` therefore takes its uncertainty from the
-fit's residual scatter rather than from the per-point SEs, and `figure_knudsen`'s second
-panel plots those pulls so the reliability of the quoted SEs is visible rather than
-assumed. **Use 4 seeds minimum for anything quoted; 2 only to establish that a quantity
-scatters at all.**
-
-Numbers are not restated here or in the README on purpose. They live in
-`examples/couette/RESULTS.md`, regenerated by `python3 -m examples.couette.report` parsing
-`results/*.log` -- the stale-hardcoded-number failure is exactly how the retracted
-"0.24 % from Chapman-Enskog" claim outlived the run that produced it.
-
-### Reward attribution in the DiCE surrogate -- measured bias (2026-09-10)
-
-See **`docs/ATTRIBUTION.md`**. Short version, because it changes how a score-carried
-gradient should be read:
-
-* `adjoint.surrogate` pairs each score with its own particle's reward. Every dropped term is
-  a covariance, so the estimator is unbiased **iff decisions do not propagate between
-  particles**. Measured: collisions off -> exact (`|z| = 0.18`); collisions on -> low by
-  **2.8x** (`|z| = 22`).
-* **The bias grows with trajectory length**, not with attribution radius: `FD/AD` = 1.13,
-  1.32, 1.57, 1.95, 2.82 at `M` = 2, 5, 10, 20, 40. Widening attribution to the whole cell
-  closed only ~10 % of the gap for 7x the variance, so that hypothesis is rejected.
-* **The shipped collision score is ~6 % low at `M = 16`** -- a competing explanation for
-  about half of the `FD/AD = 1.137` that `VARIANCE.md` section B attributes to `O(dm^2)`
-  truncation. `alpha`'s results are unaffected: its gradient is consistent with zero.
-* **Pathwise gradients are untouched** by all of this, exactly: `dJ/dT_wall` and
-  `dJ/dv_wall` verify to 3.3e-12 and 2.5e-11 against a fixed-key FD.
-* The exact fix is the global-reward form (20x worse SE). The better fix for `acc` is to
-  **relax the Bernoulli** (`acc_delta`) so it becomes pathwise -- [P3]'s `eps` trick applied
-  to the accommodation draw. `acc_delta = 0` and `score_spread="particle"` reproduce today's
-  behaviour bitwise.
-* Trap: `sum_i logh_acc_i` is **not** `sum_k l_k`. Multiplicities are 1 (wall), 2 (pair) and
-  ~`npc` (NTC count), so a global estimator built on it is valid only for `acc`.
-
-### M7/M8 boundary adjoints -- what is verified and what is not (2026-09-11)
-
-**Forward solves are untouched.** The accommodation relaxation (`acc_delta`) and the new
-boundary scores change no forward result: the Couette gate reproduces pre-M7 output to every
-digit, and the 30 000-step inflow shock reproduces all six moments, the shock position, the
-flux ratio and every diagnostic with **0 mismatches**. Pinned by `tests/test_walls.py`.
-One caveat is pinned there too: the velocity blend equals the old `where`-select in *value*
-everywhere but differs in *bits* at signed zeros (`-0.0 + 0.0` is `+0.0`), so "bitwise
-identical" was claimed and is not literally true.
-
-| parameter | route | status |
-|---|---|---|
-| wall temperature, wall velocity | pathwise | **verified** -- fixed-key FD to 3.3e-12 / 2.5e-11, and pointwise against the Couette closed form (worst 0.068 / 0.066) |
-| inflow rate `nrho` | score | **verified** -- ensemble FD/AD = 1.04, `\|z\| = 0.81` |
-| shock `d(T_2/T_1)/du_1` | pathwise | **verified** against Rankine-Hugoniot, `M = 1.6-4.0` |
-| accommodation `acc` | score | biased 2.8x at `M = 40`; use `acc_delta > 0` to make it pathwise |
-| shock `d(rho_2/rho_1)/du_1` | score | **WRONG SIGN** -- see `docs/ATTRIBUTION.md` |
-
-**Two limits bound every gradient here, and they are different.** Attribution bias (score
-route only, grows with trajectory length) and chaotic amplification (all pathwise gradients,
-grows exponentially). The shock density ratio fails both: at 300 steps it is precise and
-sign-wrong; at 1000 steps, where the forward finally reaches Rankine-Hugoniot, the spread is
-9 orders of magnitude above the signal.
-
-**A forward bug found on the way.** `inflow.inject` silently dropped entrants when dead
-slots ran out -- `shortfall` counted only `target > capacity` despite its contract naming
-both. A saturated array read as correct physics (-46 % density ratio at Mach 4, all
-diagnostics zero). Fixed.
-
-## 1.9 Forward performance against SPARTA (2026-09-28 .. 2026-10-01)
-
-The SPARTA circle deck (argon, 20 x 20, r = 3 polygon from `data.circle`, 1000 steps from empty,
-~37 M particle moves), timed on this laptop by `scratch/perf/bench_forward.py` against
-`spa_serial` (`scratch/perf/bench_sparta.txt`):
-
-| 1000 steps | 09-28 before | 10-01 now | vs SPARTA serial (0.52 s) |
-|---|---|---|---|
-| main code, 1 CPU core, polygon / level set | 67.6 / 98.3 s | **6.3 / 11.6 s** | 12x / 22x |
-| main code, GPU (RTX 3050 Ti, WSL flags), polygon / level set | 15.1 / 20.8 s | **4.5 / 6.8 s** | 8.6x / 13x |
-| one optimiser seed (optc settings, fnum x 4) | 391 s | **99 s** | |
-
-Figures: `examples/mesh/figures/performance/forward_speedup_history.png` (forward across the changes),
-`speedup_history.png` (optimiser seed), `forward_step_breakdown_cpu.png` /
-`forward_step_breakdown.png` (where a CPU / GPU step goes now), `forward_vs_sparta.png`,
-`profile_stages.png` / `profile_breakdown.png` (the optimiser seed's GPU stages).
-
-**The reference: SPARTA's algorithm in JAX, on branch `sparta-match`** (worktree
-`../JAX-DSMC-sparta`, `sparta_jax/README.md`).  A non-differentiable, algorithm-for-algorithm
-port validated against 8 SPARTA seeds runs in 1.30 s on one core (2.5x SPARTA) and 1.41 s on
-the GPU.  Its work accounting shows the 2.5x is XLA's per-op overhead and lock-step padding, not
-extra work; it is the floor this code can approach.  **It must never be merged into main:
-main stays fully differentiable.**
-
-What changed, all gated by `scratch/perf/noise_gate.py` (forward on both bodies and the
-gradient, 12 / 4 seeds, |z| < 3; every change came in at |z| < 1) and the full test suite:
-
-* the inflow normal speed is a Halley inverse CDF (was a 64-step bisection);
-* the level-set search uses an exact block-minimum cull, batched samples and a safeguarded
-  Newton refinement (was 16-sample loops and 40 bisections);
-* the polygon search and the inside check run on compacted rows;
-* on XLA:CPU the lane tracker's pass 0 is SPARTA-structured (`wall_adjoint._first_pass_routed`:
-  a dense closed-form pass and a compacted near lane; on GPU the dense pass 0 is kept, since
-  the lane's gathers cost more launches than they save), with per-slot counter-based wall
-  draws and a variadic earliest-hit reduce;
-* NTC: no scratch-row copies, constant checksum weights;
-* `SimStatic.sort = "partition"` (the mesh forward's setting, XLA:CPU): the carried partition
-  sort (PSEUDOCODE §6.2) -- the same cells and members, a different within-cell order, so NTC
-  draws differ at seed level (tested in distribution on a collisional relaxation, `tests/test_sort.py`);
-* entrants are revived at their slots (`inflow.revive_at`), and the cell temperature for the
-  majorant is one shifted pass.
-
-What is left (2026-10-02 study, `scratch/xla_ops/`; one core, polygon, steady state ~6.8 ms
-per step untraced).  **The 2026-10-01 "small-op overhead" reading was a profiler artefact:**
-the host tracer charges every executed op (traced 8.7 vs untraced ~6.6-7.4 ms per step), and
-removing 685 of the ~2200 executed ops per step (an unrolled binary search for
-`compaction.ranked_slots`) was time-neutral in an interleaved A/B (reverted).  About 70 % of
-the step is ~100 large ops, each a memory-bound pass over particle-sized arrays; packaging
-into fewer XLA ops does not pay, fewer *passes* would.  Upper bounds by ablation
-(`scratch/xla_ops/ablate.py`, the stage removed or made trivial -- physically wrong runs):
-
-| option | bound | note |
-|---|---|---|
-| fewer padded slots (60 k -> 52 k, ~47.5 k alive) | 8 % (measured) | needs growth on overflow; draws are per slot |
-| cheaper inflow speed sampler (Halley, ~3.1 k candidates) | ~0.5 ms | |
-| per-step cell temperature for the majorant | 0.3-0.45 ms | certification at stake |
-| collide stage at zero attempts (scores, checksum) | ~0.5 ms | |
-| tracker bookkeeping (N-sized elapsed / score / hit / exclude fields) | ~2 ms | deep `wall_adjoint` restructure |
-| the whole body (surface search, routing, inside check) | 1.2 ms | the no-body run |
-| entrants moved inside the main move | ~0 | dropped |
-
-Against `sparta_jax` per stage (ms per step): tracker + search 4.2 vs 1.0, cell temperature +
-collide 1.05 vs ~0, inflow 0.75 vs 0.05, sort 0.90 vs 0.44.  The bounded options together are
-worth ~20 % (6.3 -> ~5 s per 1000 steps); under 5x SPARTA serial (2.6 s) would need the
-tracker-bookkeeping rewrite as well.  Not pursued (2026-10-02): diminishing returns for the
-risk to verified behaviour.  The tools: `scratch/perf/xla_ops.py` (executed-op census,
-attributed to source functions through the HLO graph), `scratch/xla_ops/jaxpr_census.py`,
-`ab.sh` / `blocks.py` (interleaved untraced timing -- single 100-step blocks vary by +-10 %).
-`jax_dsmc/fusion.py` (`materialise`) now holds the one XLA:CPU fusion workaround the code
-uses in two places.  On the GPU the step is launch-bound (5.3 ms wall, 2.1 ms of kernels,
-~440 kernels per step).
-
-One CPU seed-noise run (`noise_gate/forward_final_cpu.json`) shows the polygon body's ungated
-energy / heat tallies at ~1e-33 against 5e-34 on the GPU: for a specular wall these are pure
-round-off (the flow's energy is ~1e-17) and differ between XLA:CPU and GPU arithmetic; every
-gated observable agrees.  The scratch work of each change is archived in
-`scratch/perf/history/2026-10-01/`.
-
-## 1.10 Adjoint cost: the fits, and the two-column backward (2026-10-02)
-
-The value backwards dominate an optimiser seed (GPU profile, `scratch/perf/profile/final_seed`:
-68 of ~120 s, of which the local quadratic fits' normal equations 32 s, their LU solves 14 s,
-partner draws and tables 16 s, the nearest-node search 2 s).  Findings and the change, all
-measured in `scratch/adjoint_fit/` (README there):
-
-* **The basis is not the cost driver.**  On one 4096-query fit chunk the nearest-node
-  search and gathers take ~2 ms and the normal-matrix assembly ~2.5 ms *whatever the
-  basis* (6 or 14 columns: not flop-bound); only the solve scales with it.  End to end,
-  affine is **1.37x cheaper** than the full quadratic (a collisional seed's two backwards,
-  67.8 vs 92.9 s, interleaved) -- and moves `λ` by 73 % rms there, so it stays a data
-  point only (the quadratic is needed for energy-like rewards, review section 5.4).
-* **Collisionless runs fit for nothing.**  In the optc / opt / squash studies (Kn ~ 1e18)
-  a step makes no attempts, every partner term is weighted by zero and no velocity
-  changes at a substep boundary: `λ` is identical to 16 digits under every basis.
-  Skipping the fits when the attempts are zero would remove ~45 s per seed, and is
-  rejected: the user's standing rule is **no runtime collisionless shortcuts** -- every
-  run exercises the collisional path, so the move to lower Kn changes nothing in the code.
-* **The change: one sweep, two value columns** (PSEUDOCODE section 9.7.1).  A seed's two
-  value backwards (hit rewards, timing rewards) share record, key, partners and every
-  fit's nodes, weights and normal matrix; only the right-hand sides differ.
-  `ensemble_device.backward_virtual` now carries `λ f64[N, R]`, `field_query` solves all
-  columns from one factorisation, and the batched LU is an unrolled Cholesky
-  (`_spd_solve`, the matrices are SPD).  `examples/ensemble_mesh._backwards` makes one
-  call.  Results: a seed's two backwards 90.5 -> 43.3 s (collisional, 2.1x); the
-  optimiser seed (optc, warm) backward 65 -> 29 s, **whole seed 99 -> 64 s**.  Gates: the
-  columns equal separate sweeps to 1e-13 (new tests in `tests/test_ensemble_device.py`);
-  the optimiser's gradient terms against the 10-01 reference to 3.7e-9 relative,
-  objective bitwise (`scratch/perf/regress.py --compare final`, saved as `columns`); the
-  collisional seed's `λ` against the old code to 3e-7 of its rms (ill-conditioned fits
-  of sparse cells amplify any last-bit change to ~1e-9 per step; the same with the old
-  LU and only the summation order changed).
-
-Profiled seed after the change (`scratch/perf/profile/seed_columns`, figures in
-`examples/mesh/figures/performance/`): forward 7.7 s wall (2.3 s GPU busy), replay 2.4 (0.6),
-value backwards 30.2 (28.2; was 68.4), shape gradient 33.3 (4.2, ~7000 kernels per step).
-In the backward the normal-equation assembly is now half the GPU time (14.6 s), partner
-draws / tables 9.0, right-hand sides 1.6, top-k 0.8, the Cholesky solve 0.5.  The forward,
-replay and shape stages are launch-bound: the laptop runs with XLA command buffers off (the
-WSL driver crash), and `examples/mesh/cluster/env.sh` exports the same guard although the
-crash is WSL-specific -- enabling command buffers on the cluster (after a smoke run) is the
-cheapest remaining speed-up there.  The f64 assembly is ~4x off the f64 roofline of this
-consumer GPU; consumer and RTX-class GPUs run f64 at 1/64 rate, A100 / H200 at 1/2, so
-collisional adjoint runs belong on the A100 / H200 partitions.
-
-Re-timed 2026-10-15 with the per-cell cubic fit (`cell_fit.py`, since 10-11), untraced stage
-timers after a warm-up seed (`scratch/perf/stage_times.py`; the 10-04 code timed the same way
-from a worktree of 74366aa for the before bar): one seed 69 -> 38 s.  Forward 6.0-6.5 s and
-replay 1.4-1.7 s unchanged; value backwards 30.3 -> 2.8 s (11x: partner draws 0.9 s GPU, per-
-cell LU 0.5, normal equations 0.3); shape gradient 29.5 -> 26.9 s, now 70 % of the seed and
-launch-bound (4.5 s GPU busy, ~6950 kernels per step at 2.2 us) -- the next target.  Profile
-`scratch/perf/profile/cellfit_seed2`; `profile_report.py cellfit_seed2 cellfit_along_pool`.
-Caveats found on the way: regress.py's second seed is not clean (84 s with compilation in it),
-the traced walls run ~10 % slow, and one profile ran in a slow GPU clock state (all kernels
-~2x long, forward 18.5 s) and was discarded -- compare busy times with an earlier profile.
-
-
-## 1.11 Free space, and the `optm` runs (2026-10-15/16)
-
-`forward.build(boundary="free")` (`--boundary free` in `optimize`, `optimize_squash`,
-`ensemble_mesh`; default `channel`, the SPARTA deck) makes every box face a free-stream face:
-the drifting Maxwellian's inward flux is injected on all four, whatever leaves is removed;
-the per-step injection capacity is `forward.injection_bound` (2x the largest face target + 64)
-and the free box's default slots `max(old rule, 1.3 NRHO V / fnum)`.  Tags get `_free`.  Why:
-the specular channel holds a half-range stream (free-molecular circle Cd 17.2-17.7 against
-free space's 12.22 at M 0.32), and at Kn 0.5 + M 10 it chokes for D/H >= 0.3 (a channel-wide
-~4.4 n_inf region grows upstream; a longer box only gives it room).  Gates
-(`scratch/freebox/`): free-molecular Cd 12.245 +- 0.036 (R 1.5, z 0.8) and 12.342 +- 0.056
-(R 0.75, z 2.2); the radius gradient with newborns from all faces +2.2 +- 2.7 % vs D/R,
--0.9 +- 3.6 % vs FD.  Not yet retrofitted to optc2 / optckn / optab / squash.
-
-`optm` (cluster README): S4 Adam, smooth 8, tangent area, 1 m keep-out, free space, one H200
-each.  Mid-run findings (`scratch/optm/analysis_optm.py`, `figures/optc/optm_*`):
-
-* Kn 0.5, M 0.32: 0.21 of the circle's drag, flat since ~140; the adjoint slope (observed
-  dD on g.dc, common random numbers) 0.81 early, then noise -- the fixed step at the noise
-  floor.
-* Free-molecular M 10: a wedge whose flat base receives no hits, so the area constraint puts
-  area into the shadow and the body slides downstream until the base meets the keep-out
-  (iterate 254, drag 0.104); the floor then clips the base, the area restore thickens the
-  wedge and the drag rises to 0.15.  The box bounds this optimum -- enlarge it (or constrain
-  the base) before quoting the wedge.
-* Kn 0.5 + M 10: from iterate ~36 the gradient grows 70-680x, concentrated at the nose
-  (Adam's v there ~790x the surface median); slope 0.94 -> ~0, drag stalls at 0.32.  Same
-  signature as the squash M 10 `cubicv` spike (`pathwise_v` on bodies < 2 cells thick).  The
-  per-step gradient is not saved, so the term is not identified yet: save it, then guard.
-* The optimiser step is normalised (the largest knot moves exactly `--step` every iterate);
-  without a decay the late iterates dither.
-* Recompiles: `npc_max` (the backward's per-cell table width) is rounded to
-  `ensemble_mesh.NPC_BUCKET` = 64 and is a static argument of the backward and the shape
-  gradient; each new bucket recompiles both, ~1200 s on H200 (3x in the 300-iterate M 10
-  run).  A larger bucket or a configured floor trades padding for fewer compiles.
+## 7. Superseded - do not rely on
+
+- Score-function / DiCE gradients as production (2.2); the sequential and Delta-t-linearised pull-backs as
+  defaults (2.2); the per-query kNN `quadratic_full` fit as default (2.3, 2026-10-11); the unguarded cubic
+  (2026-10-19).
+- `value_class="hit_ahead"` (2026-10-02: biased by construction); the "stratified fit fixed the capsule" story
+  is true of that one case only.
+- The "Kn 0.5 adjoint is 7-9 % below FD" reading (2026-10-03): FD noise (2026-10-12).
+- Augmented-Lagrangian area mode (`_al` runs, 2026-10-13: void); the projection-era optimiser runs (`optc`,
+  `optckn` before `_tan`) for any claim about drag.
+- Polygon (50-gon) shapes and any vertex edge-band term; translation controls (2026-09-20).
+- A line search in the optimiser (the optimiser as built has a fixed largest displacement, reinitialises every
+  iterate, and holds area by the tangent mode / a uniform phi shift).
+- Split cells being "refused" (since 2026-09-23 they get sub-cells; `SplitCellError` remains available via
+  `split_check`); the stencil tracker as the examples' default (the lane tracker is).
+- "SPARTA's `reset_vremax()` is only called from `init()`" - false: it is also called in
+  `Collide::collisions()` (`collide.cpp:396`, review 2026-09-14).
+- Old test counts, wall-clock suite times, and `pytest -m perf --benchmark` (there is no such marker run;
+  budgets are `tests/test_perf_budget.py`).
+- Phase-0 revision/wave planning ("the next piece of work is M1"): all of M1-M2 and the M4 forward are done.

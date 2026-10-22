@@ -138,7 +138,10 @@ def default_config():
             # .timing_band_setting): a 0.2-step band is far noisier for the same mean
             "timing_band": 10.0,
             "tag": "circle",
-            "optimizer": "gd",
+            # the step rule (2026-10-21: the shipped Adam as an optax chain, optax_rules.ox_adam;
+            # "adam" is the same step in plain numpy; gd / tr / lbfgs / mma and the other ox_*
+            # arms are the comparison runs of examples/mesh/cluster/README.md)
+            "optimizer": "ox_adam",
             "adam_beta1": 0.9,
             "adam_beta2": 0.999,
             "workers": 1,
@@ -151,8 +154,9 @@ def default_config():
             # multiplier update winds up), "penalty" (the same objective, constant
             # coefficients: nu = area_linear * price, mu = area_penalty * price / A0) or
             # "tangent" (Lagrange multiplier per iterate: the step is projected onto the
-            # constant-area set, the shift restores the second-order remainder)
-            "area_mode": "projection",
+            # constant-area set, the shift restores the second-order remainder; the default
+            # since 2026-10-21, required by the optax and optimizers.py rules)
+            "area_mode": "tangent",
             "area_penalty": 100.0,
             "area_linear": 0.0,
             # perimeter penalty (2026-10-19): J + perimeter * J_0 * P / P_0 (J_0, P_0 the first
@@ -626,12 +630,23 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         z = np.load(out / "adam_state.npz")
         adam_state = (z["m"], z["v"])
     rule = cfg["optimizer"] in OZ.RULES
+    # the optax arms (optax_rules, 2026-10-21): their state is optax's, saved as its leaves
+    ox = cfg["optimizer"].startswith("ox_")
+    ox_path = out / "optax_state.npz"
+    ox_ctx = ox_tx = ox_state = None
+    if ox:
+        import optax_rules as OX  # noqa: PLC0415 -- optax is needed by these arms only
+
+        ox_ctx = OX.Context()
+        ox_tx = OX.build(cfg["optimizer"], ox_ctx, cfg["step"])
+        fresh = ox_tx.init(jnp.asarray(ls.coef))
+        ox_state = OX.load_state(ox_path, fresh) if history else fresh
     state_path = out / "opt_state.npz"
     rule_state = OZ.load_state(state_path) if history else {}
     rule_state["area0"] = area0
     perimeter_ref = saved.get("perimeter_ref") if saved else None
     mode = cfg["area_mode"]
-    if rule and mode != "tangent":
+    if (rule or ox) and mode != "tangent":
         raise ValueError(f"--optimizer {cfg['optimizer']} needs --area-mode tangent")
     if saved and saved["config"].get("area_mode", "projection") != mode:
         raise ValueError(f"{out} was run with area_mode {saved['config'].get('area_mode')}")
@@ -690,6 +705,14 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             scale, eta = float(np.abs(delta).max()), 1.0
             stepped = dataclasses.replace(from_ls, coef=from_ls.coef + jnp.asarray(delta))
             direction = None
+        elif ox:
+            delta, ox_state = OX.step(ox_tx, ox_state, ox_ctx, g, ls, g_area, cfg)
+            OX.save_state(ox_path, ox_state)
+            scale, eta = float(np.abs(delta).max()), 1.0
+            stepped = dataclasses.replace(ls, coef=ls.coef + jnp.asarray(delta))
+            direction = None
+            predicted = float(np.sum(g * delta))
+            extra = {"step_max": scale}
         else:
             direction = smoothed_direction(g, ls, cfg["smooth"], cfg["band"] + ls.h)
         if cfg["optimizer"] == "adam":
@@ -704,10 +727,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             # until the tracker's event budget runs out -- `wall_recrossed` on every optc Adam
             # run, 2026-09-23), so the step itself is smoothed again
             direction = smoothed_direction(direction, ls, cfg["smooth"], cfg["band"] + ls.h)
-        if mode == "tangent" and not rule:
+        if mode == "tangent" and not (rule or ox):
             # the step itself: first-order area preserving
             direction, _ = tangent_component(direction, g_area)
-        if not rule:
+        if not (rule or ox):
             scale = float(np.abs(direction).max())
             eta = cfg["step"] / max(scale, 1e-300)
             stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))

@@ -1,19 +1,22 @@
-# `examples/mesh` — SPARTA-style embedded surfaces: geometry checks and forward duplicates
+# `examples/mesh` — embedded surfaces: forward duplicates of SPARTA, shape gradients, shape optimisation
 
-Everything here validates `jax_dsmc/mesh/` (cut cells, the lane, stencil and cell-walk trackers,
+Status: **current** (the mesh forward and the particle-carried ensemble adjoint are the
+production path; the large runs live on the cluster, `cluster/README.md`).  Sections: the forward
+validation scripts, forward performance, the adjoint / shape-gradient scripts, and the
+optimiser (`optimize.py`) with its production settings.
+
+The forward scripts validate `jax_dsmc/mesh/` (cut cells, the lane, stencil and cell-walk trackers,
 element models) against the shipped SPARTA `circle` (2-D) and `sphere` (3-D) examples, rerun
 in **argon** with a locally built serial SPARTA (`~/sparta/sparta/build/src/spa_serial`,
-inputs `sparta/in.{circle,sphere}_ar`, outputs under `results/sparta/`).  Plan:
-`~/.claude/plans/jolly-exploring-knuth.md`.
-
+inputs `sparta/in.{circle,sphere}_ar`, outputs under `results/sparta/`). 
 Run everything from the repository root with `PYTHONPATH=.`:
 
 | script | what | artifacts |
 |---|---|---|
 | `geometry_checks.py` | §1a: cell-type counts (264/88/48, 7256/304/440), cut-cell set, per-cell flow volumes vs SPARTA's `compute property/grid vol` dumps, candidate lists vs brute force, watertightness, sub-grid convergence | `results/geometry_checks.json`, `figures/circle_forward/mesh_cells_circle.png`, `mesh_cells_sphere_slice.png`, `mesh_volume_error.png`, `mesh_volume_convergence.png` |
-| `forward.py --case circle\|sphere [--body analytic] [--tracker lane\|stencil\|walk] [--acc 1] --seed S` | the SPARTA duplicate: empty start, `emit/face xlo`, 1000 steps, window-averaged loads and fields | `results/forward_<tag>.json`, `figures/<tag>_t0100/0300/1000.png`, `results/vtk/*.vtr|.vtp` |
+| `forward.py --case circle\|sphere [--body analytic] [--tracker lane\|stencil\|walk] [--acc 1] --seed S` | the SPARTA duplicate: empty start, `emit/face xlo`, 1000 steps, window-averaged loads and fields | `results/forward_<tag>.json`, `figures/<case>_forward/<tag>_t0100/0300/1000.png`, `results/vtk/*.vtr|.vtp` |
 | `tracker_bench.py [--import-logs] [--plot] [--table]` | lane vs stencil tracker on the roughest optimised shape: forward time, stuck particles, drag tally, adjoint memory per slot, the shape gradient coefficient by coefficient (from the GPU probe logs in `scratch/mesh/`) | `results/tracker_bench.json`, `figures/tracker_lane.png` (review 7.10) |
-| `run_forward_batch.sh` | the runs `report.py` expects (4 seeds each + walk + analytic) | |
+| `run_forward_batch.sh` | the runs `report.py` expects (4 seeds each + walk + analytic); run it before `report.py` | |
 | `report.py` | FG1–FG4, FG7 and walk-vs-stencil tables; fill curves, surface pressure, field difference figures | `results/forward_gates.json`, `figures/{circle,sphere}_fill.png`, `_surface_pressure.png`, `_fields_sparta_t1000.png`, `_fields_difference.png` |
 | `free_molecular.py --case circle\|sphere` | FG5: analytic body at three radii, drag extrapolated to zero blockage vs the Schaaf–Chambré / Bird ch. 7 reference (specular and diffuse) | `results/free_molecular_<case>.json`, `figures/free_molecular_drag_<case>.png` |
 | `record_budget.py` | G9: bytes of the captured record for the shape-gradient case by `eval_shape` | `results/record_budget.json` |
@@ -54,7 +57,7 @@ Facts worth knowing before reading numbers:
 1000 steps of the circle deck from empty on this laptop: SPARTA serial 0.52 s; the main code
 6.3 s (polygon) / 11.6 s (level set) on one CPU core and 4.5 / 6.8 s on the GPU; the
 SPARTA-faithful JAX port (branch `sparta-match`, not differentiable) 1.30 s / 1.41 s.  History,
-the changes and what is left: `docs/HANDOFF.md` section 1.9.
+the changes and what is left: `docs/HANDOFF.md` section 2.5.
 
 | script (all `scratch/perf/`) | what | artifact |
 |---|---|---|
@@ -75,10 +78,10 @@ the changes and what is left: `docs/HANDOFF.md` section 1.9.
 | `python3 -m examples.ensemble_mesh --parameter radius\|centre_x` | phase D: the SPARTA circle at `fnum x --fnum-scale`, warm-up then captured window, windowed drag; per-term breakdown (x / v / tally / timing) and `F/r` | `ensemble_mesh_circle_<parameter>_*.json` |
 | `python3 -m examples.ensemble_mesh --body levelset --parameter radius\|centre_x\|mode2 [--levelset-h 0.125]` | LS1/LS2 (phase E): the same case with the body a **level set** interpolating the circle's signed distance; the shape VJP lands on the B-spline coefficients and is chained through `coef(θ)` (`radius`: `∂coef/∂r = −1`; `mode2`: a `cos 2θ` normal displacement) | `ensemble_mesh_circle_levelset<h>_<parameter>_*.json` |
 | `python3 -m examples.ensemble_mesh --case plate --body levelset --acc 1 --parameter width --silhouette-band 0.03 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --substeps 1 --partners 2` | GP (phase E): a diffuse capsule plate normal to the stream, control = half-width; the silhouette band term (`ShapeTerms.silhouette`) vs CRN FD; `--grazing eps` regularises the hit-time derivative and the emission-side `1/(v_out·n)` of the diffuse normal score, `--grid-scale k` refines the DSMC grid at fixed particles per cell; the cap needs `h_φ ≤ 0.0625` (the `_prefloor` artifact is the same run before the emission floor, for the CRN comparison `report.score_floor_comparison`) | `ensemble_mesh_plate_levelset0.0625_acc1_sil0.03_gz0.05_width_*.json` |
-| `python3 -m examples.mesh.optimize --iterations K --seeds-per-iterate S [--optimizer gd\|adam]` (`--plot` for the figure) | first optimisation: minimum windowed drag of the level-set circle at fixed area (H1-smoothed coefficient gradient, band restriction, uniform-shift area projection, reinitialisation, CRN seeds across iterates); the first seed of every iterate records the field movie of its forward (`--frames-every`, default 50 warm-up steps) | `results/optimize/<tag>/history.json`, `coef_<k>.npy`, `frames_<k>.npz`, `figures/optimize_<tag>.png` |
-| `python3 -m examples.mesh.movie --tag <tag> [--fps 6 --morph 8 --hold 4 --stride 1 --mp4]` | the optimisation as a GIF (or, `--mp4`, an MP4 through `ffmpeg`; `--stride s` shows every s-th iterate) from those artifacts: the flow filling in around iterate k's body (nrho, \|u\| at fixed colour limits, body carved out), the steady state held, the body's zero contour morphing to iterate k + 1, and so on; drag history alongside | `figures/movie/<tag>/f_*.png`, `figures/optimize_<tag>.gif` / `.mp4` |
-| `python3 -m examples.mesh.optimize --case circle_long --area-mode tangent --smooth 8 --keepout 1.0 --boundary free …` | the production settings since 2026-10-15 (cluster groups `optc2`, `optckn`, `optm`): the gradient and the step projected onto the area's tangent space (exact area, `projection` / `lagrangian` / `penalty` the older modes), the step smoothed over 8 knots (`optab` A/B), the body kept 1 m from every face, and `--boundary free` (every face a free-stream face, `forward.build(boundary=)`; default `channel`, SPARTA's deck; gates in `scratch/freebox/`).  Mid-run analyses: `scratch/optab/analysis_tan.py`, `scratch/optm/analysis_optm.py` (drag, outlines, observed vs adjoint step, gradient size, timings), movies `scratch/optm/make_movies.sh` | `figures/optc/optab_tan_*.png`, `optm_*.png`, `figures/movie/optimize_<tag>.mp4` |
-| `examples/mesh/cluster/submit_curc.sh sphere\|mode2\|opt\|optc` / `collect` | the cluster study on CURC Alpine (sphere gradient, finer-circle `cos 2θ` gradient on 32 seeds, drag minimisation with S ∈ {1, 2, 4, 8} seeds per iterate × {gd, adam}): one right-sized SLURM job per seed / per optimisation with the seeds of an iterate concurrent on the job's GPUs (`optimize.py --workers`); `cluster/README.md` | `gradient_bench/results/…_dev_seed{i}.json` (merged by `collect`), `results/optimize/circle_{fine,coarse}_S{S}_{opt}/`, `figures/optimize_convergence[_coarse].png`, `figures/optc/optc_drag.png`, `figures/optc/optc_body_extent.png`, `figures/optc/gradient_seed_convergence.png`, `figures/mode2_gate.png` |
+| `python3 -m examples.mesh.optimize --tag T --iterations K --seeds-per-iterate S [--optimizer ox_adam\|adam\|gd\|tr\|lbfgs\|mma\|ox_*]` (`--plot` redraws the figure) | minimum windowed drag of a level-set body at fixed area: H1-smoothed coefficient gradient, band restriction, area constraint (`--area-mode`), reinitialisation, CRN seeds across iterates; resumes from `results/optimize/<tag>/`; stops at convergence (last 5 objectives within 0.125 %) or `--iterations` (default 300).  Every flag is a `default_config()` key of `optimize.py` (plus `ensemble_mesh.default_config()`): `foo_bar` is `--foo-bar` (`--workers W` seeds of an iterate on W GPUs, `--keepout`, `--boundary`, `--restart-steps`, `--smooth`, `--step`, `--band`, `--case`, `--fnum-scale`, `--levelset-h`, `--knudsen`, `--mach`, ...); `--backward-basis` (default `ensemble_backward.CELL_BASIS`, a resumed run keeps its own), `--substeps/--partners` (collisional: 4 / 8).  The first seed of every iterate records the field movie of its forward (`--frames-every`) | `results/optimize/<tag>/history.json`, `coef_<k>.npy`, `frames_<k>.npz`, `figures/optc/optimize_<tag>.png` |
+| `python3 -m examples.mesh.movie --tag <tag> [--fps 6 --morph 8 --hold 4 --every 1 --stride 1 --mp4 --squash]` | the optimisation as a GIF (or, `--mp4`, an MP4 through `ffmpeg`; `--stride s` shows every s-th iterate) from those artifacts: the flow filling in around iterate k's body (nrho, \|u\| at fixed colour limits, body carved out), the steady state held, the body's zero contour morphing to iterate k + 1, and so on; drag history alongside | `figures/movie/<tag>/f_*.png`, `figures/movie/optimize_<tag>.gif` / `.mp4` |
+| `python3 -m examples.mesh.optimize --case circle_long --fnum-scale 2 --warmup 2800 --area-mode tangent --smooth 8 --keepout 1.0 --boundary free --restart-steps 500 …` (the exact command lines per study group are `python3 -m examples.mesh.cluster.study --group <g> --list`) | the production settings (2026-10-15 .. 10-20): the gradient and step projected onto the area's tangent space (exact area; `projection` / `lagrangian` / `penalty` are older modes, the Lagrangian wound up), the step smoothed over 8 knots (`optab` A/B), the body kept 1 m from every face, `--boundary free` (every face free-stream; default `channel`, SPARTA's deck; gates in `scratch/freebox/`), and the **warm start** `--restart-steps N` (a new iterate re-equilibrates the previous iterate's final gas on the new body for N steps instead of the cold warm-up; validated 2026-10-19, 500 recommended).  Optimisers: `ox_adam` (the default since 2026-10-21: the shipped Adam step as an optax chain, identical to `adam`, its numpy twin), `gd` (projected steepest descent with H1 smoothing, not Newton), the step rules `tr` (trust region, reworked 2026-10-20), `lbfgs`, `mma` of `examples/mesh/optimizers.py`, and the optax arms of `examples/mesh/optax_rules.py` (`ox_ademamix`, `ox_adamcos` cosine step schedule, `ox_sfadam` schedule-free, `ox_prodigy` learning-rate free; need `optax`); all but `gd`/`adam` need `--area-mode tangent` (the default).  The 2026-10-20/21 comparisons found Adam best and robust to one seed per iterate (`cluster/README.md`: `optrules`, `optrules1seed`; `optax1seed` running).  Analyses: `scratch/optab/analysis_tan.py`, `scratch/optm/analysis_optm.py`, `scratch/optrules/analysis.py`, `noise.py`, `roughness.py`; optax checks `scratch/optax/` | `figures/optc/optab_tan_*.png`, `optm_*.png`, `optrules_*.png`, `figures/movie/optimize_<tag>.mp4` |
+| `examples/mesh/cluster/submit_curc.sh <group>` / `collect` | the cluster study on CURC Alpine (gradient gates, optimisations, optimiser comparisons): one right-sized SLURM job per seed / per optimisation.  Instructions, group table and results: `cluster/README.md`.  Run data is pulled with `cluster/pull_results.sh` (not in git since 2026-10-21) | `gradient_bench/results/…_dev_seed{i}.json`, `results/optimize/<tag>/`, `figures/optc/*`, `figures/mode2_gate.png` |
 | `python3 examples/mesh/report.py` | the "Adjoint gates" table (incl. LS2, GP), `figures/adjoint_gates.png`, `figures/shape_circle_terms.png`, the seed-by-seed level-set vs analytic comparison `figures/levelset_gradient.png`, the grazing sweep `figures/grazing_regularisation.png`, and the GP plate's three estimators of the diffuse normal term seed by seed with the FD vs its step `figures/plate_estimators.png` (`results/plate_fd_steps.json` from `scratch/mesh/probe_plate_fd_steps.py`) | `results/forward_gates.json` (`adjoint_gates`, `levelset_vs_analytic`, `grazing_regularisation`, `score_floor_comparison`, `plate_fd_steps`) |
 
 Both gradient runners evaluate the four estimators of `∇_xλ` on every seed
@@ -121,12 +124,17 @@ search reach `n_sample · h_φ / 2` is the level set's `stencil_sufficient` boun
 
 The specular capsule (`--case plate --acc 0`) closed the last open estimator question
 (review §7.9): its −27 % was the `∇_xλ`/`∇_vλ` parts, which are zero for a convex
-collisionless body and were read from a fit pool mixing about-to-hit and reflected
-particles at the cap.  The fits are now stratified by the hit-ahead class (`shape.
-hit_ahead`, runner default `--value-class hit_ahead`, artifacts tagged `_vchit`):
-1.356 ± 0.011 vs CRN FD 1.35 e-20, z = +0.08.
-The diffuse circle (`--case circle --acc 1 --parameter radius --silhouette-band 0.05
---grazing 0.05`, gate GD) on the same code, 4 seeds: 1.312 ± 0.052 (no timing term)
-vs CRN FD 1.442 ± 0.03 (h = 0.1), 1.128 ± 0.16 (0.05) and `F/r` 1.381 e-20 — the
-criterion is met but the estimate is 9 % below the precise FD (z = −2.3, the plate's
-pattern); the silhouette term is 61 % of it.  Not closed: more seeds and a band sweep.
+collisionless body and were read from a fit pool mixing about-to-hit and reflected particles
+at the cap.  The hit-ahead stratified fit (`shape.hit_ahead`, `--value-class hit_ahead`,
+artifacts tagged `_vchit`) gave 1.356 ± 0.011 vs CRN FD 1.35 e-20 (z = +0.08) on 2026-09-22,
+but **it is biased by construction** (2026-10-02: it drops `∇P·Δλ`, +40 % on the squash mode);
+the runner default is `--value-class none` and `hit_ahead` is diagnostic only
+(`docs/HANDOFF.md`, shape bias study).  The diffuse circle (`--case circle --acc 1 --parameter
+radius --silhouette-band 0.05 --grazing 0.05`, gate GD, 4 seeds, 2026-09-22): 1.312 ± 0.052 vs CRN
+FD 1.442 ± 0.03 (h = 0.1), 1.128 ± 0.16 (0.05) and `F/r` 1.381 e-20, 9 % below the precise FD
+(z = −2.3, the plate's pattern); the silhouette term is 61 % of it.  Not closed (the cluster
+jobs are all specular).
+
+The per-cell backward fit (default `CELL_BASIS = cell:cubicv:adapt1.5:guard32:align0.9:both`,
+2026-10-19; PSEUDOCODE §9.7.2) replaced the per-query fit used by the 2026-09 gates quoted
+above, whose artifacts are kept as they are.

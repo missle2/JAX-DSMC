@@ -1,5 +1,7 @@
 # The score estimator's variance — study results
 
+Status: **historical** (2026-09-16; the score route is superseded by the ensemble adjoint, see below).
+
 > **Provenance (2026-09-16).** The logs behind these tables and figures were produced by
 > the pre-branch code (`bafec3d`): the same forward random streams as then, and the
 > score estimator with the *same-trajectory mean baseline* that

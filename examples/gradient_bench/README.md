@@ -1,5 +1,14 @@
 # gradient_bench — estimator benchmark and the production ensemble adjoint
 
+Status: **reference** for the 1-D / 0-D gradient benchmarks (score-estimator arms, ensemble
+adjoint route (b) on Couette, inlet shock and relaxation, pathwise comparison; all gated and
+frozen) and **the artifact directory** of the mesh gradient gates: `examples.ensemble_mesh`
+(circle, level-set circle / sphere, plate) and the cluster `sphere` / `mode2` seed jobs write
+`results/ensemble_mesh_*.json` here (`examples/mesh/README.md`, `examples/mesh/cluster/README.md`).
+The production gradient path is route (b), the particle-carried ensemble adjoint
+(`jax_dsmc/ensemble_backward.py`); the score-estimator arms are kept as the measured
+comparison that ruled the score routes out.  Run from the repository root.
+
 Everything here is reproducible from the CLI; every number in
 [`docs/ADJOINT_BRANCH_REVIEW.md`](../../docs/ADJOINT_BRANCH_REVIEW.md) §4.8–4.11 and §5.4–5.7
 is printed by `report.py` from the JSON artifacts in `results/`, never typed by hand.
@@ -12,7 +21,9 @@ objective mean becomes the fixed baseline of the arms, then the arms on the disj
 seed range 32…  Studies: `triad_speed`, `triad_temperature_left` (Couette wall controls),
 `inlet_temp`, `inlet_nrho`, `inlet2_temp` (inlet shock), `scaling` (trajectory-score
 noise vs M and N), `shockbl_diam`, `shockbl_omega` (the old mean baseline reconstructed),
-`majorant` (thermal vs certified).  `--seeds-scale 0.75` was used for the recorded runs.
+`majorant` (thermal vs certified).  `--seeds-scale 0.75` was used for the recorded runs;
+`--only <job>` runs one job, `--study all` (default) runs every study.  Each job resumes from its
+own artifact in `results/`.
 
 ## Ensemble adjoint, route (b) (§5.4–5.7)
 

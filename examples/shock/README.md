@@ -1,16 +1,25 @@
 # M2 — periodic transport and shocks
 
+Status: **reference** (M2 physics gates, passed and frozen; the periodic / reflected-shock /
+two-sided-inflow cases validate the forward solver that the adjoint and mesh work build on).
+Run from the repository root.  `python3 -m examples.shock --help` lists the steepening flags
+(`--dims`, `--n-x`, `--n-trans`, `--npc-slab`, `--nrho`, `--mach`, `--seeds`, `--frames`,
+`--plot`, `--verbose`); `python3 -m examples.shock.normal --help` the Bird case (`--dims`,
+`--mach`, `--seeds`, `--npc`, `--align fit|integral|crossing`, `--plot PATH`, ...).  The first
+section is a periodic driver; Bird's case (§3), the inflow case (§4) and the gradients (§5) have
+their own modules.
+
 Two cases share one driver. Both are periodic in every direction, which is all the boundary
 machinery M2 has; inflow and walls arrive with M4/M5.
 
 ```bash
-python3 -m examples.shock --dims 1 2 3 --plot        # sine steepening, all dimensions
+python3 -m examples.shock --dims 1 2 3 --plot        # sine steepening, all dimensions (figures/shock_d{1,2,3}.png)
 ```
 
 > **Provenance (2026-09-15).** `figures/shock_d{1,2,3}.png`, the Bird normal-shock
-> figures and `figures/inflow_driven.png` were regenerated on the branch (logs
-> `scratch/bench/refresh_shock_steepening.log`, `refresh_shock_bird.log`,
-> `examples/shock/results/inflow_driven.log`) because the branch's per-slot NTC streams
+> figures and `figures/inflow_driven.png` were regenerated on the branch (commands in
+> `scratch/bench/refresh_figures.sh`; its logs were not kept, `examples/shock/results/inflow_driven.log`
+> was) because the branch's per-slot NTC streams
 > changed every forward realisation; the M2 gate (D=2 vs D=1 rms 2.37 %, D=3 vs D=1
 > 2.18 %, expected ~2.0 %), the Bird thickness and the RH ratios are unchanged within
 > their Monte Carlo scatter.
@@ -64,7 +73,7 @@ and masks a few mfp either side of each wave.
 ## 3. Bird's normal-shock structure — the kinetic gate
 
 ```bash
-python3 -m examples.shock.normal        # or scratch/bird/run_case.py for the raw profiles
+python3 -m examples.shock.normal --dims 1 2 3 --plot examples/shock/figures/bird_normal_shock.png   # or scratch/bird/run_case.py for the raw profiles
 ```
 
 The Riemann problem in §2 is *inviscid*: it pins wave positions and plateau values but says

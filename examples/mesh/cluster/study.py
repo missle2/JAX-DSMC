@@ -107,6 +107,9 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
 * ``optrules2`` (2026-10-20): the reworked trust region (``tr``: rho pooled over 5 trials from
   paired per-seed differences, x2 / x0.5, re-evaluation on new seeds at the floor) on the same
   two problems, S = 4, warm-started (``--restart-steps 500``); tags ``*_S4_tr2_*_w500``.
+* ``optax1seed`` (2026-10-21): the optax step rules (``examples/mesh/optax_rules.py``: Adam as
+  an optax chain, AdEMAMix, Adam with a cosine step schedule, schedule-free Adam, Prodigy) with
+  one seed per iterate, warm-started, 400 iterates; tags ``*_S1_ox_<arm>_*_w500``.
 * ``optrules1seed`` (2026-10-20): Adam, ``tr``, ``lbfgs`` and ``mma`` with ONE seed per iterate
   (gradient and objective noise x2) on the same two problems, warm-started, up to 1200
   iterates (the S = 4 runs' 300 x 4 seed evaluations); tags ``*_S1_<arm>_*_w500``.
@@ -382,6 +385,32 @@ def _optrules1seed_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# optax1seed (2026-10-21): the optax step rules of examples/mesh/optax_rules.py with one seed per
+# iterate, warm-started -- ox_adam (the shipped Adam as an optax chain: the control),
+# ox_ademamix (slow+fast momentum), ox_adamcos (cosine schedule on the step, 2 -> 1/4 x step
+# over 300 iterates), ox_sfadam (schedule-free Adam), ox_prodigy (learning-rate free, capped at
+# 4 x step).  400 iterates: one-seed Adam's best came at ~150 (M 10) / ~250 (deck).
+OPTAX_ARMS = ("ox_adam", "ox_ademamix", "ox_adamcos", "ox_sfadam", "ox_prodigy")
+OPTAX_ITERATIONS = 400
+
+
+def _optax1seed_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optax1seed``: every arm of :data:`OPTAX_ARMS`, one seed per iterate, warm-started."""
+    del gpus_per_node
+    return {
+        f"{name}_S1_{arm}": _optrules_tagged(
+            name,
+            arm,
+            f"--optimizer {arm}",
+            seeds=1,
+            suffix="_w500",
+            extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
+        )
+        for name in OPTRULES_REGIMES
+        for arm in OPTAX_ARMS
+    }
+
+
 # optab: name -> extra flags (the later flag wins over COARSE's --levelset-h)
 OPTAB = {
     "ctl": "--smooth 2",
@@ -416,6 +445,7 @@ NEW_GROUPS = {
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
+    "optax1seed": _optax1seed_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),
@@ -480,7 +510,7 @@ def _jobs(group: str, gpus_per_node: int) -> dict[str, str]:
                     f"python3 -m examples.mesh.optimize --tag circle_{label}_S{s}_{opt} "
                     f"--optimizer {opt} --iterations {MAX_ITERATIONS} --seeds-per-iterate {s} "
                     f"--workers {min(s, gpus_per_node)} {settings} --step 0.05 --smooth 2 "
-                    f"--band 1.0 {PULLBACK}"
+                    f"--band 1.0 --area-mode projection {PULLBACK}"
                 )
         return out
     raise ValueError(group)

@@ -1,5 +1,11 @@
 # Decaying turbulence, D ∈ {1, 2, 3}
 
+Status: **reference** (M2 turbulence gates; the 2-D Taylor–Green viscosity gate, +0.38 % vs
+Chapman–Enskog, is the project's strongest quantitative check of the VSS collision model;
+passed and frozen).  Run from the repository root; `python3 -m examples.turbulence --help` lists
+the flags (`--dim`, `--side`, `--npc`, `--mach`, `--efolds`, `--ic`, `--spectrum`, `--ensemble`,
+`--reach`, `--movie-dir`, ...).
+
 Same solver and same periodic boundary as the shock cases; only the initial condition and the
 post-processing differ. Each dimension is anchored to a reference that is a **number**, not a
 slope to be eyeballed — a log-log plot of a noisy spectrum can be made to look like almost any

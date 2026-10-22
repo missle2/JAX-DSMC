@@ -451,6 +451,17 @@ counts $m_0 = 1$, $m_1 = 1 + D + 3$, $m_2 = 14$ (2-D); keep the orders $g \le g_
 $g_c = \max\{g : 1.5\, m_g \le n_c\}$ (\code{adapt1.5}): a cell of fewer than 21 nodes fits a
 plane, fewer than 9 its mean, an empty cell nothing (value $0$; its matrix the identity).
 
+\emph{The shipped basis and the leverage guard (2026-10-19).}  The design above is the quadratic \code{quad}; the
+shipped \code{cubicv} adds the cubic monomials of $v$ (24 columns in 2-D, so \code{adapt1.5} needs 36 nodes for the full
+order) and \code{guard32} adds a per-query test: with $M_g$ the normal matrix of order $g$, the order used at a query is
+the highest $g$ (within the \code{adapt1.5} cap) whose leverage $h_g = \phi_g^\top M_g^{-1}\phi_g \le 32$ --- the variance
+of the fitted value in units of one node's noise --- and the cell mean if none.  Unguarded, the cubic extrapolates at
+post-collision queries in the empty velocity gap between a M 10 beam and the wall-reflected gas ($h\sim10^3$) next to
+bodies under $\sim2$ cells thick, and the backward recursion compounds it (squash M 10 $\dd D/\dd s = -19.6$ against FD
+$+1.48$; \code{optm} nose spikes).  Guarded, the thin and \code{optm} cases are within $\sim2$ s.e.\ of FD, the blunt Kn 0.5
+squash is unchanged ($-1.4\pm1.1\,\%$ vs FD; $<0.3\,\%$ of queries lowered).  Source of these numbers:
+the docstring of \code{ensemble\_backward.CELL\_BASIS}.
+
 \emph{Next to a surface.}  With the nearest-surface normals $n_i$ of the slots (within a
 cell width, else $0$) the carried value jumps across $v\cdot n = 0$ (a particle about to
 hit carries its imminent reward, one that just left does not), which no polynomial in $v$

@@ -1,248 +1,192 @@
-# Cluster study on CURC Alpine — sphere gradient, finer-circle optimisation, seeds × optimiser
+# Cluster study on CURC Alpine
 
-Set up 2026-09-21 to run **off the workstation**, one right-sized SLURM job per task on
-the University of Colorado Research Computing Alpine cluster.  **Partition: `aa100`**
-(12 nodes × 3 NVIDIA A100, 64 cores, 243 GB; `--gres=gpu:a100-40gb:N`, 21 cores per GPU
-max; QOS `gpu-normal` 24 h, `gpu-testing` 1 h; account `ucb856_asc1` (`#SBATCH --account` in `job.sbatch` / `check_env.sbatch`); `module
-load slurm/alpine` on a login node before `sbatch` — CURC docs, *Alpine hardware* and
-*Running jobs*).  JAX comes from a **CUDA venv** (`pip install "jax[cuda12]"`,
-self-contained CUDA 12 libraries; **verified on Alpine 2026-09-21: jax 0.6.2,
-`CudaDevice`, `check_env` ok**); the `rocm/5.3.0` + `jax` modules of the MI100 partition
-give **jax 0.4.7** and the code needs ≥ 0.4.36, so `GPU_KIND=mi100` stays only for a
-future ROCm ≥ 6 module or an Apptainer `rocm/jax` image.
+Status: **current**.  The SLURM tooling for every large run of the mesh study (3-D sphere and
+finer-circle gradient gates, shape optimisations, optimiser step-rule comparisons, bias and
+adjoint-error gates) on the University of Colorado Research Computing Alpine cluster, one
+right-sized job per task.  The job matrix is `study.py` (one *group* = one `submit_curc.sh`
+argument); the group table at the end records what each group was for and what it found.
 
-**`GPU_KIND=h200` (`ah200`, 4 H200 per node, ~3.5× the A100's fp64) is opt-in, and needs
-`check_env` on that partition first.**  On 2026-09-22 all eleven ah200 jobs were
-scheduled onto the single node `c3gpu-g5-u5`, whose driver refuses `cuInit`
-(`CUDA_ERROR_UNKNOWN`; `slurmstepd` could not read NVML either, and `sinfo` had the
-whole `g5` chassis draining).  JAX fell back to the CPU **silently** and every seed ran
-to completion at ~4× the wall time (6941 s vs ~1800 s expected).  Three things now stop
-that repeating: `env.sh` pins `JAX_PLATFORMS`, so a CPU fallback is an error;
-`job.sbatch` runs `check_env --quick` (seconds) before the real command and exits if the
-device does not initialise; and a failed preflight appends the node to `bad_nodes.txt`,
-which `submit_curc.sh` passes to every later `sbatch` as `--exclude` (`EXCLUDE_NODES`
-adds more).  The results of those CPU runs are valid — the backend does not change the
-arithmetic — just expensive.
+## Quick start
 
-```
-# on an Alpine login node, repository at /projects/$USER/JAX-DSMC-adjoint (250 GB, not purged)
-module load python                                  # >= 3.10 (`module spider python`)
+```bash
+# once, on a login node (python >= 3.10; JAX_VENV overrides the path)
+module load python
 python3 -m venv /projects/$USER/jax-env && source /projects/$USER/jax-env/bin/activate
-pip install --upgrade pip && pip install "jax[cuda12]" numpy scipy matplotlib   # once
+pip install --upgrade pip && pip install "jax[cuda12]" numpy scipy matplotlib
+# verified 2026-09-21: jax 0.6.2, CudaDevice, check_env ok
+
+# every session
 module load slurm/alpine
-cd /projects/$USER/JAX-DSMC-adjoint
-sbatch examples/mesh/cluster/check_env.sbatch      # 20 min, 1 A100: jax version, devices, tiny run
-bash examples/mesh/cluster/submit_curc.sh sphere   # 8 jobs  × 1 GPU  (one per seed)      8 h each
-bash examples/mesh/cluster/submit_curc.sh mode2    # 32 jobs × 1 GPU  (one per seed)      4 h each
-bash examples/mesh/cluster/submit_curc.sh opt      # 8 jobs  × 1/2/3 GPUs (S seeds concurrent) 12–24 h
-python3 -m examples.mesh.cluster.collect           # merges the seed files, figures + table
+cd /projects/$USER/JAX-DSMC                 # the cluster checkout; update it with `git pull` only
+bash examples/mesh/cluster/preflight.sh <group>              # local toy run of every job kind (below)
+GPU_KIND=h200 bash examples/mesh/cluster/submit_curc.sh check   # check_env on that GPU kind first
+GPU_KIND=h200 bash examples/mesh/cluster/submit_curc.sh <group> [<group> ...]
+GPU_KIND=h200 ONLY='regex' bash examples/mesh/cluster/submit_curc.sh <group>   # matching jobs only
+squeue -u $USER
 ```
+
+`submit_curc.sh <group>...` with no argument prints the usage line (the accepted groups).
+
+### Submitting
+
+* **`GPU_KIND`** (default `a100`):
+
+  | kind | partition / gres | per job | notes |
+  |---|---|---|---|
+  | `a100` | `aa100` / `a100-40gb` | 21 cores, 70 GB per GPU | 3 GPUs per node; CUDA venv |
+  | `h200` | `ah200` / `h200_2g.35gb` | 10 cores, 40 GB per **MIG slice** (35 GB GPU memory) | since 2026-10-18 the default gres is the slice; a full H200 is `GRES_TYPE=h200` (needed when a job exceeds 35 GB, e.g. `grid_scale 2`) |
+  | `rtx` | read from `sinfo` (RTX PRO 6000, Blackwell sm_120, MIG) | one 24 GB slice per job (`gpu-normal` allows one) | only groups that fit 24 GB are submitted (see the `submit_curc.sh` skip list); others print "skip" |
+  | `mi100` | `ami100` | 21 cores, 70 GB | **unusable** while CURC's ROCm `jax` module is 0.4.7 (the code needs >= 0.4.36); kept for a future ROCm >= 6 module or an Apptainer `rocm/jax` image |
+
+  Overrides: `PART`, `GRES_TYPE`, `QOS` (e.g. an allocation's priority QOS; default `gpu-normal`,
+  24 h, account `ucb856_asc1` in `job.sbatch`), `EXCLUDE_NODES`, `PYTHON` (the login node's
+  `python3` is 3.6; the script uses the venv's interpreter), `RTX_MATCH`.
+* **Wall time** is fixed per group in `submit_curc.sh`: `sphere` 8 h, `mode2` 4 h,
+  `opt`/`optc`, the `squash*`, `optckn`, `optc2`, `optab`, `optm`, `optrules*` 24 h
+  (`opt` S <= 2: 12 h), `biasgate`/`cellgate`/`gapgate`/`thingate`/`guardgate`/`shapeprof` 12 h.
+  `all` = `sphere mode2 opt`.  The allocation caps concurrent H200 jobs at 4 (2026-10-20;
+  a QOS limit, not in these scripts): split big batches with `ONLY=` across `h200` and `rtx`
+  (an rtx slice is ~1.8x slower than an H200 2g.35gb slice), heaviest jobs (M 10) on h200.
+* **GPUs per job**: seed jobs 1; an `opt`/`optckn`/`optc2` run S seeds on `min(S, GPUs per node)`
+  GPUs (`optimize.py --workers`); everything else 1.  On `rtx` every job gets one slice and the
+  seeds run in turn.
+* Jobs whose name is already in `squeue` are skipped, so repeating a submission is safe.
+* **Resuming**: every command resumes from its own artifact (finished seed rows / optimiser
+  iterates are skipped; a converged run exits at once).  A job that hit its time limit is
+  resubmitted with the same line.  A resumed optimiser keeps the backward basis it started
+  with.  The optimisers write a warm-start gas (`<run>/warm/seed<i>.npz`) every iterate.
+* **Node safety**: `env.sh` pins `JAX_PLATFORMS` (a CPU fallback is an error);
+  `job.sbatch` runs `check_env --quick` and an `import jax_dsmc, examples.ensemble_mesh` check
+  from `/tmp` before the command; a node that fails the device check is appended to
+  `bad_nodes.txt`, and `submit_curc.sh` passes that list to `sbatch --exclude`.  (Why: on
+  2026-09-22 all eleven `ah200` jobs landed on one node whose driver refused `cuInit`; JAX fell
+  back to the CPU silently and ran 4x slower.  The CPU results were valid, only expensive.)
+  A persistent XLA compilation cache is shared at `/projects/$USER/jax-cache` (clear it after
+  a jax upgrade).
+
+### Preflight (do this before a new group or GPU kind)
+
+```bash
+bash examples/mesh/cluster/preflight.sh <group> [name-regex]     # repo root; CPU, a few minutes per job kind
+GPU_KIND=h200 bash examples/mesh/cluster/submit_curc.sh preflight <group> [<group>...]   # on 2 GPUs of that kind
+```
+
+It runs the `job.sbatch` import check, `CHECK=1` on every `scratch/*/cluster_job.sh` job (name
+parses, inputs exist), and one toy run per code path (`SMOKE=1`; optimisers get toy flags and a
+`/tmp/preflight` tag).  The GPU variant (`PREFLIGHT_HOURS`, default 2) uses a 600-step warm-up
+so the body is hit; the log warns on `hits 0`.  It exists because every `biasgate` job of
+2026-10-04 died on `import jax_dsmc` after queueing (`python3 scratch/...` puts only the
+script's directory on the path; `env.sh` now exports the repository root in `PYTHONPATH`).
+A toy cannot show what depends on density, shape or memory.
+
+### Where outputs land, and getting them
+
+| what | where (cluster checkout) |
+|---|---|
+| `sphere`, `mode2` seed rows | `examples/gradient_bench/results/…_dev_seed{i}.json` (merged by `collect`) |
+| optimisations | `examples/mesh/results/optimize/<tag>/` (`history.json`, `coef_<k>.npy`, `frames_<k>.npz`, `warm/`), `optimize_squash/<tag>/` |
+| scratch-script groups (`biasgate`, `cellgate`, `gapgate`, `thingate`, `guardgate`, `shapeprof`) | `scratch/<probe>/cluster/<job>.json[l]` (+ `maps/`) |
+| job logs | `examples/mesh/cluster/logs/<group>_<name>_<jobid>.out` |
+
+**Since 2026-10-21 run data is not in git.**  `examples/mesh/results/optimize*`,
+`examples/mesh/cluster/logs`, `bad_nodes.txt` and `scratch/*/cluster/` are gitignored; git
+carries code, docs, figures and analyses, and the cluster checkout only ever `git pull`s.
+Move data to the laptop with
+
+```bash
+bash examples/mesh/cluster/pull_results.sh                     # results, logs, figures, scratch/*/cluster
+DRY=1 bash examples/mesh/cluster/pull_results.sh               # list only
+WARM=1 bash examples/mesh/cluster/pull_results.sh              # also the warm-start gas (~0.2 GB per seed)
+bash examples/mesh/cluster/pull_results.sh examples/mesh/results/optimize   # just these paths
+```
+
+(`REMOTE_USER`, `HOST`, `REMOTE_DIR` override the login; password + Duo once per run; pull
+only, nothing deleted, a newer local file is kept.)  `adopt_untracked.sh` was the **one-time**
+transition on the cluster checkout (2026-10-21) that untracked the data without deleting it;
+it is not needed again.
+
+Then `python3 -m examples.mesh.cluster.collect` merges the per-seed files and draws
+`figures/optimize_convergence[_coarse].png`, `figures/optc/{optc_drag,optc_body_extent,
+gradient_seed_convergence}.png`, `figures/mode2_gate.png`, the squash figures and the sphere gate
+row, and writes `study_results.json`.  `python3 -m examples.mesh.movie --tag <tag> [--mp4]
+[--stride s]` strings an optimisation's `frames_<k>.npz` / `coef_<k>.npy` into a movie.
+
+### Files
 
 | file | role |
 |---|---|
-| `env.sh` | the job environment: the CUDA venv at `/projects/$USER/jax-env` (`GPU_KIND=a100`, default, or `h200`; `JAX_VENV` overrides the path), `JAX_PLATFORMS` pinned so a CPU fallback is an error or `module load rocm/5.3.0; module load jax` (`GPU_KIND=mi100`, jax 0.4.7 today — unusable), `JAX_ENABLE_X64=1`, no preallocation, the persistent compilation cache `/projects/$USER/jax-cache` (`JAX_COMPILATION_CACHE_DIR`; a toy job 264 s → 104 s warm; clear after a jax upgrade) |
-| `bad_nodes.txt` | nodes whose preflight failed (one per line); `submit_curc.sh` excludes them.  Seeded 2026-09-22 with `c3gpu-g5-u5` |
-| `check_env.sbatch` / `check_env.py` | asserts JAX ≥ 0.4.36 (the code uses `jax.tree.map`, `jax.random.key`, `register_dataclass(data_fields, meta_fields)`), an accelerator, float64; runs a 40-step level-set circle with its shape terms; `--quick` stops after the device checks and is every job's preflight.  `gpu-normal` on one A100 (on `gpu-testing` only a MIG slice `a100_3g.20gb` is given) |
-| `study.py` | the job matrix by group (`--group sphere\|mode2\|opt\|optc\|squash\|squashkn\|biasgate\|cellgate\|gapgate\|thingate\|optckn\|optc2\|squashkn2 --list\|--names\|--gpus`, `--gpus-per-node` caps an optimisation's workers) |
-| `preflight.sh` | local end-to-end check of a group before submission (one toy job per kind, as `job.sbatch` runs it) |
-| `job.sbatch` | one job: resources from the `sbatch` line, the command from `CMD`; logs `nvidia-smi -L`, then the preflight, then the command |
-| `submit_curc.sh` | one `sbatch` per job line with a GPU's share of the node (H200: 32 cores, 128 GB; A100: 21 cores, 70 GB), the group's wall time; `GPU_KIND=a100\|h200\|rtx\|mi100` (`rtx`: the RTX PRO 6000 partition, gres and per-GPU sizing read from `sinfo`; `submit_curc.sh check` runs `check_env` on the chosen kind first), `PART`, `GRES_TYPE` override the partition / GPU; builds the job list with the venv's python (the login node's `python3` is 3.6; `PYTHON` overrides) |
-| `collect.py` | per-seed files → artifacts, `figures/optimize_convergence.png` / `optimize_convergence_coarse.png`, `figures/optc/optc_drag.png`, `figures/optc/optc_body_extent.png`, `figures/optc/gradient_seed_convergence.png`, `figures/mode2_gate.png`, the sphere gate row, `study_results.json` |
+| `study.py` | the job matrix: `python3 -m examples.mesh.cluster.study --group <g> --list\|--names\|--gpus [--gpus-per-node N]` |
+| `submit_curc.sh`, `job.sbatch` | one `sbatch` per job line; `job.sbatch` logs the node, runs the preflight, then `$CMD` |
+| `env.sh` | the job environment (venv, `JAX_ENABLE_X64=1`, `JAX_PLATFORMS`, no preallocation, compilation cache, `PYTHONPATH`) |
+| `check_env.py`, `check_env.sbatch` | JAX >= 0.4.36, an accelerator, float64, then a 40-step level-set circle with shape terms (`--quick`: devices only) |
+| `preflight.sh`, `collect.py`, `pull_results.sh`, `adopt_untracked.sh` | as above |
+| `bad_nodes.txt` | nodes that failed the device check (untracked) |
 
-Every command **resumes from its own artifact** (seed rows / optimiser iterates already
-written are skipped), so a job that hits its time limit is resubmitted with the same
-`submit_curc.sh <group>` line (finished jobs exit at once).  Logs in
-`examples/mesh/cluster/logs/<group>_<name>_<jobid>.out`.
+Sizing note: the finer circle (240 k slots x 300 captured steps; `mode2`, `opt`) needs
+> 18.7 GB in the captured forward alone and ran out of memory on the 24 GB rtx slices
+(2026-09-23), so `submit_curc.sh` offers only the groups that fit there.  The seed-parallel
+design (`--seed-start 32+i --seeds 1`, the RNG contract of `ensemble_mesh`) makes the merged
+artifact identical to a serial run.  `optimize.py --workers W` evaluates an iterate's seeds in
+W subprocesses pinned to the job's GPUs and combines the per-seed gradients into the serial
+mean (checked: next-iterate coefficients to 3e-15).
 
-## The jobs
+## What the study answers
 
-| group | job | what | GPUs | artifact | cost estimate |
-|---|---|---|---|---|---|
-| `sphere` | `seed{0..7}` | 3-D level-set sphere (`h_φ = 0.1` on the 0.2 grid, `fnum × 2` ≈ 40 k particles), radius gradient vs CRN FD (h = 0.05, 0.02), one seed per job | 1 | `gradient_bench/results/ensemble_mesh_sphere_levelset0.1_gz0.05_radius_f2_…_dev_seed{i}.json` → merged `…_dev.json` | ~3× the circle's 9 min/seed on the workstation GPU → ≤ 30 min/seed, 8 h limit |
-| `mode2` | `seed{0..31}` | finer circle (`fnum × 1` ≈ 48 k particles, 40 × 40 DSMC grid, `h_φ = 0.0625`), `cos 2θ` gradient vs CRN FD, one seed per job | 1 | `…circle_levelset0.0625_gz0.05_grid2_mode2_f1_…_dev_seed{i}.json` → merged | ~15 min/seed on the workstation → < 1 h, 4 h limit |
-| `opt` | `opt_S{1,2,4,8}_{gd,adam}` | finer circle drag minimisation at fixed area, to convergence (cap `--iterations 300`; 20 when this table was written), S CRN seeds per iterate evaluated concurrently (`optimize.py --workers min(S, GPUs/node)`), GD (normalised, projected) vs Adam | min(S, 3) | `mesh/results/optimize/circle_fine_S{S}_{opt}/history.json` + `coef_k.npy` | ~8 min per seed-evaluation on the workstation; per iterate ⌈S / GPUs⌉ × 8 min → S = 1, 2, 4: ~3 h; S = 8: ~6 h for 20 iterates (24 h limit; resubmit to continue) |
-| `optc` | `opt_S{1,2,4,8}_{gd,adam}` (jobs `optc_opt_…`) | `opt` on the SPARTA 20 × 20 DSMC grid (`--grid-scale 1`, `fnum × 1`, same level set and step): 60 k slots, a quarter of `opt`'s memory, fits a 24 GB rtx MIG slice (`GPU_KIND=rtx`, one slice, seeds run in turn) | 1 | `mesh/results/optimize/circle_coarse_S{S}_{opt}/` → `optimize_convergence_coarse.png`, `optc_drag.png`, `optc_body_extent.png` | measured (`study_results.json`, `optc_runs`): ≈ 4.3–4.9 min per seed evaluation, median 4.6–4.9 / 9.1–9.8 / 18–19 / 35–36 min per iterate at S = 1 / 2 / 4 / 8 |
+(1) the 3-D shape gradient passes the circle's gate (`sphere`, `mode2`); (2) how many seeds an
+evaluation needs (SE vs S); (3) which optimiser / step rule converges per unit cost; (4) where
+the adjoint is biased (the gates).  The cluster jobs are all **specular** bodies with curvature
+everywhere; the diffuse circle and flat-faced bodies are separate workstation questions (docs:
+`ADJOINT_BRANCH_REVIEW.md` §7.9).  What `optimize.py` calls `gd` is projected steepest descent
+with an H1-smoothed gradient and a step normalised to a maximum normal displacement, not a
+Newton method.
 
-### 2026-10-11: the per-cell backward, its gates and the longer runs
+## Groups
 
-**The 2026-10-04 `biasgate` jobs all failed on `import jax_dsmc`** (`ModuleNotFoundError`
-in every log): they run `python3 scratch/bias/<script>.py`, which puts only the script's
-own directory on the import path, where `python3 -m examples…` adds the working
-directory.  Fixed for every job: `env.sh` exports the repository root on `PYTHONPATH`, and
-`job.sbatch` checks `import jax_dsmc` from `/tmp` before the command (an exit in seconds
-instead of after queueing).  **Before submitting a group, run its local preflight**:
+Settings shared by the finer-circle jobs (`study.FINE`): `levelset_samples 16`, `grazing 0.05`
+(PSEUDOCODE.md §4.4), collisionless `--substeps 1 --partners 2`; collisional jobs use
+`--substeps 4 --partners 8`.  The backward's field fit is `ensemble_backward.CELL_BASIS`
+(`cell:cubicv:adapt1.5:guard32:align0.9:both` since 2026-10-19; PSEUDOCODE.md §9.7.2), a
+guarded cubic per collision cell: a Kn 0.5 squash seed took 985 s -> 95 s on the workstation
+(2026-10-11), so collisional runs afford ~10x the iterates.
 
-```
-bash examples/mesh/cluster/preflight.sh <group>     # repo root; CPU, ~minutes per job kind
-```
+### Gradient jobs
 
-which runs one job of every kind at a toy size exactly as `job.sbatch` would (clean
-environment, `PYTHONPATH` only as `env.sh` sets it, the same import check, the job's own
-command; `scratch/*/cluster_job.sh` honour `SMOKE=1`, the optimisers get toy flags and a
-`/tmp/preflight` tag).  It would have caught the 2026-10-04 failure; on 2026-10-11 it
-caught one in its own flags.
-
-On a GPU kind (a new node type, a new allocation) submit the same preflight as one job:
-
-```
-GPU_KIND=h200 bash examples/mesh/cluster/submit_curc.sh preflight optckn optc2 squashkn2
-QOS=<qos> GPU_KIND=h200 ...                          # if the allocation has its own QOS
-```
-
-One 1-hour job on two GPUs: `job.sbatch`'s own checks (driver, `check_env --quick`, import),
-then `preflight.sh` of each group with `PREFLIGHT_GPU=1` -- on the GPUs, the optimisers'
-toys with a two-worker pool (one seed per GPU) and a 600-step warm-up, so the body is hit
-in `circle_long` (30 steps reached it with no particle; the log now warns on `hits 0`).
-Verified on the workstation GPU 2026-10-13: optc2 and the optckn Kn 0.5 toy (cubic fit,
-Lagrangian area, 156 hits).
-
-The backward's field fit is now one guarded quadratic per collision cell
-(`ensemble_backward.CELL_BASIS`, docs/PSEUDOCODE.md §9.7.2): a Kn 0.5 squash seed 985 s →
-95 s on the workstation (the backward 897 → 13 s; the per-query fit was ~92 % of a
-collisional seed), so collisional optimisations can afford ~10× the iterates.  New groups:
-
-| group | jobs | what | estimate (rtx MIG slice) |
-|---|---|---|---|
-| `cellgate` | `sq_s1_seed{0..15}`, `sq_s0.6_seed{0..7}` | Kn 0.5 squash at production density (`fnum × 1`, 4 × 8): per-query k = 32, `CELL_BASIS`, `cell:cubicv:adapt1.5`, unguarded `cell:quad`, paired, + CRN FD h = 0.2 | ~1 h / seed (k = 32 most of it), 12 h limit |
-| | `optc_{c0,a50,a100,a200,s8a30,g200}_kn_b{0..3}` | six optc iterates at Kn 0.5, 4 seeds a job: two-sided k = 32, two-sided and split `CELL_BASIS` (block 0 also the one-sided k = 32), FDs along the uniform shift and the cos 2θ mode | ~1–1.5 h / seed |
-| | `optc_{…}_fm_b{0,1}` | the same shapes free-molecular, 8 seeds a job | ~20 min / seed |
-| `gapgate` | `sqh_t{1000,2000}_seed{0..15}` | the Kn 0.5 gap: squash `s = 1`, `fnum × 1`, the same forward captured for its last 300 and 1000 steps, `CELL_BASIS` and `cell:cubicv:adapt1.5:align0.9:both` paired, in the production run (1000 steps) and a filled box (2000); CRN FD h = 0.2 | ~10–15 min / seed |
-| | `circh_t{1000,2000}_b{0..3}` | the circle (optc iterate 0) the same way, 4 seeds a job, FD along the shift and cos 2θ | ~15 min / seed |
-| | `cub_{a50,a100,a200,s8a30,g200}_b{0,1}` | the cubic fit (split, as it would ship) paired with `CELL_BASIS` on the optc iterates at Kn 0.5, 4 seeds a job | ~5 min / seed |
-| | `fmgz_{c0,…,g200}_b{0,1}`, `sqfm_s{0.35,1}_b{0,1}` | free-molecular grazing cut-off 0.05 / 0.01 / 0.2 / 0 paired (derivative-only), every term's projection, FD h = 0.025 / 0.05 / 0.1; optc iterates and the squash; 8 seeds a job | ~5–8 min / seed |
-| | `fmsm_{a50,a100,a200,g200}_b{0,1}` | the elongated iterates smoothed (σ = 2 knots, same area): do the heavy-tailed gradients go with the sub-cell features? | ~3 min / seed |
-| `optckn` | `opt_S{1,2,4,8}_adam`, `opt_S4_gd` | `optc` at Kn 0.5 with the per-cell fit, to convergence (cap 300), in the **3× longer box** `circle_long` (x ∈ [−10, 20] m, centred on the body: 15 m each side; `fnum × 2`, 120 k slots (90 k ran out at Kn 0.5 on the first iterate, 2026-10-12); warm-up 2800 steps) **and** the bodies kept 1 m from every face (`--keepout 1.0`): the FM Adam runs grew through the outflow face of the 10 m box, S8 died on `inflow_shortfall`; the area in the differentiated objective (`--area-mode tangent` since 2026-10-14: the step projected onto the constant-area set, a Lagrange multiplier per iterate; the `_al` runs' augmented Lagrangian wound up) instead of the projection; tags `circle_long_kn0.5_S{S}_{opt}_tan_sm8` (step smoothed over 8 knots since 2026-10-15, from `optab`) | ~10 min / seed at 90 k slots (now 2× the slots of `optc`: expect ~1.3× that), collisions → S = 4: ~35 iterates / day (resubmit) |
-| `optc2` | `opt_S{4,8}_adam` | the free-molecular `optc` Adam runs again in the long box with the margin and `--area-mode tangent`, to convergence (cap 300); tags `circle_long_S{S}_adam_tan_sm8`, step smoothed over 8 knots since 2026-10-15 (the projection runs `circle_long_S{S}_adam` stay as they are) | ~7 min / seed |
-| `optab` | `ctl`, `smooth{4,8}`, `lsh{0.125,0.25}` | A/B of the control resolution against the sub-cell wiggles: `optc2`'s S = 4 Adam run with the step smoothed over 2 (control) / 4 / 8 knots (12.5 / 25 / 50 cm), or a coarser level set (`--levelset-h 0.125` / `0.25`, smooth 2 knots: the same 25 / 50 cm widths, representation vs smoothing).  Round 1 (2026-10-13, `--area-mode lagrangian`, tags `circle_long_S4_adam_al_ab_<name>`, 300 iterates each, ~160 s / iterate on rtx): the multiplier wound up and the area swung 4–220 % of A0, so the drag comparison is void; in the first 40 iterates the control grew wiggles and every wider setting stayed convex, coarse level set = smoothing at equal width (`scratch/optab/analysis.py`, `figures/optc/optab_overview.png`).  Round 2 (2026-10-15, `--area-mode tangent`, tags `circle_long_S4_adam_tan_ab_<name>`, first 110–129 iterates pulled mid-run): area exact to 1e-12, drag 0.23–0.26 of the circle's at equal area for all but `lsh0.25` (nose kink at ~95, 0.29); the 50 cm smoothing (`smooth8`) is the smoothest and has the best adjoint check (observed / predicted step 0.88, control 0.70); chosen for the long run.  A 150 → 180–190 s step at 16:47 in three runs at once was the node, not the code (`scratch/optab/analysis_tan.py`, `figures/optc/optab_tan_*.png`) | ~40 s / seed, 1 rtx slice each |
-| `optm` | `kn0.5`, `M10`, `kn0.5_M10` | the long optimisation in three regimes (2026-10-15): Kn 0.5 at the deck's stream (M 0.32), free-molecular M 10, Kn 0.5 + M 10; S = 4 Adam, step smoothed over 8 knots (`optab`), tangent area, long box with the 1 m margin, **in free space** (`--boundary free`: every face a free-stream face), **one GPU each** (submit on h200: multi-GPU requests wait).  Tags `circle_long_{kn0.5_,M10_,kn0.5_M10_}S4_adam_tan_sm8_free`.  Why free: the specular channel choked at Kn 0.5 + M 10 (a channel-wide normal shock at ~4.4 n∞ moved upstream, a longer box only gave it room; `scratch/optm10/m10_gate.py`) and holds a half-range stream (free-molecular Cd 17.2 vs free space's 12.2 at M 0.32); free boundaries: Cd 12.25 ± 0.04 against 12.22 (`scratch/freebox/fm_free_gate.py`), Kn 0.5 + M 10 starts (1.09 n∞ at the inflow face, ~2 n∞ ahead of the body, 117 k alive); the radius gradient with newborns from all four faces (free-molecular circle, 8 seeds, `scratch/freebox/radius_free_fm.json`): +2.2 ± 2.7 % against D/R (z 0.8), −0.9 ± 3.6 % against FD (z −0.3).  **2026-10-16, mid-run** (`scratch/optm/analysis_optm.py`, figures `optc/optm_*`): Kn 0.5 0.21 of the starting drag at 236 iterates, on a plateau since ~140 (adjoint slope 0.81 for iterates 0-79, then within noise); free-molecular M 10 done, lowest 0.104 at iterate 254, then up to 0.15: the body (a wedge whose base costs no drag, so the area moves into the shadow and the body slides downstream) reached the x = 19 m keep-out at iterate 254; from there the floor clips the base and the area restore thickens the wedge (3.75 -> 4.05 m) -- the box, not the step; Kn 0.5 + M 10 0.32 at iterate 55, then stalled: from iterate ~36 the gradient grows to 70-680x its start, concentrated at the nose (Adam's v there ~790x the surface median), adjoint slope 0.94 before, ~0 after.  **2026-10-17** (Kn 0.5 300 iterates: 0.21, flat; Kn 0.5 + M 10 247): the Kn 0.5 + M 10 drag saw-tooths between 0.16 and 0.31 (lowest 0.164 at 156) -- every rise is a run of steps pushing the nose upstream (correlation of a step's drag change with its nose motion -0.85 after iterate 36; +0.003 per advancing step, -0.009 per receding one) while the adjoint still predicts a fall; the nose's gradient is heavy-tailed (spikes to 14 000x the start) and the largest rises start at spikes (109, 156, 232): Adam's momentum keeps a spike's direction for 5-25 iterates at the full 5 cm step.  The nose has grown a forward sting < 2 cells (0.5 m) thick, the regime of the squash `cubicv` breakdown (`optm_kn0.5_M10_oscillation.png`) | H200: Kn 0.5 174 s, M 10 121 s, Kn 0.5 + M 10 337 s per iterate; iterate 0 1250-1610 s (compile); M 10 iterates 127 / 139 / 192 ~1200 s: full recompiles when the densest cell crossed a 64-particle `npc_max` step |
-| `thingate` | `sq_M10_s{0.193,0.25,0.3,0.45}_b{0,1}` | the thin-body adjoint error (2026-10-17): squash at Kn 0.5 + M 10 (squashkn2's config; 0.58 / 0.75 / 0.9 / 1.35 m thick; `s = 0.193` is the cubic S2 spike's exact `s` and seeds 0, 1 of `b0` its seeds), 4 seeds a job, five backward fits paired on one forward -- Q `cell:quad`, C the shipped `cell:cubicv`, CR cubic ridge 1e-3, CA cubic adapt 4, CL cubic leave-one-out order -- CRN FD h = 0.02; per-coefficient term maps to `cluster/maps/` | ~15 min / seed (rtx) |
-| | `sq_M10off_s0.193_b{0,1}` | the same with the body a quarter cell off the cell faces: each face's cut cell 92 % flow instead of a 42 % sliver (cut-cell occupancy at equal thickness) | ~15 min / seed (rtx) |
-| | `sqg2_M10_s{0.193,0.3}_b{0,1}` | `grid_scale 2` (0.25 m cells, 4x the particles): the body 2-4 cells thick; Q and C, 2 seeds a job | ~1 h / seed (**h200**) |
-| | `sq_M032_s{0.193,0.3}_b{0,1}`, `sq_FM10_s0.193_b0` | subsonic Kn 0.5 (the speed ratio) and free-molecular M 10 (no collision fit) at the same thickness | ~10 min / seed (rtx) |
-| | `om_it{30,58,109,156,232,246}_b0`, `omg2_it156_b0` | the optm Kn 0.5 + M 10 iterates with the optimiser's config and seeds 0-3 (C reproduces its gradient), the five fits, FDs along the uniform shift and a 0.5 m bump at the nose (h = 0.05); `omg2`: grid_scale 2, Q and C, 2 seeds | ~10 min / seed, `omg2` ~1 h / seed (**h200**) |
-| | **result (2026-10-18)** | the cubic-in-v fit is the error, and only at M 10. Squash M 10, s = 0.193: C (and CA, the same fit) -19.6 ± 8.6 against the FD +1.48; its pathwise v part -21 (Q -0.013), max lambda 4.4 (Q 3e-4); erratic down to s = 0.3, fine at 0.45; off-centre no better. Q is within 3 % at every s, CL within 4 %, CR biased -4 %. M 0.32 and free-molecular: every fit agrees with the FD. optm: C is wrong at every spike iterate (58 / 109 / 156 / 232 / 246; at 156, g · nose +836 against FD -0.33, one seed's lambda 384), Q matches the FD within 2 s.e. on both directions at every iterate. `sqg2` ran out of memory on the 35 GB H200 MIG slice and `omg2` lost inflow (fixed: the free box's slot floor ignored `grid_scale`); rerun on a full H200 (`GRES_TYPE=h200`) | |
-| `guardgate` | `sq_M032_s0.6_b{0..3}`, `sq_M10_s{0.193,0.25,0.3,0.45}_b{0,1}`, `om_it{30,58,156,246}_b0`, `unit` | the leverage-guarded cubic (2026-10-18; `cell:cubicv:adapt1.5:guard<h>:align0.9:both`, h = 8 / 32 / 128 (h = 2 dropped after the unit gates): per query the highest order whose leverage there is <= h) paired with C and Q on one forward: the blunt Kn 0.5 squash where C beat Q (16 seeds), thingate's thin M 10 squash and optm iterates, and the stored device gates. Expected: G within 0.3 % of C on the blunt squash, within 2 s.e. of the FD and no spikes on the thin / optm cases; rows carry `guard_levels` (the fraction of queries at each order), maps the per-cell counts. `scratch/guardgate/cluster_job.sh` | squash ~1 h / job (rtx), `om` ~1 h (**h200**) |
-| | **result (2026-10-19)** | `scratch/guardgate/analysis.py`, `figures/optc/guardgate.png`. The guard removes the blow-up everywhere: max lambda 1e-4..2e-3 (C up to 4..380), every thin / optm case within ~2 s.e. of Q. Blunt squash: G8 / G32 / G128 = C (-1.4 +- 1.1 % vs FD; Q -4.3 +- 1.0 %), guard lowers the order on < 0.6 % of queries. Unit gates: h 2 -13 / -20 % on the N128 inlet, h 8 -3 / -7 %, h 32 <= 0.6 %. Residual: optm iterate 58, every guard -3 to -6 % of the shift FD along the nose (G32 -3.8 +- 0.6 %; Q +0.7 +- 1.1 %), growing with h; thinnest squash (0.58 m) -3.5 to -4.2 % in every fit incl. Q. Recommended default: G32 | |
-| `optrules` | `{kn0.5,kn0.5_M10}_{adam,tr,lbfgs,mma}` | the optimiser's step rules (2026-10-19, `examples/mesh/optimizers.py`) on the optm free-space problems with the guarded backward (tags `*_g32`): Adam (control), `tr` trust region, `lbfgs` (quasi-Newton SQP step at constant area in the same trust region), `mma` (Svanberg, area >= A0, move limit 0.05 m); `trper` (5 % perimeter penalty) ran and was dropped. **Result (2026-10-20, `scratch/optrules/analysis.py`, figures `optc/optrules_*.png`, movies `movie/optrules_*.mp4`)**: best J/J0 Adam 0.203 / 0.105 (Kn 0.5 / M 10), tr 0.311 / 0.222 -- fastest per iterate, then stalled: the radius random-walked to its floor (x1.5 / x0.5 on a rho centred at 0.5) and a rejection there repeated the identical trial forever (the 'converged' flag); lbfgs 0.80 / 0.41 (curvature pairs are seed noise, cos(s,y) ~ 1e-3; steps on 1-3 coefficients); mma 0.65 / 0.45 (Kn 0.5: |g| << the 1e-5/span regulariser, steps 1/10 of the limit; M 10: no acceptance, overshoots). Reference runs: not to be resubmitted (the tags resume) | 24 h each (**h200**) |
-| `optrules2` | `{kn0.5,kn0.5_M10}_tr2` | the reworked trust region (2026-10-20): rho pooled over the last 5 trials at the radius from paired per-seed differences, radius x2 / x0.5 only when rho is beyond its error, a trial rejected only when worse than its base beyond the noise, a rejection at the floor re-evaluates the base on new seeds (`seed_shift`). S = 4, warm-started (`--restart-steps 500`); tags `*_S4_tr2_*_w500`. Rows add `rho_pooled`, `rho_se`, `rebase`, `seeds`, `objectives` | 24 h each (**h200**), resumable |
-| `optrules1seed` | `{kn0.5,kn0.5_M10}_S1_{adam,tr,lbfgs,mma}` | every rule with ONE seed per iterate (gradient / objective noise x2 against S = 4: the noisier-gradient regime of complex 3-D flows), warm-started, up to 1200 iterates (= the S = 4 runs' seed evaluations); tr's rho noise from the window's scatter (no decision before 3 trials). Tags `*_S1_<arm>_*_w500` | 24 h each (**h200**), resumable |
-| `squashkn2` | `kn0.5_S{4,8}`, `kn0.5_M10_S{2,4}` | `squashkn` with the per-cell fit, to convergence (`s` of the last 5 iterates within 0.5 %, cap 300; the 2026-10-01 runs managed 10 and 3 iterates at S = 4 in 24 h); tags carry the basis, so they never resume the per-query runs | Kn 0.5: ~200 s / seed; M 10: ~400 s / seed |
-
-Formulation checks behind them (2026-10-11): with the inflow 10 m from the body centre the
-empty long box's windowed drag was steady from 1400 warm-up steps (free-molecular 3.606 /
-3.691 / 3.667 / 3.696 e-20, Kn 0.5 1.493 / 1.571 / 1.552 / 1.576 e-2 after 700 / 1400 / 2100 /
-2800; `scratch/cellfit/warmup_check.py`); the box finally used is centred on the body (15 m
-of inflow): free-molecular 3.631 / 3.682 / 3.692 e-20 after 2100 / 2800 / 3500 (2 seeds,
-`warmup_check_centred.log`), so the runs warm up 2800 steps; the NTC attempt budget at production density
-on the optc shapes (circle, S1-adam 100 and the protruding 200) never clips even at
-`a_max 32` (`scratch/cellfit/attempts_check.py`), so 64 has ≥ 2× margin; `keep_inside` +
-`project_area` alternated (`optimize.constrain`) hold the margin and the area exactly on a
-shape that had crossed a face.  Suggested order (2026-10-12): `gapgate` (done 2026-10-12,
-`scratch/gapgate/analysis.py`: the default basis is now `cell:cubicv:adapt1.5:align0.9:both`;
-`optimize.py` records it in `history.json` and a resumed run keeps its own; `optimize_squash`
-names its artifacts by basis, so `squashkn2` starts new runs), then `squashkn2` and
-`optckn`, `optc2` (2026-10-14: these and `optab` now use `--area-mode tangent`, tags `*_tan`: the augmented Lagrangian of the `_al` runs wound up (exact area, the shift restores only the second-order remainder: 0.5 mm vs 1-2 cm per Adam iterate in projection mode); since 2026-10-13 every optimisation runs to convergence, capped at 300 iterates: `study.MAX_ITERATIONS`, `optimize.window_converged`; `collect` counts a converged run as done); of `biasgate` only
-`ONLY='^kn_fd|hor'` (the FD arbiter and horizons; `kn_seed*` is superseded by `cellgate`).
-
-Sizing: `submit_curc.sh` gives every job a GPU's share of its node (A100: 21 cores and
-70 GB per GPU; H200: 32 cores, 128 GB).  GPU memory: the finer circle (`mode2`, `opt`: 240 k slots × 300 captured steps) peaks above 18.7 GB in the captured forward alone and ran out of memory on the 24 GB rtx MIG slices (2026-09-23), so `submit_curc.sh` runs only `sphere` and `optc` there; `mode2` and `opt` need an A100-40GB or H200 and `--time` 8 h (sphere), 4 h (mode2), 12 h
-(opt, S ≤ 2), 24 h (opt, S ≥ 4).  The `opt` jobs with S ≥ 3 take a whole A100 node's GPUs; if the account's concurrent-GPU limit bites, submit `opt` first.  Estimates are
-extrapolated from the workstation (RTX 3050 Ti, weak fp64); the first job's log
-calibrates them — **measured 2026-09-22 on 32 CPU cores** (the failed-GPU runs):
-6900 s per sphere seed, so a GPU seed is well inside the 8 h limit.
-
-Shared settings of the finer jobs (`study.FINE`): `levelset_samples 16` (hit-search reach
-`16 h_φ/2 = 0.5` covers the fastest moves on the finer level set), `grazing 0.05` (the
-cut-off of the hit-time derivative and of the diffuse score, PSEUDOCODE §4.4), `--substeps
-1 --partners 2` (collisionless).
-
-## Seeds in parallel
-
-*Seed jobs* (`sphere`, `mode2`): each seed is its own job (`--seed-start 32+i --seeds 1
---output …_seed{i}.json`, the RNG contract of `ensemble_mesh`: seed `i` = key `32 + i`, so
-the merged artifact is identical to a serial run of `--seeds N`).  `collect.py` merges.
-
-*Optimisation*: `optimize.py --workers W` evaluates the seeds of one iterate in `W`
-subprocesses pinned round-robin to the job's GPUs (`ROCR_VISIBLE_DEVICES`, set by SLURM
-for the `--gres` allocation), each a re-invocation of the script in worker mode
-(`--eval-coef coef_k.npy --eval-seeds … --eval-out eval_k_w.npz`); the parent combines the
-per-seed gradients into the same mean a serial run gives (checked on the workstation:
-objective, gradient norm and step identical, the next iterate's coefficients to 3e-15).  The optimiser's step, projection and
-reinitialisation stay in the parent.
-
-## What gates what
-
-The cluster jobs are all **specular** bodies with curvature everywhere (sphere, circle
-modes, the smooth C1 optimisation iterates), on the terms validated on the workstation
-(phase D circle: pathwise + timing, z = −1.4 / +0.7 for radius / `cos 2θ`).  The two
-workstation analyses still open — the **diffuse circle** (the hybrid normal term and the
-silhouette on a curved body; GP validated them on the plate) and the **specular capsule**
-(the `∇_vλ` part of a flat-faced body, −25 %; closed 2026-09-22 by the hit-ahead
-stratified fit, z = +0.08, review §7.9) — do **not** gate them: no cluster job has a
-diffuse wall, and none starts from a flat face.  The capsule question would matter only if
-an optimisation iterate developed a flat, cap-terminated face; the drag history and
-`coef_k.npy` sequence show whether it does.
-
-`collect.py` draws `figures/optimize_convergence.png` (J per iterate and per unit cost `S
-× iterates` for every run, the area constraint), `figures/optc/gradient_seed_convergence.png`
-(bootstrap SE of the `cos 2θ` gradient vs the number of seeds against 1 % of the FD), for
-`optc` `optimize_convergence_coarse.png`, `optc_drag.png` and `optc_body_extent.png`, for
-`mode2` `mode2_gate.png`, and prints the sphere gate row (all written to
-`study_results.json`); everything from the artifacts.  `python3 -m
-examples.mesh.movie --tag circle_fine_S4_gd` strings an optimisation's
-`frames_<k>.npz` (the first seed's forward at every iterate: fields every 50 warm-up
-steps from the empty box, then the steady state) and `coef_<k>.npy` into
-`figures/optimize_<tag>.gif` (`--mp4`: `.mp4` through `ffmpeg`; `--stride s`: every s-th
-iterate, for the long runs) — fill, shape step, fill, … with the drag history alongside.
-
-## Disk
-
-The jobs write small files to the repository under `/projects` (250 GB quota): the
-gradient jobs one JSON row each (≤ 100 kB), the optimisations per iterate `coef_k.npy`
-(~250 kB at `h_φ = 0.0625`) + `frames_k.npz` (16 frames × 5 floats × 1600 cells in
-float32 ≈ 0.5 MB) + two small `.log`s — about 15 MB per run, ~150 MB for the whole study;
-the venv is ~4 GB.  Nothing here needs `/scratch/alpine` (90-day purge); the 1.1 GB of
-VTK series under `examples/mesh/results/vtk` on the workstation comes from the forward
-visualisation runs (`forward.py --vtk-every`), which the cluster study does not run.
-
-What the study answers: (1) does the 3-D shape gradient pass the same gate as the circle;
-(2) how many seeds a gradient evaluation needs at the finer resolution (the SE vs S curve);
-(3) whether the noisy-gradient optimisation converges per *cost* better with few seeds and
-many iterates or the reverse, and whether Adam's per-coefficient normalisation helps or
-hurts on a smoothed, band-restricted level-set gradient (GD's step is the largest
-displacement per iterate; Adam's learning rate is set to the same displacement).
-
-Note on the optimiser names: what `optimize.py` calls `gd` is projected steepest descent
-with an H1-smoothed gradient and a step normalised to a maximum normal displacement —
-there is no Hessian, it is not a Newton method.
-
-If a ROCm route ever becomes available (`module spider jax` showing ≥ 0.4.36, or an
-Apptainer image `rocm/jax`), `GPU_KIND=mi100 bash examples/mesh/cluster/submit_curc.sh
-<group>` switches to `ami100` / `gpu:mi100:N` with the module lines of `env.sh`.
-
-## `biasgate` (2026-10-04): the bias study's gates at production settings
-
-The local bias study (`scratch/bias/`, slides `docs/math/shape_validation.tex`)
-ran at fnum x2 on the 4 GB workstation GPU; these jobs repeat its open Kn 0.5 gate at
-fnum x1 with the shipped 4 x 8 pull-back, and test the horizon against the whole run
-captured.  Each job is `bash scratch/bias/cluster_job.sh <name>` (its header documents the
-settings; JSON arguments live there because `sbatch --export` splits on commas).  Copy
-`scratch/bias/` to the cluster checkout first (it is not tracked).
-
-```
-bash examples/mesh/cluster/submit_curc.sh biasgate                       # all 18 jobs, A100
-GPU_KIND=h200 ONLY='hor' bash examples/mesh/cluster/submit_curc.sh biasgate          # horizon jobs
-GPU_KIND=rtx  ONLY='^kn_(seed|fd)' bash examples/mesh/cluster/submit_curc.sh biasgate # the rest
-```
-
-| job | what | cost |
+| group | jobs | purpose / result |
 |---|---|---|
-| `kn_seed{0..7}` | Kn 0.5 paired gate at s = 1: all grad-lambda variants, the identity with/without L* lambda, volume and collision-order terms, CRN FD (h = 0.2), frozen-volume FD | ~1 h |
-| `kn_fd{0..3}` | FD only, 16 seeds each, h = 0.1 and 0.2 (the arbiter) | ~1 h |
-| `kn_hor_seed{0..3}` | horizon: 300 captured steps vs the whole run (1000, no truncation) | ~4 h, > 24 GB likely: a100 / h200 |
-| `fm_hor_s1.0`, `fm_hor_s0.35` | the same in free-molecular flow, 8 seeds | ~3 h |
+| `sphere` | `seed{0..7}` | 3-D level-set sphere (`h_phi = 0.1`, `fnum x 2`), radius gradient vs CRN FD (h = 0.05, 0.02): the first 3-D shape-gradient gate |
+| `mode2` | `seed{0..31}` | finer circle (`fnum x 1`, 40 x 40 grid, `h_phi = 0.0625`), `cos 2 theta` gradient vs CRN FD; 32 seeds give the SE vs S curve (`gradient_seed_convergence.png`) |
+| `squash` | `grad_s{0.35,0.6,1}`, `opt_S{1,4}` | aspect-ratio problem (2-D ellipse, analytic free-molecular reference): gradient vs FD and `optimize_squash` runs |
+| `squashkn` | `kn0.5[_M10]_S{1,4}` | the squash problem at Kn 0.5 / + M 10 with the per-query fit; the 2026-10-01 runs reached only 10 and 3 iterates in 24 h (superseded by `squashkn2`) |
+| `squashkn2` | `kn0.5_S{4,8}`, `kn0.5_M10_S{2,4}` | `squashkn` with the per-cell fit, to convergence (`s` of the last 5 iterates within 0.5 %, cap 300); tags carry the basis so they never resume per-query runs |
 
-Results: `scratch/bias/cluster/<job>.jsonl`; summarise with
-`cat scratch/bias/cluster/kn_seed*.jsonl > kn.jsonl; python3 scratch/bias/summarise.py kn.jsonl`
-(FD arbiter: the `fd` columns of `kn_fd*.jsonl`), and
-`python3 scratch/bias/horizon_summary.py scratch/bias/cluster/fm_hor_s1.0.jsonl`.
+### Optimisations
+
+| group | jobs | purpose / result |
+|---|---|---|
+| `opt`, `optc` | `opt_S{1,2,4,8}_{gd,adam}` | finer-circle (`opt`) / SPARTA-grid (`optc`, 60 k slots, fits an rtx slice) drag minimisation at fixed area, S CRN seeds per iterate, gd vs Adam, collisionless; cap 300 iterates.  Measured `optc`: ~4.3-4.9 min per seed evaluation.  Tags `circle_{fine,coarse}_S{S}_{opt}`.  The optc bodies grew through the outflow face -> the `--keepout` runs below |
+| `optckn` | `opt_S{1,2,4,8}_adam`, `opt_S4_gd` | `optc` at Kn 0.5 in the 3x longer box (`circle_long`, x in [-10, 20] m, `fnum x 2`, warm-up 2800), bodies kept 1 m from every face (`--keepout 1.0`), `--area-mode tangent` (step projected onto the constant-area set; the augmented-Lagrangian `_al` runs wound up), step smoothed over 8 knots (`--smooth 8`); tags `circle_long_kn0.5_S{S}_{opt}_tan_sm8`; ~10 min / seed |
+| `optc2` | `opt_S{4,8}_adam` | the same free-molecular; tags `circle_long_S{S}_adam_tan_sm8` (earlier projection runs `circle_long_S{S}_adam` stay) |
+| `optab` | `ctl`, `smooth{4,8}`, `lsh{0.125,0.25}` | A/B of control resolution against sub-cell wiggles on `optc2`'s S = 4 Adam run.  **Result (round 2, 2026-10-15, tangent area; round 1 with the Lagrangian area is void: the multiplier wound up)**: area exact to 1e-12; 50 cm smoothing (`smooth8`) gives the smoothest shapes and the best adjoint check (observed/predicted step 0.88), drag 0.23-0.26 of the circle's; chosen for the long runs (`scratch/optab/analysis_tan.py`, `figures/optc/optab_tan_*.png`) |
+| `optm` | `kn0.5`, `M10`, `kn0.5_M10` | long S = 4 Adam optimisations in three regimes, **in free space** (`--boundary free`: the specular channel choked at Kn 0.5 + M 10 and holds a half-range stream; free boundaries reproduce the free-molecular Cd 12.25 +- 0.04 vs 12.22, `scratch/freebox/`), one GPU each.  Tags `circle_long_{kn0.5_,M10_,kn0.5_M10_}S4_adam_tan_sm8_free`.  **Result (2026-10-16/17, `scratch/optm/analysis_optm.py`)**: Kn 0.5 reaches 0.21 of the starting drag and plateaus; free-molecular M 10 reaches 0.104 until the body hits the keep-out; Kn 0.5 + M 10 saw-tooths 0.16-0.31 because of heavy-tailed nose gradients (spikes to 14 000x) that Adam's momentum carries for 5-25 iterates, and the nose grew a sub-2-cell sting where the old `cubicv` fit broke down (see `thingate`).  The Adam runs are the baseline for `optrules` |
+| `optrules` | `{kn0.5,kn0.5_M10}_{adam,tr,lbfgs,mma}` | step rules (`examples/mesh/optimizers.py`; `tr` trust region, `lbfgs` SQP at constant area, `mma` Svanberg) on the `optm` problems with the guarded backward (tags `*_g32`).  **Result (2026-10-20)**: best J/J0 Adam 0.203 / 0.105 (Kn 0.5 / M 10) vs tr 0.311 / 0.222 (fastest per iterate, then stalled: the radius random-walked to its floor and a rejection repeated the identical trial), lbfgs 0.80 / 0.41 (curvature pairs are seed noise), mma 0.65 / 0.45.  Reference runs, not to be resubmitted (the tags resume).  Analysis `scratch/optrules/analysis.py`, `figures/optc/optrules_*.png`.  The old `trper` perimeter arm was dropped |
+| `optrules2` | `{kn0.5,kn0.5_M10}_tr2` | the reworked `tr` (2026-10-20): rho pooled over 5 trials from paired per-seed differences, radius changes only beyond rho's error, rejection only when worse beyond noise, a rejection at the floor re-evaluates the base on new seeds.  S = 4, warm-started `--restart-steps 500`; tags `*_S4_tr2_*_w500`.  **Result (2026-10-21)**: no longer loops, but still parks at its floor (58-86 % of iterates); best 0.254 (Kn 0.5) / 0.238 (M 10), then drifts up at M 10.  Done |
+| `optrules1seed` | `{kn0.5,kn0.5_M10}_S1_{adam,tr,lbfgs,mma}` | every rule with ONE seed per iterate (the noisy-gradient regime of complex 3-D flows), warm-started, up to 1200 iterates; tags `*_S1_<arm>_*_w500`.  **Result (2026-10-21, `scratch/optrules/noise.py`, `roughness.py`; figures `optc/optrules_noise*.png`, movies `movie/optrules_*_noise.mp4`)**: S1 Adam matches S4 Adam per iterate at 1/4 the cost (noise is not its limit) and repeats its M 10 overshoot (~0.105 at iterate ~150, ~0.19 by 330: the fixed step size is); S1 `tr` / L-BFGS drift up after ~50; S1 MMA fragments shapes (15 pieces at M 10).  Done; not resubmitted |
+| `optax1seed` | `{kn0.5,kn0.5_M10}_S1_ox_{adam,ademamix,adamcos,sfadam,prodigy}` | the optax step rules of `examples/mesh/optax_rules.py` (2026-10-21) with one seed per iterate, warm-started, 400 iterates: `ox_adam` (the shipped Adam as an optax chain: control), `ox_adamcos` (Adam with a cosine step schedule 0.1 -> 0.0125 m over 300 iterates), `ox_sfadam` (schedule-free Adam), `ox_prodigy` (learning-rate free, capped at 0.2 m), `ox_ademamix` (slow + fast momentum).  Needs `optax` in the cluster venv.  Tags `*_S1_ox_<arm>_*_w500` |
+
+### Gate groups (scratch scripts, `bash scratch/<probe>/cluster_job.sh <job>`)
+
+| group | jobs | purpose / result |
+|---|---|---|
+| `biasgate` (2026-10-04, `scratch/bias/`) | `kn_seed{0..7}`, `kn_fd{0..3}`, `kn_hor_seed{0..3}`, `fm_hor_s1.0`, `fm_hor_s0.35` | the bias study's Kn 0.5 gate at production settings, the FD arbiter, and the 300-step horizon vs the whole run.  Only `ONLY='^kn_fd\|hor'` is still of interest (`kn_seed*` is superseded by `cellgate`).  Summaries: `scratch/bias/summarise.py`, `horizon_summary.py` |
+| `cellgate` | `sq_s1_seed*`, `sq_s0.6_seed*`, `optc_{c0,a50,a100,a200,s8a30,g200}_kn_b*`, `_fm_b*` | per-cell `CELL_BASIS` (quad and cubic) against the per-query k = 32 fit on the Kn 0.5 squash and the optc iterates, with FDs |
+| `gapgate` (2026-10-12, `scratch/gapgate/analysis.py`) | `sqh_*`, `circh_*`, `cub_*`, `fmgz_*`, `sqfm_*`, `fmsm_*` | the Kn 0.5 gap: horizons, cubic vs quadratic, free-molecular grazing cut-off, smoothed iterates.  **Result**: the default basis became `cell:cubicv:adapt1.5:align0.9:both` (later guarded, see `guardgate`) |
+| `thingate` (2026-10-17/18, `scratch/thingate/summarise.py`) | `sq_M10_s*`, `sq_M10off_*`, `sqg2_*`, `sq_M032_*`, `sq_FM10_*`, `om_it*` | the thin-body adjoint error: five backward fits on one forward vs FD.  **Result**: the unguarded cubic-in-v fit is the error, and only at M 10 (squash s = 0.193: -19.6 +- 8.6 against FD +1.48; wrong at every `optm` spike iterate); the quadratic fit is within 3 %; M 0.32 and free-molecular agree for every fit.  `sqg2`/`omg2` (`grid_scale 2`) need a full H200 (`GRES_TYPE=h200`; the 35 GB slice ran out of memory) |
+| `guardgate` (2026-10-18/19, `scratch/guardgate/analysis.py`, `figures/optc/guardgate.png`) | `sq_M032_*`, `sq_M10_*`, `om_it*`, `unit` | leverage-guarded cubic, h = 8 / 32 / 128, paired with the unguarded cubic and the quadratic.  **Result**: the guard removes the blow-up everywhere (max lambda 1e-4..2e-3, thin and `optm` cases within ~2 s.e. of the quadratic); on the blunt squash G = C (-1.4 +- 1.1 % vs FD).  Residual: `optm` iterate 58 reads -3 to -6 % along the nose, the thinnest squash -3.5 to -4.2 % in every fit.  Shipped default: guard 32 |
+| `shapeprof` | `optm_it{30,156}` | per-phase seconds of the shape gradient on `optm` iterates (perfetto trace of one seed; H200); `scratch/shapeprof/profile.py` |
+
+Formulation checks behind the long box (2026-10-11): the empty `circle_long` box's windowed drag
+is steady after ~2100-2800 warm-up steps (`scratch/cellfit/warmup_check*.py`); the NTC attempt
+budget never clips at `a_max 64` on the optc shapes (`scratch/cellfit/attempts_check.py`);
+`keep_inside` + `project_area` hold the margin and the area exactly on a shape that had crossed
+a face.  Every optimisation runs to convergence, capped at `study.MAX_ITERATIONS = 300`
+(`optimize.window_converged`; `collect` counts a converged run as done).

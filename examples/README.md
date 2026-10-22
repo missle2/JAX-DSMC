@@ -1,7 +1,11 @@
 # Examples
 
-One directory per milestone case, each holding its driver, its figures, and its own
-notes. Run everything **from the repository root**:
+One directory per case, each holding its driver, its figures, and its own notes.  Run everything
+**from the repository root**.  The **current** work is `mesh/` (embedded surfaces, ensemble-adjoint
+shape gradients, level-set shape optimisation, the CURC cluster study) and the benchmarks that
+validate its gradient (`gradient_bench/`); the milestone cases M1-M7 below are **reference**
+(passed gates, kept as regression evidence), and `p2_replication/`, `p3_replication/` and the
+score-estimator variance study are **historical** cross-checks of the adjoint papers.
 
 ```bash
 python3 -m examples.bkw --help
@@ -9,15 +13,26 @@ python3 -m examples.shock --help
 python3 -m examples.turbulence --help
 python3 -m examples.scaling --help
 python3 -m examples.shock_adjoint --help
+python3 -m examples.couette --help
+python3 -m examples.gradient_bench --help
+python3 -m examples.mesh.optimize --help     # flags = default_config() keys, foo_bar -> --foo-bar
 ```
 
-| directory | milestone | what it demonstrates |
+| directory | status | what it demonstrates |
 |---|---|---|
-| `bkw/` | **M1** | 0-D relaxation against the exact Bobylev–Krook–Wu solution |
-| `shock/` | **M2** | periodic transport: shock formation, a Riemann problem against the exact Euler solution, and **Bird §12.11 normal-shock structure vs Bird + Alsmeyer** |
-| `turbulence/` | **M2** | decaying turbulence — same solver, different initial conditions. Includes the **Taylor–Green viscosity gate (+0.38 % vs Chapman–Enskog)** |
-| `shock_adjoint/` | **M6** | the adjoint: `jax.grad` vs finite differences on Bird's shock, `D = 1, 2, 3` |
-| `scaling/` | — | weak and strong scaling over multiple devices |
+| `mesh/` | **current** | SPARTA-style embedded surfaces (cut cells, level-set bodies); forward duplicate of SPARTA's `circle` / `sphere`; shape gradients by the ensemble adjoint; shape optimisation (`optimize.py`); `mesh/cluster/` = the CURC Alpine study |
+| `gradient_bench/` | current / reference | the estimator benchmark and the production ensemble adjoint (route (b)) on Couette, inlet shock and relaxation; artifact directory of the mesh gradient gates |
+| `couette/` | reference (M4, M7) | wall boundary conditions: shear viscosity vs Chapman-Enskog, wall-parameter gradients |
+| `shock/` | reference (M2) | periodic transport: shock formation, a Riemann problem against the exact Euler solution, **Bird §12.11 normal-shock structure vs Bird + Alsmeyer**, two-sided-inflow shock |
+| `bkw/` | reference (M1) | 0-D relaxation against the exact Bobylev-Krook-Wu solution |
+| `turbulence/` | reference (M2) | decaying turbulence; the **Taylor-Green viscosity gate (+0.38 % vs Chapman-Enskog)** |
+| `shock_adjoint/` | reference / historical (M6) | `jax.grad` (pathwise) vs finite differences on Bird's shock, `D = 1, 2, 3`; the score-estimator variance study (`VARIANCE.md`, superseded) |
+| `scaling/` | reference | weak and strong scaling over multiple devices |
+| `p2_replication/`, `p3_replication/` | historical | scaled re-implementations of the adjoint papers' numerical tests |
+
+Top-level scripts (`ensemble_mesh.py`, `ensemble_couette.py`, `ensemble_inlet_shock.py`,
+`ensemble_relaxation.py`, `gradient_convergence.py`, `shape_planar_oracle.py`,
+`validation_matrix.py`) are the gradient runners and helpers that `gradient_bench/` and `mesh/` use.
 
 Figures land in `<case>/figures/`. Compiled programs are cached in `examples/.jax_cache/`
 (gitignored), so the second run of any problem size skips compilation — measured 4.0 s → 0.8 s.

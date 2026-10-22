@@ -690,8 +690,8 @@ def run_adaptive(  # noqa: PLR0915 -- the resize/retry loop reads best as one un
     carries it across processes), so a run settles onto its working capacity after
     a couple of resizes and pays nothing thereafter.
 
-    ``step0`` keeps the random stream identical to an unchunked run, so chunking
-    changes results not at all -- ``tests/test_simulate.py`` asserts bit equality.
+    ``step0`` keeps the random stream identical to an unchunked run (every draw is keyed by
+    the absolute step index), so chunking does not change the results.
 
     **Keeping the output affordable.**  ``scan`` stacks its per-step output, so a
     long run at a large cell count cannot emit full moments every step.  Two knobs

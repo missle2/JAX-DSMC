@@ -1,5 +1,10 @@
 # Weak and strong scaling
 
+Status: **reference** (2026-09; the multi-device domain-decomposition path `jax_dsmc/decomp.py`
+on the periodic solver; not used by the mesh / optimisation work).  Flags: `--devices` (list),
+`--mode weak|strong|both` (default both), `--dim`, `--side` (cells per side on ONE device),
+`--npc`, `--steps`, `--headroom`, `--json PATH`.
+
 ```bash
 python3 -m examples.scaling --devices 1 2 4 --dim 3 --side 96 --npc 50 --steps 20
 

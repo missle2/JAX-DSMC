@@ -1,5 +1,12 @@
 # `couette` — do the wall boundary conditions carry the right physics?
 
+Status: **reference** (M4 wall gate and M7 wall-parameter gradients; passed and frozen).  The
+physics studies are multi-hour runs whose logs are kept in `results/`; `RESULTS.md` is
+**generated** by `python3 -m examples.couette.report` (do not edit by hand).  The 1-D Couette is
+also the cheap test bed of the ensemble adjoint (`examples/ensemble_couette.py`,
+`examples/gradient_bench`).  Run from the repository root; `--study` takes `gate|knudsen|converge|
+walls|dims|all`, with `--sample`, `--seeds` (default 4, minimum 2), `--warm`, `--warm-diff`.
+
 The M4 gate. Two walls slide in opposite directions and shear the gas between them; the
 measured shear viscosity is compared against Chapman–Enskog (Bird 4.64). Nothing in the
 solver is told that number, so it is a *target*, not an input — the same standard as the
@@ -29,7 +36,7 @@ so which logs were produced by which code matters:
 
 | log / figure | produced by | note |
 |---|---|---|
-| `results/gate.log`, `figures/profiles.png` | **branch** (F1 gate, `scratch/bench/F1_couette_gate.log`) | `mu/mu_CE` 0.9656 ± 0.0061 vs main 0.9747 ± 0.0030 at the same `dx/λ = 0.30`: within the combined scatter |
+| `results/gate.log`, `figures/profiles.png` | **branch** (F1 gate) | `mu/mu_CE` 0.9656 ± 0.0061 vs main 0.9747 ± 0.0030 at the same `dx/λ = 0.30`: within the combined scatter |
 | `results/gradients.log`, `figures/gradients.png` | **branch** (`python3 -m examples.couette.gradients --seeds 512 --horizon-seeds 128`, 2026-09-15) | M7 pathwise `du/du_wall`, `dT/dT_wall`: worst |z| 2.3 over 12 slabs, 512 seeds; the seeds are now vmapped in batches of 64 (`SEED_BATCH`) because the tracker's per-bounce reverse-pass records no longer fit a 4 GB device at once |
 | `results/gradient_scaling.log`, `figures/gradient_scaling.png` | **branch** (2026-09-15) | |
 | `results/knudsen.log`, `converge.log`, `dims.log`, `walls.log` and their figures | **pre-branch** (`generated=2026-09-09/10`, main tree) | many-hour viscosity studies; the F1 gate above re-establishes the same physics on the branch at one configuration, so these were not re-run.  Their numbers are statistically equivalent, not bit-reproducible, from this branch |

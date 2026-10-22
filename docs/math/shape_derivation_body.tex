@@ -236,10 +236,15 @@ $o = \tilde p - \bar p_c$ from the node mean:
 \phi(o) = \big(1,\ o_x,\ o_v,\ \{o_{v,a}o_{v,b}\}_{a\le b},\ o_x^{2}\big),\qquad
 \Big(\sum_{n\in c}\phi_n\phi_n^\top + \rho\,\bar d\,\mathrm{diag}(0,1,\dots,1)\Big)\beta_c = \sum_{n\in c}\phi_n\lambda_n ,
 \]
-and every query in $c$ reads $\Lam(x_q, v_q) = \phi(\tilde p_q - \bar p_c)\cdot\beta_c$.
+and every query in $c$ reads $\Lam(x_q, v_q) = \phi(\tilde p_q - \bar p_c)\cdot\beta_c$.  (The
+displayed $\phi$ is the quadratic basis; the shipped basis \code{cubicv} adds the cubic monomials of $v$.)
 \begin{itemize}
 \item \textbf{Order guard}: only the columns of the orders whose cumulative count is $\le n_c/1.5$
-  (14 columns in 2-D need 21 nodes; else a plane, else the cell mean).
+  (the 14 quadratic columns in 2-D need 21 nodes, the 24 of \code{cubicv} need 36; else a lower order, a plane, the cell mean).
+\item \textbf{Leverage guard} (shipped 2026-10-19, \code{guard32}): per query, the highest order whose fitted value has variance
+  $\le 32$ node-noise variances (leverage $h = \phi^\top M^{-1}\phi$).  A cubic extrapolates at post-collision queries in the empty
+  velocity gap between a hypersonic beam and the wall-reflected gas ($h\sim10^3$) and the backward compounds it; this was the
+  thin-body M 10 blow-up of the unguarded \code{cubicv}.
 \item \textbf{Next to a surface} ($\lambda$ jumps across $v\cdot n = 0$): three fits per cell -- nodes leaving,
   approaching ($v\cdot n_c \gtrless 0$, $n_c$ the cell's mean nearest-surface normal) and all; a query takes
   its side's fit, the unsplit one when no surface is near, its side is empty, or the cell's normals
@@ -248,7 +253,7 @@ and every query in $c$ reads $\Lam(x_q, v_q) = \phi(\tilde p_q - \bar p_c)\cdot\
 \end{itemize}
 \codenote{\code{jax\_dsmc/cell\_fit.py}: \code{fit}, \code{fit\_split}, \code{cell\_normals},
 \code{evaluate}; \code{ensemble\_device.\_field} / \code{\_query} (\code{\_Hybrid} for the optional per-query
-fallback).  \code{ensemble\_backward.CELL\_BASIS} = \code{"cell:cubicv:adapt1.5:guard32:align0.9:both"} (2026-10-19: \code{guard32} takes, per query, the highest order whose leverage is $\le 32$; unguarded cubic from 10-12, \code{cell:quad:\dots} before; default of
+fallback).  \code{ensemble\_backward.CELL\_BASIS} = \code{"cell:cubicv:adapt1.5:guard32:align0.9:both"} (2026-10-19: \code{guard32} takes, per query, the highest order whose leverage is $\le 32$; unguarded cubic 10-12 to 10-18, \code{cell:quad:\dots} before; default of
 \code{configure} and every example's \code{-{}-backward-basis}; \code{quadratic\_full} = the per-query fit).
 Tests \code{tests/test\_cell\_fit.py}; record docs/PSEUDOCODE.md 9.7.2.}
 \end{frame}
@@ -268,7 +273,7 @@ Tests \code{tests/test\_cell\_fit.py}; record docs/PSEUDOCODE.md 9.7.2.}
   The guard bounds the columns by the nodes.
 \end{itemize}
 \textbf{Measured} (Kn 0.5 squash vs CRN FD): at production density (16 seeds) guarded per-cell $-3.7\pm0.8\,\%$,
-per-query $k = 32$ $-3.4\pm0.8\,\%$, a cubic-in-$v$ guarded fit $-0.7\pm0.8\,\%$; a seed $1100\to46$\,s.  Stable on the optimiser's complicated shapes, where
+per-query $k = 32$ $-3.4\pm0.8\,\%$; the shipped cubic-in-$v$ fit $-0.7\pm0.8\,\%$ ($-1.4\pm1.1\,\%$ with the leverage guard, 2026-10-19); a seed $1100\to46$\,s.  Stable on the optimiser's complicated shapes, where
 the per-query one-sided fit diverged.
 \codenote{Evaluation of every interpolant tried (\code{mean}, \code{lin}, \code{quad}, \code{quadfull}, \code{cubicv},
 \code{cubic}, \code{adapt}, \code{loo}, \code{pool}, \code{rb}, split rules, fallbacks): validation deck section V;
@@ -647,7 +652,7 @@ piece & approximation & size / control\\
 \midrule
 wall-map VJP, tally, scores & exact given the record & ---\\
 collision pull-back & $S$ substeps, $K$ virtual partners & $O(\Delta t/S)$; $(S,K)=(4,8)$\\
-value field of the pull-back & one guarded quadratic per cell (split at surfaces) & $-3.7\pm0.8\,\%$ (Kn 0.5)\\
+value field of the pull-back & one cubic-in-$v$ fit per cell, order- and leverage-guarded (split at surfaces) & $-0.7\pm0.8\,\%$ (Kn 0.5; quadratic $-3.7$)\\
 fitted slopes $\nabla\lambda$ & local quadratic, state-based node sets & fit bias; $k$, pool, half-space\\
 along-flight $\Lstar$ part & continuous identity in a discrete scheme & $O(\nu\Delta t)$\\
 grazing floor & $1/(v\cdot n)$ floored in the derivative & $O(\epsilon)$; $\epsilon = 0.05$\\

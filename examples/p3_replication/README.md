@@ -1,5 +1,10 @@
 # P3 reference experiments
 
+Status: **reference / historical** (2026-09).  Scaled re-implementations of the algorithms of the
+P3 paper (host NumPy/SciPy retained-ensemble inlet reference, JAX wall solver) used to
+cross-check the production ensemble adjoint (route (b)); nothing in the optimisation path
+depends on them.  Not maintained beyond the commands below.
+
 See [implementation changes and validation limits](../../docs/ADJOINT_CORRECTIONS.md).
 These are scaled checks of P3's algorithms; the saved runs do not reproduce the
 paper's large-population confidence intervals.
