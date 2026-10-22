@@ -67,6 +67,13 @@ case "${GPU_KIND}" in
     PER_NODE=1 ;;
   *) echo "unknown GPU_KIND ${GPU_KIND} (h200|a100|rtx|mi100)"; exit 1 ;;
 esac
+# a venv active in the submitting shell would ride into every job (--export=ALL) and break
+# env.sh's `module purge` (2026-10-22, see env.sh): submit without it
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  echo "dropping the active venv ${VIRTUAL_ENV} from the jobs' environment"
+  PATH="$(echo "${PATH}" | tr ':' '\n' | grep -vxF "${VIRTUAL_ENV}/bin" | paste -sd: -)"
+  unset VIRTUAL_ENV VIRTUAL_ENV_PROMPT PYTHONHOME
+fi
 # study.py needs python >= 3.8 (annotations); the login node's /usr/bin/python3 is 3.6, so
 # use the jobs' venv interpreter (PYTHON overrides).
 PY="${PYTHON:-${JAX_VENV:-/projects/${USER}/jax-env}/bin/python3}"

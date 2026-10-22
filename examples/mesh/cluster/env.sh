@@ -21,6 +21,18 @@
 #                          register_dataclass(data_fields, meta_fields)); kept for the
 #                          day CURC ships a ROCm >= 6.0 jax (or an Apptainer rocm/jax image).
 export GPU_KIND="${GPU_KIND:-a100}"  # submit_curc.sh passes its own (default a100)
+# A job submitted from a shell with the venv active (`source .../activate`) inherits
+# VIRTUAL_ENV and the loaded python module (sbatch --export=ALL) but not the venv's shell
+# function `deactivate`, which `module purge` then calls: the optax1seed jobs of 2026-10-22
+# printed "deactivate: command not found" ~600 MB deep and never got past this file.  Drop
+# the inherited venv and give purge a no-op `deactivate`; the `activate` below defines the
+# real one.  (submit_curc.sh strips the venv too.)
+if [ -n "${VIRTUAL_ENV:-}" ]; then
+  PATH="$(echo "${PATH}" | tr ':' '\n' | grep -vxF "${VIRTUAL_ENV}/bin" | paste -sd: -)"
+  unset VIRTUAL_ENV VIRTUAL_ENV_PROMPT PYTHONHOME
+fi
+declare -F deactivate > /dev/null || deactivate() { :; }
+export -f deactivate
 module purge
 if [ "${GPU_KIND}" = "mi100" ]; then
   module load rocm/5.3.0
@@ -29,6 +41,7 @@ else
   module load python 2>/dev/null || true   # the venv's interpreter is what runs
   # shellcheck disable=SC1091
   source "${JAX_VENV:-/projects/${USER}/jax-env}/bin/activate"
+  export -f deactivate   # so child shells that call it (module commands) find it too
 fi
 export JAX_ENABLE_X64=1
 # Pin the backend.  Without this JAX falls back to the CPU when a node's driver refuses
