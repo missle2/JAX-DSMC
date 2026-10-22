@@ -95,9 +95,11 @@ def default_config():
         # one-sided fits in the backward next to the body (shape.local_normals): the
         # virtual pull-back's four-term values in the cut cells
         "backward_normals": False,
-        # captured steps evaluated side by side in the shape VJP (shape._batched_scan): the
-        # per-step replay and pull-back are launch-bound; memory grows ~linearly with it
-        "shape_batch": 4,
+        # captured steps evaluated side by side in the shape VJP (shape._batched_scan): fewer
+        # kernel launches, ~1.6 GB more per extra step at Kn 0.5 M 10.  1 (sequential) since the
+        # 2026-10-22 RTX speedprof: batch 4 ran out of a 24 GB slice at M 10 and gained <1 s/iterate
+        # at Kn 0.5 (the RTX is compute-bound); untested where launches dominate (A100 / H200)
+        "shape_batch": 1,
         # the y semi-axis factor s of the `ellipse` / `spheroid` cases (semi-axes R, s R[, R]):
         # the evaluation point of the control `squash_y`
         "squash": 1.0,

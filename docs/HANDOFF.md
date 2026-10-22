@@ -645,10 +645,15 @@ Ordered roughly by value.
    Adam slow (0.25); Prodigy unstable (its step grows: 0.21 -> 0.34 J0); L-BFGS / MMA stall at
    0.6-0.7 J0 at M 0.3.  Four seeds per iterate change Adam's per-iterate path little (drag, step
    consistency and drift all alike): the step's direction is not noise-limited.
-5. **Cluster speed**: `speedprof` (XLA command buffers on native-Linux GPUs -- on in env.sh since
-   2026-10-22, unmeasured --, `shape_batch` 1 / 4 / 12 with peak memory, and the 2026-10-22
-   shape-step speed-ups at production size); set the `shape_batch` default from it (4 is a guess: ~1 GB per
-   extra step at M 10 sizes, scaled from the laptop -- tight next to the ~18 GB runs on a 24 GB RTX). Next candidates: the guard's leverage (~30 % of the
+5. **Cluster speed**: `speedprof` on an RTX PRO 6000 1g.24gb slice (2026-10-22; the same hardware as the
+   Kn 0.5 optax1seed runs): per iterate at Kn 0.5 the backward 62 -> ~37 s, the shape step 23 -> ~7.5 s,
+   ~102 -> ~62 s in all (the 2026-10-22 changes; gradient equal to 1.3e-11 with command buffers on and
+   steps batched).  Command buffers on: no crash, no measurable gain on the RTX (compute-bound f64);
+   `shape_batch 4` ran out of the 24 GB slice at M 10 (6.4 GB more) and gained < 1 s at Kn 0.5, so the
+   default is 1.  A shape recompile costs ~45 s on the RTX (M 10's replay grew 8 -> 16 passes on its
+   second iterate); one unexplained ~42 s shape-step spike at Kn 0.5 (third call, sizes unchanged;
+   both settings) -- run once with `JAX_EXPLAIN_CACHE_MISSES=1` to see if it is a recompile.  Untested:
+   A100 / H200 (`SETTINGS=... GPU_KIND=h200 ... speedprof`). Next candidates: the guard's leverage (~30 % of the
    backward; exact skip at the fit's own nodes, where the leverage is <= 1), and particle slots
    (195 k slots for ~131 k live particles at M 10: every per-slot pass pays for the empty third).
 6. **Retrofit `--boundary free`** to the older studies if they are to be compared (`optc2`, `optckn`, `optab`,
