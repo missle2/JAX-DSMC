@@ -329,3 +329,18 @@ def test_pooled_query_fits_widen_only_the_queried_cells(cap, monkeypatch):
     for got, want in ((gx, full[0]), (gv, full[1])):
         np.testing.assert_allclose(np.asarray(got)[near], np.asarray(want)[near], rtol=1e-9,
                                    atol=1e-12)  # fmt: skip
+
+
+@pytest.mark.parametrize("poly", ["linear", "quad", "quad_full", "cubicv", "cubic"])
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_features_equal_the_column_products_bitwise(poly, dim):
+    """2026-10-22: the design is built from gathered factors (a column stack was a
+    quarter of the backward on the GPU); every column is the same left-to-right product."""
+    o = jnp.asarray(np.random.default_rng(dim).normal(size=(7, 11, dim + 3)))
+    cols = []
+    for t in cell_fit.monomials(poly, dim):
+        col = jnp.ones(o.shape[:-1])
+        for a in t:
+            col = col * o[..., a]
+        cols.append(col)
+    np.testing.assert_array_equal(np.asarray(cell_fit.features(o, poly)), np.stack(cols, -1))

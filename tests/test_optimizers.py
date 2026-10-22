@@ -184,3 +184,106 @@ def test_warm_start_carries_the_cartesian_cells_onto_a_mesh_with_more_sub_cells(
     np.testing.assert_array_equal(np.asarray(c.vremax[n_cart:]), 1.0)
     np.testing.assert_array_equal(np.asarray(c.remainder[:n_cart]), 0.25)
     np.testing.assert_array_equal(np.asarray(c.remainder[n_cart:]), 0.0)
+
+
+def test_replay_sizes_follow_the_record():
+    """2026-10-22: the shape VJP's traced replay runs the passes and lane the captured record
+    needed (the deepest event pass + 2, twice the most pass-0 events of a step, powers of
+    two), at least the minimum and the floor and never above the forward's sizes; a dense
+    record (another tracker) keeps the forward's."""
+    import dataclasses  # noqa: PLC0415
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    import jax.numpy as jnp  # noqa: PLC0415
+
+    from examples import ensemble_mesh as EM  # noqa: PLC0415
+    from jax_dsmc.state import SimStatic  # noqa: PLC0415
+
+    static = SimStatic(D=2, N=195_000, S=1, G=1, A_max=256, K_bounce=32, n_steps=10,
+                       tracker="lane")  # fmt: skip
+    face = -jnp.ones((3, 1, 195_000), jnp.int32)  # (steps, pass 0, slots)
+    face = face.at[1, 0, :300].set(5)  # 300 element hits in the busiest step
+    walls = SimpleNamespace(head=SimpleNamespace(face=face),
+                            pass_=jnp.asarray([[1, 2, -1], [5, -1, -1], [-1, -1, -1]]))  # fmt: skip
+    small = EM.replay_static(static, walls)
+    assert (small.K_bounce, small.lane_size) == (8, 1024)  # pass 5 + 2 -> 8; 2 x 300 -> 1024
+    quiet = EM.replay_static(static, SimpleNamespace(head=SimpleNamespace(face=-jnp.ones((2, 1, 9))),
+                                                     pass_=-jnp.ones((2, 4), jnp.int32)))  # fmt: skip
+    assert (quiet.K_bounce, quiet.lane_size) == (EM.REPLAY_PASSES_MIN, EM.REPLAY_LANE_MIN)
+    grown = EM.replay_static(static, walls, floor=(16, 2048))
+    assert (grown.K_bounce, grown.lane_size) == (16, 2048)
+    deep = EM.replay_static(static, SimpleNamespace(head=walls.head, pass_=jnp.asarray([[40]])))
+    assert deep.K_bounce == 32  # capped at the forward's
+    stencil = dataclasses.replace(static, tracker="stencil")
+    assert EM.replay_static(stencil, walls) is stencil
+
+
+def _circle_levelset(centre=(5.0, 5.0)):
+    import jax.numpy as jnp  # noqa: PLC0415
+
+    from jax_dsmc.mesh import levelset  # noqa: PLC0415
+
+    lo, hi = np.zeros(2), np.full(2, 10.0)
+    k_lo, m = levelset.grid_for_box(jnp.asarray(lo), jnp.asarray(hi), 0.125)
+    ls = levelset.from_analytic(jnp.asarray(centre), 2.0, k_lo, 0.125, m, n_sample=16)
+    return ls, lo, hi
+
+
+def test_centroid_constraint_projects_and_restores():
+    """2026-10-23 (``fix_centroid``): a step projected on the stack of the area's and the
+    centroid's gradients changes neither to first order; a body displaced by a quarter metre
+    is moved back to the target centroid with its area kept."""
+    import optimize as O  # noqa: PLC0415
+
+    ls, lo, hi = _circle_levelset()
+    _area0, g_area = O.area_and_gradient(ls, lo, hi)
+    stack = O.constraint_gradients(ls, lo, hi, g_area, {"fix_centroid": 1})
+    assert stack.shape == (3, *ls.coef.shape)
+    rng = np.random.default_rng(0)
+    v, _nu = O.tangent_component(rng.normal(size=ls.coef.shape), stack)
+    np.testing.assert_allclose(stack.reshape(3, -1) @ v.ravel(), 0.0, atol=1e-9)
+    c0 = np.asarray(O._centroid_of_coef(ls.coef, ls, lo, hi))
+    np.testing.assert_allclose(c0, [5.0, 5.0], atol=1e-6)
+    # Newton: quadratic -- a step-sized offset in the default iterations, a large one in four
+    for centre, iters in (((5.03, 5.0), 3), ((5.25, 4.9), 4)):
+        moved, _, _ = _circle_levelset(centre)
+        a_moved = O.area_and_gradient(moved, lo, hi)[0]
+        back, err = O.project_centroid(moved, c0, lo, hi, iters=iters)
+        assert err < 1e-8
+        # first order only (0.3 % at 0.27 m); after_step's project_area restores it after
+        assert abs(O.area_and_gradient(back, lo, hi)[0] - a_moved) < 5e-3 * a_moved
+    # a single stacked row is the area-only projection
+    w1, _ = O.tangent_component(v, g_area)
+    w2, _ = O.tangent_component(v, g_area[None])
+    np.testing.assert_allclose(w1, w2, atol=1e-12)
+
+
+def test_prodigy_cosine_cap_bounds_the_step(tmp_path):
+    """2026-10-23 ``ox_prodigycos``: Prodigy's step never exceeds the cosine cap (``4 step`` at
+    the start, ``step / 4`` from :data:`optax_rules.COSINE_ITERATES` on), and its state
+    survives a save / load (a resumed run continues the schedule)."""
+    import jax  # noqa: PLC0415
+    import jax.numpy as jnp  # noqa: PLC0415
+    import optax_rules as OX  # noqa: PLC0415
+    import optimize as O  # noqa: PLC0415
+
+    ls, lo, hi = _circle_levelset()
+    g_area = O.area_and_gradient(ls, lo, hi)[1]
+    cfg = {"smooth": 2.0, "band": 1.0, "step": 0.05}
+    ctx = OX.Context()
+    tx = OX.build("ox_prodigycos", ctx, cfg["step"])
+    state = tx.init(jnp.asarray(ls.coef))
+    rng = np.random.default_rng(2)
+    signal = rng.normal(size=ls.coef.shape)
+    for k in range(6):
+        g = signal + 0.3 * rng.normal(size=ls.coef.shape)
+        delta, state = OX.step(tx, state, ctx, g, ls, g_area, cfg)
+        cap = float(OX._cap_cosine(k)) * cfg["step"]
+        assert np.abs(delta).max() <= cap * (1 + 1e-12)
+        assert np.all(np.isfinite(delta))
+    assert abs(float(OX._cap_cosine(OX.COSINE_ITERATES)) - OX.CAP / 16.0) < 1e-12
+    OX.save_state(tmp_path / "s.npz", state)
+    back = OX.load_state(tmp_path / "s.npz", tx.init(jnp.asarray(ls.coef)))
+    leaves = zip(jax.tree_util.tree_leaves(state), jax.tree_util.tree_leaves(back), strict=True)
+    for a, b in leaves:
+        np.testing.assert_array_equal(np.asarray(a), np.asarray(b))

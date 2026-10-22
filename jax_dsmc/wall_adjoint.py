@@ -13,7 +13,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
-from jax_dsmc import sampling
+from jax_dsmc import sampling, step_axis
 from jax_dsmc.compaction import prefix_count, ranked_slots
 from jax_dsmc.geometry import first_hit
 from jax_dsmc.grid import cell_of
@@ -328,7 +328,7 @@ def _box_tallies(tally, rows, hit_slot, faces, wall, mass):
         return dense(tally, rows, None)
     slot, lost = hit_slot
     compact = functools.partial(_compact_face_tallies, mass=mass, velocity_wall=velocity_wall)
-    return jax.lax.cond(jnp.any(lost), dense, compact, tally, rows, slot)
+    return jax.lax.cond(step_axis.any_(lost), dense, compact, tally, rows, slot)
 
 
 def _surface_tally(tally, surface, selected, incident, outgoing, mass, velocity_wall):
@@ -512,7 +512,7 @@ def _element_events(
         return _elements_dense(state, rows, None, k, operands)
     slot, lost = hit_slot
     return jax.lax.cond(
-        jnp.any(lost),
+        step_axis.any_(lost),
         functools.partial(_elements_dense, k=k, operands=operands),
         functools.partial(_elements_compact, k=k, operands=operands),
         state,
@@ -724,7 +724,7 @@ def _bounce(
     )
     hit_slot = lane_slots(hit, lane_capacity(x.shape[0], 0)) if with_slot else None
     x, v, alive, logp, tally, events, exclude = jax.lax.cond(
-        jnp.any(hit),
+        step_axis.any_(hit),
         functools.partial(
             _apply_events,
             grid=grid,
@@ -757,7 +757,7 @@ def _lane_pass(k, state, body):
     runs it too."""
     carry, pending = state
     return jax.lax.cond(
-        jnp.any(pending),
+        step_axis.any_(pending),
         functools.partial(body, k, with_hit=True),
         functools.partial(_lane_idle, pending=pending),
         carry,
@@ -1141,7 +1141,7 @@ def _first_pass_dense(init, body, grid, faces, wall, mass, tallies, mesh, tables
         lane = lane_slots(alive & had_hit, size)
     else:
         lane = jax.lax.cond(
-            jnp.any(hit_lost),
+            step_axis.any_(hit_lost),
             functools.partial(_lane_dense, size=size),
             functools.partial(_lane_from_hits, size=size),
             alive & had_hit,

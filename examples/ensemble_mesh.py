@@ -57,7 +57,7 @@ from jax_dsmc.grid import n_cartesian, num_cells
 from jax_dsmc.mesh import cut
 from jax_dsmc.mesh import levelset as levelset_mod
 from jax_dsmc.mesh.types import AnalyticBody
-from jax_dsmc.state import FlowParams
+from jax_dsmc.state import FlowParams, lane_capacity
 from jax_dsmc.validation import require_valid
 
 PARAMETERS = ("radius", "centre_x", "mode2", "width", "squash_y")
@@ -95,6 +95,9 @@ def default_config():
         # one-sided fits in the backward next to the body (shape.local_normals): the
         # virtual pull-back's four-term values in the cut cells
         "backward_normals": False,
+        # captured steps evaluated side by side in the shape VJP (shape._batched_scan): the
+        # per-step replay and pull-back are launch-bound; memory grows ~linearly with it
+        "shape_batch": 4,
         # the y semi-axis factor s of the `ellipse` / `spheroid` cases (semi-axes R, s R[, R]):
         # the evaluation point of the control `squash_y`
         "squash": 1.0,
@@ -665,18 +668,67 @@ def _volume_term(dev, rec, grid, mesh):
     return shape.volume_cotangent(shape.geometry(mesh), mesh, grid, weights)
 
 
+REPLAY_PASSES_MIN = 8
+REPLAY_LANE_MIN = 1024
+_replay_seen = {}
+"""The largest traced-replay sizes this process has used per forward setting: they only grow
+(:func:`_checked_replay`), so a run compiles the shape VJP for a few sizes, not one per
+iterate (a compile is ~20 min on an H200; the persistent cache shares them across jobs)."""
+
+
+def _pow2(n: int) -> int:
+    return 1 << max(int(n) - 1, 0).bit_length()
+
+
+def replay_static(static, walls, floor=(0, 0)):
+    """The traced replay's tracker sizes cut to what the captured record used: bounce passes
+    the record's deepest event pass plus 2 (the pass after a particle's last event finds
+    nothing; one more of margin), the event lane twice the record's most pass-0 element and
+    diffuse-face events in a step, each rounded up to a power of two, at least
+    :data:`REPLAY_PASSES_MIN` / :data:`REPLAY_LANE_MIN` and ``floor = (passes, lane)``, never
+    above the forward's.  The shape VJP transposes every pass over the whole lane, so the
+    forward's sizes (32 passes, a lane of ``N / 32``: ~6 000 entries for ~200 hits) made it
+    ~85 % of the shape step, launch-bound (scratch/shapefast, 2026-10-22: 2.9x faster at
+    reduced size, gradient within 2e-14).  A replay that needed more fails the record check
+    and :func:`_checked_replay` reruns it at the forward's sizes.  ``static`` unchanged for a
+    dense record (the non-lane trackers)."""
+    if static.tracker != "lane" or not hasattr(walls, "pass_"):
+        return static
+    deepest = max(int(jnp.max(walls.pass_)), 0)  # -1: no event after pass 0
+    passes = max(REPLAY_PASSES_MIN, floor[0], _pow2(deepest + 2))
+    head = int(jnp.max(jnp.sum(walls.head.face >= 0, axis=(1, 2))))
+    lane = max(REPLAY_LANE_MIN, floor[1], _pow2(2 * head))
+    full = lane_capacity(static.N, static.lane_size)
+    return dataclasses.replace(
+        static, K_bounce=min(static.K_bounce, passes), lane_size=min(full, lane)
+    )
+
+
 def _checked_replay(
     rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, static, reward, jump, timing_band
 ):  # fmt: skip
-    """:func:`shape.replay` of the captured steps (epsilon = acc_delta = 0), its replay error
-    checked against :data:`REPLAY_TOL`."""
-    rep = shape.replay(
-        rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, 0.0, 0.0, static,
-        reward=reward, timing_jump=jump, timing_band=timing_band,
-    )  # fmt: skip
-    if float(rep.replay_error) > REPLAY_TOL:
-        raise RuntimeError(f"replay error {float(rep.replay_error):g}")
-    return rep
+    """:func:`shape.replay` of the captured steps (epsilon = acc_delta = 0) at the record's
+    tracker sizes (:func:`replay_static`), its replay error checked against
+    :data:`REPLAY_TOL`; ``(replay, static)`` -- the sizes the shape VJP must use as well.  A
+    cut replay that misses the record is rerun at the forward's sizes."""
+    seen = (static.N, static.K_bounce, static.lane_size)
+    small = replay_static(static, rec.walls, _replay_seen.get(seen, (0, 0)))
+    for sizes in (small, static) if small != static else (static,):
+        rep = shape.replay(
+            rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, 0.0, 0.0, sizes,
+            reward=reward, timing_jump=jump, timing_band=timing_band,
+        )  # fmt: skip
+        if float(rep.replay_error) <= REPLAY_TOL:
+            _replay_seen[seen] = (sizes.K_bounce, sizes.lane_size)
+            return rep, sizes
+        if sizes is small:
+            warnings.warn(
+                f"replay at {small.K_bounce} passes, lane {small.lane_size} missed the record "
+                f"(error {float(rep.replay_error):g}): rerun at the forward's sizes",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+    raise RuntimeError(f"replay error {float(rep.replay_error):g}")
 
 
 def shape_terms(
@@ -715,7 +767,8 @@ def shape_terms(
     steps = cfg["warmup"] + jnp.arange(m, dtype=jnp.int32)
     reward, jump, timing_band = _drag_setup(cfg, float(mass), dim, first, scale_r, timing_band)
     t0 = time.time()
-    rep = _checked_replay(
+    # the replay and the shape VJP at the record's tracker sizes (replay_static)
+    rep, traced = _checked_replay(
         rec, steps, state0, key, grid, s["faces"], wall, mass, dt, mesh, static, reward, jump,
         timing_band,
     )  # fmt: skip
@@ -769,7 +822,7 @@ def shape_terms(
         mesh=mesh,
         epsilon=0.0,
         acc_delta=0.0,
-        static=static,
+        static=traced,
         scale=fit_scale,
         npc_max=npc_max,
         hit_reward=hit_reward,
@@ -783,6 +836,7 @@ def shape_terms(
         # epsilon = 0 above: only the slots with a body hit have a geometry-dependent
         # post-move state, so the grad-lambda fits run there only (shape.gradient)
         hit_fits=True,
+        batch=int(cfg.get("shape_batch", 1)),
     )
     s["volume"] = _volume_term(dev, rec, grid, mesh)
     t_shape = time.time() - t0
@@ -803,6 +857,8 @@ def shape_terms(
         "lambda_p9999": float(np.percentile(np.abs(lam[alive]), 99.99)) if alive.any() else 0.0,
         "seconds_backward": t_backward,
         "seconds_shape": t_shape,
+        # the traced replay's (bounce passes, lane) -- a change between iterates recompiles
+        "replay_sizes": [int(traced.K_bounce), int(traced.lane_size)],
         "seconds_replay": t_replay,
         **{f"seconds_{k}": v for k, v in s["seconds"].items()},
     }

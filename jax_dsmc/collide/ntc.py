@@ -316,13 +316,29 @@ def _replay_writes(v, xs):
 
 def post_collision_velocities(v, pairs: PairRecord):
     """The post-collision velocities of a step from its pre-collision velocities ``v``
-    (``f64[N, 3]``) and its :class:`PairRecord`: the slot scan of :func:`collide` replayed
-    write for write -- same scratch slot at ``N``, same gathers from the pre-slot state,
-    same ``where`` / ``set`` in slot order -- so the result is **bitwise** the ``v`` the
-    forward returned (``EventRecord.v_post``, which a lean record does not store)."""
-    xs = (pairs.pi, pairs.pj, pairs.accept, pairs.vi_post, pairs.vj_post)
-    out, _ = lax.scan(_replay_writes, v, xs)
-    return out
+    (``f64[N, 3]``) and its :class:`PairRecord`: **bitwise** the ``v`` the forward returned
+    (``EventRecord.v_post``, which a lean record does not store).
+
+    The slot scan of :func:`collide` writes, in slot order and ``pi`` before ``pj``, a
+    pair's stored post-collision velocity where the attempt is accepted and the row's own
+    current value where not (a no-op); the scratch slot ``N`` is dropped.  So a particle
+    ends with the stored velocity of its LAST accepted write, or its ``v``: found here in
+    one scatter-max of the writes' order over the particles, not by replaying the
+    ``A_max`` slots one after another (each a few kernels: ~1 750 launches a step at
+    ``A_max = 256``, 2026-10-22).  A particle's writes all come from its own cell's
+    column, so the slot-major position orders them as the scan does."""
+    n = v.shape[0]
+    order = 2 * jnp.arange(pairs.pi.size, dtype=jnp.int32).reshape(pairs.pi.shape)
+    last = jnp.full(n, -1, jnp.int32)
+    last = last.at[pairs.pi].max(jnp.where(pairs.accept, order, -1), mode="drop")
+    last = last.at[pairs.pj].max(jnp.where(pairs.accept, order + 1, -1), mode="drop")
+    flat = jnp.maximum(last, 0) // 2
+    vel = jnp.where(
+        (last % 2 == 0)[:, None],
+        pairs.vi_post.reshape(-1, 3)[flat],
+        pairs.vj_post.reshape(-1, 3)[flat],
+    )
+    return jnp.where((last >= 0)[:, None], vel, v)
 
 
 def pair_velocities(v, pairs: PairRecord):

@@ -39,7 +39,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 
-from jax_dsmc import cell_fit, sort
+from jax_dsmc import cell_fit, sort, step_axis
 from jax_dsmc.collide.ntc import step_pairs, step_v_post
 from jax_dsmc.collide.vss import collision_rate, scatter
 from jax_dsmc.grid import cell_neighbourhood as grid_neighbourhood
@@ -609,7 +609,7 @@ def _pooled_query_gradients(tables, grid, pool, c, x, v, alive, scale, k, basis,
     def full(_):
         return _query_gradients(pooled_tables(tables, grid, pool), c, *common)
 
-    return lax.cond(jnp.all(fits | ~used), compact, full, None)
+    return lax.cond(step_axis.all_(fits | ~used), compact, full, None)
 
 
 def value_query(

@@ -50,6 +50,7 @@ import jax
 import jax.numpy as jnp
 
 from jax_dsmc import geometry as box_geometry
+from jax_dsmc import step_axis
 from jax_dsmc.grid import cell_bounds, cell_of
 from jax_dsmc.mesh import analytic
 from jax_dsmc.mesh import levelset as levelset_mod
@@ -328,7 +329,7 @@ def _polygon_hit(x, vd, grid, mesh, exclude, remaining, tables=None):
     branch = jnp.where(count == 0, 0, branch)
     near_branches = tuple(functools.partial(_elements_near, mesh=mesh, size=m) for m in sizes)
     return jax.lax.switch(
-        branch,
+        step_axis.tier(branch),
         (_elements_none, *near_branches, functools.partial(_elements_dense, mesh=mesh)),
         (x, vd, cell, exclude, slot),
     )
@@ -594,7 +595,7 @@ def inside_polygon(
             slot, count = levelset_mod._near_slots(cut, size)
             branch = jnp.where(count == 0, 0, jnp.where(count <= size, 1, 2))
             odd = jax.lax.switch(
-                branch,
+                step_axis.tier(branch),
                 (
                     _odd_none,
                     functools.partial(_odd_near, mesh=mesh, grid=grid),

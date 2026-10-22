@@ -116,8 +116,8 @@ class Renderer:
     """Draws one frame: the two field panels with the body of ``coef`` carved out and its
     zero contour, and the drag history with iterate ``k`` marked."""
 
-    def __init__(self, grid, ls0, limits, objective, fine=300):
-        self.grid, self.ls0 = grid, ls0
+    def __init__(self, grid, ls0, limits, objective, fine=300, dpi=80):
+        self.grid, self.ls0, self.dpi = grid, ls0, dpi
         self.lo, self.hi = np.asarray(grid.lo), np.asarray(grid.hi)
         self.limits = limits
         xs = np.linspace(self.lo[0], self.hi[0], fine)
@@ -151,7 +151,7 @@ class Renderer:
         ax.set_ylabel(self.ylabel)
         ax.set_title(f"J = {self.j[k]:.4g}", fontsize=10)
         fig.suptitle(title, color=viz.INK, fontsize=11)
-        viz.savefig(fig, path, dpi=80)
+        viz.savefig(fig, path, dpi=self.dpi)
 
 
 def fields_of(frame, i):
@@ -160,7 +160,14 @@ def fields_of(frame, i):
 
 
 def render(
-    out: Path, fig_dir: Path, morph: int, hold: int, every: int, stride: int = 1, squash=False
+    out: Path,
+    fig_dir: Path,
+    morph: int,
+    hold: int,
+    every: int,
+    stride: int = 1,
+    squash=False,
+    dpi=80,
 ):
     """Every PNG frame of the movie, in order; returns their paths."""
     cfg, rows, coefs, frames = (load_squash_run if squash else load_run)(out)
@@ -177,7 +184,7 @@ def render(
         "nrho": (0.0, float(np.percentile(steady, 99)) * 1.1),
         "|u|": (0.0, max(SPEED_MAX, float(np.percentile(speed, 99)) * 1.1)),
     }
-    r = Renderer(grid, ls0, limits, series(rows, squash))
+    r = Renderer(grid, ls0, limits, series(rows, squash), dpi=dpi)
     fig_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     n_iter = min(len(frames), len(coefs) - 1)
@@ -239,11 +246,14 @@ def main(argv=None):
     ap.add_argument("--stride", type=int, default=1, help="show every n-th iterate")
     ap.add_argument("--mp4", action="store_true", help="write an MP4 (ffmpeg) instead of a GIF")
     ap.add_argument("--squash", action="store_true", help="an optimize_squash run")
+    ap.add_argument("--dpi", type=int, default=80, help="frame resolution (13.2 x 3.9 in)")
     args = ap.parse_args(argv)
     results = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "optimize_squash")
     out = Path(results if args.squash else O.RESULTS) / args.tag
     fig_dir = Path(figure_path("movie", args.tag))
-    paths = render(out, fig_dir, args.morph, args.hold, args.every, args.stride, args.squash)
+    paths = render(
+        out, fig_dir, args.morph, args.hold, args.every, args.stride, args.squash, args.dpi
+    )
     if args.mp4:
         movie = assemble_mp4(
             fig_dir, len(paths), Path(figure_path("movie", f"optimize_{args.tag}.mp4")), args.fps

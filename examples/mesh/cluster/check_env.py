@@ -18,7 +18,7 @@ import os
 import sys
 import time
 
-os.environ.setdefault("XLA_FLAGS", "--xla_gpu_enable_command_buffer=")
+os.environ.setdefault("XLA_FLAGS", "")  # env.sh: command buffers on (XLA default) since 2026-10-22
 
 MIN_JAX = (0, 4, 36)
 

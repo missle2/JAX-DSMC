@@ -45,6 +45,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from jax_dsmc import step_axis
 from jax_dsmc.compaction import prefix_count, ranked_slots
 from jax_dsmc.mesh.types import LevelSet
 
@@ -257,12 +258,12 @@ def _culled(fn, fill, ls, rows, candidate):
     dense = functools.partial(_rows_dense, fn=fn)
     if n < CULL_MIN:
         args = (ls, rows, jnp.zeros(0, jnp.int32))
-        return jax.lax.cond(jnp.any(candidate), dense, none, args)
+        return jax.lax.cond(step_axis.any_(candidate), dense, none, args)
     sizes = tuple(n // b for b in CULL_BUCKETS)
     slot, count = _near_slots(candidate, sizes[-1])
     branch = jnp.where(count == 0, 0, 1 + sum((count > s).astype(jnp.int32) for s in sizes))
     compact = [functools.partial(_rows_compact, fn=fn, fill=fill, size=s) for s in sizes]
-    return jax.lax.switch(branch, (none, *compact, dense), (ls, rows, slot))
+    return jax.lax.switch(step_axis.tier(branch), (none, *compact, dense), (ls, rows, slot))
 
 
 def _near_slots(near, size):
@@ -787,6 +788,26 @@ def body_volume(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> j
     heaviside = 0.5 * (1.0 - jnp.tanh(phi / w))
     cell = jnp.prod((hi - lo) / jnp.asarray(counts, dtype=jnp.float64))
     return jnp.sum(heaviside) * cell
+
+
+def body_moments(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:
+    """``f64[D + 1]``: the volume and the first moments ``int x_a dx`` of ``phi < 0`` inside the
+    box, on :func:`body_volume`'s sub-grid and smoothed Heaviside (entry 0 is
+    :func:`body_volume`); the centroid is ``moments[1:] / moments[0]``.  Differentiable in
+    ``coef`` (the optimiser's centroid constraint)."""
+    box = np.asarray(hi, dtype=np.float64) - np.asarray(lo, dtype=np.float64)  # static
+    lo = jnp.asarray(lo, dtype=jnp.float64)
+    hi = jnp.asarray(hi, dtype=jnp.float64)
+    d = lo.shape[0]
+    counts = [math.ceil(box[a] / ls.h) * sub for a in range(d)]
+    axes = [lo[a] + (hi[a] - lo[a]) * (jnp.arange(counts[a]) + 0.5) / counts[a] for a in range(d)]
+    grid = jnp.meshgrid(*axes, indexing="ij")
+    x = jnp.stack([g.ravel() for g in grid], axis=1)
+    w = ls.h / 2.0 if width is None else float(width)
+    heaviside = 0.5 * (1.0 - jnp.tanh(value(ls, x) / w))
+    cell = jnp.prod((hi - lo) / jnp.asarray(counts, dtype=jnp.float64))
+    weights = jnp.concatenate((jnp.ones((x.shape[0], 1)), x), axis=1)
+    return (heaviside @ weights) * cell
 
 
 def body_perimeter(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:

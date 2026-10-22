@@ -80,6 +80,7 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 jax.config.update("jax_enable_x64", True)
 
@@ -212,16 +213,28 @@ def orders(poly: str, dim: int) -> tuple[int, ...]:
     return tuple(len(t) for t in monomials(poly, dim))
 
 
+@functools.cache
+def _factor_table(poly: str, dim: int) -> np.ndarray:
+    """``int[p, d]``: each monomial's variables (``d`` the highest degree), padded with the
+    index ``dim + 3`` of a ones column appended to the offsets."""
+    terms = monomials(poly, dim)
+    width = max(1, *(len(t) for t in terms))
+    return np.asarray([list(t) + [dim + 3] * (width - len(t)) for t in terms], dtype=np.int32)
+
+
 def features(offsets, poly):
-    """The design ``(..., p)`` of scaled offsets ``(..., D+3)``."""
-    dim = offsets.shape[-1] - 3
-    cols = []
-    for t in monomials(poly, dim):
-        col = jnp.ones(offsets.shape[:-1])
-        for a in t:
-            col = col * offsets[..., a]
-        cols.append(col)
-    return jnp.stack(cols, axis=-1)
+    """The design ``(..., p)`` of scaled offsets ``(..., D+3)``: each monomial's factors
+    gathered from ``[offsets, 1]`` and multiplied left to right (the padding ones are exact),
+    the same products as one column at a time.  Built as whole ``(..., p)`` arrays: a stack of
+    ``p`` columns lowers to a minor-axis concatenate with strided writes, 10-27x slower on the
+    GPU and a quarter of the virtual backward's time (scratch/shapefast, 2026-10-22)."""
+    table = _factor_table(poly, offsets.shape[-1] - 3)
+    ones = jnp.ones((*offsets.shape[:-1], 1), offsets.dtype)
+    ext = jnp.concatenate((offsets, ones), axis=-1)
+    out = ext[..., table[:, 0]]
+    for k in range(1, table.shape[1]):
+        out = out * ext[..., table[:, k]]
+    return out
 
 
 def _tricube(u):

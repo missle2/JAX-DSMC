@@ -292,6 +292,7 @@ distribution); `inflow.revive_at`.
 | 2026-10-02 | 64 s | two value backwards as one two-column sweep (`ensemble_device` value columns + unrolled Cholesky `_spd_solve`) |
 | 2026-10-15 | 38 s | per-cell fit: value backwards 30.3 -> 2.8 s; shape gradient 26.9 s now 70 % of the seed (launch-bound, ~6950 kernels/step) |
 | 2026-10-19 | (H200 2g.35gb slice) warm-up 53-58 s, guarded backward 40 s (unguarded 16), shape 28 s, capture + replay 12 s | guard costs time; leverage via cell tables |
+| 2026-10-22 | (laptop GPU, reduced size: fnum x 16, 80 steps) seed 36.1 -> 24.7 s: backward 12.2 -> 9.2 s, shape 10.1 -> 3.8 s | design matrix built from gathered factors (`cell_fit.features`, bitwise equal: the column stack was ~25 % of the backward); traced replay at the record's sizes (`ensemble_mesh.replay_static`: the shape VJP transposed 32 passes over a lane of N/32, ~85 % of the shape step; gradient within 1e-17). Then shape 3.8 -> 2.2 s: a lean record's post-collision velocities from one scatter-max of the accepted writes instead of a 256-slot replay (`ntc.post_collision_velocities`, bitwise; ~1 750 launches a step, also in the backward), and 4 captured steps at a time through `vmap` (`shape._batched_scan`, `shape_batch`; each runtime branch taken once per batch, `jax_dsmc/step_axis.py`; 331 k -> 63 k kernels, gradient within 2e-15). Production numbers: `speedprof` |
 
 - **Warm start** (`--restart-steps R`, 2026-10-19): each seed restarts from its previous iterate's final gas,
   particles inside the new body removed. After a drag-halving shape change the carried gas is within
@@ -300,8 +301,19 @@ distribution); `inflow.revive_at`.
   516 -> 307 s/iterate. Default 0 (cold), set by the `optrules2`/`optrules1seed` groups.
 - Basis is not the cost driver for kNN fits (assembly is basis-independent; affine only 1.37x cheaper and
   moves lambda 73 %). f64 runs at 1/64 rate on consumer/RTX GPUs vs 1/2 on A100/H200: collisional adjoint
-  runs belong on A100/H200. Enabling XLA command buffers on the cluster (after a smoke run) is the cheapest
-  untried speed-up there; `cluster/env.sh` still exports the WSL guard flag (harmless, but disables them).
+  runs belong on A100/H200. XLA command buffers (CUDA graphs) are on on the cluster since 2026-10-22
+  (`cluster/env.sh` used to export the laptop's WSL guard flag; run_locked.sh keeps it locally); the
+  `speedprof` group times off / default / + WHILE, CONDITIONAL (`scratch/shapefast/cluster_job.sh`).
+- **Where a seed's time goes** (2026-10-22, `scratch/shapefast/`, kernel profile mapped to source lines):
+  the shape step is launch-bound (~4000 kernels per captured step, 0.9 s of GPU work in a 10 s call) and
+  was mostly the transpose of the traced replay's fixed 32 bounce passes over its oversized lane -- now
+  cut to the record's needs (`replay_static`; sizes only grow within a process, since each new size
+  recompiles the shape VJP; the history's `replay_sizes` shows them per iterate; a cut size the record
+  outgrows fails the replay check and reruns at the forward's sizes, so a miss costs time, never
+  correctness). Batching the steps does not make the full sizes cheap: 32 passes at 4 steps a time
+  took 3.8 s against 2.2 s at the record's 8. The backward is compute-bound: the guard's per-query leverage is still
+  ~30 % of it (`cell_fit._leverage_tables`); summing the shape step's six pull-backs into one saved
+  3 % (not adopted); the cut-volume term costs 0.1 s.
 - Memory: full adjoint 64 kB per slot per captured step (lean record, 2026-09-24); the fine circle
   (240 k slots x 300 steps) needs > 18.7 GB; the coarse `optc` fits a 24 GB RTX MIG slice.
 - Recompiles: `npc_max` (backward's per-cell table width) is rounded to `ensemble_mesh.NPC_BUCKET = 64` and
@@ -621,8 +633,24 @@ Ordered roughly by value.
 3. **Thin-body residuals** (-4 % at 0.58 m, optm nose -3.8 %): unexplained; hypotheses not yet tested beyond
    the fit order.
 4. **Enlarge the free-molecular M 10 box** (or constrain the base) before quoting the wedge.
-5. **Cluster speed**: try XLA command buffers on native-Linux GPUs; shape gradient (28 s) is the largest
-   phase and launch-bound.
+   2026-10-23 (`scratch/optax/`, figures `optc/optax_*.png`, movies `movie/optax_{all,present}_*.mp4`):
+   every Adam-type one-seed run at Kn 0.5 M 10 reached ~0.11-0.12 J0 by iterates 60-230 and then
+   slid ~10 m downstream (centroid x 5 -> 16) until its base flattened on the outflow face, drag
+   back to ~0.2-0.25 J0 -- a systematic pull (the four Adam variants drift alike, the one-seed scatter
+   is ~0.004 J0), most likely the bow shock's interaction with the inflow face.  `--fix-centroid`
+   is built (a mirror-symmetry option was dropped: L/D and heat-flux objectives need asymmetric
+   shapes); the `optcm` group tests it with Adam, Adam + cosine, Prodigy and `ox_prodigycos`.
+   Verdict of the optax arms: Adam (= ox_adam) remains the best at Kn 0.5 M 0.3 (0.20 J0); the
+   cosine step is the fastest early (M 10: 0.12 J0 by iterate 60); AdEMAMix ~ Adam; schedule-free
+   Adam slow (0.25); Prodigy unstable (its step grows: 0.21 -> 0.34 J0); L-BFGS / MMA stall at
+   0.6-0.7 J0 at M 0.3.  Four seeds per iterate change Adam's per-iterate path little (drag, step
+   consistency and drift all alike): the step's direction is not noise-limited.
+5. **Cluster speed**: `speedprof` (XLA command buffers on native-Linux GPUs -- on in env.sh since
+   2026-10-22, unmeasured --, `shape_batch` 1 / 4 / 12 with peak memory, and the 2026-10-22
+   shape-step speed-ups at production size); set the `shape_batch` default from it (4 is a guess: ~1 GB per
+   extra step at M 10 sizes, scaled from the laptop -- tight next to the ~18 GB runs on a 24 GB RTX). Next candidates: the guard's leverage (~30 % of the
+   backward; exact skip at the fit's own nodes, where the leverage is <= 1), and particle slots
+   (195 k slots for ~131 k live particles at M 10: every per-slot pass pays for the empty third).
 6. **Retrofit `--boundary free`** to the older studies if they are to be compared (`optc2`, `optckn`, `optab`,
    `squash`).
 7. 3-D shape optimisation (sphere gradient is gated; no optimiser run), hierarchical grids, real multi-GPU

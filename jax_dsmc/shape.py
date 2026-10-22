@@ -60,7 +60,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 
-from jax_dsmc import boundary, ensemble_device, sampling
+from jax_dsmc import boundary, ensemble_device, sampling, step_axis
 from jax_dsmc.collide.ntc import step_v_post
 from jax_dsmc.ensemble_device import node_gradients
 from jax_dsmc.grid import collision_cell, spacing
@@ -910,6 +910,53 @@ def _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, stat
     }
 
 
+def _step_alone(xs_k, pre, body, zeros):
+    """One step of the shape VJP's ``body`` from its own pre-move state ``pre`` with zero
+    accumulators: the step's contributions (the carry less the state) and its hit count."""
+    carry, hits = body((*pre, *zeros), xs_k)
+    return carry[3:], hits
+
+
+def _batched_chunk(carry, c, body, xs, size):
+    """``scan`` body of :func:`_batched_scan`: chunk ``c`` of ``size`` steps through
+    ``vmap``."""
+    xs_c = jax.tree.map(lambda a: lax.dynamic_slice_in_dim(a, c * size, size), xs)
+    x, v, alive, *acc = carry
+    rec = xs_c[0]
+    x_post, v_post, alive_post = rec.x, jax.vmap(step_v_post)(rec), rec.alive
+    pre = tuple(
+        jnp.concatenate((a[None], b[:-1]))
+        for a, b in ((x, x_post), (v, v_post), (alive, alive_post))
+    )
+    zeros = jax.tree.map(jnp.zeros_like, tuple(acc))
+    batched = jax.vmap(
+        functools.partial(_step_alone, body=body, zeros=zeros), axis_name=step_axis.STEPS
+    )
+    parts, hits = batched(xs_c, pre)
+    *sums, err = acc
+    *steps, errs = parts
+    sums = jax.tree.map(lambda a, d: a + jnp.sum(d, axis=0), tuple(sums), tuple(steps))
+    err = jnp.maximum(err, jnp.max(errs))
+    return (x_post[-1], v_post[-1], alive_post[-1], *sums, err), hits
+
+
+def _batched_scan(body, init, xs, batch):
+    """``lax.scan(body, init, xs)`` of the shape VJP with ``batch`` steps at a time (the
+    largest divisor of the step count up to it).  The steps are independent: a step's
+    pre-move state is the previous step's recorded post-move state (the scan carries
+    nothing else but sums), so a chunk's steps run side by side through ``vmap`` -- one
+    kernel launch for ``batch`` steps' work.  The per-step replay and pull-back are
+    hundreds of small kernels and data-dependent conditionals (each a device-to-host
+    sync on GPU); batched, each conditional is taken once for the chunk, on its predicate
+    reduced over the steps (:mod:`jax_dsmc.step_axis`).  Sums differ from the sequential
+    scan's in their order only."""
+    m = jax.tree.leaves(xs[0])[0].shape[0]
+    b = max(d for d in range(1, min(batch, m) + 1) if m % d == 0)
+    chunk = functools.partial(_batched_chunk, body=body, xs=xs, size=b)
+    carry, hits = lax.scan(chunk, init, jnp.arange(m // b, dtype=jnp.int32))
+    return carry, hits.reshape(m)
+
+
 @functools.partial(
     jax.jit, static_argnames=("faces", "static", "reward", "timing_jump", "timing_band")
 )
@@ -968,6 +1015,7 @@ def replay(
         "reward",
         "value_class",
         "hit_fits",
+        "batch",
     ),
 )
 def _gradient(
@@ -1001,10 +1049,12 @@ def _gradient(
     value_class="none",
     hit_fits=False,
     collision=None,
+    batch=1,
 ):
     """:func:`gradient` for several ``grad lambda`` estimators ``(pool, k, along)`` at once
     (a tuple of :class:`ShapeTerms`, one per estimator): one wall-map replay and one
-    batched pull-back per step serve them all -- only the fits differ."""
+    batched pull-back per step serve them all -- only the fits differ.  ``batch > 1``
+    evaluates that many steps at once (:func:`_batched_scan`)."""
     if value_class not in ("hit_ahead", "none"):
         raise ValueError(value_class)
     setup = _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static)
@@ -1048,9 +1098,15 @@ def _gradient(
         zero_g,
         jnp.float64(0.0),
     )
-    (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err), hits = lax.scan(
-        body, init, (records, lam, steps, hit_reward, tally_weight, lam_timing, klass, collision)
-    )
+    xs = (records, lam, steps, hit_reward, tally_weight, lam_timing, klass, collision)
+    if batch > 1:
+        (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err), hits = _batched_scan(
+            body, init, xs, batch
+        )
+    else:
+        (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err), hits = lax.scan(
+            body, init, xs
+        )
     return tuple(
         ShapeTerms(
             jax.tree.map(lambda a, b, c: a + b + c, gx, gv, g_tally),
@@ -1099,6 +1155,7 @@ def gradient(
     reward=None,
     value_class="none",
     hit_fits=False,
+    batch=1,
 ):
     """The shape gradient of the captured window: :class:`ShapeTerms` shaped like
     :func:`geometry` ``(mesh)``.  ``silhouette_band > 0`` (a length, level-set bodies
@@ -1136,6 +1193,9 @@ def gradient(
     flight time every particle's post-move state depends on the geometry through the hit
     set, and the restriction would drop those terms.  (``epsilon`` is traced, so this is
     the caller's declaration; ``examples.ensemble_mesh.shape_terms`` runs at 0.)
+
+    ``batch > 1`` evaluates that many captured steps side by side (:func:`_batched_scan`):
+    the same terms up to summation order, fewer kernel launches, more memory.
     """
     _warn_value_class(value_class)
     (terms,) = _gradient(
@@ -1168,6 +1228,7 @@ def gradient(
         reward=reward,
         value_class=value_class,
         hit_fits=hit_fits,
+        batch=batch,
     )
     return terms
 

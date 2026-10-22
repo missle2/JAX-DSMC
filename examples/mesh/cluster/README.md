@@ -43,7 +43,7 @@ squeue -u $USER
   `python3` is 3.6; the script uses the venv's interpreter), `RTX_MATCH`.
 * **Wall time** is fixed per group in `submit_curc.sh`: `sphere` 8 h, `mode2` 4 h,
   `opt`/`optc`, the `squash*`, `optckn`, `optc2`, `optab`, `optm`, `optrules*` 24 h
-  (`opt` S <= 2: 12 h), `biasgate`/`cellgate`/`gapgate`/`thingate`/`guardgate`/`shapeprof` 12 h.
+  (`opt` S <= 2: 12 h), `biasgate`/`cellgate`/`gapgate`/`thingate`/`guardgate`/`shapeprof`/`speedprof` 12 h.
   `all` = `sphere mode2 opt`.  The allocation caps concurrent H200 jobs at 4 (2026-10-20;
   a QOS limit, not in these scripts): split big batches with `ONLY=` across `h200` and `rtx`
   (an rtx slice is ~1.8x slower than an H200 2g.35gb slice), heaviest jobs (M 10) on h200.
@@ -85,7 +85,7 @@ A toy cannot show what depends on density, shape or memory.
 |---|---|
 | `sphere`, `mode2` seed rows | `examples/gradient_bench/results/…_dev_seed{i}.json` (merged by `collect`) |
 | optimisations | `examples/mesh/results/optimize/<tag>/` (`history.json`, `coef_<k>.npy`, `frames_<k>.npz`, `warm/`), `optimize_squash/<tag>/` |
-| scratch-script groups (`biasgate`, `cellgate`, `gapgate`, `thingate`, `guardgate`, `shapeprof`) | `scratch/<probe>/cluster/<job>.json[l]` (+ `maps/`) |
+| scratch-script groups (`biasgate`, `cellgate`, `gapgate`, `thingate`, `guardgate`, `shapeprof`, `speedprof`) | `scratch/<probe>/cluster/<job>.json[l]` (+ `maps/`) |
 | job logs | `examples/mesh/cluster/logs/<group>_<name>_<jobid>.out` |
 
 **Since 2026-10-21 run data is not in git.**  `examples/mesh/results/optimize*`,
@@ -172,6 +172,7 @@ guarded cubic per collision cell: a Kn 0.5 squash seed took 985 s -> 95 s on the
 | `optrules2` | `{kn0.5,kn0.5_M10}_tr2` | the reworked `tr` (2026-10-20): rho pooled over 5 trials from paired per-seed differences, radius changes only beyond rho's error, rejection only when worse beyond noise, a rejection at the floor re-evaluates the base on new seeds.  S = 4, warm-started `--restart-steps 500`; tags `*_S4_tr2_*_w500`.  **Result (2026-10-21)**: no longer loops, but still parks at its floor (58-86 % of iterates); best 0.254 (Kn 0.5) / 0.238 (M 10), then drifts up at M 10.  Done |
 | `optrules1seed` | `{kn0.5,kn0.5_M10}_S1_{adam,tr,lbfgs,mma}` | every rule with ONE seed per iterate (the noisy-gradient regime of complex 3-D flows), warm-started, up to 1200 iterates; tags `*_S1_<arm>_*_w500`.  **Result (2026-10-21, `scratch/optrules/noise.py`, `roughness.py`; figures `optc/optrules_noise*.png`, movies `movie/optrules_*_noise.mp4`)**: S1 Adam matches S4 Adam per iterate at 1/4 the cost (noise is not its limit) and repeats its M 10 overshoot (~0.105 at iterate ~150, ~0.19 by 330: the fixed step size is); S1 `tr` / L-BFGS drift up after ~50; S1 MMA fragments shapes (15 pieces at M 10).  Done; not resubmitted |
 | `optax1seed` | `{kn0.5,kn0.5_M10}_S1_ox_{adam,ademamix,adamcos,sfadam,prodigy}` | the optax step rules of `examples/mesh/optax_rules.py` (2026-10-21) with one seed per iterate, warm-started, 400 iterates: `ox_adam` (the shipped Adam as an optax chain: control), `ox_adamcos` (Adam with a cosine step schedule 0.1 -> 0.0125 m over 300 iterates), `ox_sfadam` (schedule-free Adam), `ox_prodigy` (learning-rate free, capped at 0.2 m), `ox_ademamix` (slow + fast momentum).  Needs `optax` in the cluster venv.  Tags `*_S1_ox_<arm>_*_w500` |
+| `optcm` | `{kn0.5,kn0.5_M10}_S1_ox_{adam,adamcos,prodigy,prodigycos}_cm` | (2026-10-23) the body's area centroid held at its start (`--fix-centroid 1`: every Adam-type M 10 run of optax1seed / optrules1seed slid ~10 m downstream onto the outflow face) for Adam, Adam + cosine step, Prodigy and Prodigy with its 4-step cap decaying on a cosine to step / 4 (`ox_prodigycos`: plain Prodigy's step sat at the cap from iterate ~25 on); S = 1, warm-started, 400 iterates (~10-13 h at the optax1seed pace).  Tags `*_S1_ox_<rule>_cm_*_w500`; `scratch/optax/` for the comparison figures and movies |
 
 ### Gate groups (scratch scripts, `bash scratch/<probe>/cluster_job.sh <job>`)
 
@@ -183,6 +184,7 @@ guarded cubic per collision cell: a Kn 0.5 squash seed took 985 s -> 95 s on the
 | `thingate` (2026-10-17/18, `scratch/thingate/summarise.py`) | `sq_M10_s*`, `sq_M10off_*`, `sqg2_*`, `sq_M032_*`, `sq_FM10_*`, `om_it*` | the thin-body adjoint error: five backward fits on one forward vs FD.  **Result**: the unguarded cubic-in-v fit is the error, and only at M 10 (squash s = 0.193: -19.6 +- 8.6 against FD +1.48; wrong at every `optm` spike iterate); the quadratic fit is within 3 %; M 0.32 and free-molecular agree for every fit.  `sqg2`/`omg2` (`grid_scale 2`) need a full H200 (`GRES_TYPE=h200`; the 35 GB slice ran out of memory) |
 | `guardgate` (2026-10-18/19, `scratch/guardgate/analysis.py`, `figures/optc/guardgate.png`) | `sq_M032_*`, `sq_M10_*`, `om_it*`, `unit` | leverage-guarded cubic, h = 8 / 32 / 128, paired with the unguarded cubic and the quadratic.  **Result**: the guard removes the blow-up everywhere (max lambda 1e-4..2e-3, thin and `optm` cases within ~2 s.e. of the quadratic); on the blunt squash G = C (-1.4 +- 1.1 % vs FD).  Residual: `optm` iterate 58 reads -3 to -6 % along the nose, the thinnest squash -3.5 to -4.2 % in every fit.  Shipped default: guard 32 |
 | `shapeprof` | `optm_it{30,156}` | per-phase seconds of the shape gradient on `optm` iterates (perfetto trace of one seed; H200); `scratch/shapeprof/profile.py` |
+| `speedprof` | `m10_it156`, `kn05_it200` | one seed's phases on a production iterate (M 10 optm, Kn 0.5 optrules1seed) with XLA command buffers off (the old WSL guard) / XLA default (env.sh since 2026-10-22) / + WHILE, CONDITIONAL, and `shape_batch` 1 / 4 / 12; peak memory and gradients compared; the 2026-10-22 shape-step speed-ups included. ~2 h, one GPU (H200 to compare with the runs' histories); `scratch/shapefast/` |
 
 Formulation checks behind the long box (2026-10-11): the empty `circle_long` box's windowed drag
 is steady after ~2100-2800 warm-up steps (`scratch/cellfit/warmup_check*.py`); the NTC attempt

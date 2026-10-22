@@ -50,7 +50,15 @@ export JAX_ENABLE_X64=1
 # 2 h per seed on the CPU).  job.sbatch's preflight turns that into an immediate exit.
 if [ "${GPU_KIND}" = "mi100" ]; then export JAX_PLATFORMS=rocm; else export JAX_PLATFORMS=cuda; fi
 export XLA_PYTHON_CLIENT_PREALLOCATE=false   # several seed workers may share a GPU
-export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_enable_command_buffer=}"  # the WSL crash guard; harmless here
+# XLA's command buffers (CUDA graphs: a run of kernels launched as one) are ON here, XLA's
+# default set.  Until 2026-10-22 this file switched them off (`--xla_gpu_enable_command_buffer=`),
+# a copy of the laptop's WSL crash guard (run_locked.sh) that the cluster never needed; the
+# shape step and the backward are hundreds of thousands of microsecond kernels, launch-bound
+# (scratch/shapefast; the speedprof group measures both settings and the WHILE/CONDITIONAL
+# kinds).  The flags are in the compilation cache's key: the first jobs after the switch
+# compile afresh.  Off again for one submission:
+#   XLA_FLAGS=--xla_gpu_enable_command_buffer= bash examples/mesh/cluster/submit_curc.sh ...
+export XLA_FLAGS="${XLA_FLAGS:-}"
 export PYTHONUNBUFFERED=1
 # Persistent compilation cache, shared by every job on the shared /projects filesystem: a
 # job whose programs were compiled before (same shapes, flags, jax version and device kind --

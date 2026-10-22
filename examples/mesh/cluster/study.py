@@ -110,12 +110,21 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
 * ``optax1seed`` (2026-10-21): the optax step rules (``examples/mesh/optax_rules.py``: Adam as
   an optax chain, AdEMAMix, Adam with a cosine step schedule, schedule-free Adam, Prodigy) with
   one seed per iterate, warm-started, 400 iterates; tags ``*_S1_ox_<arm>_*_w500``.
+* ``optcm`` (2026-10-23): the body's area centroid held at its start (``--fix-centroid 1``: the
+  Adam-type M 10 runs slid ~10 m downstream onto the outflow face) for Adam, Adam + cosine
+  step, Prodigy and Prodigy with a cosine-decaying cap (``ox_prodigycos``), S = 1,
+  warm-started, 400 iterates; tags ``*_S1_ox_<rule>_cm_*_w500``.
 * ``optrules1seed`` (2026-10-20): Adam, ``tr``, ``lbfgs`` and ``mma`` with ONE seed per iterate
   (gradient and objective noise x2) on the same two problems, warm-started, up to 1200
   iterates (the S = 4 runs' 300 x 4 seed evaluations); tags ``*_S1_<arm>_*_w500``.
 * ``shapeprof`` (2026-10-19): where a seed's time goes (``bash scratch/shapeprof/cluster_job.sh
   <name>``): the optm Kn 0.5 M 10 iterates 30 / 156 with the run's own config, per phase, the
   unguarded cubic and the plain k32 slope fit for comparison, and a perfetto trace.  One H200.
+* ``speedprof`` (2026-10-22): one optimiser seed's phases on a production iterate (the optm
+  M 10 iterate 156, the optrules1seed Kn 0.5 iterate 200) under XLA command buffers off (the
+  old WSL guard) / XLA's default (env.sh now) / with WHILE, CONDITIONAL, and the shape VJP's
+  ``shape_batch`` 1 / 4 / 12; peak memory and the gradients compared (``bash
+  scratch/shapefast/cluster_job.sh <name>``).  One GPU, ~2 h.
 * ``opt``: ``opt_S{S}_{gd|adam}``, the finer circle's drag minimisation at fixed area, to
   convergence (resumed across jobs), ``S`` CRN seeds per iterate for
   ``S in SEED_COUNTS`` and both optimisers (same step, smoothing and band; Adam's step is
@@ -249,6 +258,13 @@ def _guardgate_jobs(gpus_per_node: int) -> dict[str, str]:
 def _shapeprof_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     return {f"optm_it{k}": f"bash scratch/shapeprof/cluster_job.sh optm_it{k}" for k in (30, 156)}
+
+
+def _speedprof_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    return {
+        job: f"bash scratch/shapefast/cluster_job.sh {job}" for job in ("m10_it156", "kn05_it200")
+    }
 
 
 def _squashkn2_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -411,6 +427,31 @@ def _optax1seed_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
+# optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
+# rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
+# cap (its step sat at the 4-step cap from iterate ~25 on)
+OPTCM = ("ox_adam", "ox_adamcos", "ox_prodigy", "ox_prodigycos")
+
+
+def _optcm_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optcm``: each rule of :data:`OPTCM` with ``--fix-centroid 1`` on both optrules
+    problems, S = 1, warm-started, 400 iterates."""
+    del gpus_per_node
+    return {
+        f"{name}_S1_{arm}_cm": _optrules_tagged(
+            name,
+            f"{arm}_cm",
+            f"--optimizer {arm} --fix-centroid 1",
+            seeds=1,
+            suffix="_w500",
+            extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
+        )
+        for name in OPTRULES_REGIMES
+        for arm in OPTCM
+    }
+
+
 # optab: name -> extra flags (the later flag wins over COARSE's --levelset-h)
 OPTAB = {
     "ctl": "--smooth 2",
@@ -442,10 +483,12 @@ NEW_GROUPS = {
     "thingate": _thingate_jobs,
     "guardgate": _guardgate_jobs,
     "shapeprof": _shapeprof_jobs,
+    "speedprof": _speedprof_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
     "optax1seed": _optax1seed_jobs,
+    "optcm": _optcm_jobs,
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

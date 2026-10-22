@@ -21,7 +21,11 @@ whatever a rule does to the step's MAGNITUDE (schedules, learning-rate-free esti
   ``step``, iterate-averaged; the gradient is taken at the interpolated point -- an
   average that should damp the late overshoot and the noise-driven roughness without a
   schedule), ``ox_prodigy`` (Prodigy, learning-rate free: its own distance estimate sets
-  the step, capped at the trust region's largest radius ``4 step``).
+  the step, capped at the trust region's largest radius ``4 step``), ``ox_prodigycos``
+  (2026-10-23: Prodigy with that cap following a cosine from ``4 step`` to ``step / 4`` over
+  :data:`COSINE_ITERATES`: plain Prodigy's estimate only grows, its step sat at the cap from
+  iterate ~25 on in both optax1seed regimes -- the fastest descent, then 0.2 m steps on a
+  noisy gradient near the optimum).
 
 The level set and the area gradient of the iterate reach the host transforms (smoothing,
 tangent projection) through :class:`Context`, set before every update -- extra arguments do not
@@ -111,6 +115,18 @@ def _cap(updates, state, params=None, *, ctx, **extra):
     return updates * jnp.minimum(1.0, CAP * ctx.step / jnp.maximum(big, 1e-300)), state
 
 
+def _cap_scheduled(updates, state, params=None, *, ctx, schedule, **extra):
+    """:func:`_cap` to ``schedule(count) * ctx.step``."""
+    del params, extra
+    big = jnp.abs(updates).max()
+    cap = schedule(state.count) * ctx.step
+    return updates * jnp.minimum(1.0, cap / jnp.maximum(big, 1e-300)), _Count(state.count + 1)
+
+
+def _cap_cosine(count):
+    return optax.cosine_decay_schedule(CAP, COSINE_ITERATES, alpha=1.0 / 16.0)(count)
+
+
 def _host(update, ctx, **kw):
     return optax.GradientTransformationExtraArgs(
         _init_empty, functools.partial(update, ctx=ctx, **kw)
@@ -145,16 +161,21 @@ def build(name: str, ctx: Context, step: float) -> optax.GradientTransformationE
             _host(_rescale, ctx),
         )
         return contrib.schedule_free(base, learning_rate=1.0, b1=0.9)
-    if name == "ox_prodigy":
+    if name in ("ox_prodigy", "ox_prodigycos"):
         # its distance estimate starts at a tenth of the nominal step (optax's 1e-6 needed
         # far more iterates than a run has to grow to the displacement scale: zero motion in a
         # 6-iterate smoke, 2026-10-21) and adapts from there
         rule = contrib.prodigy(learning_rate=1.0, eps=EPS, estim_lr0=0.1 * step)
-        return optax.chain(_direction_chain(rule, ctx), _host(_cap, ctx))
+        if name == "ox_prodigy":
+            return optax.chain(_direction_chain(rule, ctx), _host(_cap, ctx))
+        capped = optax.GradientTransformationExtraArgs(
+            _init_count, functools.partial(_cap_scheduled, ctx=ctx, schedule=_cap_cosine)
+        )
+        return optax.chain(_direction_chain(rule, ctx), capped)
     raise ValueError(f"unknown optax arm {name!r} (one of {ARMS})")
 
 
-ARMS = ("ox_adam", "ox_ademamix", "ox_adamcos", "ox_sfadam", "ox_prodigy")
+ARMS = ("ox_adam", "ox_ademamix", "ox_adamcos", "ox_sfadam", "ox_prodigy", "ox_prodigycos")
 
 
 def step(tx, state, ctx, g, ls, g_area, cfg):

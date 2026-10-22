@@ -546,6 +546,22 @@ def test_lean_record_gives_the_full_records_chain_bitwise(tracker):
             np.testing.assert_array_equal(np.asarray(leaf_b), np.asarray(leaf_a))
 
 
+@pytest.mark.parametrize("tracker", ["stencil", "lane"])
+def test_batched_steps_give_the_sequential_shape_terms(tracker):
+    """``shape.gradient(batch=3)``: the captured steps three at a time through ``vmap``, each
+    runtime branch of the move taken once per batch (:mod:`jax_dsmc.step_axis`) -- the
+    sequential scan's terms up to summation order, the same replay check."""
+    seq = _replay_chain(tracker)[0]
+    bat = _replay_chain(tracker, batch=3)[0]
+    assert float(bat.replay_error) < 1e-12
+    np.testing.assert_array_equal(np.asarray(bat.surface_hits), np.asarray(seq.surface_hits))
+    for part in ("pathwise_x", "pathwise_v", "pathwise_tally", "score"):
+        a, b = getattr(seq, part), getattr(bat, part)
+        for leaf_a, leaf_b in zip(jax.tree.leaves(a), jax.tree.leaves(b), strict=True):
+            np.testing.assert_allclose(np.asarray(leaf_b), np.asarray(leaf_a), rtol=1e-12,
+                                       atol=1e-14 * float(np.max(np.abs(leaf_a))))  # fmt: skip
+
+
 @pytest.mark.parametrize("tracker", ["stencil", "lane", "walk"])
 def test_replay_reproduces_the_captured_forward_bitwise_and_the_vjp_runs(tracker):
     """A short run with the specular circle: the traced replay of every step matches the

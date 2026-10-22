@@ -162,6 +162,13 @@ def default_config():
             # perimeter penalty (2026-10-19): J + perimeter * J_0 * P / P_0 (J_0, P_0 the first
             # iterate's drag and perimeter; 0 = off)
             "perimeter": 0.0,
+            # the body's area centroid held at its start (2026-10-23; 1 = on, needs "tangent"):
+            # the drag in a uniform stream does not depend on where the body sits, but every
+            # Adam-type M 10 run slid ~10 m downstream onto the outflow face (the box's inflow
+            # and outflow faces make position matter) -- the constraint removes that direction
+            # from the step like the area's (tangent_component) and restores the centroid
+            # after it (project_centroid)
+            "fix_centroid": 0,
         }
     )
     return cfg
@@ -191,6 +198,44 @@ def area_and_gradient(ls, lo, hi):
     return float(a), np.asarray(g)
 
 
+def _centroid_of_coef(coef, ls, lo, hi):
+    m = L.body_moments(dataclasses.replace(ls, coef=coef), lo, hi, 4)
+    return m[1:] / m[0]
+
+
+def centroid_and_gradient(ls, lo, hi):
+    """``(c, dc/dcoef)``: the area centroid of :func:`levelset.body_moments` (``f64[D]``) and its
+    Jacobian ``f64[D, *coef.shape]``."""
+    c = _centroid_of_coef(ls.coef, ls, lo, hi)
+    jac = jax.jacrev(_centroid_of_coef)(ls.coef, ls, lo, hi)
+    return np.asarray(c), np.asarray(jac)
+
+
+def constraint_gradients(ls, lo, hi, g_area, cfg):
+    """The gradients a step is kept tangent to: ``g_area``, or with ``fix_centroid`` the stack
+    ``[g_area, dc_x/dcoef, ...]`` (:func:`tangent_component` takes either)."""
+    if not cfg.get("fix_centroid", 0):
+        return g_area
+    return np.concatenate((g_area[None], centroid_and_gradient(ls, lo, hi)[1]))
+
+
+def project_centroid(ls, target, lo, hi, iters=3):
+    """The smallest coefficient change (area unchanged to first order) that moves the centroid
+    to ``target``: Newton on ``[A, c]`` with ``A``'s row held at zero change (quadratic: a
+    0.03 m offset to 1e-7 in two iterations, 0.27 m to 5e-10 in four).  Returns ``(ls,
+    remaining centroid error)``."""
+    target = np.asarray(target, float)
+    for _ in range(iters):
+        g_area = area_and_gradient(ls, lo, hi)[1]
+        c, jac = centroid_and_gradient(ls, lo, hi)
+        rows = np.concatenate((g_area[None], jac)).reshape(len(c) + 1, -1)
+        rhs = np.concatenate(([0.0], target - c))
+        dc = np.linalg.solve(rows @ rows.T, rhs) @ rows
+        ls = dataclasses.replace(ls, coef=ls.coef + jnp.asarray(dc.reshape(ls.coef.shape)))
+    c = centroid_and_gradient(ls, lo, hi)[0] if iters else np.zeros_like(target)
+    return ls, float(np.abs(c - target).max())
+
+
 def _perimeter_of_coef(coef, ls, lo, hi):
     return L.body_perimeter(dataclasses.replace(ls, coef=coef), lo, hi, 4)
 
@@ -210,6 +255,7 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
     low, upp = OZ.mma_asymptotes(state, coef, step, k)
     g0 = smooth(g_full)
     area = float(L.body_volume(ls, lo, hi, 4))
+    g_area = g_area[0] if g_area.ndim > coef.ndim else g_area  # MMA's own: the area only
     xs, lam = OZ.mma_step(coef[mask], g0[mask], area, g_area[mask], float(state["area0"]),
                           low[mask], upp[mask], step)  # fmt: skip
     delta = np.zeros_like(coef)
@@ -250,7 +296,7 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     base_ls = dataclasses.replace(ls, coef=jnp.asarray(base))
     if not accepted:  # the step's metric and constraint at the base point
         smooth = functools.partial(smoothed_direction, ls=base_ls, sigma=cfg["smooth"], band=band)
-        g_area = area_and_gradient(base_ls, lo, hi)[1]
+        g_area = constraint_gradients(base_ls, lo, hi, area_and_gradient(base_ls, lo, hi)[1], cfg)
     if rule == "lbfgs":
         direction, has_pairs = OZ.lbfgs_direction(g_base, pairs, smooth)
     else:
@@ -309,9 +355,15 @@ def project_area(ls: LevelSet, target: float, lo, hi, n_bisect: int = 40) -> tup
 
 def tangent_component(v: np.ndarray, g_area: np.ndarray) -> tuple[np.ndarray, float]:
     """``v`` without its component along ``g_area`` (coefficient space: ``g_area . dc`` is the
-    first-order area change of a step ``dc``), and the removed coefficient."""
-    nu = float(np.sum(v * g_area) / np.sum(g_area * g_area))
-    return v - nu * g_area, nu
+    first-order area change of a step ``dc``), and the removed coefficient.  ``g_area`` may be a
+    stack of constraint gradients (:func:`constraint_gradients`, one more leading axis): ``v``
+    is projected onto their common null space; the coefficient returned is the area's."""
+    if g_area.ndim == v.ndim:
+        nu = float(np.sum(v * g_area) / np.sum(g_area * g_area))
+        return v - nu * g_area, nu
+    rows = g_area.reshape(g_area.shape[0], -1)
+    lam = np.linalg.solve(rows @ rows.T, rows @ v.ravel())
+    return v - (lam @ rows).reshape(v.shape), float(lam[0])
 
 
 def smoothed_direction(grad: np.ndarray, ls: LevelSet, sigma: float, band: float) -> np.ndarray:
@@ -394,7 +446,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
     each seed starts from its own final gas of the previous iterate (``<run_dir>/warm/``,
     :func:`EM.forward`'s ``restart``) instead of the empty box: the warm-up shrinks to
     ``restart_steps`` re-equilibration steps on the new body."""
-    grads, objs, hits, secs, stuck, phases = [], [], [], [], [], []
+    grads, objs, hits, secs, stuck, phases, sizes = [], [], [], [], [], [], []
     out = {}
     for i in seeds:
         key = jax.random.key(cfg["seed_start"] + int(i))
@@ -422,6 +474,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
         stuck.append(info["stuck"])
         secs.append(time.time() - t0)
         phases.append([info.get(f"seconds_{name}", np.nan) for name in PHASES])
+        sizes.append(info.get("replay_sizes", [0, 0]))
         if s["frames"] is not None:
             out.update({f"frame_{name}": s["frames"][name] for name in FRAME_KEYS})
     out.update(
@@ -432,6 +485,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
             "stuck": np.asarray(stuck, dtype=float),
             "seconds": np.asarray(secs, dtype=float),
             "phase_seconds": np.asarray(phases, dtype=float),
+            "replay_sizes": np.asarray(sizes, dtype=np.int64),
         }
     )
     return out
@@ -456,6 +510,9 @@ def _combine(parts):
         "phase_seconds": dict(zip(PHASES, np.concatenate(
             [p.get("phase_seconds", np.full((len(p["seconds"]), len(PHASES)), np.nan))
              for p in parts]).sum(axis=0).tolist(), strict=True)),
+        # the largest traced-replay (passes, lane) of the seeds (EM.replay_static)
+        "replay_sizes": np.concatenate([p.get("replay_sizes", np.zeros((1, 2), np.int64))
+                                        for p in parts]).max(axis=0).tolist(),
     }  # fmt: skip
 
 
@@ -591,13 +648,15 @@ def constrain(ls, area0, lo, hi, margin, shift, passes: int = 12):
     return ls, shift, first
 
 
-def after_step(stepped, mode, area0, lo, hi, keepout):
+def after_step(stepped, mode, area0, lo, hi, keepout, centroid0=None):
     """Reinitialise the stepped level set, then the constraints: ``projection`` restores the
     area by a uniform shift (with the face margin, :func:`constrain`); ``lagrangian`` /
     ``penalty`` only apply the face margin (the area is in the differentiated objective).  Returns
     ``(ls, area shift, knots the face floor moved)``."""
     # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1
     new = L.reinitialise(stepped)
+    if centroid0 is not None:
+        new, _err = project_centroid(new, centroid0, lo, hi)
     if mode in ("lagrangian", "penalty"):
         clipped = 0
         if keepout > 0.0:
@@ -622,6 +681,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     else:
         np.save(out / "coef_0.npy", np.asarray(ls.coef))
     area0 = saved["area_target"] if saved else float(L.body_volume(ls, lo, hi, 4))
+    # the initial body's (coef_0), also for a run resumed with the constraint newly on
+    coef0 = jnp.asarray(np.load(out / "coef_0.npy"))
+    centroid0 = (saved or {}).get("centroid_target") or np.asarray(
+        _centroid_of_coef(coef0, ls, lo, hi)
+    ).tolist()
     seeds = list(range(cfg["seeds_per_iterate"]))
     t_start = time.time()
     k = len(history)
@@ -646,6 +710,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     rule_state["area0"] = area0
     perimeter_ref = saved.get("perimeter_ref") if saved else None
     mode = cfg["area_mode"]
+    if cfg["fix_centroid"] and mode != "tangent":
+        raise ValueError("--fix-centroid needs --area-mode tangent")
     if (rule or ox) and mode != "tangent":
         raise ValueError(f"--optimizer {cfg['optimizer']} needs --area-mode tangent")
     if saved and saved["config"].get("area_mode", "projection") != mode:
@@ -694,6 +760,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         elif mode == "tangent":
             area_now, g_area = area_and_gradient(ls, lo, hi)
             area_err = area_now - area0
+            # with fix_centroid the stack of the area's and the centroid's gradients
+            g_area = constraint_gradients(ls, lo, hi, g_area, cfg)
             # the KKT gradient: Adam's moments then track the constrained gradient too
             g, nu = tangent_component(g, g_area)
         extra = {}
@@ -736,7 +804,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
             # predicted first-order decrease: g . delta coef (before the area projection)
             predicted = float(-eta * np.sum(g * direction))
-        new, shift, clipped = after_step(stepped, mode, area0, lo, hi, cfg["keepout"])
+        new, shift, clipped = after_step(
+            stepped, mode, area0, lo, hi, cfg["keepout"],
+            centroid0 if cfg["fix_centroid"] else None,
+        )  # fmt: skip
         area = float(L.body_volume(new, lo, hi, 4))
         nu_next = nu + mu * (area - area0) if mode == "lagrangian" else nu
         row = {
@@ -751,6 +822,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "stuck": avg["stuck"],
             "area": float(L.body_volume(ls, lo, hi, 4)),
             "area_after_step": area,
+            "centroid": np.asarray(_centroid_of_coef(ls.coef, ls, lo, hi)).tolist(),
             "grad_norm": float(np.linalg.norm(g)),
             "direction_max": scale,
             "eta": eta,
@@ -759,6 +831,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "predicted_decrease": predicted,
             "seconds": time.time() - t0,
             "phase_seconds": avg["phase_seconds"],
+            "replay_sizes": avg["replay_sizes"],
             **extra,
         }
         if perimeter is not None:
@@ -783,6 +856,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
                     "config": cfg,
                     "backward_basis": ensemble_backward.VIRTUAL_BASIS,
                     "area_target": area0,
+                    "centroid_target": centroid0,
                     "perimeter_ref": perimeter_ref,
                     "converged": converged_objective(cfg, history),
                     "rows": history,
