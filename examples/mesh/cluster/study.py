@@ -113,7 +113,12 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
 * ``optcm`` (2026-10-23): the body's area centroid held at its start (``--fix-centroid 1``: the
   Adam-type M 10 runs slid ~10 m downstream onto the outflow face) for Adam, Adam + cosine
   step, Prodigy and Prodigy with a cosine-decaying cap (``ox_prodigycos``), S = 1,
-  warm-started, 400 iterates; tags ``*_S1_ox_<rule>_cm_*_w500``.
+  warm-started, 400 iterates; tags ``*_S1_ox_<rule>_cm_*_w500``.  Done; the constraint then
+  reshaped the body's nose and base by the centroid's coefficient gradient (ragged bases).
+* ``optct`` (2026-10-23): ``optcm`` again with the centroid held by rigid translations (the
+  gradient's translation part removed, the step corrected along translations, the body moved
+  back) and the body started 2 m downstream (centroid x = 7: the ``_cm`` M 10 noses stopped
+  ~9.4 m from the inflow face); tags ``*_S1_ox_<rule>_ct_*_w500``.
 * ``optrules1seed`` (2026-10-20): Adam, ``tr``, ``lbfgs`` and ``mma`` with ONE seed per iterate
   (gradient and objective noise x2) on the same two problems, warm-started, up to 1200
   iterates (the S = 4 runs' 300 x 4 seed evaluations); tags ``*_S1_<arm>_*_w500``.
@@ -434,15 +439,19 @@ def _optax1seed_jobs(gpus_per_node: int) -> dict[str, str]:
 OPTCM = ("ox_adam", "ox_adamcos", "ox_prodigy", "ox_prodigycos")
 
 
-def _optcm_jobs(gpus_per_node: int) -> dict[str, str]:
+def _optcm_jobs(gpus_per_node: int, mark: str = "cm", extra: str = "") -> dict[str, str]:
     """``optcm``: each rule of :data:`OPTCM` with ``--fix-centroid 1`` on both optrules
-    problems, S = 1, warm-started, 400 iterates."""
+    problems, S = 1, warm-started, 400 iterates; tags ``*_ox_<rule>_<mark>_*``.  ``optct``
+    (``mark="ct"``) is the same with the centroid held by rigid translations and the body
+    started 2 m downstream (``extra``; 2026-10-23: the ``_cm`` runs reshaped the body for the
+    constraint, the first version of it, and their M 10 noses stopped ~9.4 m from the inflow
+    face; they are done: resubmitting ``optcm`` would resume them)."""
     del gpus_per_node
     return {
-        f"{name}_S1_{arm}_cm": _optrules_tagged(
+        f"{name}_S1_{arm}_{mark}": _optrules_tagged(
             name,
-            f"{arm}_cm",
-            f"--optimizer {arm} --fix-centroid 1",
+            f"{arm}_{mark}",
+            f"--optimizer {arm} --fix-centroid 1{extra}",
             seeds=1,
             suffix="_w500",
             extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
@@ -489,6 +498,7 @@ NEW_GROUPS = {
     "optrules1seed": _optrules1seed_jobs,
     "optax1seed": _optax1seed_jobs,
     "optcm": _optcm_jobs,
+    "optct": functools.partial(_optcm_jobs, mark="ct", extra=" --start-shift 2.0"),
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),

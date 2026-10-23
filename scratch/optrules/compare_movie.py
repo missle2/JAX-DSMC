@@ -5,7 +5,7 @@ last productive shape, marked "stopped") and the drag histories J / J0 with the 
 
     PYTHONPATH=. python3 scratch/optrules/compare_movie.py REGIME [--stride 2 --fps 10]
 
-REGIME ``kn0.5`` or ``kn0.5_M10``; writes ``examples/mesh/figures/movie/optrules_<REGIME>.mp4``.
+REGIME ``kn0.5`` or ``kn0.5_M10``; writes ``examples/mesh/figures/movie/optrules/optrules_<REGIME>.mp4``.
 """
 
 import argparse
@@ -69,7 +69,7 @@ def main():
     pts = np.concatenate([s for arm in shown for segs in lines[arm].values() for s in segs])
     centre = 0.5 * (pts.min(0) + pts.max(0))
     half = 0.52 * (pts.max(0) - pts.min(0))
-    frames = Path(figure_path("movie", f"optrules_{regime}" + ("" if args.group == "rules" else f"_{args.group}")))
+    frames = Path(figure_path("movie/optrules", f"optrules_{regime}" + ("" if args.group == "rules" else f"_{args.group}")))
     if frames.exists():
         shutil.rmtree(frames)
     frames.mkdir(parents=True)
@@ -117,7 +117,7 @@ def main():
                      "left; dashed: initial circle)", fontsize=10)  # fmt: skip
         fig.savefig(frames / f"f_{i:04d}.png", dpi=80)
         plt.close(fig)
-    mp4 = figure_path("movie", f"optrules_{regime}" + ("" if args.group == "rules" else f"_{args.group}") + ".mp4")
+    mp4 = figure_path("movie/optrules", f"optrules_{regime}" + ("" if args.group == "rules" else f"_{args.group}") + ".mp4")
     subprocess.run(
         ["ffmpeg", "-y", "-loglevel", "error", "-framerate", f"{args.fps}",
          "-i", str(frames / "f_%04d.png"), "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",

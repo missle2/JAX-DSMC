@@ -12,7 +12,7 @@
   :func:`jax_dsmc.mesh.levelset.value`).
 * ``figures/optc/gradient_seed_convergence.png``: the ``cos 2 theta`` gradient's standard error
   vs number of seeds (bootstrap over the 32-seed artifact) against the CRN FD;
-  ``figures/mode2_gate.png``: that artifact's per-term, per-seed and per-variant gate.
+  ``figures/gates/mode2_gate.png``: that artifact's per-term, per-seed and per-variant gate.
 * the sphere gate row (ensemble vs FD, z) if its artifact exists.
 * ``squash`` / ``squashkn``: ``figures/squash/squash_gradient_gate.png`` (``dD/ds`` of every
   ``grad_s`` artifact against its CRN FD and the free-molecular reference, per estimator) and
@@ -1014,7 +1014,7 @@ def main():
     m2 = mode2_summary()
     if m2:
         summary, rows = m2
-        figure_mode2(summary, rows, os.path.join(FIGURES, "mode2_gate.png"))
+        figure_mode2(summary, rows, figure_path("gates", "mode2_gate.png"))
         report["mode2"] = summary
         print(
             f"mode2 ({summary['seeds']} seeds): adjoint {summary['gradient']['mean']:.4g} ± "

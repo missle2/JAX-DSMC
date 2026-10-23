@@ -1,14 +1,17 @@
 """Side-by-side MP4s of the optimiser comparison (2026-10-23), per regime:
 
-* ``optax_all_<regime>.mp4``: every one-seed arm's body over its steady density field (3 x 3,
-  left) and every arm's drag history to the shown iterate (right);
+* ``optax_all_<regime>.mp4``: every one-seed arm's body over its steady density field (3 x 4,
+  left: the eight free arms, then the four centroid-fixed ones) and every arm's drag history
+  to the shown iterate (right);
 * ``optax_present_<regime>.mp4``: the presentation cut -- four arms (``PRESENT``) 2 x 2 on the
   left, the drag histories of ALL arms on the right.
 
-An arm whose run ended holds its last body (marked "ended").  The bodies (zero contours) and
-fields of the shown iterates are cached in ``scratch/optax/cache_<regime>.pkl``.
+An arm whose run ended holds its last body (marked "ended").  Playback is skewed: every
+iterate of the first ``SLOW`` at 10 iterates / s, then every third at 45 / s (2026-10-23: 3x
+slower and 1.5x faster than the earlier uniform 30 / s).  The bodies (zero contours) and fields
+of the shown iterates are cached in ``scratch/optax/cache_<regime>.pkl``.
 
-    PYTHONPATH=. python3 scratch/optax/compare_movies.py REGIME [--stride 2 --fps 15]
+    PYTHONPATH=. python3 scratch/optax/compare_movies.py REGIME
         [--only all|present] [--frame K]   (--frame: one PNG of iterate K, no movie)
 """
 
@@ -33,27 +36,36 @@ sys.path.insert(0, "scratch/optax")
 import optimize as O  # noqa: E402
 from analysis import ROOT, tag  # noqa: E402
 from figure_paths import figure_path  # noqa: E402
-from style import COLOURS, DASHED, GRID, INK, LABELS, MUTED, ORDER, REGIME_TITLES  # noqa: E402
+from style import COLOURS, GRID, INK, LABELS, MUTED, ORDER, REGIME_TITLES, linestyle  # noqa: E402
 
 PRESENT = ("ox_adam", "ox_adamcos", "lbfgs", "mma")
 CAP = {"kn0.5": 450, "kn0.5_M10": 400}  # iterates shown (the longest arms are flat beyond)
 VIEW = {"kn0.5": (-10.0, 12.0), "kn0.5_M10": (-2.0, 20.0)}  # x range of the body panels
 DENSITY_MAX = {"kn0.5": 3.0, "kn0.5_M10": 3.0}  # n / n_inf colour limit: the free stream light grey
+SLOW = 50  # iterates shown one by one, at SLOW_REPEAT video frames each
+FPS, SLOW_REPEAT, FAST_STRIDE, FAST_REPEAT = 30, 3, 3, 2  # 10 iterates / s, then 45 / s
 
 
-def cache(regime, stride):
+def shown_iterates(regime):
+    """The iterates drawn and how many video frames (at ``FPS``) each is held."""
+    slow = [(k, SLOW_REPEAT) for k in range(SLOW)]
+    fast = [(k, FAST_REPEAT) for k in range(SLOW, CAP[regime] + 1, FAST_STRIDE)]
+    return slow + fast
+
+
+def cache(regime):
     path = Path(f"scratch/optax/cache_{regime}.pkl")
+    shown = [k for k, _ in shown_iterates(regime)]
     if path.exists():
         saved = pickle.loads(path.read_bytes())
-        if saved["stride"] == stride:
+        if saved["shown"] == shown and set(saved["arms"]) == set(ORDER):
             return saved
     data = json.load(open("scratch/optax/analysis.json"))[regime]
     cfg = dict(O.default_config(),
                **json.load(open(f"{ROOT}/{tag(regime, 'S4_adam')}/history.json"))["config"])  # fmt: skip
     grid, ls0 = O.initial_levelset(cfg)
     lo, hi = np.asarray(grid.lo), np.asarray(grid.hi)
-    shown = list(range(0, CAP[regime] + 1, stride))
-    out = {"stride": stride, "shown": shown, "lo": lo, "hi": hi, "n": tuple(grid.n),
+    out = {"shown": shown, "lo": lo, "hi": hi, "n": tuple(grid.n),
            "init": O.surface_polyline(ls0, lo, hi), "arms": {}}  # fmt: skip
     for arm in ORDER:
         d = data[arm]
@@ -114,7 +126,7 @@ def _traces(ax, c, k, regime):
         a = c["arms"][arm]
         m = a["J_mean"]
         it = np.arange(len(m))
-        ls = "--" if arm in DASHED else "-"
+        ls = linestyle(arm)
         ax.plot(it, m, color=COLOURS[arm], lw=1.0, alpha=0.25, ls=ls)
         upto = min(k + 1, len(m))
         ax.plot(it[:upto], m[:upto], color=COLOURS[arm], lw=2.4, ls=ls, label=LABELS[arm])
@@ -130,14 +142,16 @@ def _traces(ax, c, k, regime):
     ax.grid(True, which="both", color=GRID, lw=0.6)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.legend(fontsize=10.5, loc="upper right", frameon=False, ncol=2)
+    ax.legend(fontsize=10, loc="upper right", frameon=False, ncol=2, handlelength=2.6)
 
 
 def frame(c, regime, k, arms, path):
-    rows, cols = (2, 2) if len(arms) == 4 else (3, 3)
-    # frame height fitted to the body panels (aspect ~2.2 at full box height): no empty bands
-    fig = plt.figure(figsize=(19.2, 7.2 if rows == 2 else 7.6))
-    outer = fig.add_gridspec(1, 2, width_ratios=(1.75, 1.0), left=0.008, right=0.99, top=0.9,
+    rows, cols = (2, 2) if len(arms) == 4 else (3, 4)
+    # frame height fitted to the body panels (aspect ~2.2 at full box height): no empty bands;
+    # the 3 x 4 frame is wider, its panels and the traces the size of the earlier 3 x 3 one's
+    width, ratio = (19.2, 1.75) if rows == 2 else (23.4, 2.35)
+    fig = plt.figure(figsize=(width, 7.2 if rows == 2 else 7.6))
+    outer = fig.add_gridspec(1, 2, width_ratios=(ratio, 1.0), left=0.008, right=0.99, top=0.9,
                              bottom=0.08, wspace=0.1)  # fmt: skip
     left = outer[0].subgridspec(rows, cols, wspace=0.025, hspace=0.14)
     n_inf = float(np.median(_grid(c["arms"][arms[0]]["fields"][0], c["n"])[0]))  # inflow column
@@ -151,21 +165,26 @@ def frame(c, regime, k, arms, path):
     plt.close(fig)
 
 
-def movie(c, regime, arms, name, fps):
-    frames = Path(figure_path("movie", name))
+def movie(c, regime, arms, name):
+    frames = Path(figure_path("movie/optax", name))
     if frames.exists():
         shutil.rmtree(frames)
     frames.mkdir(parents=True)
-    for i, k in enumerate(c["shown"]):
-        frame(c, regime, k, arms, frames / f"f_{i:04d}.png")
+    drawn = frames / "drawn"
+    drawn.mkdir()
+    i = 0
+    plan = shown_iterates(regime)
     # the last frame held for two seconds
-    for j in range(int(2 * fps)):
-        shutil.copy(frames / f"f_{len(c['shown']) - 1:04d}.png",
-                    frames / f"f_{len(c['shown']) + j:04d}.png")  # fmt: skip
-    mp4 = figure_path("movie", f"{name}.mp4")
+    plan[-1] = (plan[-1][0], 2 * FPS)
+    for n, (k, repeat) in enumerate(plan):
+        frame(c, regime, k, arms, drawn / f"d_{n:04d}.png")
+        for _ in range(repeat):
+            (frames / f"f_{i:05d}.png").hardlink_to(drawn / f"d_{n:04d}.png")
+            i += 1
+    mp4 = figure_path("movie/optax", f"{name}.mp4")
     subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error", "-framerate", f"{fps}",
-         "-i", str(frames / "f_%04d.png"), "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        ["ffmpeg", "-y", "-loglevel", "error", "-framerate", f"{FPS}",
+         "-i", str(frames / "f_%05d.png"), "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", mp4],
         check=True,
     )  # fmt: skip
@@ -175,12 +194,10 @@ def movie(c, regime, arms, name, fps):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("regime", choices=list(CAP))
-    ap.add_argument("--stride", type=int, default=2)
-    ap.add_argument("--fps", type=float, default=15.0)
     ap.add_argument("--only", choices=("all", "present"), default=None)
     ap.add_argument("--frame", type=int, default=None)
     args = ap.parse_args()
-    c = cache(args.regime, args.stride)
+    c = cache(args.regime)
     layouts = {"all": tuple(ORDER), "present": PRESENT}
     for name, arms in layouts.items():
         if args.only not in (None, name):
@@ -188,7 +205,7 @@ def main():
         if args.frame is not None:
             frame(c, args.regime, args.frame, arms, f"scratch/optax/frame_{name}.png")
             continue
-        movie(c, args.regime, arms, f"optax_{name}_{args.regime}", args.fps)
+        movie(c, args.regime, arms, f"optax_{name}_{args.regime}")
 
 
 if __name__ == "__main__":

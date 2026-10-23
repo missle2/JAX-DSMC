@@ -400,7 +400,7 @@ Silhouette = 45\,\% of the gradient.
 
 \textbf{Diffuse circle (GD)}: $1.348\pm0.25$ with timing vs FD $1.442\pm0.03$ / $1.128\pm0.16$;
 silhouette 61\,\%; 9\,\% low against the precise FD without the timing term (open then; see Part IV).
-\begin{center}\fig{0.55}{mesh/figures/plate_estimators.png}\end{center}
+\begin{center}\fig{0.55}{mesh/figures/gates/plate_estimators.png}\end{center}
 \end{frame}
 
 \begin{frame}{The specular capsule and the future-class fit (2026-09-22, superseded)}
@@ -1005,7 +1005,7 @@ The shape gradient's \emph{slope} fits (pooled, one-sided, $k = 96$) are unchang
 \code{cellgate} / \code{biasgate}, $f_{\mathrm{num}}\times1$, $4\times8$, Kn 0.5 squash; every fit paired on the same forward
 and against the seed's CRN FD ($h = 0.2$); \code{scratch/cellfit/cluster\_analysis.py}.
 \begin{center}
-\fig{0.74}{mesh/figures/bias_gate_cluster.png}
+\fig{0.74}{mesh/figures/gates/bias_gate_cluster.png}
 \end{center}
 \begin{itemize}
 \item \textbf{FD} (64 seeds): $h = 0.1$ / $0.2$: $0.01633\pm0.00010$ / $0.01631\pm0.00006$, paired difference $+0.14\pm0.67\,\%$.
@@ -1020,7 +1020,7 @@ and against the seed's CRN FD ($h = 0.2$); \code{scratch/cellfit/cluster\_analys
 \scriptsize
 $g\cdot d$ vs CRN FD ($h = 0.05$) along the uniform shift and $\cos2\theta$, in units of $|$FD along the shift$|$:
 \begin{center}
-\fig{0.6}{mesh/figures/cellgate_optc.png}
+\fig{0.6}{mesh/figures/gates/cellgate_optc.png}
 \end{center}
 \begin{itemize}
 \item \textbf{Stable}: every per-cell setting on every shape ($\lambda$ rms $\le3.2\times10^{-7}$); the per-query one-sided fit
@@ -1038,7 +1038,7 @@ $g\cdot d$ vs CRN FD ($h = 0.05$) along the uniform shift and $\cos2\theta$, in 
 Same forward captured for its last 300 and 1000 steps, both fits paired; production length $T = 1000$ and a filled box
 $T = 2000$; 16 CRN seeds a point; \code{scratch/gapgate/analysis.py}.
 \begin{center}
-\fig{0.84}{mesh/figures/gapgate_kn.png}
+\fig{0.84}{mesh/figures/gates/gapgate_kn.png}
 \end{center}
 \begin{itemize}
 \item \textbf{Squash}: horizon $1000-300$ $+2.1\pm0.3\,\%$ at \emph{both} $T$ (adjoint memory, not the fill); \code{cubicv}$-$quad
@@ -1053,7 +1053,7 @@ $T = 2000$; 16 CRN seeds a point; \code{scratch/gapgate/analysis.py}.
 \begin{frame}{\code{gapgate}: free-molecular --- grazing, smoothing, FD linearity}
 \scriptsize
 \begin{center}
-\fig{0.88}{mesh/figures/gapgate_fm.png}
+\fig{0.88}{mesh/figures/gates/gapgate_fm.png}
 \end{center}
 \begin{itemize}
 \item \textbf{Variance = grazing hits on sub-cell features}: the scatter ratio falls with the cut-off (S1/GD: $10$--$16$ /
@@ -1087,7 +1087,7 @@ Adam, lr 0.05, to convergence ($s$ of the last 5 iterates within 0.5\,\%); \code
 optc2 S4 Adam (free-molecular, long box), step smoothed 2 / 4 / 8 knots vs level set $h = 12.5$ / $25$\,cm (smooth 2 knots:
 the same physical widths); \code{scratch/optab/analysis.py}.
 \begin{center}
-\fig{0.58}{mesh/figures/optc/optab_overview.png}
+\fig{0.58}{mesh/figures/optc/optab/optab_overview.png}
 \end{center}
 \begin{itemize}
 \item \textbf{Area control unstable}: a fixed-size step overshoots whatever the pull, and $\nu\leftarrow\nu+\mu\,\Delta A$ integrates the
@@ -1107,7 +1107,7 @@ the same physical widths); \code{scratch/optab/analysis.py}.
 The same five runs, \code{-{}-area-mode tangent} (tags \code{circle\_long\_S4\_adam\_tan\_ab\_*}), first 110--129 of 300 iterates
 (pulled 2026-10-15); area held to $10^{-12}$; \code{scratch/optab/analysis\_tan.py}.
 \begin{center}
-\fig{0.82}{mesh/figures/optc/optab_tan_drag.png}
+\fig{0.82}{mesh/figures/optc/optab/optab_tan_drag.png}
 \end{center}
 \begin{itemize}
 \item Drag falls to \textbf{0.23--0.26 of the circle's} at equal area (the projection run's $\eta$ was 0.33 at 300).  All
@@ -1120,8 +1120,8 @@ The same five runs, \code{-{}-area-mode tangent} (tags \code{circle\_long\_S4\_a
 \scriptsize
 \begin{columns}[T]
 \column{0.5\linewidth}
-\fig{1.0}{mesh/figures/optc/optab_tan_shapes.png}\\
-\fig{1.0}{mesh/figures/optc/optab_tan_adjoint.png}
+\fig{1.0}{mesh/figures/optc/optab/optab_tan_shapes.png}\\
+\fig{1.0}{mesh/figures/optc/optab/optab_tan_adjoint.png}
 \column{0.5\linewidth}
 \begin{itemize}
 \item \textbf{Shapes}: all become the same slender body, 15\,m $\times$ 2.4\,m (from a 6\,m circle).  Smoothing over 8 knots (50\,cm)
@@ -1134,7 +1134,7 @@ The same five runs, \code{-{}-area-mode tangent} (tags \code{circle\_long\_S4\_a
   iterates (56--59), $h = 25$\,cm $+$11\,s at 17:02, $h = 12.5$\,cm never.  No change in hits; the step follows the clock,
   not the run: a neighbour on the shared node, not the code.
 \end{itemize}
-\fig{1.0}{mesh/figures/optc/optab_tan_timing.png}
+\fig{1.0}{mesh/figures/optc/optab/optab_tan_timing.png}
 \end{columns}
 \end{frame}
 
@@ -1184,8 +1184,8 @@ S4 Adam, smooth 8 knots, tangent area, \code{circle\_long} (x $-10$..20, y 0..10
 pulled 2026-10-16 (Kn 0.5 236, free-mol.\ M 10 300 = done, Kn 0.5 + M 10 68 iterates); \code{scratch/optm/analysis\_optm.py}.
 \begin{columns}[T]
 \column{0.5\linewidth}
-\fig{1.0}{mesh/figures/optc/optm_drag.png}\\
-\fig{1.0}{mesh/figures/optc/optm_timing.png}
+\fig{1.0}{mesh/figures/optc/optm/optm_drag.png}\\
+\fig{1.0}{mesh/figures/optc/optm/optm_timing.png}
 \column{0.5\linewidth}
 \begin{itemize}
 \item \textbf{Kn 0.5, M 0.32}: 0.21 of the circle's drag, a slender 13.8\,m $\times$ 2.9\,m body; flat since $\sim$140.  Adjoint slope
@@ -1202,7 +1202,7 @@ pulled 2026-10-16 (Kn 0.5 236, free-mol.\ M 10 300 = done, Kn 0.5 + M 10 68 iter
 \begin{frame}{\code{optm} free-molecular M 10: the box, not the step}
 \scriptsize
 \begin{center}
-\fig{0.74}{mesh/figures/optc/optm_M10.png}
+\fig{0.74}{mesh/figures/optc/optm/optm_M10.png}
 \end{center}
 \begin{itemize}
 \item The body becomes a wedge with a flat base.  At M 10 nothing hits the base, so area there costs no drag: the area constraint
@@ -1218,7 +1218,7 @@ pulled 2026-10-16 (Kn 0.5 236, free-mol.\ M 10 300 = done, Kn 0.5 + M 10 68 iter
 \begin{frame}{\code{optm} Kn 0.5 + M 10: gradient spikes at the nose}
 \scriptsize
 \begin{center}
-\fig{0.80}{mesh/figures/optc/optm_kn0.5_M10.png}
+\fig{0.80}{mesh/figures/optc/optm/optm_kn0.5_M10.png}
 \end{center}
 \begin{itemize}
 \item Iterates 0--35: slope $0.94\pm0.02$, drag 0.50.  From $\sim$36 $|g|$ grows to 70--680$\times$ its start; slope $\approx0$; drag

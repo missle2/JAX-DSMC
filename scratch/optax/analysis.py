@@ -23,13 +23,14 @@ from roughness import turning  # noqa: E402
 ROOT = "examples/mesh/results/optimize"
 REGIMES = {"kn0.5": "Kn 0.5, M 0.3", "kn0.5_M10": "Kn 0.5, M 10"}
 S1 = ("adam", "ox_adam", "ox_adamcos", "ox_ademamix", "ox_prodigy", "ox_sfadam", "tr", "lbfgs",
-      "mma")  # fmt: skip
+      "mma", "ox_adam_cm", "ox_adamcos_cm", "ox_prodigy_cm", "ox_prodigycos_cm")  # fmt: skip
 # four seeds per iterate: optrules (cold start, 2026-10-19) and the reworked TR (optrules2)
 S4 = {"S4_adam": "S4_adam_tan_sm8_free_g32", "S4_tr": "S4_tr_tan_sm8_free_g32",
       "S4_lbfgs": "S4_lbfgs_tan_sm8_free_g32", "S4_mma": "S4_mma_tan_sm8_free_g32",
       "S4_tr2": "S4_tr2_tan_sm8_free_g32_w500"}  # fmt: skip
 WINDOW = 15  # running-mean width (iterates)
 ROUGH_EVERY = 10
+OUT = "scratch/optax/analysis.json"
 
 
 def tag(regime, arm):
@@ -68,6 +69,8 @@ def step_cosines(coefs):
 
 
 def main():
+    # an arm already in the json at its current length is kept (the roughness is the slow part)
+    old = json.load(open(OUT)) if Path(OUT).exists() else {}
     out = {}
     for regime in REGIMES:
         out[regime] = {}
@@ -80,6 +83,10 @@ def main():
             try:
                 hist, j, coefs = load(regime, arm)
             except FileNotFoundError:
+                continue
+            kept = old.get(regime, {}).get(arm)
+            if kept is not None and len(kept["J"]) == len(j):
+                out[regime][arm] = kept
                 continue
             seeds = 4 if arm in S4 else 1
             r = j / j0
@@ -113,7 +120,7 @@ def main():
                   f"{rough[min(rough, key=lambda k: abs(k - s['best_mean_at']))][0]:.2f}/"
                   f"{rough[max(rough)][0]:.2f} cos={np.nanmean(cos[:50]):.2f}/"
                   f"{np.nanmean(cos[-100:]):.2f}", flush=True)  # fmt: skip
-    json.dump(out, open("scratch/optax/analysis.json", "w"))
+    json.dump(out, open(OUT, "w"))
 
 
 if __name__ == "__main__":

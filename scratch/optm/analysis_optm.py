@@ -11,7 +11,7 @@ Kn 0.5 M 10 247 (the 2026-10-16 pull had 236 / 300 / 68).
 ``optm_kn0.5_M10_oscillation.png`` (from ``step_where.py``'s per-step motion of the nose): the
 Kn 0.5 M 10 drag's saw-tooth against the nose's normal motion and the gradient spikes.
 
-Per run (``figures/optc/optm_<run>.png``): drag / starting drag (±2 s.e.), the outlines, the
+Per run (``figures/optc/optm/optm_<run>.png``): drag / starting drag (±2 s.e.), the outlines, the
 adjoint check (observed drag change of each step, common random numbers -- the same 4 seeds
 every iterate -- against its first-order prediction ``g . dc``; the fitted slope of
 ``dD = a g . dc + b shift`` per phase, 1 = exact first order), the gradient norm, and the
@@ -235,7 +235,7 @@ def plot_run(run, h, geo, adj):  # noqa: PLR0915 -- one six-panel figure
         fontsize=11.5,
     )
     fig.tight_layout()
-    path = figure_path("optc", f"optm_{run}.png")
+    path = figure_path("optc/optm", f"optm_{run}.png")
     fig.savefig(path, dpi=130)
     plt.close(fig)
     print("wrote", path)
@@ -321,7 +321,7 @@ def plot_oscillation(run, h):
         fontsize=11.5,
     )
     fig.tight_layout()
-    out = figure_path("optc", f"optm_{run}_oscillation.png")
+    out = figure_path("optc/optm", f"optm_{run}_oscillation.png")
     fig.savefig(out, dpi=130)
     plt.close(fig)
     print("wrote", out)
@@ -343,7 +343,7 @@ def plot_drag(hist):
            "knots (optm, pulled 2026-10-17)", "optimisation iterate", "drag / initial drag")  # fmt: skip
     ax.legend(fontsize=8, frameon=False)
     fig.tight_layout()
-    path = figure_path("optc", "optm_drag.png")
+    path = figure_path("optc/optm", "optm_drag.png")
     fig.savefig(path, dpi=140)
     plt.close(fig)
     print("wrote", path)
@@ -374,7 +374,7 @@ def plot_timing(hist, nodes):
     fig.suptitle("optm step timings, one H200 per run (shared node c3gpu-g5-u13 for M10 and "
                  "Kn 0.5 M10)", fontsize=11)  # fmt: skip
     fig.tight_layout()
-    path = figure_path("optc", "optm_timing.png")
+    path = figure_path("optc/optm", "optm_timing.png")
     fig.savefig(path, dpi=140)
     plt.close(fig)
     print("wrote", path)

@@ -2,7 +2,7 @@
 squash at production density with every backward fit paired, and six optc shapes along the
 uniform shift and the cos 2 theta mode, Kn 0.5 and free-molecular) and ``biasgate`` (the
 64-seed Kn 0.5 FD, the Kn 0.5 and free-molecular whole-run horizon).  Prints the tables
-and draws ``figures/bias_gate_cluster.png`` and ``figures/cellgate_optc.png``.
+and draws ``figures/gates/bias_gate_cluster.png`` and ``figures/gates/cellgate_optc.png``.
 
     python3 scratch/cellfit/cluster_analysis.py
 """
@@ -162,7 +162,7 @@ def plot_squash(sq, hor, fd):
     ax.set_ylim(-4, 4.5)
     ax.legend(fontsize=8, loc="lower left")
     fig.tight_layout()
-    path = figure_path("", "bias_gate_cluster.png")
+    path = figure_path("gates", "bias_gate_cluster.png")
     fig.savefig(path, dpi=150)
     print("wrote", path)
 
@@ -194,7 +194,7 @@ def plot_optc(oc):
     fig.suptitle("optc level-set iterates, 16 CRN seeds each, fnum ×1, FD h = 0.05 "
                  "(mean ± se)", fontsize=11)
     fig.tight_layout()
-    path = figure_path("", "cellgate_optc.png")
+    path = figure_path("gates", "cellgate_optc.png")
     fig.savefig(path, dpi=150)
     print("wrote", path)
 

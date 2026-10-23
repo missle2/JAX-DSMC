@@ -5,7 +5,7 @@ particle crept along a concave stretch).
 
     PYTHONPATH=. python3 scratch/optrules/noise_shapes.py
 
-Writes ``examples/mesh/figures/optc/optrules_noise_shapes.png``.
+Writes ``examples/mesh/figures/optc/optrules/optrules_noise_shapes.png``.
 """
 
 import dataclasses
@@ -90,7 +90,7 @@ def main():
     fig.suptitle("filled: best shape; black: latest; grey dashed: S4 Adam's best "
                  "(flow from the left, area held)", fontsize=10)  # fmt: skip
     fig.tight_layout()
-    fig.savefig(figure_path("optc", "optrules_noise_shapes.png"), dpi=130)
+    fig.savefig(figure_path("optc/optrules", "optrules_noise_shapes.png"), dpi=130)
 
 
 if __name__ == "__main__":

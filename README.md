@@ -14,7 +14,7 @@ one run does not give it. This repository implements a **particle-carried ensemb
 (after Caflisch, Silantyev and Yang, arXiv 2603.20946) that does, checked against finite differences,
 and uses it to **optimise the shape of a body for minimum drag at fixed cross-section area**.
 
-![Optimised 2-D shapes from a circle: rows are two flow regimes, columns optimisers](examples/mesh/figures/optc/optrules_shapes.png)
+![Optimised 2-D shapes from a circle: rows are two flow regimes, columns optimisers](examples/mesh/figures/optc/optrules/optrules_shapes.png)
 
 *Starting from a circle (dashed), the optimiser reshapes the body to cut its drag to 0.10-0.20 of the
 circle's at the same area: a slender lens in a slow rarefied flow (top), a sharp wedge at Mach 10

@@ -14,8 +14,9 @@ steady field; the third panel is the drag history with the current iterate marke
 ``--stride s`` shows every ``s``-th iterate (the morph then spans ``s`` shape steps and
 the final iterate is always shown), which keeps a 250-iterate run's GIF to a few hundred
 frames.
-PNG frames go to ``figures/movie/<tag>/`` and the GIF to ``figures/movie/optimize_<tag>.gif``
-(``--mp4``: an H.264 ``figures/movie/optimize_<tag>.mp4`` through the ``ffmpeg`` executable
+PNG frames go to ``figures/movie/<group>/<tag>/`` and the GIF to
+``figures/movie/<group>/optimize_<tag>.gif`` (``<group>``: ``figure_paths.movie_folder``;
+``--mp4``: an H.264 ``figures/movie/<group>/optimize_<tag>.mp4`` through the ``ffmpeg`` executable
 instead -- a tenth of the GIF's size, so longer runs can keep more frames).
 
 ``--squash`` reads an aspect-ratio run instead (``results/optimize_squash/<tag>/``,
@@ -40,7 +41,7 @@ from matplotlib.ticker import MaxNLocator
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import forward as F
 import optimize as O  # the optimiser module: its artifacts are read here
-from figure_paths import figure_path
+from figure_paths import figure_path, movie_folder
 
 from examples import ensemble_mesh as EM
 from jax_dsmc import viz
@@ -250,16 +251,17 @@ def main(argv=None):
     args = ap.parse_args(argv)
     results = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "optimize_squash")
     out = Path(results if args.squash else O.RESULTS) / args.tag
-    fig_dir = Path(figure_path("movie", args.tag))
+    folder = movie_folder(args.tag)
+    fig_dir = Path(figure_path(folder, args.tag))
     paths = render(
         out, fig_dir, args.morph, args.hold, args.every, args.stride, args.squash, args.dpi
     )
     if args.mp4:
         movie = assemble_mp4(
-            fig_dir, len(paths), Path(figure_path("movie", f"optimize_{args.tag}.mp4")), args.fps
+            fig_dir, len(paths), Path(figure_path(folder, f"optimize_{args.tag}.mp4")), args.fps
         )
     else:
-        movie = assemble(paths, Path(figure_path("movie", f"optimize_{args.tag}.gif")), args.fps)
+        movie = assemble(paths, Path(figure_path(folder, f"optimize_{args.tag}.gif")), args.fps)
     print(f"wrote {movie} ({len(paths)} frames, {movie.stat().st_size / 1e6:.1f} MB)")
 
 

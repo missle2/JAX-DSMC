@@ -4,7 +4,9 @@
 * ``optax_convergence.png``: drag J / J0 (15-iterate running mean over the raw one-seed
   values), the body's centroid x and its roughness, per iterate, both regimes;
 * ``optax_shapes_<regime>.png``: each arm's best (running-mean) shape and its last;
-* ``optax_seeds.png``: one seed against four per iterate for Adam / TR / L-BFGS / MMA.
+* ``optax_seeds.png``: one seed against four per iterate for Adam / TR / L-BFGS / MMA;
+* ``optax_centroid.png``: each centroid-fixed arm against its free run -- drag, the body's
+  front (its upstream end) and length.
 
     PYTHONPATH=. python3 scratch/optax/figures.py
 """
@@ -25,7 +27,17 @@ sys.path.insert(0, "scratch/optax")
 import optimize as O  # noqa: E402
 from analysis import ROOT, running, tag  # noqa: E402
 from figure_paths import figure_path  # noqa: E402
-from style import COLOURS, DASHED, GRID, INK, LABELS, MUTED, ORDER, REGIME_TITLES  # noqa: E402
+from style import (  # noqa: E402
+    COLOURS,
+    FREE,
+    GRID,
+    INK,
+    LABELS,
+    MUTED,
+    ORDER,
+    REGIME_TITLES,
+    linestyle,
+)
 
 BOX_X = (-10.0, 20.0)
 plt.rcParams.update({"axes.edgecolor": MUTED, "axes.labelcolor": INK, "xtick.color": MUTED,
@@ -35,7 +47,7 @@ plt.rcParams.update({"axes.edgecolor": MUTED, "axes.labelcolor": INK, "xtick.col
 
 
 def _style(arm):
-    return {"color": COLOURS[arm], "ls": "--" if arm in DASHED else "-", "lw": 2.0}
+    return {"color": COLOURS[arm], "ls": linestyle(arm), "lw": 2.0}
 
 
 def _series(d, key):
@@ -88,7 +100,7 @@ def shapes(regime, arms, path):
     grid, ls0 = O.initial_levelset(cfg)
     lo, hi = np.asarray(grid.lo), np.asarray(grid.hi)
     init = O.surface_polyline(ls0, lo, hi)
-    fig, axes = plt.subplots(3, 3, figsize=(17, 7.6), constrained_layout=True)
+    fig, axes = plt.subplots(3, 4, figsize=(22, 7.6), constrained_layout=True)
     for ax, arm in zip(axes.ravel(), ORDER, strict=True):
         d = arms[arm]
         best, last = d["best_mean_at"], max(int(k) for k in d["position"])
@@ -161,12 +173,42 @@ def seeds(data, path):
     plt.close(fig)
 
 
+def centroid_pairs(data, path):
+    fig, axes = plt.subplots(2, 3, figsize=(17, 8.2), constrained_layout=True)
+    for row, (regime, arms) in enumerate(data.items()):
+        aj, af, al = axes[row]
+        for arm in ("ox_adam", "ox_adamcos", "ox_prodigy", *FREE, "ox_prodigycos_cm"):
+            d = arms.get(arm)
+            if d is None:
+                continue
+            m = np.asarray(d["J_mean"])
+            aj.plot(np.arange(len(m)), m, label=LABELS[arm], **_style(arm))
+            k, pos = _series(d, "position")
+            af.plot(k, pos[:, 2], **_style(arm))
+            al.plot(k, pos[:, 3] - pos[:, 2], **_style(arm))
+        aj.set_yscale("log")
+        aj.set_ylabel("drag J / J0  (running mean)")
+        aj.set_title(f"{REGIME_TITLES[regime]}: drag, free (solid) / centroid fixed", loc="left")
+        af.axhline(BOX_X[0], color=MUTED, lw=1.0, ls=":")
+        af.text(2, BOX_X[0] + 0.4, "inflow face", color=MUTED, va="bottom", fontsize=9)
+        af.set_ylabel("body front: smallest x (m)")
+        af.set_title(f"{REGIME_TITLES[regime]}: upstream end (start x = 2)", loc="left")
+        al.set_ylabel("body length in x (m)")
+        al.set_title(f"{REGIME_TITLES[regime]}: length (start 6)", loc="left")
+        for ax in axes[row]:
+            ax.set_xlabel("iterate")
+    axes[0, 0].legend(fontsize=9, ncol=2, frameon=False)
+    fig.savefig(path, dpi=110)
+    plt.close(fig)
+
+
 def main():
     data = json.load(open("scratch/optax/analysis.json"))
-    convergence(data, figure_path("optc", "optax_convergence.png"))
+    convergence(data, figure_path("optc/optax", "optax_convergence.png"))
     for regime, arms in data.items():
-        shapes(regime, arms, figure_path("optc", f"optax_shapes_{regime}.png"))
-    seeds(data, figure_path("optc", "optax_seeds.png"))
+        shapes(regime, arms, figure_path("optc/optax", f"optax_shapes_{regime}.png"))
+    seeds(data, figure_path("optc/optax", "optax_seeds.png"))
+    centroid_pairs(data, figure_path("optc/optax", "optax_centroid.png"))
     print("wrote the figures")
 
 

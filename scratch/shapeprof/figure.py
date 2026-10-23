@@ -7,7 +7,7 @@
 The 2026-10-20 ``warm500`` call compiled the warm path inside its timed call (the cold path
 came from the persistent cache), so its warm-up is drawn hatched; the estimate beside it puts
 the 500 settle steps at the captured window's per-step rate.  Writes
-``examples/mesh/figures/optc/shapeprof.png``.
+``examples/mesh/figures/optc/gates/shapeprof.png``.
 """
 
 import json
@@ -71,7 +71,7 @@ def main():
     fig.suptitle("guarded backward 40-42 s -> 33-34 s (per-cell leverage tables); warm start: "
                  "the timed call paid the warm path's compile (hatched)", fontsize=10)  # fmt: skip
     fig.tight_layout()
-    fig.savefig(figure_path("optc", "shapeprof.png"), dpi=140)
+    fig.savefig(figure_path("optc/gates", "shapeprof.png"), dpi=140)
 
 
 if __name__ == "__main__":

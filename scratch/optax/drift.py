@@ -36,6 +36,8 @@ def main():
         grid, ls0 = O.initial_levelset(cfg)
         lo, hi = np.asarray(grid.lo), np.asarray(grid.hi)
         for arm, d in arms.items():
+            if "position" in d:  # kept from an earlier pass (analysis.py keeps unchanged arms)
+                continue
             pos = {}
             n = len(d["J"])
             for k in sorted({*range(0, n + 1, 10), n}):

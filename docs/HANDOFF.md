@@ -383,7 +383,7 @@ distribution); `inflow.revive_at`.
     (2026-10-21): S1 Adam at M 10 reaches ~0.10-0.11 J0 at ~iterate 150 then climbs to ~0.19 by 330, the
     S4 overshoot again - Adam's limit is its fixed step SIZE (too small early: `tr` was 2x faster to 0.35;
     too large late), which is what `optax1seed` tests. S1 MMA fragments (15 pieces at M 10) and roughens
-    (total turning 25 at Kn 0.5). Figures `optrules_noise*.png`, movies `figures/movie/optrules_*_noise.mp4`.
+    (total turning 25 at Kn 0.5). Figures `optrules_noise*.png`, movies `figures/movie/optrules/optrules_*_noise.mp4`.
 - **Regime findings** (`optm`): Kn 0.5: 0.21 of circle drag, flat since ~140; the observed dD vs adjoint
   slope S/(S + rho) with rho 4.8 is noise dilution, not bias. Free-molecular M 10: a wedge whose flat base
   receives no hits, so area migrates into the shadow and the body slides downstream into the keep-out
@@ -392,7 +392,7 @@ distribution); `inflow.revive_at`.
   spike's direction 5-25 iterates; the nose grows a sting < 2 cells thick (the thin-body regime fixed by
   `guard32`; re-check after the guard).
 - **Roughness** (2026-10-21, `scratch/optrules/roughness.py`, `reinit_drift.py`, `noise_shapes.py`;
-  figures `examples/mesh/figures/optc/optrules_roughness.png`, `optrules_noise_shapes.png`): see open
+  figures `examples/mesh/figures/optc/optrules/optrules_roughness.png`, `optrules_noise_shapes.png`): see open
   problem 1 in the summary.
 
 ### 2.7 Cluster and process
@@ -633,7 +633,7 @@ Ordered roughly by value.
 3. **Thin-body residuals** (-4 % at 0.58 m, optm nose -3.8 %): unexplained; hypotheses not yet tested beyond
    the fit order.
 4. **Enlarge the free-molecular M 10 box** (or constrain the base) before quoting the wedge.
-   2026-10-23 (`scratch/optax/`, figures `optc/optax_*.png`, movies `movie/optax_{all,present}_*.mp4`):
+   2026-10-23 (`scratch/optax/`, figures `optc/optax/optax_*.png`, movies `movie/optax/optax_{all,present}_*.mp4`):
    every Adam-type one-seed run at Kn 0.5 M 10 reached ~0.11-0.12 J0 by iterates 60-230 and then
    slid ~10 m downstream (centroid x 5 -> 16) until its base flattened on the outflow face, drag
    back to ~0.2-0.25 J0 -- a systematic pull (the four Adam variants drift alike, the one-seed scatter
@@ -645,7 +645,21 @@ Ordered roughly by value.
    Adam slow (0.25); Prodigy unstable (its step grows: 0.21 -> 0.34 J0); L-BFGS / MMA stall at
    0.6-0.7 J0 at M 0.3.  Four seeds per iterate change Adam's per-iterate path little (drag, step
    consistency and drift all alike): the step's direction is not noise-limited.
-5. **Cluster speed**: `speedprof` on an RTX PRO 6000 1g.24gb slice (2026-10-22; the same hardware as the
+   `optcm` (centroid held, 2026-10-23): M 0.3 ~ the free runs (0.21-0.23 J0); M 10 worse (0.18-0.20
+   against 0.12).  Two causes.  (a) The first constraint cancelled the step's translation by
+   reshaping the nose / base along the raw centroid gradient (`scratch/optax/projection_synthetic.py`:
+   a correction ~2x rougher than a translation, peaked at the base): ragged bases, roughness 13-25.
+   Now held by rigid translations (`translation_modes`, `constrained_gradient`, `project_centroid`
+   translates); group `optct`.  (b) Every centroid-fixed M 10 nose stopped at x ~ -0.6 by iterate 40
+   and never moved, the body capped at ~9.3 m, while the free runs grew to 10-11 m by moving away
+   from the inflow face: most likely the box (the nose's shock against the inflow face 9.4 m away),
+   not the optimiser.  Untested: the same shape evaluated at two positions.
+5. **Cluster speed**: production per iterate, optax1seed -> optcm (2026-10-23, the 10-22 changes):
+   Kn 0.5 M 0.3 (RTX) 113 -> 68 s, M 10 (H200) 89 -> 66 s.  Laptop (`speedup_history.png`,
+   `scratch/perf/stage_times.py`): 38 s (10-11) -> 32 s cold -> 29 s warm-started; the shape step
+   27 -> 14 s, while the forward rose 6 -> 10 s and the backward 3 -> 5 s with the 10-12..10-20
+   correctness changes (guard32 basis, free stream, sub-cells), not yet profiled.
+   Earlier: `speedprof` on an RTX PRO 6000 1g.24gb slice (2026-10-22; the same hardware as the
    Kn 0.5 optax1seed runs): per iterate at Kn 0.5 the backward 62 -> ~37 s, the shape step 23 -> ~7.5 s,
    ~102 -> ~62 s in all (the 2026-10-22 changes; gradient equal to 1.3e-11 with command buffers on and
    steps batched).  Command buffers on: no crash, no measurable gain on the RTX (compute-bound f64);

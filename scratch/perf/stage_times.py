@@ -2,9 +2,12 @@
 regress.py configuration (optc settings at fnum x 4, 15 k slots): forward, traced replay, the
 value backwards, the shape gradient's variants and the cut-volume term (2026-10, outside
 profile_seed.py's hooks), each blocked on.  One warm-up seed (key 40), then the timed seeds.
+``--restart-steps R`` (2026-10-23): the timed seeds warm-started from the warm-up seed's final
+gas with ``R`` re-equilibration steps (the optimiser's ``--restart-steps``), the cost of a
+warm-started iterate's seed.
 
     run_locked.sh gpu env PYTHONPATH=. python3 scratch/perf/stage_times.py --tag cellfit \
-        [--variants one along_pool]
+        [--variants one along_pool] [--restart-steps 500]
 
 Writes scratch/perf/regress/stages_<tag>.json.
 """
@@ -48,6 +51,7 @@ def main():
     ap.add_argument("--tag", required=True)
     ap.add_argument("--variants", nargs="+", default=["one", "along_pool"])
     ap.add_argument("--seeds", type=int, nargs="+", default=[32, 33])
+    ap.add_argument("--restart-steps", type=int, default=0)
     args = ap.parse_args()
     ensemble_backward.configure("virtual", 1, 2, "staged")
     cfg = dict(
@@ -60,19 +64,26 @@ def main():
     wrap(shape, "gradient_variants", "gradient_variants")
     wrap(EM, "_volume_term", "volume_term")
     variants = tuple(args.variants)
-    EM.shape_terms(cfg, jax.random.key(40), ls, "radius", 32, 0.2, variants)  # warm-up
+    _t, _i, s0 = EM.shape_terms(cfg, jax.random.key(40), ls, "radius", 32, 0.2, variants)  # warm-up
+    restart = None
+    if args.restart_steps > 0:
+        cfg["restart_steps"] = args.restart_steps
+        restart = s0["final"]
+        # the warm start's own compilation (a first warm seed's forward: 79 s against 8 s)
+        EM.shape_terms(cfg, jax.random.key(41), ls, "radius", 32, 0.2, variants, 0, restart)
     rows = []
     for seed in args.seeds:
         STAGES.clear()
         t0 = time.perf_counter()
         _terms, info, _s = EM.shape_terms(
-            cfg, jax.random.key(seed), ls, "radius", 32, 0.2, variants
+            cfg, jax.random.key(seed), ls, "radius", 32, 0.2, variants, 0, restart
         )
         total = time.perf_counter() - t0
         row = {
             "seed": seed,
             "device": jax.devices()[0].device_kind,
             "variants": list(variants),
+            "restart_steps": args.restart_steps,
             "total": total,
             **{k: float(v) for k, v in STAGES.items()},
             "host_other": total - sum(STAGES.values()),

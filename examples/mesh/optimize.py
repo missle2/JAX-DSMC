@@ -165,10 +165,17 @@ def default_config():
             # the body's area centroid held at its start (2026-10-23; 1 = on, needs "tangent"):
             # the drag in a uniform stream does not depend on where the body sits, but every
             # Adam-type M 10 run slid ~10 m downstream onto the outflow face (the box's inflow
-            # and outflow faces make position matter) -- the constraint removes that direction
-            # from the step like the area's (tangent_component) and restores the centroid
-            # after it (project_centroid)
+            # and outflow faces make position matter) -- the constraint removes the translation
+            # part of the gradient (constrained_gradient), corrects the step along rigid
+            # translations (tangent_component) and moves the body back after it
+            # (project_centroid); the shape is never reshaped for it (the first version,
+            # optcm of 2026-10-23, reshaped it by the centroid's gradient: ragged bases)
             "fix_centroid": 0,
+            # the initial body moved downstream by this much (m) before the first iterate
+            # (2026-10-23): every centroid-fixed M 10 nose stopped at x ~ -0.6, ~9.4 m from the
+            # inflow face, while the free bodies grew longer by sliding away from it -- with
+            # fix_centroid the held centroid is the moved body's
+            "start_shift": 0.0,
         }
     )
     return cfg
@@ -211,28 +218,48 @@ def centroid_and_gradient(ls, lo, hi):
     return np.asarray(c), np.asarray(jac)
 
 
+def translation_modes(ls, band):
+    """``f64[D, *coef.shape]``: the coefficient changes that translate the body rigidly along
+    each axis (per unit distance, to first order: ``phi(x - d e_a) ~ phi - d d_a phi``, the
+    coefficient field's central difference), restricted to the coefficient band of half-width
+    ``band``.  Smooth along the surface: a step corrected along them keeps its shape."""
+    coef = np.asarray(ls.coef)
+    mask = np.asarray(L.coefficient_band(ls, band))
+    return np.stack([-np.gradient(coef, ls.h, axis=a) * mask for a in range(coef.ndim)])
+
+
 def constraint_gradients(ls, lo, hi, g_area, cfg):
-    """The gradients a step is kept tangent to: ``g_area``, or with ``fix_centroid`` the stack
-    ``[g_area, dc_x/dcoef, ...]`` (:func:`tangent_component` takes either)."""
+    """The constraints a step is kept tangent to: ``g_area``, or with ``fix_centroid`` the pair
+    ``[rows, modes]`` (``f64[2, 1 + D, *coef.shape]``): the rows ``[g_area, dc_x/dcoef, ...]``
+    and the directions a step is corrected along, ``[g_area, translation_modes]`` -- the
+    centroid is restored by moving the body, never by reshaping it (:func:`tangent_component`,
+    :func:`constrained_gradient` take either)."""
     if not cfg.get("fix_centroid", 0):
         return g_area
-    return np.concatenate((g_area[None], centroid_and_gradient(ls, lo, hi)[1]))
+    rows = np.concatenate((g_area[None], centroid_and_gradient(ls, lo, hi)[1]))
+    modes = np.concatenate((g_area[None], translation_modes(ls, cfg.get("band", 1.0) + ls.h)))
+    return np.stack((rows, modes))
 
 
-def project_centroid(ls, target, lo, hi, iters=3):
-    """The smallest coefficient change (area unchanged to first order) that moves the centroid
-    to ``target``: Newton on ``[A, c]`` with ``A``'s row held at zero change (quadratic: a
-    0.03 m offset to 1e-7 in two iterations, 0.27 m to 5e-10 in four).  Returns ``(ls,
-    remaining centroid error)``."""
+def translate(ls, shift):
+    """``ls`` moved rigidly by ``shift`` (``f64[D]``): the spline resampled at the knots."""
+    x = L.knots(ls) - jnp.asarray(shift)
+    values = L.value(ls, x).reshape(ls.coef.shape)
+    return dataclasses.replace(ls, coef=L.interpolate(values))
+
+
+def project_centroid(ls, target, lo, hi, iters=2):
+    """The rigid translation that puts the area centroid at ``target`` (the shape, and so the
+    area, unchanged; the centroid moves with the body up to the sub-grid's quadrature, hence a
+    second pass).  Returns ``(ls, remaining centroid error)``.  (Until 2026-10-23 the smallest
+    coefficient change by Newton on ``[A, c]``: the centroid's coefficient gradient is a
+    one-knot-wide band weighted by ``x - c``, and every restoration reshaped the body's nose and
+    base by it -- the optcm runs' ragged bases.)"""
     target = np.asarray(target, float)
     for _ in range(iters):
-        g_area = area_and_gradient(ls, lo, hi)[1]
-        c, jac = centroid_and_gradient(ls, lo, hi)
-        rows = np.concatenate((g_area[None], jac)).reshape(len(c) + 1, -1)
-        rhs = np.concatenate(([0.0], target - c))
-        dc = np.linalg.solve(rows @ rows.T, rhs) @ rows
-        ls = dataclasses.replace(ls, coef=ls.coef + jnp.asarray(dc.reshape(ls.coef.shape)))
-    c = centroid_and_gradient(ls, lo, hi)[0] if iters else np.zeros_like(target)
+        c = np.asarray(_centroid_of_coef(ls.coef, ls, lo, hi))
+        ls = translate(ls, target - c)
+    c = np.asarray(_centroid_of_coef(ls.coef, ls, lo, hi))
     return ls, float(np.abs(c - target).max())
 
 
@@ -255,7 +282,8 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
     low, upp = OZ.mma_asymptotes(state, coef, step, k)
     g0 = smooth(g_full)
     area = float(L.body_volume(ls, lo, hi, 4))
-    g_area = g_area[0] if g_area.ndim > coef.ndim else g_area  # MMA's own: the area only
+    while g_area.ndim > coef.ndim:  # MMA's own: the area only
+        g_area = g_area[0]
     xs, lam = OZ.mma_step(coef[mask], g0[mask], area, g_area[mask], float(state["area0"]),
                           low[mask], upp[mask], step)  # fmt: skip
     delta = np.zeros_like(coef)
@@ -356,14 +384,30 @@ def project_area(ls: LevelSet, target: float, lo, hi, n_bisect: int = 40) -> tup
 def tangent_component(v: np.ndarray, g_area: np.ndarray) -> tuple[np.ndarray, float]:
     """``v`` without its component along ``g_area`` (coefficient space: ``g_area . dc`` is the
     first-order area change of a step ``dc``), and the removed coefficient.  ``g_area`` may be a
-    stack of constraint gradients (:func:`constraint_gradients`, one more leading axis): ``v``
-    is projected onto their common null space; the coefficient returned is the area's."""
+    stack of constraint gradients (one more leading axis): ``v`` is projected onto their common
+    null space; or :func:`constraint_gradients`' ``[rows, modes]`` (two more): ``v`` corrected
+    along the modes into the rows' null space (``v - B (R B)^-1 R v``).  The coefficient
+    returned is the area's."""
     if g_area.ndim == v.ndim:
         nu = float(np.sum(v * g_area) / np.sum(g_area * g_area))
         return v - nu * g_area, nu
-    rows = g_area.reshape(g_area.shape[0], -1)
-    lam = np.linalg.solve(rows @ rows.T, rows @ v.ravel())
-    return v - (lam @ rows).reshape(v.shape), float(lam[0])
+    if g_area.ndim == v.ndim + 2:
+        rows, modes = (a.reshape(a.shape[0], -1) for a in g_area)
+    else:
+        rows = modes = g_area.reshape(g_area.shape[0], -1)
+    lam = np.linalg.solve(rows @ modes.T, rows @ v.ravel())
+    return v - (lam @ modes).reshape(v.shape), float(lam[0])
+
+
+def constrained_gradient(g: np.ndarray, cons: np.ndarray) -> tuple[np.ndarray, float]:
+    """The gradient the optimiser sees: ``g`` without its components along the constraint's
+    correction directions (orthogonally; :func:`tangent_component` for a bare ``g_area`` or
+    a stack).  With ``[rows, modes]`` that removes the translation part (a body's drag does
+    not depend on where it sits: what there is of it is noise or the box), keeping the
+    gradient smooth; the coefficient returned is the area's."""
+    if cons.ndim == g.ndim + 2:
+        return tangent_component(g, cons[1])
+    return tangent_component(g, cons)
 
 
 def smoothed_direction(grad: np.ndarray, ls: LevelSet, sigma: float, band: float) -> np.ndarray:
@@ -679,6 +723,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         # coef_k.npy is the level set *entering* iterate k
         ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(out / f"coef_{len(history)}.npy")))
     else:
+        if cfg["start_shift"]:
+            ls = translate(ls, np.array([cfg["start_shift"]] + [0.0] * (ls.coef.ndim - 1)))
         np.save(out / "coef_0.npy", np.asarray(ls.coef))
     area0 = saved["area_target"] if saved else float(L.body_volume(ls, lo, hi, 4))
     # the initial body's (coef_0), also for a run resumed with the constraint newly on
@@ -760,10 +806,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         elif mode == "tangent":
             area_now, g_area = area_and_gradient(ls, lo, hi)
             area_err = area_now - area0
-            # with fix_centroid the stack of the area's and the centroid's gradients
+            # with fix_centroid the area and centroid rows and their correction directions
             g_area = constraint_gradients(ls, lo, hi, g_area, cfg)
             # the KKT gradient: Adam's moments then track the constrained gradient too
-            g, nu = tangent_component(g, g_area)
+            g, nu = constrained_gradient(g, g_area)
         extra = {}
         if rule:
             from_ls, delta, predicted, rule_state, extra = rule_step(

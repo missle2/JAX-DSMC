@@ -337,9 +337,9 @@ def main():
             "median": float(np.median(rho)),
         }
     lines = {r: shapes(r, ("base", *ARMS), data[r]) for r in REGIMES}
-    fig_convergence(data, figure_path("optc", "optrules_convergence.png"))
-    fig_shapes(data, lines, figure_path("optc", "optrules_shapes.png"))
-    fig_mechanisms(data, pairs, figure_path("optc", "optrules_mechanisms.png"))
+    fig_convergence(data, figure_path("optc/optrules", "optrules_convergence.png"))
+    fig_shapes(data, lines, figure_path("optc/optrules", "optrules_shapes.png"))
+    fig_mechanisms(data, pairs, figure_path("optc/optrules", "optrules_mechanisms.png"))
     with open("scratch/optrules/analysis.json", "w") as fh:
         json.dump(out, fh, indent=1)
     for r in REGIMES:

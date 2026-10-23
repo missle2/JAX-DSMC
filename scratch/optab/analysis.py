@@ -24,7 +24,7 @@ Per run, from ``history.json`` and ``coef_<k>.npy``:
   ``E[a] = S / (S + rho)`` with ``rho`` the per-seed noise-to-signal power of the step's
   projection: a slope below 1 that rises with the seed count is noise, not bias.
 
-Writes ``figures/optc/optab_*.png`` and ``scratch/optab/analysis.json``.
+Writes ``figures/optc/optab/optab_*.png`` and ``scratch/optab/analysis.json``.
 """
 
 import dataclasses
@@ -306,7 +306,7 @@ def plot(hist, tags, out):
         fontsize=11,
     )
     fig.tight_layout()
-    path = figure_path("optc", "optab_overview.png")
+    path = figure_path("optc/optab", "optab_overview.png")
     fig.savefig(path, dpi=140)
     print("wrote", path)
 

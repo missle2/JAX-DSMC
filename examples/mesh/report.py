@@ -1544,7 +1544,7 @@ def main() -> int:  # noqa: PLR0912, PLR0915 -- one report pass, kept whole
         report[case] = g
         _print_case(case, g)
     ws = window_score(
-        os.path.join(RESULTS, "window_score.json"), os.path.join(FIGURES, "window_score.png")
+        os.path.join(RESULTS, "window_score.json"), figure_path("gates", "window_score.png")
     )
     if ws is not None:
         report["G3a_window_score"] = ws
@@ -1558,16 +1558,16 @@ def main() -> int:  # noqa: PLR0912, PLR0915 -- one report pass, kept whole
             print(
                 f"| {w} | {r['fd'][0]:+.4f} ± {r['fd'][1]:.4f} ({r['sd_fd']:.4f}) | {r['analytic']:+.4f} | {s02[0]:+.4f} ± {s02[1]:.4f} (z {r['score_z']['0.02']:+.1f}) | {s01[0]:+.4f} ± {s01[1]:.4f} (z {r['score_z']['0.01']:+.1f}) | {r['score_sd_over_fd_sd']['0.02']:.1f} / {r['score_sd_over_fd_sd']['0.01']:.1f} |"
             )
-    ag = adjoint_gates(os.path.join(FIGURES, "adjoint_gates.png"))
+    ag = adjoint_gates(figure_path("gates", "adjoint_gates.png"))
     if ag:
         report["adjoint_gates"] = ag
         print_adjoint_gates(ag)
-        figure_shape_terms(ag, os.path.join(FIGURES, "shape_circle_terms.png"))
-        ls = levelset_vs_analytic(os.path.join(FIGURES, "levelset_gradient.png"))
+        figure_shape_terms(ag, figure_path("gates", "shape_circle_terms.png"))
+        ls = levelset_vs_analytic(figure_path("gates", "levelset_gradient.png"))
         if ls is not None:
             report["levelset_vs_analytic"] = ls
             print_levelset(ls)
-        gz = grazing_regularisation(os.path.join(FIGURES, "grazing_regularisation.png"))
+        gz = grazing_regularisation(figure_path("gates", "grazing_regularisation.png"))
         if gz is not None:
             report["grazing_regularisation"] = gz
             print_grazing(gz)
@@ -1580,12 +1580,12 @@ def main() -> int:  # noqa: PLR0912, PLR0915 -- one report pass, kept whole
             report["plate_fd_steps"] = fs
             print_plate_fd_steps(fs)
         if sf is not None and fs is not None:
-            figure_plate_estimators(sf, fs, os.path.join(FIGURES, "plate_estimators.png"))
+            figure_plate_estimators(sf, fs, figure_path("gates", "plate_estimators.png"))
         for suffix in ("", "_energy"):
             fb = _fit_bias(suffix)
             if fb is not None:
                 report[f"plane_fit_bias{suffix}"] = fb
-        fc = fit_classes(os.path.join(FIGURES, "fit_classes.png"))
+        fc = fit_classes(figure_path("gates", "fit_classes.png"))
         if fc is not None:
             report["plane_fit_classes"] = fc
             print_fit_classes(fc)
@@ -1593,7 +1593,7 @@ def main() -> int:  # noqa: PLR0912, PLR0915 -- one report pass, kept whole
         runs = variants_runs(ag)
         print_variants(probe, runs)
         report["estimator_variants"] = {"probe": probe, "runs": runs}
-        figure_variants(probe, runs, os.path.join(FIGURES, "estimator_variants.png"))
+        figure_variants(probe, runs, figure_path("gates", "estimator_variants.png"))
     with open(os.path.join(RESULTS, "forward_gates.json"), "w") as fh:
         json.dump(report, fh, indent=1)
     print("wrote", os.path.join(RESULTS, "forward_gates.json"))

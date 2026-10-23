@@ -21,7 +21,7 @@ The area holds to ~1e-12 relative in tangent mode, so the drag itself is the com
 * the per-iterate wall time against the wall clock (all five ran side by side on one rtx node,
   separate MIG 1g.24gb slices) and against the particle hits.
 
-Writes ``figures/optc/optab_tan_{drag,shapes,adjoint,timing}.png`` and
+Writes ``figures/optc/optab/optab_tan_{drag,shapes,adjoint,timing}.png`` and
 ``scratch/optab/analysis_tan.json``.
 """
 
@@ -261,7 +261,7 @@ def plot_drag(hist, ref):
         fontsize=11,
     )
     fig.tight_layout()
-    path = figure_path("optc", "optab_tan_drag.png")
+    path = figure_path("optc/optab", "optab_tan_drag.png")
     fig.savefig(path, dpi=140)
     print("wrote", path)
 
@@ -311,7 +311,7 @@ def plot_shapes(hist, out, outlines):
         fontsize=11,
     )
     fig.tight_layout()
-    path = figure_path("optc", "optab_tan_shapes.png")
+    path = figure_path("optc/optab", "optab_tan_shapes.png")
     fig.savefig(path, dpi=140)
     print("wrote", path)
 
@@ -371,7 +371,7 @@ def plot_adjoint(out):
         fontsize=11,
     )
     fig.tight_layout()
-    path = figure_path("optc", "optab_tan_adjoint.png")
+    path = figure_path("optc/optab", "optab_tan_adjoint.png")
     fig.savefig(path, dpi=140)
     print("wrote", path)
 
@@ -400,7 +400,7 @@ def plot_timing(hist, out):
            "hits per seed [thousands]")  # fmt: skip
     fig.suptitle("Iterate timings (iterate 0 = compile omitted)", fontsize=11)
     fig.tight_layout()
-    path = figure_path("optc", "optab_tan_timing.png")
+    path = figure_path("optc/optab", "optab_tan_timing.png")
     fig.savefig(path, dpi=140)
     print("wrote", path)
 

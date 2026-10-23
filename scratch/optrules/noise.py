@@ -7,7 +7,7 @@ Panels per regime: J / J0 (J0 the S = 4 initial drag; one-seed curves as a 10-it
 mean over the raw values) against the iterate and against the seed evaluations (iterates x S:
 the hardware-neutral cost -- the runs sit on H200 2g.35gb and RTX 1g.24gb slices, ~1.8x apart),
 and the trust radius of the reworked TR (S = 4 and S = 1).  A crashed run ends in an x.
-Writes ``examples/mesh/figures/optc/optrules_noise.png``.
+Writes ``examples/mesh/figures/optc/optrules/optrules_noise.png``.
 """
 
 import json
@@ -105,7 +105,7 @@ def main():
         axes[row, 2].legend(fontsize=6)
     axes[0, 0].legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(figure_path("optc", "optrules_noise.png"), dpi=130)
+    fig.savefig(figure_path("optc/optrules", "optrules_noise.png"), dpi=130)
 
 
 if __name__ == "__main__":

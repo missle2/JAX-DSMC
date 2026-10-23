@@ -230,28 +230,42 @@ def _circle_levelset(centre=(5.0, 5.0)):
 
 
 def test_centroid_constraint_projects_and_restores():
-    """2026-10-23 (``fix_centroid``): a step projected on the stack of the area's and the
-    centroid's gradients changes neither to first order; a body displaced by a quarter metre
-    is moved back to the target centroid with its area kept."""
+    """2026-10-23 (``fix_centroid``): a step corrected along rigid translations changes
+    neither the area nor the centroid to first order, and the correction is a translation
+    (smooth: no more high-frequency content than the step's own); the constrained gradient
+    has no translation part; a body displaced by a quarter metre is moved back rigidly, its
+    area kept."""
     import optimize as O  # noqa: PLC0415
+    from scipy.ndimage import gaussian_filter  # noqa: PLC0415
 
     ls, lo, hi = _circle_levelset()
     _area0, g_area = O.area_and_gradient(ls, lo, hi)
-    stack = O.constraint_gradients(ls, lo, hi, g_area, {"fix_centroid": 1})
-    assert stack.shape == (3, *ls.coef.shape)
+    cons = O.constraint_gradients(ls, lo, hi, g_area, {"fix_centroid": 1, "band": 1.0})
+    assert cons.shape == (2, 3, *ls.coef.shape)
+    rows, modes = cons
     rng = np.random.default_rng(0)
-    v, _nu = O.tangent_component(rng.normal(size=ls.coef.shape), stack)
-    np.testing.assert_allclose(stack.reshape(3, -1) @ v.ravel(), 0.0, atol=1e-9)
+    v0 = gaussian_filter(rng.normal(size=ls.coef.shape), 4.0)  # a smooth step
+    v, _nu = O.tangent_component(v0, cons)
+    np.testing.assert_allclose(rows.reshape(3, -1) @ v.ravel(), 0.0, atol=1e-9)
+    # the correction lies in the span of the area row and the translations
+    basis = modes.reshape(3, -1).T
+    fit = np.linalg.lstsq(basis, (v0 - v).ravel(), rcond=None)
+    np.testing.assert_allclose(basis @ fit[0], (v0 - v).ravel(), atol=1e-9)
+    g, _ = O.constrained_gradient(v0, cons)
+    np.testing.assert_allclose(modes.reshape(3, -1) @ g.ravel(), 0.0, atol=1e-9)
     c0 = np.asarray(O._centroid_of_coef(ls.coef, ls, lo, hi))
     np.testing.assert_allclose(c0, [5.0, 5.0], atol=1e-6)
-    # Newton: quadratic -- a step-sized offset in the default iterations, a large one in four
-    for centre, iters in (((5.03, 5.0), 3), ((5.25, 4.9), 4)):
+    for centre in ((5.03, 5.0), (5.25, 4.9)):
         moved, _, _ = _circle_levelset(centre)
         a_moved = O.area_and_gradient(moved, lo, hi)[0]
-        back, err = O.project_centroid(moved, c0, lo, hi, iters=iters)
-        assert err < 1e-8
-        # first order only (0.3 % at 0.27 m); after_step's project_area restores it after
-        assert abs(O.area_and_gradient(back, lo, hi)[0] - a_moved) < 5e-3 * a_moved
+        back, err = O.project_centroid(moved, c0, lo, hi)
+        assert err < 1e-6
+        assert abs(O.area_and_gradient(back, lo, hi)[0] - a_moved) < 1e-4 * a_moved
+        # a rigid move: the body back where the centred circle is
+        phi = np.asarray(O.L.value(back, O.L.knots(back)))
+        ref = np.asarray(O.L.value(ls, O.L.knots(ls)))
+        near = np.abs(ref) < 0.5
+        assert np.abs(phi - ref)[near].max() < 2e-3
     # a single stacked row is the area-only projection
     w1, _ = O.tangent_component(v, g_area)
     w2, _ = O.tangent_component(v, g_area[None])

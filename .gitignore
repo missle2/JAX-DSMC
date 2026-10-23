@@ -240,7 +240,7 @@ examples/mesh/results/**/adam_state.npz
 # VTK field dumps of the forward runs
 examples/mesh/results/vtk/
 # the PNG frames a movie is assembled from (examples.mesh.movie); the .mp4 / .gif stay
-examples/mesh/figures/movie/*/
+examples/mesh/figures/movie/*/*/
 # profiler traces
 scratch/profile/
 *.xplane.pb

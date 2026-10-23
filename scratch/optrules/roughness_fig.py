@@ -73,7 +73,7 @@ def main():
         zx.set_aspect("equal")
         zx.set_title("zoom: roughest 1 m (red = concave)", fontsize=8)
     fig.tight_layout()
-    fig.savefig(figure_path("optc", "optrules_roughness.png"), dpi=110)
+    fig.savefig(figure_path("optc/optrules", "optrules_roughness.png"), dpi=110)
 
 
 if __name__ == "__main__":

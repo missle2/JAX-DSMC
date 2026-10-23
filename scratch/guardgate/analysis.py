@@ -7,7 +7,7 @@ Every fit is paired on one forward per seed against the seed's CRN central FD.  
 against body thickness, (c) the optm Kn 0.5 M 10 iterates along the shift and the nose bump,
 (d) the carried value's largest |lambda| (the blow-up's signature), (e) how often the guard
 lowers the order, (f) the stored device gates, guard against the shipped cubic.  Writes
-``examples/mesh/figures/optc/guardgate.png`` and ``<dir>/analysis.json``.
+``examples/mesh/figures/optc/gates/guardgate.png`` and ``<dir>/analysis.json``.
 """
 
 import json
@@ -241,7 +241,7 @@ def main():
     fig.suptitle("Leverage-guarded cubic backward fit (guardgate): every fit paired on one "
                  "forward per seed against the CRN FD; error bars +-2 s.e.", fontsize=11)  # fmt: skip
     fig.tight_layout()
-    path = figure_path("optc", "guardgate.png")
+    path = figure_path("optc/gates", "guardgate.png")
     fig.savefig(path, dpi=130)
     plt.close(fig)
     print("wrote", path)

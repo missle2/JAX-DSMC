@@ -11,7 +11,7 @@ value's largest |lambda|.  optm jobs (``om_*``, ``omg2_*``): per (iterate, fit) 
 against the FD along each direction, each term's projection, the seed-mean gradient's norm
 against the optimiser's ``grad_norm`` at that iterate (the reproduction check: the shipped
 fit on the same seeds), and where the per-knot pathwise v map peaks (from the npz maps).
-Writes ``<dir>/summary.json`` and ``examples/mesh/figures/optc/thingate.png``.
+Writes ``<dir>/summary.json`` and ``examples/mesh/figures/optc/gates/thingate.png``.
 """
 
 import glob
@@ -228,7 +228,7 @@ def plot(sq, om):
     fig.suptitle("Thin-body adjoint gates (thingate): the backward fits paired on one forward "
                  "per seed", fontsize=11)  # fmt: skip
     fig.tight_layout()
-    path = figure_path("optc", "thingate.png")
+    path = figure_path("optc/gates", "thingate.png")
     fig.savefig(path, dpi=130)
     plt.close(fig)
     print("wrote", path)

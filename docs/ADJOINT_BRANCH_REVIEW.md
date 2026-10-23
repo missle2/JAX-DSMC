@@ -781,7 +781,7 @@ shape machinery was exercised. Findings (items 3 to 5 are cited elsewhere by num
    reads -0.37 +- 0.07 against -0.15 +- 0.04 (z -2.9) because its x-part is +0.07 where the exact one is
    +0.36.
 4. **One-sided fits: where needed, what they cost, the general form** (`probe_fit_classes.py`,
-   `figures/fit_classes.png`). Needed for the *receding* population within a cell of a surface whose hits
+   `figures/gates/fit_classes.png`). Needed for the *receding* population within a cell of a surface whose hits
    carry reward (halves the slope error, cuts the value error 20 to 30 %); costs 0 to 3 % of the sd
    elsewhere (approaching, fixed diffuse wall, interior). The two-sided bias is below the noise per
    particle; the -0.03 of item 3 is the weighted sum, where grazing hits (`1/v_n` weights) dominate. The
@@ -886,7 +886,7 @@ flatten, as expected for a specular body in free-molecular flow. The later optim
 ### 7.8 The two remaining terms (2026-09-21): grazing regularisation and the silhouette band
 
 **Grazing regularisation** (`LevelSet.grazing`, `AnalyticBody.grazing`; PSEUDOCODE 4.4;
-`figures/grazing_regularisation.png`). The hit-time derivative's `1/(v . n)` is evaluated with `|v . n| >=
+`figures/gates/grazing_regularisation.png`). The hit-time derivative's `1/(v . n)` is evaluated with `|v . n| >=
 eps |v||n|` in the tangent only (`levelset.regularised_quotient`, primal exact). Radius tally term, 8 CRN
 seeds:
 

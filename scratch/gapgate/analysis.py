@@ -235,7 +235,7 @@ def plot_kn(sq, ci):
     fig.suptitle("Kn 0.5, fnum ×1, 16 CRN seeds per point (mean ± se): backward fit × "
                  "captured horizon × run length", fontsize=11)
     fig.tight_layout()
-    path = figure_path("", "gapgate_kn.png")
+    path = figure_path("gates", "gapgate_kn.png")
     fig.savefig(path, dpi=150)
     print("wrote", path)
 
@@ -283,7 +283,7 @@ def plot_fm(gz, sm, sf):
     fig.suptitle("Free-molecular, fnum ×1, 16 CRN seeds (mean ± se); reference = |FD shift| "
                  "(optc) or FD (squash)", fontsize=11)
     fig.tight_layout()
-    path = figure_path("", "gapgate_fm.png")
+    path = figure_path("gates", "gapgate_fm.png")
     fig.savefig(path, dpi=150)
     print("wrote", path)
 

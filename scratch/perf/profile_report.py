@@ -5,7 +5,8 @@ events.npz from profile_extract.py) and the regression timings (scratch/perf/reg
                                                kernels per step and the mean kernel length
   examples/mesh/figures/performance/profile_breakdown.png  GPU time per stage by code path
   examples/mesh/figures/performance/speedup_history.png    per-stage wall time of one steady seed across
-                                               the speed-up changes (same seeds, same GPU)
+                                               the speed-up changes (same seeds, same GPU; the
+                                               last bar a warm-started seed, hatched)
   scratch/perf/profile/<tag>/summary.json
 
     python3 scratch/perf/profile_report.py gpu_after [untraced]
@@ -209,10 +210,17 @@ def fig_history(path):
         # right of the line: stage_times.py, a warm-up seed first, then 2 seeds averaged
         ("stages:pre_cellfit_1004", "10-04 re-timed\n(warm-up seed)"),
         ("stages:cellfit", "10-11: per-cell\ncubic fit"),
+        # 10-23: the replay sized from the record, cell_fit.features, the parallel
+        # post-collision velocities (the shape step's slot scan), after the guard32 basis and
+        # the free-stream / sub-cell changes of 10-12..10-20 (forward 6 -> 10 s, backward 3 -> 5)
+        ("stages:shapefast_1023", "10-23: lean\nshape step"),
+        # the same, the seed warm-started from the previous iterate's gas (--restart-steps 500
+        # replacing this config's 700 warm-up steps; production's 2800)
+        ("stages:shapefast_1023_warm500", "10-23: warm\nstart (500)"),
     ]
     parts = [("forward_replay", "forward + replay + host", ORANGE), ("backward", "value backwards", GREY),
              ("shape", "shape gradient", BLUE)]  # fmt: skip
-    fig, ax = plt.subplots(figsize=(12.5, 3.8))
+    fig, ax = plt.subplots(figsize=(14.5, 3.8))
     x = np.arange(len(versions))
     bottom = np.zeros(len(versions))
     totals = []
@@ -220,7 +228,11 @@ def fig_history(path):
         vals = []
         for tag, _l in versions:
             vals.append(history_part(tag, key))
-        ax.bar(x, vals, bottom=bottom, color=colour, label=label, width=0.6)
+        bars = ax.bar(x, vals, bottom=bottom, color=colour, label=label, width=0.6)
+        for (tag, _l), bar in zip(versions, bars, strict=True):
+            if tag.endswith("_warm500"):
+                bar.set_hatch("///")
+                bar.set_edgecolor("white")
         bottom += np.array(vals)
     totals = bottom
     split = next(i for i, v in enumerate(versions) if v[0].startswith("stages:")) - 0.5
