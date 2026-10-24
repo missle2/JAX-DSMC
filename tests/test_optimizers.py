@@ -301,3 +301,74 @@ def test_prodigy_cosine_cap_bounds_the_step(tmp_path):
     leaves = zip(jax.tree_util.tree_leaves(state), jax.tree_util.tree_leaves(back), strict=True)
     for a, b in leaves:
         np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+
+
+def _rule_iterates(rule, n, noise, tmp_path):
+    """``n`` iterates of ``optimize.rule_step`` for ``rule`` on the test circle, the gradient of
+    ``0.5 |coef - target|^2`` on the band (target: the circle moved 0.5 m in x) plus ``noise``
+    times white noise, through after_step and a state save / load each iterate.  Returns
+    ``(rows, objectives, steps, near)`` (``near``: the knots within 0.5 m of the last surface,
+    inside the band -- where a step's roughness shapes the body)."""
+    import dataclasses  # noqa: PLC0415
+
+    import jax.numpy as jnp  # noqa: PLC0415
+    import optimize as O  # noqa: PLC0415
+    import optimizers as OZ  # noqa: PLC0415
+
+    ls, lo, hi = _circle_levelset()
+    target = np.asarray(_circle_levelset((5.5, 5.0))[0].coef)
+    cfg = {"optimizer": rule, "step": 0.05, "smooth": 2.0, "band": 1.0}
+    area0 = O.area_and_gradient(ls, lo, hi)[0]
+    state = {"area0": area0}
+    rng = np.random.default_rng(0)
+    rows, objectives, steps = [], [], []
+    for k in range(n):
+        band = np.asarray(O.L.coefficient_band(ls, cfg["band"] + ls.h))
+        diff = (np.asarray(ls.coef) - target) * band
+        objectives.append(0.5 * float(np.sum(diff**2)))
+        g_full = diff + noise * rng.normal(size=diff.shape) * band
+        g_area = O.area_and_gradient(ls, lo, hi)[1]
+        g, _ = O.tangent_component(g_full, g_area)
+        base, delta, _pred, state, extra = O.rule_step(
+            cfg, ls, g, g_full, g_area, np.array([objectives[-1]]), state, k, lo, hi
+        )
+        OZ.save_state(tmp_path / "s.npz", state)
+        state = OZ.load_state(tmp_path / "s.npz")
+        rows.append(extra)
+        steps.append(delta)
+        stepped = dataclasses.replace(base, coef=base.coef + jnp.asarray(delta))
+        ls, _, _ = O.after_step(stepped, "tangent", area0, lo, hi, 0.0)
+    near = np.abs(np.asarray(O.L.value(ls, O.L.knots(ls)))).reshape(ls.coef.shape) < 0.5
+    return rows, objectives, steps, near
+
+
+def test_lbfgs_fixed_step_accepts_every_trial_at_the_fixed_size(tmp_path):
+    """2026-10-24 ``lbfgs_fs``: the L-BFGS direction at the fixed largest displacement
+    ``step`` -- no trust radius, no rejection -- with curvature pairs accumulating; on the
+    quadratic the objective falls."""
+    rows, objectives, _, _ = _rule_iterates("lbfgs_fs", 6, 0.0, tmp_path)
+    for r in rows:
+        assert r["accepted"] and not r["rebase"]
+        np.testing.assert_allclose(r["step_max"], 0.05, rtol=1e-9)
+    assert rows[-1]["lbfgs_pairs"] >= 2
+    assert objectives[-1] < objectives[0]
+
+
+def test_mma_averaged_smoothed_step_is_smooth_on_a_noisy_gradient(tmp_path):
+    """2026-10-24 ``mma_s``: on a noisy gradient its step has a far smaller high-frequency
+    share than plain ``mma``'s (whose separable step follows every coefficient's noise), and
+    its averaged gradient survives the state round trip (``mma_t`` counts the iterates)."""
+
+    def high_frequency(d, near):
+        lap = 4 * d[1:-1, 1:-1] - d[2:, 1:-1] - d[:-2, 1:-1] - d[1:-1, 2:] - d[1:-1, :-2]
+        inner = near[1:-1, 1:-1]
+        return float(np.sqrt(np.sum(lap[inner] ** 2) / np.sum(d[1:-1, 1:-1][inner] ** 2)))
+
+    _, _, plain, near_plain = _rule_iterates("mma", 3, 0.5, tmp_path)
+    _, objectives, smoothed, near = _rule_iterates("mma_s", 3, 0.5, tmp_path)
+    import optimizers as OZ  # noqa: PLC0415
+
+    assert int(OZ.load_state(tmp_path / "s.npz")["mma_t"]) == 3
+    assert all(np.abs(d).max() > 0 for d in smoothed)
+    assert high_frequency(smoothed[-1], near) < 0.25 * high_frequency(plain[-1], near_plain)
+    assert np.all(np.isfinite(objectives))

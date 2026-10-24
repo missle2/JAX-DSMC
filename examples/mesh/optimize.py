@@ -274,12 +274,17 @@ def perimeter_and_gradient(ls, lo, hi):
 
 
 def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
-    """:func:`rule_step` for ``mma``: the subproblem on the band's coefficients (the full
-    gradient ``g_full`` against the area constraint, :mod:`optimizers`)."""
+    """:func:`rule_step` for ``mma`` / ``mma_s``: the subproblem on the band's coefficients
+    (the full gradient ``g_full`` against the area constraint, :mod:`optimizers`); ``mma_s``
+    averages the gradient first and smooths the step."""
     step, band = cfg["step"], cfg["band"] + ls.h
     coef = np.asarray(ls.coef)
     mask = np.asarray(L.coefficient_band(ls, band))
     low, upp = OZ.mma_asymptotes(state, coef, step, k)
+    averaged = cfg["optimizer"] == "mma_s"
+    if averaged:
+        g_full, moment = OZ.averaged_gradient(state, g_full)
+        state = dict(state, **moment)
     g0 = smooth(g_full)
     area = float(L.body_volume(ls, lo, hi, 4))
     while g_area.ndim > coef.ndim:  # MMA's own: the area only
@@ -288,6 +293,8 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
                           low[mask], upp[mask], step)  # fmt: skip
     delta = np.zeros_like(coef)
     delta[mask] = xs - coef[mask]
+    if averaged:
+        delta = smooth(delta)
     previous = state.get("mma_x1")
     state = dict(state, mma_x1=coef, mma_low=low, mma_upp=upp)
     if previous is not None:
@@ -297,7 +304,8 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
 
 
 def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
-    """One step of an :mod:`optimizers` rule (``tr``, ``lbfgs``, ``mma``) from the iterate
+    """One step of an :mod:`optimizers` rule (``tr``, ``lbfgs``, ``mma``, ``lbfgs_fs``,
+    ``mma_s``) from the iterate
     just evaluated (level set ``ls``, area-tangent gradient ``g``, the full one ``g_full``,
     the per-seed objectives ``objectives``): the level set to step from (the base point
     after a rejection), the coefficient step, its predicted change, the updated state and the
@@ -309,14 +317,15 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     smooth = functools.partial(smoothed_direction, ls=ls, sigma=cfg["smooth"], band=band)
     coef = np.asarray(ls.coef)
     extra = {}
-    if rule == "mma":
+    if rule in ("mma", "mma_s"):
         return _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi)
-    verdict = OZ.judge(state, objectives, step)
+    lbfgs = rule in ("lbfgs", "lbfgs_fs")
+    verdict = OZ.fixed_verdict(step) if rule == "lbfgs_fs" else OZ.judge(state, objectives, step)
     accepted, radius = verdict["accepted"], verdict["radius"]
     pairs = OZ.pairs_of(state)
     if "base_coef" in state:
         pairs, kept = OZ.add_pair(pairs, coef - state["base_coef"], g - state["base_g"])
-        extra["pair_kept"] = kept if rule == "lbfgs" else None
+        extra["pair_kept"] = kept if lbfgs else None
     if accepted:
         base, g_base, j_base = coef, g, np.asarray(objectives, float)
     else:
@@ -325,12 +334,12 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     if not accepted:  # the step's metric and constraint at the base point
         smooth = functools.partial(smoothed_direction, ls=base_ls, sigma=cfg["smooth"], band=band)
         g_area = constraint_gradients(base_ls, lo, hi, area_and_gradient(base_ls, lo, hi)[1], cfg)
-    if rule == "lbfgs":
+    if lbfgs:
         direction, has_pairs = OZ.lbfgs_direction(g_base, pairs, smooth)
     else:
         direction, has_pairs = -smooth(g_base), False
     direction, _ = tangent_component(direction, g_area)
-    if has_pairs:
+    if has_pairs and rule != "lbfgs_fs":
         delta, at_edge = OZ.fit_to_radius(direction, radius)
     else:
         delta, at_edge = direction * (radius / max(float(np.abs(direction).max()), 1e-300)), True
@@ -346,7 +355,7 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     extra.update(accepted=accepted, rho=verdict["rho"], rho_pooled=verdict["rho_pooled"],
                  rho_se=verdict["rho_se"], rho_window=len(verdict["window"][0]),
                  rebase=verdict["rebase"], seed_shift=shift, radius=radius, at_edge=at_edge,
-                 lbfgs_pairs=len(pairs) if rule == "lbfgs" else None,
+                 lbfgs_pairs=len(pairs) if lbfgs else None,
                  step_max=float(np.abs(delta).max()))  # fmt: skip
     return base_ls, delta, predicted, state, extra
 

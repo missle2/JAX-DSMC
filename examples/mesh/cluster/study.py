@@ -130,6 +130,9 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   and the free M 10 Adam body at iterate 100, in ``circle_long`` and in ``circle_xlong`` (the
   inflow face 15 m further upstream); ``scratch/boxcheck/translation.py`` ->
   ``scratch/boxcheck/cluster/<regime>_<box>.json``.
+* ``optrules3`` (2026-10-24): ``lbfgs_fs`` (the L-BFGS direction at a fixed largest step, no
+  trust region) and ``mma_s`` (MMA on the averaged gradient with a smoothed step), one seed,
+  warm-started, 400 iterates, optrules1seed's settings; tags ``*_S1_{lbfgs_fs,mma_s}_*_w500``.
 * ``opt3dcheck`` (2026-10-24): the first 3-D optimiser runs, the sphere case at Kn 0.5 and
   Kn 0.5 + M 10, Adam at fixed volume, one seed, 5 iterates; tags
   ``sphere_<regime>_S1_ox_adam_check``.
@@ -487,6 +490,30 @@ def _optax1seed_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# optrules3 (2026-10-24): the one-seed L-BFGS and MMA with their step-length controls replaced
+# (examples/mesh/optimizers.py): lbfgs_fs (L-BFGS direction, fixed largest step, no trust
+# region) and mma_s (MMA on the averaged gradient, smoothed step); optrules1seed's box and
+# settings, so they compare with its lbfgs / mma directly
+OPTRULES3 = ("lbfgs_fs", "mma_s")
+
+
+def _optrules3_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optrules3``: each rule of :data:`OPTRULES3`, one seed per iterate, warm-started."""
+    del gpus_per_node
+    return {
+        f"{name}_S1_{arm}": _optrules_tagged(
+            name,
+            arm,
+            f"--optimizer {arm}",
+            seeds=1,
+            suffix="_w500",
+            extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
+        )
+        for name in OPTRULES_REGIMES
+        for arm in OPTRULES3
+    }
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -550,6 +577,7 @@ NEW_GROUPS = {
     "speedprof": _speedprof_jobs,
     "boxcheck": _boxcheck_jobs,
     "opt3dcheck": _opt3dcheck_jobs,
+    "optrules3": _optrules3_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

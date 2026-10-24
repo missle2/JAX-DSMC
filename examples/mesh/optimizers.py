@@ -46,6 +46,19 @@ the largest normal displacement, ``|grad phi| = 1`` -- the rule chooses.
   control) and widen where they do not.  The 1-D dual is maximised with L-BFGS-B.  No
   acceptance test (plain MMA, not GCMMA).
 
+2026-10-24, the one-seed failures (optrules1seed: L-BFGS 0.68 / MMA 0.63 J0 at Kn 0.5 against
+Adam's 0.20) were their step-length controls, not their directions:
+
+* ``lbfgs_fs``: ``lbfgs``'s direction (the same pairs and ``gamma S`` initial inverse) at a
+  **fixed** largest displacement ``step``, every trial accepted (:func:`fixed_verdict`).  The
+  trust radius of ``lbfgs`` sat at its floor (step / 4) from iterate ~60 on: there the predicted
+  change is far below one seed's drag noise (~0.01 J0), so rho was noise and never grew it.
+* ``mma_s``: ``mma`` on an **averaged** gradient (Adam's first moment, ``beta = 0.9``, bias
+  corrected: :func:`averaged_gradient`) with its step **smoothed** in the same H1 metric
+  (``mma``'s separable step is per coefficient, sign-like on a noisy gradient: roughness 15-75)
+  -- the smoothed moves also make the asymptotes' sign test see oscillation rather than noise
+  (``mma``'s shrank on every noisy flip: steps 0.002-0.014 of 0.05 at Kn 0.5).
+
 State lives in ``<run>/opt_state.npz`` (:func:`load_state` / :func:`save_state`), so a
 resumed run continues the rule where it stopped.
 """
@@ -57,7 +70,8 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import minimize
 
-RULES = ("tr", "lbfgs", "mma")
+RULES = ("tr", "lbfgs", "mma", "lbfgs_fs", "mma_s")
+MMA_BETA = 0.9  # mma_s: the averaged gradient's decay (Adam's first moment)
 GROW, SHRINK = 2.0, 0.5
 RHO_GOOD, RHO_POOR = 0.75, 0.25
 RHO_WINDOW = 5  # trials pooled into rho (at the current radius)
@@ -151,6 +165,14 @@ def judge(state, objectives, step):
     return out
 
 
+def fixed_verdict(step):
+    """:func:`judge`'s result for ``lbfgs_fs``: every trial accepted at the fixed radius
+    ``step``, nothing pooled."""
+    nan = float("nan")
+    return {"accepted": True, "rebase": False, "radius": float(step), "rho": nan,
+            "rho_pooled": nan, "rho_se": nan, "window": [[], [], []]}  # fmt: skip
+
+
 def fit_to_radius(direction, radius):
     """The step ``direction`` clipped to the trust region (largest entry ``radius``) and
     whether it was clipped (the step reaches the edge)."""
@@ -212,6 +234,14 @@ def _mma_terms(grad, x, low, upp, span):
     p = (upp - x) ** 2 * (1.001 * pos + 0.001 * neg + reg)
     q = (x - low) ** 2 * (0.001 * pos + 1.001 * neg + reg)
     return p, q
+
+
+def averaged_gradient(state, g):
+    """``mma_s``'s gradient: the bias-corrected exponential average of the gradients so far
+    (``MMA_BETA``) and the state that carries it."""
+    t = int(state.get("mma_t", 0)) + 1
+    m = MMA_BETA * np.asarray(state.get("mma_m", np.zeros_like(g))) + (1.0 - MMA_BETA) * g
+    return m / (1.0 - MMA_BETA**t), {"mma_m": m, "mma_t": t}
 
 
 def mma_asymptotes(state, x, move, k):
