@@ -770,11 +770,15 @@ def reinitialise(ls: LevelSet, n_iter: int | None = None, band: float | None = N
     return LevelSet(interpolate(jnp.asarray(values)), ls.lo, ls.h, ls.n_sample, ls.n_bisect)
 
 
-def body_volume(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:
-    """Volume of ``phi < 0`` inside the box ``[lo, hi]`` by a ``sub``-per-knot-spacing
-    centred sub-grid with a smoothed Heaviside of half-width ``width`` (default ``h / 2``):
-    differentiable in ``coef`` (the constraint of the optimiser; ``O(width^2)`` bias for a
-    distance-like ``phi``)."""
+SUBGRID_CHUNK = 1 << 16
+"""Sub-grid points per chunk of the body integrals: the full 3-D sub-grid at once (4 per knot
+spacing, 160^3 points of 4^3 coefficients each) asked for ~3 GB (2026-10-24, the first 3-D
+optimiser run); a chunk is ~35 MB."""
+
+
+def _subgrid(ls: LevelSet, lo, hi, sub: int):
+    """The centred sub-grid of the body integrals, ``sub`` points per knot spacing: the points
+    ``f64[N, D]`` and the volume of one."""
     box = np.asarray(hi, dtype=np.float64) - np.asarray(lo, dtype=np.float64)  # static
     lo = jnp.asarray(lo, dtype=jnp.float64)
     hi = jnp.asarray(hi, dtype=jnp.float64)
@@ -783,11 +787,49 @@ def body_volume(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> j
     axes = [lo[a] + (hi[a] - lo[a]) * (jnp.arange(counts[a]) + 0.5) / counts[a] for a in range(d)]
     grid = jnp.meshgrid(*axes, indexing="ij")
     x = jnp.stack([g.ravel() for g in grid], axis=1)
-    w = ls.h / 2.0 if width is None else float(width)
-    phi = value(ls, x)
-    heaviside = 0.5 * (1.0 - jnp.tanh(phi / w))
     cell = jnp.prod((hi - lo) / jnp.asarray(counts, dtype=jnp.float64))
-    return jnp.sum(heaviside) * cell
+    return x, cell
+
+
+def _heaviside_terms(ls, x, w):
+    return 0.5 * (1.0 - jnp.tanh(value(ls, x) / w))[:, None]
+
+
+def _moment_terms(ls, x, w):
+    return _heaviside_terms(ls, x, w) * jnp.concatenate((jnp.ones((x.shape[0], 1)), x), axis=1)
+
+
+def _perimeter_terms(ls, x, w):
+    phi, grad = value_and_grad(ls, x)
+    return (0.5 / w / jnp.cosh(phi / w) ** 2 * jnp.sqrt(jnp.sum(grad**2, axis=1)))[:, None]
+
+
+def _chunk_sum(chunk, ls, terms, w):
+    x, keep = chunk
+    return jnp.sum(terms(ls, x, w) * keep[:, None], axis=0)
+
+
+def _integrate(ls, lo, hi, sub, width, terms):
+    """``sum terms(x) * cell`` over :func:`_subgrid` in chunks of :data:`SUBGRID_CHUNK`
+    points (padded with zero-weight copies of the first point)."""
+    x, cell = _subgrid(ls, lo, hi, sub)
+    w = ls.h / 2.0 if width is None else float(width)
+    n = x.shape[0]
+    pad = -n % SUBGRID_CHUNK
+    x = jnp.concatenate((x, jnp.broadcast_to(x[:1], (pad, x.shape[1]))))
+    keep = jnp.concatenate((jnp.ones(n), jnp.zeros(pad)))
+    k = x.shape[0] // SUBGRID_CHUNK
+    chunks = (x.reshape(k, SUBGRID_CHUNK, -1), keep.reshape(k, SUBGRID_CHUNK))
+    sums = jax.lax.map(functools.partial(_chunk_sum, ls=ls, terms=terms, w=w), chunks)
+    return jnp.sum(sums, axis=0) * cell
+
+
+def body_volume(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:
+    """Volume of ``phi < 0`` inside the box ``[lo, hi]`` by a ``sub``-per-knot-spacing
+    centred sub-grid with a smoothed Heaviside of half-width ``width`` (default ``h / 2``):
+    differentiable in ``coef`` (the constraint of the optimiser; ``O(width^2)`` bias for a
+    distance-like ``phi``)."""
+    return _integrate(ls, lo, hi, sub, width, _heaviside_terms)[0]
 
 
 def body_moments(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:
@@ -795,38 +837,14 @@ def body_moments(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> 
     box, on :func:`body_volume`'s sub-grid and smoothed Heaviside (entry 0 is
     :func:`body_volume`); the centroid is ``moments[1:] / moments[0]``.  Differentiable in
     ``coef`` (the optimiser's centroid constraint)."""
-    box = np.asarray(hi, dtype=np.float64) - np.asarray(lo, dtype=np.float64)  # static
-    lo = jnp.asarray(lo, dtype=jnp.float64)
-    hi = jnp.asarray(hi, dtype=jnp.float64)
-    d = lo.shape[0]
-    counts = [math.ceil(box[a] / ls.h) * sub for a in range(d)]
-    axes = [lo[a] + (hi[a] - lo[a]) * (jnp.arange(counts[a]) + 0.5) / counts[a] for a in range(d)]
-    grid = jnp.meshgrid(*axes, indexing="ij")
-    x = jnp.stack([g.ravel() for g in grid], axis=1)
-    w = ls.h / 2.0 if width is None else float(width)
-    heaviside = 0.5 * (1.0 - jnp.tanh(value(ls, x) / w))
-    cell = jnp.prod((hi - lo) / jnp.asarray(counts, dtype=jnp.float64))
-    weights = jnp.concatenate((jnp.ones((x.shape[0], 1)), x), axis=1)
-    return (heaviside @ weights) * cell
+    return _integrate(ls, lo, hi, sub, width, _moment_terms)
 
 
 def body_perimeter(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:
     """Perimeter (2-D; surface area in 3-D) of ``phi = 0`` inside the box, ``int delta_w(phi)
     |grad phi| dx`` on :func:`body_volume`'s sub-grid with the derivative of its smoothed
     Heaviside: differentiable in ``coef`` (the optimiser's optional perimeter penalty)."""
-    box = np.asarray(hi, dtype=np.float64) - np.asarray(lo, dtype=np.float64)  # static
-    lo = jnp.asarray(lo, dtype=jnp.float64)
-    hi = jnp.asarray(hi, dtype=jnp.float64)
-    d = lo.shape[0]
-    counts = [math.ceil(box[a] / ls.h) * sub for a in range(d)]
-    axes = [lo[a] + (hi[a] - lo[a]) * (jnp.arange(counts[a]) + 0.5) / counts[a] for a in range(d)]
-    grid = jnp.meshgrid(*axes, indexing="ij")
-    x = jnp.stack([g.ravel() for g in grid], axis=1)
-    w = ls.h / 2.0 if width is None else float(width)
-    phi, grad = value_and_grad(ls, x)
-    delta = 0.5 / w / jnp.cosh(phi / w) ** 2
-    cell = jnp.prod((hi - lo) / jnp.asarray(counts, dtype=jnp.float64))
-    return jnp.sum(delta * jnp.sqrt(jnp.sum(grad**2, axis=1))) * cell
+    return _integrate(ls, lo, hi, sub, width, _perimeter_terms)[0]
 
 
 def coefficient_band(ls: LevelSet, width: float) -> jax.Array:

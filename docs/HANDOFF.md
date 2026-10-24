@@ -654,6 +654,22 @@ Ordered roughly by value.
    and never moved, the body capped at ~9.3 m, while the free runs grew to 10-11 m by moving away
    from the inflow face: most likely the box (the nose's shock against the inflow face 9.4 m away),
    not the optimiser.  Untested: the same shape evaluated at two positions.
+   `optct` (2026-10-24, centroid held by projecting on raw rigid-translation modes, start 2 m
+   downstream) failed: noses sharpened, then the steps went rough at the tip (~iterate 76 at
+   M 0.3) and the bodies frayed / broke up (J up to 1.2-1.9 J0).  Offline replay
+   (`scratch/optax/constraint_replay.py`, synthetic noise + a downstream push, 100 iterates
+   from the optct iterate-70 body): total turning area-only 2.6, rows (optcm) 5.7, raw modes
+   (optct) 23.7, smoothed modes 9.0 -- every projection roughens; the raw modes worst.  Next:
+   remove the cause instead -- `circle_xlong` (inflow 15 m further up, ~9 mean free paths ahead
+   of the nose) and the `boxcheck` group (adjoint dJ/dx along a translation vs a paired 1 m
+   finite difference, both boxes); if dJ/dx vanishes there, run free in the long box.
+   L-BFGS / TR / MMA (2026-10-24): L-BFGS's direction is good (M 10: 0.23 J0 by iterate 51) but
+   its trust radius sits at the floor (step / 5) from iterate ~60 -- one seed's drag noise
+   swamps the predicted decrease there, so rho cannot grow it; MMA's asymptotes shrink on every
+   sign flip of a coefficient's move (noise flips them: M 0.3 steps 0.002-0.014 of 0.05) and
+   its separable step is never smoothed (roughness 15-75).  Candidate arms: L-BFGS direction
+   with Adam's fixed max-norm step; MMA with a smoothed step, no shrink on flips and an
+   averaged gradient.
 5. **Cluster speed**: production per iterate, optax1seed -> optcm (2026-10-23, the 10-22 changes):
    Kn 0.5 M 0.3 (RTX) 113 -> 68 s, M 10 (H200) 89 -> 66 s.  Laptop (`speedup_history.png`,
    `scratch/perf/stage_times.py`): 38 s (10-11) -> 32 s cold -> 29 s warm-started; the shape step
@@ -672,7 +688,8 @@ Ordered roughly by value.
    (195 k slots for ~131 k live particles at M 10: every per-slot pass pays for the empty third).
 6. **Retrofit `--boundary free`** to the older studies if they are to be compared (`optc2`, `optckn`, `optab`,
    `squash`).
-7. 3-D shape optimisation (sphere gradient is gated; no optimiser run), hierarchical grids, real multi-GPU
+7. 3-D shape optimisation (sphere gradient is gated; 2026-10-24 the first loop: the body integrals
+   now chunked (the 3-D sub-grid asked ~3 GB), the forward needs ~10 GB -- `opt3dcheck` on the cluster), hierarchical grids, real multi-GPU
    scaling numbers, thermal-wall epsilon adjoint: `docs/PLAN.md`.
 
 ---

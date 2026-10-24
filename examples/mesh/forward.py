@@ -83,6 +83,21 @@ CASES = {
         "fnum": 1.0e-3,
         "capacity": 240_000,
     },
+    "circle_xlong": {
+        # circle_long with the inflow face 15 m further upstream (2026-10-24): at Kn 0.5 the
+        # mean free path is ~3 m and the nose sat ~4 of them from the face -- every free M 10
+        # Adam-type run slid ~10 m downstream (scratch/boxcheck).  1.5x the cells; slots
+        # scaled from circle_long's
+        "dim": 2,
+        "lo": [-25.0, 0.0],
+        "hi": [20.0, 10.0],
+        "n": (90, 20),
+        "surf": "data.circle",
+        "centre": [5.0, 5.0],
+        "radius": 3.0,
+        "fnum": 1.0e-3,
+        "capacity": 360_000,
+    },
     "ellipse": {
         # the aspect-ratio test: the circle box with a smaller circle (blockage ~3 % at s = 1,
         # free_molecular_circle.json) squashed in y to semi-axes (R, s R); a level-set body

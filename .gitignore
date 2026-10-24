@@ -240,7 +240,12 @@ examples/mesh/results/**/adam_state.npz
 # VTK field dumps of the forward runs
 examples/mesh/results/vtk/
 # the PNG frames a movie is assembled from (examples.mesh.movie); the .mp4 / .gif stay
-examples/mesh/figures/movie/*/*/
+# (2026-10-24: any depth -- the old one-level frame directories, still written by jobs on the
+# old layout, slipped past the per-depth pattern after the movie/ reorganisation)
+examples/mesh/figures/movie/**
+!examples/mesh/figures/movie/**/
+!examples/mesh/figures/movie/**/*.mp4
+!examples/mesh/figures/movie/**/*.gif
 # profiler traces
 scratch/profile/
 *.xplane.pb

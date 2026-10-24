@@ -125,6 +125,14 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
 * ``shapeprof`` (2026-10-19): where a seed's time goes (``bash scratch/shapeprof/cluster_job.sh
   <name>``): the optm Kn 0.5 M 10 iterates 30 / 156 with the run's own config, per phase, the
   unguarded cubic and the plain k32 slope fit for comparison, and a perfetto trace.  One H200.
+* ``boxcheck`` (2026-10-24): does the drag depend on where the body sits?  The adjoint's
+  dJ/dx along a rigid translation and a paired 1 m finite difference (six seeds) for the circle
+  and the free M 10 Adam body at iterate 100, in ``circle_long`` and in ``circle_xlong`` (the
+  inflow face 15 m further upstream); ``scratch/boxcheck/translation.py`` ->
+  ``scratch/boxcheck/cluster/<regime>_<box>.json``.
+* ``opt3dcheck`` (2026-10-24): the first 3-D optimiser runs, the sphere case at Kn 0.5 and
+  Kn 0.5 + M 10, Adam at fixed volume, one seed, 5 iterates; tags
+  ``sphere_<regime>_S1_ox_adam_check``.
 * ``speedprof`` (2026-10-22): one optimiser seed's phases on a production iterate (the optm
   M 10 iterate 156, the optrules1seed Kn 0.5 iterate 200) under XLA command buffers off (the
   old WSL guard) / XLA's default (env.sh now) / with WHILE, CONDITIONAL, and the shape VJP's
@@ -269,6 +277,53 @@ def _speedprof_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     return {
         job: f"bash scratch/shapefast/cluster_job.sh {job}" for job in ("m10_it156", "kn05_it200")
+    }
+
+
+# boxcheck (2026-10-24): the box's position gradient -- the adjoint's dJ/dx along a rigid
+# translation and a paired 1 m finite difference, six seeds, for the circle and the free M 10
+# Adam body at iterate 100 -- in circle_long and in circle_xlong (inflow 15 m further up; a
+# 1.5x warm-up for the 1.5x box)
+BOXES = {"long": LONG, "xlong": "--case circle_xlong --fnum-scale 2 --warmup 4200"}
+
+
+def _boxcheck_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
+               "kn0.5_M10": f"--knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 {KNPULLBACK}"}  # fmt: skip
+    return {
+        f"{regime}_{box}": (
+            f"python3 scratch/boxcheck/translation.py --name {regime}_{box} {COARSE} {flags} "
+            f"--step 0.05 --smooth 8 --band 1.0 --keepout {KEEPOUT} --area-mode tangent "
+            f"--boundary free --seeds-per-iterate 1 {extra}"
+        )
+        for regime, extra in regimes.items()
+        for box, flags in BOXES.items()
+    }
+
+
+# opt3dcheck (2026-10-24): the first 3-D optimiser runs -- the sphere case (r = 1 m in the
+# +-2 m box, 0.2 m cells), Adam at fixed volume, one seed, 5 iterates: every step of the loop
+# (volume / centroid integrals, reinitialisation, smoothing, warm start) in 3-D.  The lengths
+# scaled from the circle's (r = 3 m, 0.5 m cells): step 0.02, smoothing 3 knots of 0.1 m,
+# band 0.4 m, face margin 0.3 m.  The forward needs ~10 GB (the laptop's 4 GB ran out)
+SPHERE3D = (
+    "--case sphere --levelset-h 0.1 --levelset-samples 16 --grazing 0.05 --step 0.02 --smooth 3 "
+    "--band 0.4 --keepout 0.3 --area-mode tangent --boundary free --seeds-per-iterate 1 "
+    "--workers 1 --restart-steps 300"
+)
+
+
+def _opt3dcheck_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
+               "kn0.5_M10": f"--knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 {KNPULLBACK}"}  # fmt: skip
+    return {
+        f"sphere_{regime}": (
+            f"python3 -m examples.mesh.optimize --tag sphere_{regime}_S1_ox_adam_check "
+            f"{SPHERE3D} --optimizer ox_adam --iterations 5 {extra}"
+        )
+        for regime, extra in regimes.items()
     }
 
 
@@ -493,6 +548,8 @@ NEW_GROUPS = {
     "guardgate": _guardgate_jobs,
     "shapeprof": _shapeprof_jobs,
     "speedprof": _speedprof_jobs,
+    "boxcheck": _boxcheck_jobs,
+    "opt3dcheck": _opt3dcheck_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
