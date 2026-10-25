@@ -130,6 +130,10 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   and the free M 10 Adam body at iterate 100, in ``circle_long`` and in ``circle_xlong`` (the
   inflow face 15 m further upstream); ``scratch/boxcheck/translation.py`` ->
   ``scratch/boxcheck/cluster/<regime>_<box>.json``.
+* ``adjbias`` (2026-10-24): the translation bias of the shape gradient term by term
+  (``scratch/adjbias/terms.py`` -> ``scratch/adjbias/cluster/<rung>.json``): free-molecular at
+  grazing floors 0.05 / 0.01 / 0.001, Kn 0.5 at 0.05 / 0.001 / with one-sided wall fits, and the
+  production long box at Kn 0.5 and M 10; 16 seeds each.
 * ``optrules3`` (2026-10-24): ``lbfgs_fs`` (the L-BFGS direction at a fixed largest step, no
   trust region) and ``mma_s`` (MMA on the averaged gradient with a smoothed step), one seed,
   warm-started, 400 iterates, optrules1seed's settings; tags ``*_S1_{lbfgs_fs,mma_s}_*_w500``.
@@ -327,6 +331,37 @@ def _opt3dcheck_jobs(gpus_per_node: int) -> dict[str, str]:
             f"{SPHERE3D} --optimizer ox_adam --iterations 5 {extra}"
         )
         for regime, extra in regimes.items()
+    }
+
+
+# adjbias (2026-10-24): which shape-gradient term carries the translation bias (boxcheck: the
+# adjoint's dJ/dx +7.3 % of J per metre at Kn 0.5 against a zero FD).  Every term of
+# shape_terms projected on the spline's rigid x-translation, 16 seeds per rung
+# (scratch/adjbias/terms.py): free-molecular (true 0) at three grazing floors of the hit-time
+# derivative; Kn 0.5 at the production floor, at 0.001 and with one-sided wall fits
+# (--backward-normals); the production long box at Kn 0.5 and M 10
+ADJBIAS_CIRCLE = "--case circle --levelset-h 0.0625 --levelset-samples 16 --boundary free"
+ADJBIAS_LONG = (
+    "--case circle_long --fnum-scale 2 --warmup 2800 --levelset-h 0.0625 --levelset-samples 16 "
+    "--grazing 0.05 --boundary free"
+)
+ADJBIAS = {
+    "fm": f"{ADJBIAS_CIRCLE} --grazing 0.05",
+    "fm_gz0.01": f"{ADJBIAS_CIRCLE} --grazing 0.01",
+    "fm_gz0.001": f"{ADJBIAS_CIRCLE} --grazing 0.001",
+    "kn05": f"{ADJBIAS_CIRCLE} --grazing 0.05 --knudsen 0.5 --a-max 64",
+    "kn05_gz0.001": f"{ADJBIAS_CIRCLE} --grazing 0.001 --knudsen 0.5 --a-max 64",
+    "kn05_bn": f"{ADJBIAS_CIRCLE} --grazing 0.05 --knudsen 0.5 --a-max 64 --backward-normals true",
+    "long_kn05": f"{ADJBIAS_LONG} --knudsen 0.5 --a-max 64",
+    "long_m10": f"{ADJBIAS_LONG} --knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256",
+}
+
+
+def _adjbias_jobs(gpus_per_node: int) -> dict[str, str]:
+    del gpus_per_node
+    return {
+        name: f"python3 scratch/adjbias/terms.py {name} --seeds 16 {flags}"
+        for name, flags in ADJBIAS.items()
     }
 
 
@@ -578,6 +613,7 @@ NEW_GROUPS = {
     "boxcheck": _boxcheck_jobs,
     "opt3dcheck": _opt3dcheck_jobs,
     "optrules3": _optrules3_jobs,
+    "adjbias": _adjbias_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
