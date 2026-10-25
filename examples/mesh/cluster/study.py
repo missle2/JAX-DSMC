@@ -608,9 +608,10 @@ def _adjfix_jobs(gpus_per_node: int) -> dict[str, str]:
 # scaled with the NTC attempts, ~ppc) and the DSMC cells halved to 0.25 m (behind the M 10 bow
 # shock the gas is ~4x denser, lambda ~0.75 m against the free stream's 3 m: the 0.5 m cells
 # are ~lambda / 1.5 there) at the same particles per cell (4x the particles) and at half of
-# them (2x).  The ppc / fine checks need the whole H200 (M 10 in circle_long nearly fills a
-# 35 GB slice: circle_xlong ran out of it).  Submit in two parts:
-#   GPU_KIND=h200 ONLY='^(terms|check_g)' bash examples/mesh/cluster/submit_curc.sh adjm10
+# them (2x).  M 10 in circle_long fits a 24 GB rtx slice (boxcheck_kn0.5_M10_long, adjbias
+# long_m10; circle_xlong's 1.5x box ran out of it), so the baseline-size jobs go to rtx (no
+# H200 cap); the ppc / fine checks (2-4x the particles) take whole H200s, the cap's 4 at once:
+#   GPU_KIND=rtx ONLY='^(terms|check_g)' bash examples/mesh/cluster/submit_curc.sh adjm10
 #   GPU_KIND=h200_full ONLY='ppc|fine' bash examples/mesh/cluster/submit_curc.sh adjm10
 ADJM10_REGIME = f"--knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 {FIX}"
 ADJM10_TERMS = {

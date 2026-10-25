@@ -129,7 +129,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
       && [ "${group}" != "guardgate" ] && [ "${group}" != "shapeprof" ] \
       && [ "${group}" != "speedprof" ] && [ "${group}" != "boxcheck" ] \
       && [ "${group}" != "opt3dcheck" ] && [ "${group}" != "adjbias" ] \
-      && [ "${group}" != "adjfix" ] \
+      && [ "${group}" != "adjfix" ] && [ "${group}" != "adjm10" ] \
       && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] && [ "${group}" != "optab" ] \
       && [ "${group}" != "squashkn2" ] && [ "${group}" != "optrules2" ] \
       && [ "${group}" != "optrules1seed" ] && [ "${group}" != "optax1seed" ] \
