@@ -686,8 +686,17 @@ Ordered roughly by value.
    backward's pooled wall fits (incoming and outgoing particles in one fit where lam jumps at
    v.n = 0): at Kn 0.5 `--backward-normals true` changes the total by -5.73 +- 0.49 (the
    collision-order term -0.33 -> -5.29, cut-volume +0.69 -> +0.13), leaving +0.14 +- 0.57; it
-   costs ~1.7x per seed (19 -> 32 s on rtx, short box).  M 10 untested with either.  `adjfix`
-   checks both changes at M 10 and runs the free ox_adam with them.
+   costs ~1.7x per seed (19 -> 32 s on rtx, short box).
+   `adjfix` (2026-10-25, 8 seeds, % J/m, adjoint vs FD): Kn 0.5 circle with both changes
+   -0.35 +- 1.2 vs -0.42 +- 0.7 -- FIXED (per-seed sd 1.4 -> 3.3); the free ox_adam with them
+   held its centroid at 5.3-5.4 to iterate 250 (the old run: 3.7 at 200), same J (~0.0018),
+   ~10 % slower per iterate.  M 10 NOT fixed and blind to both changes: circle -1.6..-1.7 vs
+   -0.59, Adam body -8.0 / -8.6 / -9.0 (one-sided fits / floor 0.01 / both) vs +0.26 +- 0.3;
+   the M 10 ox_adam with the fix slid downstream onto the outflow keep-out like the old one.
+   Production flags `--backward-normals true --grazing 0.01`; M 10 has a third cause.  `adjm10`
+   looks for it: the term breakdown on the M 10 body (and free-molecular at M 10), the fit's
+   neighbour count, 2x / 4x particles per cell and 0.25 m DSMC cells (lambda ~0.75 m behind the
+   bow shock, so 0.5 m cells are ~lambda / 1.5 there).
 5. **Cluster speed**: production per iterate, optax1seed -> optcm (2026-10-23, the 10-22 changes):
    Kn 0.5 M 0.3 (RTX) 113 -> 68 s, M 10 (H200) 89 -> 66 s.  Laptop (`speedup_history.png`,
    `scratch/perf/stage_times.py`): 38 s (10-11) -> 32 s cold -> 29 s warm-started; the shape step

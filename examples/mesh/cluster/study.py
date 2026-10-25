@@ -137,6 +137,10 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
 * ``adjfix`` (2026-10-24): the translation-bias fix (one-sided wall fits + grazing floor
   0.01): boxcheck's adjoint-vs-FD at Kn 0.5 and M 10 (M 10 also with each change alone) and the
   free ox_adam on both optrules problems with the fix; tags ``*_S1_ox_adam_fix_*_w500``.
+* ``adjm10`` (2026-10-25): the M 10 translation bias adjfix left (body -9 % J/m with the fix):
+  the term breakdown on the M 10 Adam body (also free-molecular) and the circle, and the
+  adjoint-vs-FD with the fit's neighbour count 16 / 64, 2x / 4x the particles per cell and
+  0.25 m DSMC cells; ``scratch/{adjbias,boxcheck}/cluster/adjm10_<name>.json``.
 * ``optrules3`` (2026-10-24): ``lbfgs_fs`` (the L-BFGS direction at a fixed largest step, no
   trust region) and ``mma_s`` (MMA on the averaged gradient with a smoothed step), one seed,
   warm-started, 400 iterates, optrules1seed's settings; tags ``*_S1_{lbfgs_fs,mma_s}_*_w500``.
@@ -595,6 +599,54 @@ def _adjfix_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+# adjm10 (2026-10-25): the M 10 translation bias that adjfix left (circle -1.1, free M 10 Adam
+# body -8 to -9 % J/m against a ~zero FD, the same with each FIX change alone and both).  All at
+# Kn 0.5 M 10 with FIX.  terms_*: adjbias's term breakdown (16 seeds) of the body, the circle and
+# the body free-molecular at M 10 (true value 0: is it the collision adjoint?).  check_*:
+# boxcheck's adjoint-vs-FD (8 seeds) with the backward fit's neighbour count 16 / 64 (g32 is
+# the baseline), 2x / 4x the particles per cell (finite-sample fit bias shrinks with them; A_max
+# scaled with the NTC attempts, ~ppc) and the DSMC cells halved to 0.25 m (behind the M 10 bow
+# shock the gas is ~4x denser, lambda ~0.75 m against the free stream's 3 m: the 0.5 m cells
+# are ~lambda / 1.5 there) at the same particles per cell (4x the particles) and at half of
+# them (2x).  The ppc / fine checks need the whole H200 (M 10 in circle_long nearly fills a
+# 35 GB slice: circle_xlong ran out of it).  Submit in two parts:
+#   GPU_KIND=h200 ONLY='^(terms|check_g)' bash examples/mesh/cluster/submit_curc.sh adjm10
+#   GPU_KIND=h200_full ONLY='ppc|fine' bash examples/mesh/cluster/submit_curc.sh adjm10
+ADJM10_REGIME = f"--knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 {FIX}"
+ADJM10_TERMS = {
+    "body": f"--shape m10_adam_it100 {ADJM10_REGIME}",
+    "circle": ADJM10_REGIME,
+    "body_fm": f"--shape m10_adam_it100 --mach 10 --dt 2.5e-5 {FIX}",
+}
+ADJM10_CHECKS = {
+    "g16": "--neighbors 16",
+    "g64": "--neighbors 64",
+    "ppc2": "--fnum-scale 1 --a-max 512",
+    "ppc4": "--fnum-scale 0.5 --a-max 1024",
+    "fine": "--grid-scale 2",
+    "fine_half": "--grid-scale 2 --fnum-scale 4",
+}
+
+
+def _adjm10_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``adjm10``: the term breakdowns of :data:`ADJM10_TERMS` and the translation checks of
+    :data:`ADJM10_CHECKS`, Kn 0.5 M 10 with :data:`FIX`."""
+    del gpus_per_node
+    jobs = {
+        f"terms_{name}": (
+            f"python3 scratch/adjbias/terms.py adjm10_{name} --seeds 16 {ADJBIAS_LONG} {flags}"
+        )
+        for name, flags in ADJM10_TERMS.items()
+    }
+    for name, flags in ADJM10_CHECKS.items():
+        jobs[f"check_{name}"] = (
+            f"python3 scratch/boxcheck/translation.py --name adjm10_{name} --seeds 8 {COARSE} "
+            f"{LONG} --step 0.05 --smooth 8 --band 1.0 --keepout {KEEPOUT} --area-mode tangent "
+            f"--boundary free --seeds-per-iterate 1 {ADJM10_REGIME} {KNPULLBACK} {flags}"
+        )
+    return jobs
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -661,6 +713,7 @@ NEW_GROUPS = {
     "optrules3": _optrules3_jobs,
     "adjbias": _adjbias_jobs,
     "adjfix": _adjfix_jobs,
+    "adjm10": _adjm10_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
