@@ -141,6 +141,9 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   the term breakdown on the M 10 Adam body (also free-molecular) and the circle, and the
   adjoint-vs-FD with the fit's neighbour count 16 / 64, 2x / 4x the particles per cell and
   0.25 m DSMC cells; ``scratch/{adjbias,boxcheck}/cluster/adjm10_<name>.json``.
+* ``stepfd`` (2026-10-25): the adjoint against paired finite differences along the free M 10
+  runs' own steps (ox_adam_fix iterates 20 / 100 / 150 / 200, mma_s 150, and 150 on knots h / 2),
+  whole step / nose part / rest / rigid shift; ``scratch/adjbias/cluster/stepfd_<name>.json``.
 * ``optrules3`` (2026-10-24): ``lbfgs_fs`` (the L-BFGS direction at a fixed largest step, no
   trust region) and ``mma_s`` (MMA on the averaged gradient with a smoothed step), one seed,
   warm-started, 400 iterates, optrules1seed's settings; tags ``*_S1_{lbfgs_fs,mma_s}_*_w500``.
@@ -655,6 +658,38 @@ def _adjm10_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+# stepfd (2026-10-25): is the descent the free M 10 runs keep predicting real?  In the slide
+# phase (ox_adam_fix iterates 150-250, mma_s alike) the adjoint predicts ~-0.01 per step (~4 %
+# of J; independent seeds agree) and ~0 is realised, the predicted decrease at the needle nose
+# in pathwise_tally (scratch/adjbias/drift_pipeline.py).  scratch/adjbias/stepfd.py: along the
+# step a run took at iterate K (and its nose part, the rest, a rigid 0.04 m shift), the
+# adjoint g . delta against paired central differences at eps 0.5 and 1, 8 seeds; it20 is the
+# control (realised ~0.9 of predicted there), mma_it150 the other constraint treatment (MMA's
+# own area subproblem, no tangent projection), adam_it150_h2 the same shapes on knots h / 2.
+# One gradient + 14 forwards per seed: ~5 h on an rtx slice (h2 longer).
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh stepfd
+STEPFD_ADAM = "circle_long_kn0.5_M10_S1_ox_adam_fix_tan_sm8_free_g32_w500"
+STEPFD_MMA = "circle_long_kn0.5_M10_S1_mma_s_tan_sm8_free_g32_w500"
+STEPFD = {
+    "adam_it20": f"--run {STEPFD_ADAM} --iterate 20",
+    "adam_it100": f"--run {STEPFD_ADAM} --iterate 100",
+    "adam_it150": f"--run {STEPFD_ADAM} --iterate 150",
+    "adam_it200": f"--run {STEPFD_ADAM} --iterate 200",
+    "mma_it150": f"--run {STEPFD_MMA} --iterate 150",
+    "adam_it150_h2": f"--run {STEPFD_ADAM} --iterate 150 --refine 2",
+}
+
+
+def _stepfd_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``stepfd``: :data:`STEPFD`, the adjoint against finite differences along the free M 10
+    runs' own steps (``scratch/adjbias/stepfd.py``; the runs' coefficients on the cluster)."""
+    del gpus_per_node
+    return {
+        name: f"python3 scratch/adjbias/stepfd.py {name} --seeds 8 {flags}"
+        for name, flags in STEPFD.items()
+    }
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -722,6 +757,7 @@ NEW_GROUPS = {
     "adjbias": _adjbias_jobs,
     "adjfix": _adjfix_jobs,
     "adjm10": _adjm10_jobs,
+    "stepfd": _stepfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

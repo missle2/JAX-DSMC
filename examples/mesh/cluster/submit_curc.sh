@@ -42,7 +42,7 @@
 # (GRES_TYPE=a100-80gb, ...); the partition's GPUs per node cap the GPUs of an opt job.
 set -euo pipefail
 GROUPS_TO_RUN=("$@")
-[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|speedprof|boxcheck|opt3dcheck|optrules3|adjbias|adjfix|adjm10|optrules|optrules2|optrules1seed|optax1seed|optcm|optct|optckn|optc2|optab|optm|squashkn2|all|check|preflight <group>..."; exit 1; }
+[ ${#GROUPS_TO_RUN[@]} -eq 0 ] && { echo "usage: $0 sphere|mode2|opt|optc|squash|squashkn|biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|speedprof|boxcheck|opt3dcheck|optrules3|adjbias|adjfix|adjm10|stepfd|optrules|optrules2|optrules1seed|optax1seed|optcm|optct|optckn|optc2|optab|optm|squashkn2|all|check|preflight <group>..."; exit 1; }
 [ "${GROUPS_TO_RUN[0]}" = "all" ] && GROUPS_TO_RUN=(sphere mode2 opt)
 [ ${#GROUPS_TO_RUN[@]} -eq 1 ] && [ "${GROUPS_TO_RUN[0]}" = "check" ] && CHECK_ONLY=1
 [ "${GROUPS_TO_RUN[0]}" = "preflight" ] && PREFLIGHT_GROUPS=("${GROUPS_TO_RUN[@]:1}")
@@ -113,7 +113,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
     squash|squashkn|squashkn2|optckn|optc2|optab|optm|optrules|optrules2|optrules1seed|optax1seed|optcm|optct|optrules3|adjfix) HOURS=24 ;;
-    biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|speedprof|boxcheck|opt3dcheck|adjbias|adjm10) HOURS=12 ;;
+    biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|speedprof|boxcheck|opt3dcheck|adjbias|adjm10|stepfd) HOURS=12 ;;
     *) echo "unknown group ${group}"; exit 1 ;;
   esac
   # the finer circle (240 k slots x 300 captured steps) peaks above a 24 GB MIG slice: the
@@ -129,7 +129,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
       && [ "${group}" != "guardgate" ] && [ "${group}" != "shapeprof" ] \
       && [ "${group}" != "speedprof" ] && [ "${group}" != "boxcheck" ] \
       && [ "${group}" != "opt3dcheck" ] && [ "${group}" != "adjbias" ] \
-      && [ "${group}" != "adjfix" ] && [ "${group}" != "adjm10" ] \
+      && [ "${group}" != "adjfix" ] && [ "${group}" != "adjm10" ] && [ "${group}" != "stepfd" ] \
       && [ "${group}" != "optckn" ] && [ "${group}" != "optc2" ] && [ "${group}" != "optab" ] \
       && [ "${group}" != "squashkn2" ] && [ "${group}" != "optrules2" ] \
       && [ "${group}" != "optrules1seed" ] && [ "${group}" != "optax1seed" ] \
