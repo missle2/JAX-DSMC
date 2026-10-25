@@ -674,8 +674,20 @@ Ordered roughly by value.
    the adjoint's dJ/dx along a rigid translation is +7.3 +- 0.6 % of J per metre (every seed
    +5.8..+9.2 %), the paired 1 m finite difference -0.8 +- 0.8 % -- the drift is a bias of the
    gradient estimator, not the box (at least at M 0.3; descent on it moves the body upstream,
-   as the M 0.3 runs did).  M 10 and the xlong box pending; the translation test is a cheap
-   gradient-bias gate worth keeping.
+   as the M 0.3 runs did).  The translation test is a cheap gradient-bias gate worth keeping.
+   Full boxcheck (6 seeds, % J/m, adjoint vs FD): Kn 0.5 circle long +7.3 vs -0.8, xlong +8.6
+   vs +0.4; M 10 circle long -1.6 vs -0.5, xlong -1.8 vs -0.2; M 10 Adam body (it 100) long
+   -7.0 vs +0.0, xlong -7.4 vs +0.3 -- the box is not the cause, the estimator is (and its sign
+   matches each regime's drift: upstream at M 0.3, downstream at M 10).
+   `adjbias` (16 paired seeds per rung, the circle, terms projected on the translation): two
+   causes.  (a) The grazing floor of the hit-time derivative (`regularised_quotient`, eps 0.05)
+   truncates the pathwise tally term asymmetrically: free-molecular total +1.49 +- 0.55 at 0.05,
+   paired change -1.22 +- 0.19 at 0.01 and -1.31 +- 0.22 at 0.001 (no variance cost).  (b) The
+   backward's pooled wall fits (incoming and outgoing particles in one fit where lam jumps at
+   v.n = 0): at Kn 0.5 `--backward-normals true` changes the total by -5.73 +- 0.49 (the
+   collision-order term -0.33 -> -5.29, cut-volume +0.69 -> +0.13), leaving +0.14 +- 0.57; it
+   costs ~1.7x per seed (19 -> 32 s on rtx, short box).  M 10 untested with either.  `adjfix`
+   checks both changes at M 10 and runs the free ox_adam with them.
 5. **Cluster speed**: production per iterate, optax1seed -> optcm (2026-10-23, the 10-22 changes):
    Kn 0.5 M 0.3 (RTX) 113 -> 68 s, M 10 (H200) 89 -> 66 s.  Laptop (`speedup_history.png`,
    `scratch/perf/stage_times.py`): 38 s (10-11) -> 32 s cold -> 29 s warm-started; the shape step

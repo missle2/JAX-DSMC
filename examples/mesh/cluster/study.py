@@ -134,6 +134,9 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   (``scratch/adjbias/terms.py`` -> ``scratch/adjbias/cluster/<rung>.json``): free-molecular at
   grazing floors 0.05 / 0.01 / 0.001, Kn 0.5 at 0.05 / 0.001 / with one-sided wall fits, and the
   production long box at Kn 0.5 and M 10; 16 seeds each.
+* ``adjfix`` (2026-10-24): the translation-bias fix (one-sided wall fits + grazing floor
+  0.01): boxcheck's adjoint-vs-FD at Kn 0.5 and M 10 (M 10 also with each change alone) and the
+  free ox_adam on both optrules problems with the fix; tags ``*_S1_ox_adam_fix_*_w500``.
 * ``optrules3`` (2026-10-24): ``lbfgs_fs`` (the L-BFGS direction at a fixed largest step, no
   trust region) and ``mma_s`` (MMA on the averaged gradient with a smoothed step), one seed,
   warm-started, 400 iterates, optrules1seed's settings; tags ``*_S1_{lbfgs_fs,mma_s}_*_w500``.
@@ -549,6 +552,49 @@ def _optrules3_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# adjfix (2026-10-24): the translation-bias fix.  adjbias split the circle's bias (Kn 0.5
+# +5.9 % J/m, FD ~0) into the grazing floor of the hit-time derivative (+1.2-1.3 % J/m, gone at
+# 0.01 in free-molecular flow) and the pooled wall fits of the backward (-5.7 % J/m of the
+# collision-order / cut-volume terms with --backward-normals).  FIX holds both.  Checks:
+# boxcheck's adjoint-vs-FD on the circle and the free M 10 Adam body (8 seeds; M 10 is untested
+# with either change: its body's bias is -7 % J/m against a zero FD) and ox_adam with the fix
+# and no centroid constraint, 400 iterates (optax1seed's free ox_adam drifted 2.4 m upstream at
+# Kn 0.5 and 11 m downstream at M 10); tags *_S1_ox_adam_fix_*_w500
+FIX = "--backward-normals true --grazing 0.01"
+ADJFIX_CHECKS = {
+    "kn0.5_fix": FIX,
+    "kn0.5_M10_bn": "--backward-normals true",
+    "kn0.5_M10_gz": "--grazing 0.01",
+    "kn0.5_M10_fix": FIX,
+}
+
+
+def _adjfix_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``adjfix``: the translation checks of :data:`ADJFIX_CHECKS` and the free ox_adam runs
+    with :data:`FIX` on both optrules problems."""
+    del gpus_per_node
+    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
+               "kn0.5_M10": f"--knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 {KNPULLBACK}"}  # fmt: skip
+    jobs = {
+        f"check_{name}": (
+            f"python3 scratch/boxcheck/translation.py --name adjfix_{name} --seeds 8 {COARSE} "
+            f"{LONG} --step 0.05 --smooth 8 --band 1.0 --keepout {KEEPOUT} --area-mode tangent "
+            f"--boundary free --seeds-per-iterate 1 {regimes[name.rsplit('_', 1)[0]]} {flags}"
+        )
+        for name, flags in ADJFIX_CHECKS.items()
+    }
+    for name in OPTRULES_REGIMES:
+        jobs[f"{name}_S1_ox_adam_fix"] = _optrules_tagged(
+            name,
+            "ox_adam_fix",
+            f"--optimizer ox_adam {FIX}",
+            seeds=1,
+            suffix="_w500",
+            extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
+        )
+    return jobs
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -614,6 +660,7 @@ NEW_GROUPS = {
     "opt3dcheck": _opt3dcheck_jobs,
     "optrules3": _optrules3_jobs,
     "adjbias": _adjbias_jobs,
+    "adjfix": _adjfix_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

@@ -1006,11 +1006,25 @@ def resumed_basis(out: Path, asked):
     return basis
 
 
+def parse_bool(text: str) -> bool:
+    """A boolean flag's value (``type=bool`` would read ``"false"`` as True)."""
+    if text.lower() in ("1", "true", "yes"):
+        return True
+    if text.lower() in ("0", "false", "no"):
+        return False
+    raise argparse.ArgumentTypeError(f"not a boolean: {text}")
+
+
+def cli_type(default):
+    """The argparse ``type`` of a config entry with this default."""
+    return parse_bool if isinstance(default, bool) else type(default)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     cfg = default_config()
     for k, v in cfg.items():
-        p.add_argument(f"--{k.replace('_', '-')}", type=type(v), default=v)
+        p.add_argument(f"--{k.replace('_', '-')}", type=cli_type(v), default=v)
     p.add_argument("--pullback", default="virtual", choices=("virtual", "sequential"))
     # the SPARTA circle is collisionless (Natt = 0): the virtual pull-back's partners do no
     # work there, so the cheap setting of the phase-D artifacts (1 x 2) is the default

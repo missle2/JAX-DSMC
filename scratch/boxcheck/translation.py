@@ -11,6 +11,9 @@ Run once in circle_long and once in circle_xlong (inflow face 15 m further upstr
 
     python3 scratch/boxcheck/translation.py --name <label> <optimize.py flags>
         -> scratch/boxcheck/cluster/<label>.json
+
+adjfix (2026-10-24) reuses it with --seeds 8 and the candidate fix (--backward-normals true,
+--grazing 0.01) under adjfix_<label> names.
 """
 
 import argparse
@@ -37,9 +40,10 @@ SOURCE = ("circle_long_kn0.5_M10_S1_ox_adam_tan_sm8_free_g32_w500", 100, "circle
 def parse(argv):
     p = argparse.ArgumentParser()
     p.add_argument("--name", required=True)
+    p.add_argument("--seeds", type=int, default=SEEDS)
     cfg = O.default_config()
     for k, v in cfg.items():
-        p.add_argument(f"--{k.replace('_', '-')}", type=type(v), default=v)
+        p.add_argument(f"--{k.replace('_', '-')}", type=O.cli_type(v), default=v)
     p.add_argument("--substeps", type=int, default=1)
     p.add_argument("--partners", type=int, default=2)
     args = p.parse_args(argv)
@@ -55,8 +59,8 @@ def resampled(cfg, ls):
     return O.L.reinitialise(dataclasses.replace(ls, coef=O.L.interpolate(values)))
 
 
-def measure(cfg, ls, lo, hi):
-    seeds = list(range(SEEDS))
+def measure(cfg, ls, lo, hi, n_seeds):
+    seeds = list(range(n_seeds))
     tx = O.translation_modes(ls, cfg["band"] + ls.h)[0]
     base = O.seed_terms(cfg, ls, seeds)
     moved = O.seed_terms(cfg, O.translate(ls, np.array([SHIFT, 0.0])), seeds)
@@ -83,13 +87,13 @@ def main(argv=None):
     ensemble_backward.configure("virtual", args.substeps, args.partners, "staged")
     grid, ls = O.initial_levelset(cfg)
     lo, hi = np.asarray(grid.lo), np.asarray(grid.hi)
-    out = {"case": cfg["case"], "box_x": [float(lo[0]), float(hi[0])], "seeds": SEEDS,
+    out = {"case": cfg["case"], "box_x": [float(lo[0]), float(hi[0])], "seeds": args.seeds,
            "shift": SHIFT, "shapes": {}}  # fmt: skip
     path = Path(f"scratch/boxcheck/cluster/{args.name}.json")
     path.parent.mkdir(parents=True, exist_ok=True)
     for label, body in (("circle", ls), ("m10_adam_it100", resampled(cfg, ls))):
         t0 = time.time()
-        out["shapes"][label] = measure(cfg, body, lo, hi)
+        out["shapes"][label] = measure(cfg, body, lo, hi, args.seeds)
         out["shapes"][label]["seconds"] = time.time() - t0
         print(label, out["shapes"][label]["summary"], flush=True)
         path.write_text(json.dumps(out, indent=1))
