@@ -12,6 +12,12 @@ where the analytic distance's centre derivative is 0/0.)
 ``--shape m10_adam_it100`` (adjm10, 2026-10-25): boxcheck's free M 10 Adam body at iterate 100
 (scratch/boxcheck/translation.py's ``resampled``) instead of the circle; its -9 % J/m bias
 against a zero FD survived both adjfix changes.
+
+``--save-vectors 1`` (adjm10 ``vec_*``, 2026-10-25): also writes every seed's term arrays (the
+coefficient-space gradients, before the projection) to ``cluster/NAME_vectors.npz`` with the
+body's coefficients, so projections and their location on the surface can be computed offline:
+on the M 10 body this script's translation (+9.4 % J/m) and optimize.translation_modes
+(-9.0) disagree in sign on every seed while the circle's agree.
 """
 
 import json
@@ -49,6 +55,7 @@ def main():
     flags = dict(zip(argv[::2], argv[1::2], strict=True))
     seeds = int(flags.pop("--seeds", 8))
     shape = flags.pop("--shape", "circle")
+    save_vectors = flags.pop("--save-vectors", "0") in ("1", "true", "True")
     for k, v in flags.items():
         key = k.lstrip("-").replace("-", "_")
         cfg[key] = v in ("1", "true", "True") if isinstance(cfg[key], bool) else type(cfg[key])(v)
@@ -62,6 +69,7 @@ def main():
         raise ValueError(f"unknown --shape {shape}")
     tx = translation(ls)
     rows = []
+    vectors = {"coef": np.asarray(ls.coef), "h": ls.h, "translation": tx}
     for i in range(seeds):
         t0 = time.time()
         all_terms, info, s = EM.shape_terms(cfg, jax.random.key(32 + i), ls, "radius", 32, 10.0,
@@ -78,6 +86,15 @@ def main():
         rows.append(row)
         print(i, {k: round(v, 3) for k, v in row.items()}, flush=True)
         path.write_text(json.dumps({"config": cfg, "shape": shape, "rows": rows}))
+        if save_vectors:
+            for t in TERMS:
+                v = getattr(terms, t)
+                vectors[f"{t}_{i}"] = np.zeros_like(tx) if v is None else np.asarray(v)
+            vectors[f"volume_{i}"] = (
+                np.zeros_like(tx) if s["volume"] is None else np.asarray(s["volume"])
+            )
+            vectors[f"J_{i}"] = np.float64(j)
+            np.savez_compressed(path.with_name(f"{name}_vectors.npz"), **vectors)
     print("mean +- se, % J / m:")
     for k in (*TERMS, "volume", "total"):
         v = np.array([r[k] for r in rows])

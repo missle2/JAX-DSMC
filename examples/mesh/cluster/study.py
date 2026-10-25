@@ -618,6 +618,12 @@ ADJM10_TERMS = {
     "body": f"--shape m10_adam_it100 {ADJM10_REGIME}",
     "circle": ADJM10_REGIME,
     "body_fm": f"--shape m10_adam_it100 --mach 10 --dt 2.5e-5 {FIX}",
+    # the per-seed term vectors as well (8 seeds): on the body the two translation
+    # discretisations (terms.py +9.4, optimize.translation_modes -9.0 % J/m) disagree in sign,
+    # so the projections and where they sit on the surface are computed offline.  rtx:
+    #   GPU_KIND=rtx ONLY='_vec' bash examples/mesh/cluster/submit_curc.sh adjm10
+    "body_vec": f"--shape m10_adam_it100 {ADJM10_REGIME} --save-vectors 1",
+    "body_fm_vec": f"--shape m10_adam_it100 --mach 10 --dt 2.5e-5 {FIX} --save-vectors 1",
 }
 ADJM10_CHECKS = {
     "g16": "--neighbors 16",
@@ -635,7 +641,8 @@ def _adjm10_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     jobs = {
         f"terms_{name}": (
-            f"python3 scratch/adjbias/terms.py adjm10_{name} --seeds 16 {ADJBIAS_LONG} {flags}"
+            f"python3 scratch/adjbias/terms.py adjm10_{name} --seeds {8 if 'vec' in name else 16} "
+            f"{ADJBIAS_LONG} {flags}"
         )
         for name, flags in ADJM10_TERMS.items()
     }
