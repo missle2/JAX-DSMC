@@ -58,6 +58,7 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import lax
 
 from jax_dsmc import boundary, ensemble_device, sampling, step_axis
@@ -1334,18 +1335,42 @@ def volume_weights(cell_collision, grid):
     return jnp.where(volume > 0.0, -total / jnp.where(volume > 0.0, volume, 1.0), 0.0)
 
 
-def _cell_samples(grid, sub):
-    """Centred ``sub^D`` sample points of every Cartesian cell, ``f64[C0 sub^D, D]``, the
-    collision cell each lies in (a split cell's sub-cell by its region raster) and the
-    volume each stands for (with ``grid.transverse``)."""
+VOLUME_CHUNK_POINTS = 1 << 20
+"""Sample points per chunk of :func:`volume_cotangent` (2026-10-24: every Cartesian cell's
+``32^3`` samples at once was 6.3 GB on the 3-D sphere, the first 3-D optimiser run)."""
+VOLUME_SATURATION = 20.0
+"""Cells whose centre is further than this many Heaviside widths (plus the half-diagonal)
+from the surface are left out of the cut-volume term: ``tanh`` is 1 there to double precision,
+the samples' derivative ``~ 4 exp(-40)``."""
+
+
+def _cell_samples(cells, grid, sub):
+    """Centred ``sub^D`` sample points of the Cartesian cells ``cells`` (flat indices,
+    row-major: grid.cell_of's order), ``f64[len(cells) sub^D, D]``, the collision cell each
+    lies in (a split cell's sub-cell by its region raster) and the volume each stands for
+    (with ``grid.transverse``)."""
     d = len(grid.n)
     dx = spacing(grid)
-    # row-major, the last axis fastest: grid.cell_of's order
-    idx = jnp.stack(jnp.meshgrid(*[jnp.arange(n) for n in grid.n], indexing="ij"), axis=-1)
+    idx = jnp.stack(jnp.unravel_index(cells, grid.n), axis=-1)
     offs = jnp.stack(jnp.meshgrid(*[(jnp.arange(sub) + 0.5) / sub] * d, indexing="ij"), axis=-1)
     x = grid.lo + (idx.reshape(-1, 1, d) + offs.reshape(1, -1, d)) * dx
     x = x.reshape(-1, d)
     return x, collision_cell(x, grid), jnp.prod(dx) / sub**d * grid.transverse
+
+
+def _near_surface_cells(ls, grid, width):
+    """Flat indices of the Cartesian cells within :data:`VOLUME_SATURATION` widths of the
+    surface (centre ``|phi|`` against the half-diagonal plus that margin), padded with ``-1``
+    to a power of two (iterates share compilations)."""
+    d = len(grid.n)
+    dx = np.asarray(spacing(grid))
+    idx = np.stack(np.meshgrid(*[np.arange(n) for n in grid.n], indexing="ij"), axis=-1)
+    centres = np.asarray(grid.lo) + (idx.reshape(-1, d) + 0.5) * dx
+    phi = np.asarray(levelset_mod.value(ls, jnp.asarray(centres)))
+    reach = 0.5 * float(np.linalg.norm(dx)) + VOLUME_SATURATION * width
+    near = np.nonzero(np.abs(phi) <= reach)[0]
+    size = 1 << max(int(near.size - 1).bit_length(), 0)
+    return np.concatenate((near, np.full(size - near.size, -1)))
 
 
 def _weighted_flow_volume(coef, ls, x, w_sample, width):
@@ -1357,6 +1382,17 @@ def _weighted_flow_volume(coef, ls, x, w_sample, width):
     return jnp.sum(w_sample * flow)
 
 
+def _chunk_cotangent(cot, cells, coef, ls, grid, weights, sub, width):
+    """:func:`lax.scan` body of :func:`volume_cotangent`: one chunk of cells' samples
+    (``-1`` padding: weight 0) added to the cotangent."""
+    valid = cells >= 0
+    x, cell, area = _cell_samples(jnp.where(valid, cells, 0), grid, sub)
+    keep = jnp.repeat(valid, sub ** len(grid.n))
+    w_sample = jnp.where(keep, weights[cell] * area, 0.0)
+    part = jax.grad(_weighted_flow_volume)(coef, ls, x, w_sample, width)
+    return cot + part, None
+
+
 def volume_cotangent(geom, mesh, grid, weights, sub=32, width=None):
     """The cut-volume term as a cotangent on the level-set coefficients ``geom``:
     ``sum_c weights_c dV_c / dcoef`` with ``V_c`` the smoothed flow volume of each
@@ -1366,16 +1402,19 @@ def volume_cotangent(geom, mesh, grid, weights, sub=32, width=None):
     ``int_c delta(phi) B_j`` -- the shape derivative of the cut volume,
     ``int_{Gamma cap c} B_j / |grad phi|``.  ``weights`` from :func:`volume_weights`.  The
     sample spacing must resolve ``width`` (the default ``sub = 32`` gives 4 samples per
-    ``width`` on a cell of 8 knots)."""
+    ``width`` on a cell of 8 knots).  Only the cells near the surface are sampled
+    (:func:`_near_surface_cells`; the rest add nothing), :data:`VOLUME_CHUNK_POINTS` samples
+    at a time."""
     if mesh.kind != "levelset":
         raise ValueError("the cut-volume term is built for level-set bodies")
     ls = mesh.body
     width = ls.h / 4.0 if width is None else float(width)
-    x, cell, area = _cell_samples(grid, sub)
-    w_sample = weights[cell] * area
-    _v, vjp = jax.vjp(
-        functools.partial(_weighted_flow_volume, ls=ls, x=x, w_sample=w_sample, width=width),
-        geom,
+    cells = _near_surface_cells(dataclasses.replace(ls, coef=geom), grid, width)
+    per = max(1, VOLUME_CHUNK_POINTS // sub ** len(grid.n))
+    per = min(per, cells.size)
+    cells = np.concatenate((cells, np.full(-cells.size % per, -1)))
+    body = functools.partial(
+        _chunk_cotangent, coef=geom, ls=ls, grid=grid, weights=weights, sub=sub, width=width
     )
-    (cot,) = vjp(jnp.float64(1.0))
+    cot, _ = lax.scan(body, jnp.zeros_like(geom), jnp.asarray(cells.reshape(-1, per)))
     return cot

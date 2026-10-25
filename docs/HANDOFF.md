@@ -670,6 +670,12 @@ Ordered roughly by value.
    its separable step is never smoothed (roughness 15-75).  Candidate arms: L-BFGS direction
    with Adam's fixed max-norm step; MMA with a smoothed step, no shrink on flips and an
    averaged gradient.
+   `boxcheck` first result (2026-10-24, Kn 0.5 M 0.3, circle_long, the initial circle, 6 seeds):
+   the adjoint's dJ/dx along a rigid translation is +7.3 +- 0.6 % of J per metre (every seed
+   +5.8..+9.2 %), the paired 1 m finite difference -0.8 +- 0.8 % -- the drift is a bias of the
+   gradient estimator, not the box (at least at M 0.3; descent on it moves the body upstream,
+   as the M 0.3 runs did).  M 10 and the xlong box pending; the translation test is a cheap
+   gradient-bias gate worth keeping.
 5. **Cluster speed**: production per iterate, optax1seed -> optcm (2026-10-23, the 10-22 changes):
    Kn 0.5 M 0.3 (RTX) 113 -> 68 s, M 10 (H200) 89 -> 66 s.  Laptop (`speedup_history.png`,
    `scratch/perf/stage_times.py`): 38 s (10-11) -> 32 s cold -> 29 s warm-started; the shape step
@@ -689,7 +695,10 @@ Ordered roughly by value.
 6. **Retrofit `--boundary free`** to the older studies if they are to be compared (`optc2`, `optckn`, `optab`,
    `squash`).
 7. 3-D shape optimisation (sphere gradient is gated; 2026-10-24 the first loop: the body integrals
-   now chunked (the 3-D sub-grid asked ~3 GB), the forward needs ~10 GB -- `opt3dcheck` on the cluster), hierarchical grids, real multi-GPU
+   now chunked (the 3-D sub-grid asked ~3 GB), the forward needs ~10 GB -- `opt3dcheck` on the cluster; the cut-volume term
+   sampled 32^3 points in every cell (6.3 GB on the sphere): now only cells near the surface,
+   chunked (equal to 2e-16 in 2-D, 5e-15 in 3-D, 4x faster); M 10 3-D forward asks a 14.7 GB block
+   -- whole H200s, GPU_KIND=h200_full), hierarchical grids, real multi-GPU
    scaling numbers, thermal-wall epsilon adjoint: `docs/PLAN.md`.
 
 ---
