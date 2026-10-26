@@ -127,6 +127,16 @@ def default_config():
             "iterations": 300,
             "converge_window": 5,
             "converge_tol": 0.00125,
+            # or (2026-10-26; 0 = off) when the `converge_mean`-iterate running mean of the
+            # objective has not set a new best by `converge_gain` (relative) for
+            # `converge_patience` iterates: the one-seed runs' noise (+-5 % of J at M 10) never
+            # passes the window test.  Offline on the 39 drag histories of >= 150 iterates
+            # (25 / 100 / 2 %) the M 10 runs stopped 0-3 % short of their eventual best (the
+            # slow mma_s tails did not stop), the Kn 0.5 runs 0-10 %; 50-80-iterate trend or
+            # window-mean tests fired 20-40 % short on the M 10 mma_s / Adam runs
+            "converge_patience": 0,
+            "converge_mean": 25,
+            "converge_gain": 0.02,
             "seeds_per_iterate": 2,
             "seed_start": 32,
             "step": 0.05,
@@ -157,8 +167,13 @@ def default_config():
             # constant-area set, the shift restores the second-order remainder; the default
             # since 2026-10-21, required by the optax and optimizers.py rules) or "none" (no area
             # constraint, 2026-10-25: the lift-to-drag runs; the optax and optimizers.py rules
-            # take it too)
+            # take it too) or "floor" (2026-10-26: the area at least area_floor x the initial
+            # body's -- MMA's own inequality; the optax rules project the step and the moments
+            # tangent to the area while at the floor and stepping below it; restored by the
+            # uniform shift after a step that undershoots.  The unconstrained L / D runs thinned
+            # the body into a plate below the 0.5 m cells and on until it vanished)
             "area_mode": "tangent",
+            "area_floor": 0.5,
             "area_penalty": 100.0,
             "area_linear": 0.0,
             # perimeter penalty (2026-10-19): J + perimeter * J_0 * P / P_0 (J_0, P_0 the first
@@ -503,10 +518,28 @@ def window_converged(values, window: int, tol: float) -> bool:
     return bool(np.ptp(w) <= tol * abs(w.mean()))
 
 
+def patience_converged(values, mean: int, patience: int, gain: float) -> bool:
+    """True when the ``mean``-iterate running mean of ``values`` has not improved on its best by
+    ``gain`` (relative) over the last ``patience`` windows' ends (0 = off)."""
+    if patience <= 0 or len(values) < mean + patience:
+        return False
+    run = np.convolve(np.asarray(values, float), np.ones(mean) / mean, mode="valid")
+    best, at = run[0], 0
+    for i, v in enumerate(run):
+        if v < best - gain * abs(best):
+            best, at = v, i
+    return len(run) - 1 - at >= patience
+
+
 def converged_objective(cfg, history) -> bool:
-    """:func:`window_converged` on the rows' Lagrangian (the objective in projection mode)."""
+    """:func:`window_converged` or :func:`patience_converged` on the rows' Lagrangian (the
+    objective in projection mode)."""
     values = [r.get("lagrangian", r["objective"]) for r in history]
-    return window_converged(values, cfg["converge_window"], cfg["converge_tol"])
+    return window_converged(values, cfg["converge_window"], cfg["converge_tol"]) or (
+        patience_converged(
+            values, cfg["converge_mean"], cfg["converge_patience"], cfg["converge_gain"]
+        )
+    )
 
 
 PHASES = ("build", "warmup", "capture", "replay", "backward", "shape")
@@ -756,20 +789,44 @@ def constrain(ls, area0, lo, hi, margin, shift, passes: int = 12):
     return ls, shift, first
 
 
+FLOOR_BAND = 0.05  # the floor is active within this fraction of the floor area above it
+
+
+def floor_active(g, g_area, area, area0, rule):
+    """``area_mode floor``'s ``(g_area, g, multiplier)``: MMA (``rule``) takes the inequality
+    itself (the true ``g_area``, ``g`` unchanged); for the optax rules the constraint is active
+    -- the step and the moments tangent to the area, as ``tangent`` -- only within
+    :data:`FLOOR_BAND` of the floor and when the descent step removes area (``g . g_area > 0``),
+    else ``g_area`` is ``None`` (as ``none``)."""
+    if rule:
+        return g_area, g, 0.0
+    if area > area0 * (1.0 + FLOOR_BAND) or float(np.sum(g * g_area)) <= 0.0:
+        return None, g, 0.0
+    g, nu = constrained_gradient(g, g_area)
+    return g_area, g, nu
+
+
 def after_step(stepped, mode, area0, lo, hi, keepout, centroid0=None):
     """Reinitialise the stepped level set, then the constraints: ``projection`` restores the
     area by a uniform shift (with the face margin, :func:`constrain`); ``lagrangian`` /
-    ``penalty`` only apply the face margin (the area is in the differentiated objective).  Returns
+    ``penalty`` only apply the face margin (the area is in the differentiated objective);
+    ``floor`` restores the area only when the step left it below ``area0``.  Returns
     ``(ls, area shift, knots the face floor moved)``."""
     # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1
     new = L.reinitialise(stepped)
     if centroid0 is not None:
         new, _err = project_centroid(new, centroid0, lo, hi)
-    if mode in ("lagrangian", "penalty", "none"):
+    if mode in ("lagrangian", "penalty", "none", "floor"):
         clipped = 0
         if keepout > 0.0:
             new, clipped = keep_inside(new, lo, hi, keepout)
-        return new, 0.0, clipped
+        if mode != "floor" or float(L.body_volume(new, lo, hi, 4)) >= area0:
+            return new, 0.0, clipped
+        # floor: a step that undershot it, restored by the uniform shift (and the margin)
+        new, shift = project_area(new, area0, lo, hi)
+        if keepout > 0.0:
+            return constrain(new, area0, lo, hi, keepout, shift)
+        return new, shift, clipped
     new, shift = project_area(new, area0, lo, hi)
     if keepout > 0.0:
         return constrain(new, area0, lo, hi, keepout, shift)
@@ -791,6 +848,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             ls = translate(ls, np.array([cfg["start_shift"]] + [0.0] * (ls.coef.ndim - 1)))
         np.save(out / "coef_0.npy", np.asarray(ls.coef))
     area0 = saved["area_target"] if saved else float(L.body_volume(ls, lo, hi, 4))
+    if not saved and cfg["area_mode"] == "floor":
+        area0 *= cfg["area_floor"]
     # the initial body's (coef_0), also for a run resumed with the constraint newly on
     coef0 = jnp.asarray(np.load(out / "coef_0.npy"))
     centroid0 = (saved or {}).get("centroid_target") or np.asarray(
@@ -822,11 +881,13 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     mode = cfg["area_mode"]
     if cfg["fix_centroid"] and mode != "tangent":
         raise ValueError("--fix-centroid needs --area-mode tangent")
-    if (rule or ox) and mode not in ("tangent", "none"):
-        raise ValueError(f"--optimizer {cfg['optimizer']} needs --area-mode tangent or none")
+    if (rule or ox) and mode not in ("tangent", "none", "floor"):
+        raise ValueError(f"--optimizer {cfg['optimizer']} needs --area-mode tangent, none or floor")
+    if mode == "floor" and not (ox or cfg["optimizer"] in ("mma", "mma_s")):
+        raise ValueError("--area-mode floor needs an ox_* rule or mma / mma_s")
     if saved and saved["config"].get("area_mode", "projection") != mode:
         raise ValueError(f"{out} was run with area_mode {saved['config'].get('area_mode')}")
-    if mode not in ("projection", "lagrangian", "penalty", "tangent", "none"):
+    if mode not in ("projection", "lagrangian", "penalty", "tangent", "none", "floor"):
         raise ValueError(f"area_mode {mode}")
     price = area_price(cfg)
     mu = cfg["area_penalty"] * price / area0
@@ -874,6 +935,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             g_area = constraint_gradients(ls, lo, hi, g_area, cfg)
             # the KKT gradient: Adam's moments then track the constrained gradient too
             g, nu = constrained_gradient(g, g_area)
+        elif mode == "floor":
+            area_now, g_area = area_and_gradient(ls, lo, hi)
+            area_err = area_now - area0
+            g_area, g, nu = floor_active(g, g_area, area_now, area0, rule)
         else:
             g_area = None  # area_mode none (projection: the step's shift after it)
         extra = {}
@@ -965,7 +1030,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         }
         if perimeter is not None:
             row.update(perimeter=perimeter, penalised_objective=objective)
-        if mode == "tangent":
+        if mode in ("tangent", "floor"):
             row.update(area_multiplier=nu, area_error=area_err)
         if mode in ("lagrangian", "penalty"):
             row.update(

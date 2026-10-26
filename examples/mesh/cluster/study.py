@@ -709,6 +709,10 @@ def _stepfd_jobs(gpus_per_node: int) -> dict[str, str]:
 # stayed put); rtx, ~14 h at 400 iterates (ox_adam_fix: 123 s/iterate):
 #   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh optrc
 OPTRC = ("ox_adam", "mma_s")
+# 2026-10-26: stop when the 25-iterate running mean of J has not improved by 2 % in 100
+# iterates (optimize.patience_converged; offline on the drag histories the M 10 runs stopped
+# 0-3 % short of their eventual best and the slow mma_s tails kept going).  optrc, ldopt, sph3d
+CONVERGE = "--converge-patience 100"
 
 
 def _optrc_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -719,7 +723,7 @@ def _optrc_jobs(gpus_per_node: int) -> dict[str, str]:
         f"kn0.5_M10_S1_{arm}_rc": _optrules_tagged(
             "kn0.5_M10",
             f"{arm}_rc",
-            f"--optimizer {arm} --recentre 1 {FIX}",
+            f"--optimizer {arm} --recentre 1 {CONVERGE} {FIX}",
             seeds=1,
             suffix="_w500",
             extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
@@ -734,31 +738,38 @@ def _optrc_jobs(gpus_per_node: int) -> dict[str, str]:
 # (L = 0: the first steps are the lift gradient's), both optrules problems, the two rules that
 # did best on drag; rtx, ~8-14 h at 400 iterates:
 #   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh ldopt
+# 2026-10-26: the unconstrained runs (_ld_, _ldrc_) are degenerate -- all four thinned the circle
+# into a ~35 deg plate (peak L / D 1.46 Kn 0.5, 1.25 M 10 by iterate 60-130), then on below the
+# 0.5 m cells, where the predicted decrease stopped holding, until the body vanished (three
+# crashed in reinitialise).  Now with an area floor at half the circle's (--area-mode floor:
+# a ~1.8 m thick plate at an 8 m chord, >= 3 cells), tags _ldfl_floor_
 LDOPT = ("ox_adam", "mma_s")
+LDOPT_FLOOR = 0.5
 
 
 def _ldopt_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``ldopt``: :data:`LDOPT` maximising L / D with ``--area-mode none`` and :data:`FIX` on
-    both optrules problems, one seed, warm-started, 400 iterates; tags
-    ``circle_long_<problem>_S1_<arm>_ldrc_none_sm8_free_g32_w500`` (the first runs without
-    recentring: ``_ld_``)."""
+    """``ldopt``: :data:`LDOPT` maximising L / D with the area at least :data:`LDOPT_FLOOR` of
+    the circle's, ``--recentre 1`` and :data:`FIX` on both optrules problems, one seed,
+    warm-started, 400 iterates; tags ``circle_long_<problem>_S1_<arm>_ldfl_floor_sm8_free_g32_w500``
+    (the unconstrained runs: ``_ld_none_`` without recentring, ``_ldrc_none_`` with it)."""
     del gpus_per_node
     jobs = {}
     for name in OPTRULES_REGIMES:
         for arm in LDOPT:
             cmd = _optrules_tagged(
                 name,
-                f"{arm}_ldrc",
+                f"{arm}_ldfl",
                 # --recentre 1 (2026-10-26): the first runs' M 10 Adam body slid 0.05 m /
                 # iterate in -y towards the bottom face's keep-out; restarted from the circle
                 # under new tags (_ldrc_), the first runs (_ld_) kept for comparison
-                f"--optimizer {arm} --objective lift_drag --area-mode none --recentre 1 {FIX}",
+                f"--optimizer {arm} --objective lift_drag --area-mode floor "
+                f"--area-floor {LDOPT_FLOOR} --recentre 1 {CONVERGE} {FIX}",
                 seeds=1,
                 suffix="_w500",
                 extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
             )
             # the tag names the area mode: "_tan_" is _optrules_tagged's, overridden here
-            jobs[f"{name}_S1_{arm}_ldrc"] = cmd.replace("_ldrc_tan_sm8", "_ldrc_none_sm8", 1)
+            jobs[f"{name}_S1_{arm}_ldfl"] = cmd.replace("_ldfl_tan_sm8", "_ldfl_floor_sm8", 1)
     return jobs
 
 
@@ -775,6 +786,9 @@ def _ldopt_jobs(gpus_per_node: int) -> dict[str, str]:
 # (opt3dcheck: ~10 GB at 42 k slots; the 2-D M 10 runs fit 195 k slots in a 24 GB slice;
 # expect tens of GB -- the job's GPU monitor log has the peak), resubmit to resume:
 #   GPU_KIND=h200_full bash examples/mesh/cluster/submit_curc.sh sph3d
+# or (2026-10-26) on 3g.71gb slices, ~40-50 GB estimated (the 2-D M 10 runs: ~18 GB at ~195 k
+# slots; an out-of-memory job fails in its first iterate and resumes on a full card):
+#   GPU_KIND=h200_71 bash examples/mesh/cluster/submit_curc.sh sph3d
 # --recentre 1 (2026-10-26) as the 2-D ldopt / optrc runs: the body held within half a knot of
 # its start by exact whole-knot shifts.  --a-max 16: a low first guess the forward grows on a
 # clipped step (ensemble_mesh._run_grown); the record's collision pairs are (A_max, cells) per
@@ -786,7 +800,9 @@ SPHERE_LONG = (
 )
 SPH3D = {
     "drag": "--area-mode tangent",
-    "ld": "--objective lift_drag --area-mode none",
+    # 2026-10-26: with a volume floor at half the sphere's, as the 2-D ldopt (the unconstrained
+    # 2-D L / D runs thinned the body below the cells until it vanished)
+    "ldfl": f"--objective lift_drag --area-mode floor --area-floor {LDOPT_FLOOR}",
 }
 
 
@@ -800,7 +816,7 @@ def _sph3d_jobs(gpus_per_node: int) -> dict[str, str]:
         f"sphere_long_{regime}_{name}": (
             f"python3 -m examples.mesh.optimize "
             f"--tag sphere_long_{regime}_S1_ox_adam_{name}_free_w300 {SPHERE_LONG} "
-            f"--optimizer ox_adam {flags} {extra} --a-max 16 {FIX}"
+            f"--optimizer ox_adam {flags} {extra} --a-max 16 {CONVERGE} {FIX}"
         )
         for regime, extra in regimes.items()
         for name, flags in SPH3D.items()

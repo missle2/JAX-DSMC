@@ -22,7 +22,7 @@
 # limit is simply resubmitted (`submit_curc.sh <group>` again: finished rows/iterates are
 # skipped).  GPU_KIND=a100 (default, CUDA venv) -> aa100 / gpu:a100-40gb; GPU_KIND=h200
 # -> ah200 / a 2g.35gb MIG slice of an H200 (GPU_KIND=h200_full: the whole card, gpu:h200,
-# 32 cores, 128 GB -- the 3-D runs) (faster, but run check_env there first: on 2026-09-22 the ah200
+# 32 cores, 128 GB; GPU_KIND=h200_71: a 3g.71gb slice, 16 cores, 80 GB -- the 3-D runs) (faster, but run check_env there first: on 2026-09-22 the ah200
 # jobs all landed on one node whose driver refuses cuInit); GPU_KIND=mi100 -> ami100 /
 # gpu:mi100 (needs a jax >= 0.4.36 module, see env.sh).  Nodes listed in bad_nodes.txt
 # (written by a job's preflight) and in EXCLUDE_NODES are excluded from every submission.
@@ -54,6 +54,9 @@ case "${GPU_KIND}" in
   # a whole H200 (141 GB), not a 2g.35gb MIG slice: the 3-D sphere ran out of memory on the
   # slice (opt3dcheck, 2026-10-24).  Counts against the same 4-concurrent H200 cap
   h200_full) PART="${PART:-ah200}"; GRES="${GRES_TYPE:-h200}"; CORES=32; MEM=128; PER_NODE=4 ;;
+  # a 3g.71gb MIG slice (half a card, 16 cores max per GPU, 2026-10-26): the 3-D sphere_long
+  # runs, ~40-50 GB estimated from the 2-D M 10 runs' ~18 GB at ~195 k slots
+  h200_71) PART="${PART:-ah200}"; GRES="${GRES_TYPE:-h200_3g.71gb}"; CORES=16; MEM=80; PER_NODE=8 ;;
   a100) PART="${PART:-aa100}"; GRES="${GRES_TYPE:-a100-40gb}"; CORES=21; MEM=70; PER_NODE=3 ;;
   mi100) PART="${PART:-ami100}"; GRES="${GRES_TYPE:-mi100}"; CORES=21; MEM=70; PER_NODE=3 ;;
   rtx)
@@ -69,7 +72,7 @@ case "${GPU_KIND}" in
     # gpu-normal allows ONE rtx MIG slice per job (sbatch Error 8, 2026-09-23): an opt job's
     # S seeds then run one after another on its slice (optimize.py --workers 1)
     PER_NODE=1 ;;
-  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|h200_full|a100|rtx|mi100)"; exit 1 ;;
+  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|h200_71|h200_full|a100|rtx|mi100)"; exit 1 ;;
 esac
 # a venv active in the submitting shell would ride into every job (--export=ALL) and break
 # env.sh's `module purge` (2026-10-22, see env.sh): submit without it

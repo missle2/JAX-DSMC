@@ -399,6 +399,46 @@ def test_recentre_moves_the_body_back_by_whole_knots_exactly():
     assert out["count"] == 7 and out["x"] == 1.5
 
 
+def test_area_floor_is_active_only_at_the_floor_and_restores_an_undershoot():
+    """2026-10-26 (``area_mode floor``): the optax rules see the area only at the floor with a
+    step that removes area (then as ``tangent``), MMA always (its own inequality); a step that
+    left the body below the floor is shifted back onto it, one above it is left alone."""
+    import jax.numpy as jnp  # noqa: PLC0415
+    import optimize as O  # noqa: PLC0415
+
+    ls, lo, hi = _circle_levelset()
+    area, g_area = O.area_and_gradient(ls, lo, hi)
+    shrink = g_area.copy()  # descent along -g removes area
+    assert O.floor_active(shrink, g_area, area, 0.5 * area, rule=False)[0] is None
+    ga, g, _nu = O.floor_active(shrink, g_area, area, area, rule=False)
+    assert ga is g_area and abs(float(np.sum(g * g_area))) < 1e-9 * float(np.sum(g_area**2))
+    assert O.floor_active(-shrink, g_area, area, area, rule=False)[0] is None
+    assert O.floor_active(shrink, g_area, area, 0.5 * area, rule=True)[0] is g_area
+    smaller = dataclasses.replace(ls, coef=ls.coef + 0.5 * ls.h)
+    a_small = O.area_and_gradient(smaller, lo, hi)[0]
+    back, shift, _ = O.after_step(smaller, "floor", area, lo, hi, 0.0)
+    assert shift < 0.0 and abs(O.area_and_gradient(back, lo, hi)[0] - area) < 1e-6 * area
+    kept, shift, _ = O.after_step(smaller, "floor", 0.9 * a_small, lo, hi, 0.0)
+    assert shift == 0.0
+    np.testing.assert_allclose(
+        np.asarray(kept.coef), np.asarray(jnp.asarray(smaller.coef)), atol=0.05
+    )
+
+
+def test_patience_stops_a_plateau_but_not_a_slow_descent():
+    """2026-10-26 (``converge_patience``): a noisy plateau stops ``patience`` iterates after its
+    running mean's last 2 % improvement; a slow descent under the same noise does not."""
+    import optimize as O  # noqa: PLC0415
+
+    noise = 0.01 * np.random.default_rng(0).standard_normal(400)
+    plateau = np.r_[np.linspace(1.0, 0.2, 100), np.full(300, 0.2)] + noise
+    stop = next(n for n in range(1, 401) if O.patience_converged(plateau[:n], 25, 100, 0.02))
+    assert 200 < stop < 260
+    slow = np.linspace(1.0, 0.2, 400) + noise
+    assert not O.patience_converged(slow, 25, 100, 0.02)
+    assert not O.patience_converged(plateau, 25, 0, 0.02)
+
+
 def test_lift_drag_weights_are_the_ratio_gradient():
     """2026-10-25 (``objective lift_drag``): the per-hit momentum weights are ``dJ/dF`` of
     ``J = -L / D`` at the windowed forces, and the drag keeps its unweighted reward (a
