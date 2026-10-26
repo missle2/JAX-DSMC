@@ -33,6 +33,7 @@ import argparse
 import dataclasses
 import functools
 import json
+import math
 import os
 import sys
 import time
@@ -367,6 +368,37 @@ def _run(
     )
 
 
+A_MAX_GROWTH = 1.4
+A_MAX_RESIZES = 8
+_a_max_seen = {}
+"""The largest NTC attempt bound this process has needed per box (slots, cells): it only grows
+(:func:`_run_grown`), so the later seeds and iterates start from the settled value.  Per
+process: ``optimize --workers N`` starts fresh workers every iterate, which regrow it each time
+(one redone warm-up per iterate); one worker keeps it."""
+
+
+def _run_grown(state, cstate, common, static, capacity, step0, capture):
+    """:func:`_run` with ``A_max`` grown when the flow outgrows it (``simulate.run_adaptive``'s
+    rule for the mesh forward, 2026-10-25): a clipped run is redone from the same state at
+    ``max(A_max + 1, 1.4 x the peak attempts)`` -- the same draws (keyed by step), so the result
+    is the unclipped run's.  ``A_max`` is the attempt scan's trip count, a compile-time size,
+    so each new value compiles the forward once; the cfg's ``a_max`` is the starting guess.
+    Returns ``(carry, aux, static)``."""
+    for _ in range(A_MAX_RESIZES + 1):
+        carry, aux = _run(state, cstate, *common, static, capacity, step0, capture)
+        clipped = int(jnp.sum(aux[1].attempts_clipped))
+        if not clipped:
+            return carry, aux, static
+        peak = int(jnp.max(aux[1].max_attempts))
+        a_max = max(static.A_max + 1, math.ceil(A_MAX_GROWTH * peak))
+        print(f"  A_max {static.A_max} clipped in {clipped} cell-steps (peak {peak}) -> {a_max}",
+              flush=True)  # fmt: skip
+        static = dataclasses.replace(static, A_max=a_max)
+        key = (static.N, tuple(common[0].n))
+        _a_max_seen[key] = max(_a_max_seen.get(key, 0), a_max)
+    raise RuntimeError(f"A_max still clipped after {A_MAX_RESIZES} resizes (now {static.A_max})")
+
+
 @jax.jit
 def _snapshot(state, grid, params, sp):
     """One :class:`CellMoments` of a state (the frame of a field movie)."""
@@ -420,6 +452,43 @@ def _carried(state, cstate, mesh, fresh, grid):
     return dataclasses.replace(state, alive=state.alive & ~covered), cstate
 
 
+def _warm_up(cfg, state, cstate, common, static, capacity, restart, frames_every):
+    """:func:`forward`'s uncaptured steps: the warm start's re-equilibration, or the empty
+    box's warm-up (in frame blocks with ``frames_every``).  Returns ``((state, cstate),
+    static, frames)`` with ``static`` carrying the attempt bound the steps needed
+    (:func:`_run_grown`)."""
+    grid, sp, params, _key, _faces, _wall, _res, mesh = common
+    frames = []
+    if restart is not None:
+        state, cstate = _carried(*restart, mesh, (state, cstate), grid)
+        settle = min(int(cfg["restart_steps"]), cfg["warmup"])
+        if settle:
+            warm = dataclasses.replace(static, n_steps=settle)
+            (state, cstate), aux, warm = _run_grown(
+                state, cstate, common, warm, capacity, cfg["warmup"] - settle, False
+            )
+            require_valid(aux[1])
+            static = dataclasses.replace(static, A_max=warm.A_max)
+    elif frames_every > 0:
+        if cfg["warmup"] % frames_every:
+            raise ValueError(f"frames_every {frames_every} must divide warmup {cfg['warmup']}")
+        frames.append(_frame(0, state, grid, params, sp))
+        warm = dataclasses.replace(static, n_steps=frames_every)
+        for k0 in range(0, cfg["warmup"], frames_every):
+            (state, cstate), aux, warm = _run_grown(
+                state, cstate, common, warm, capacity, k0, False
+            )
+            require_valid(aux[1])
+            frames.append(_frame(k0 + frames_every, state, grid, params, sp))
+        static = dataclasses.replace(static, A_max=warm.A_max)
+    elif cfg["warmup"]:
+        warm = dataclasses.replace(static, n_steps=cfg["warmup"])
+        (state, cstate), aux, warm = _run_grown(state, cstate, common, warm, capacity, 0, False)
+        require_valid(aux[1])
+        static = dataclasses.replace(static, A_max=warm.A_max)
+    return (state, cstate), static, frames
+
+
 def forward(cfg, parameter, value, key, capture, body=None, frames_every=0, restart=None):
     """Empty start, ``warmup`` uncaptured steps, then the captured steps.  Returns
     ``(state0, final, diag, rec, tallies, setup)`` with ``setup`` the run's objects.
@@ -442,6 +511,9 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0, rest
     grid, mesh, sp, params, static, faces, res, wall, capacity = build(
         cfg, parameter, value, cfg["steps"], body
     )
+    # the attempt bound grown by an earlier seed or iterate of this box (_run_grown)
+    seen = _a_max_seen.get((static.N, tuple(grid.n)), 0)
+    static = dataclasses.replace(static, A_max=max(static.A_max, seen))
     seconds = {"build": time.time() - t0}
     t0 = time.time()
     flow = FlowParams(
@@ -452,34 +524,14 @@ def forward(cfg, parameter, value, key, capture, body=None, frames_every=0, rest
     state = initialize.initial_state(key, flow, grid, sp, static, n_alive=0)
     cstate = initialize.initial_collide_state(flow, grid, sp, static)
     common = (grid, sp, params, key, faces, wall, res, mesh)
-    frames = []
-    if restart is not None:
-        state, cstate = _carried(*restart, mesh, (state, cstate), grid)
-        settle = min(int(cfg["restart_steps"]), cfg["warmup"])
-        if settle:
-            warm = dataclasses.replace(static, n_steps=settle)
-            (state, cstate), aux = _run(
-                state, cstate, *common, warm, capacity, cfg["warmup"] - settle, False
-            )
-            require_valid(aux[1])
-    elif frames_every > 0:
-        if cfg["warmup"] % frames_every:
-            raise ValueError(f"frames_every {frames_every} must divide warmup {cfg['warmup']}")
-        frames.append(_frame(0, state, grid, params, sp))
-        warm = dataclasses.replace(static, n_steps=frames_every)
-        for k0 in range(0, cfg["warmup"], frames_every):
-            (state, cstate), aux = _run(state, cstate, *common, warm, capacity, k0, False)
-            require_valid(aux[1])
-            frames.append(_frame(k0 + frames_every, state, grid, params, sp))
-    elif cfg["warmup"]:
-        warm = dataclasses.replace(static, n_steps=cfg["warmup"])
-        (state, cstate), aux = _run(state, cstate, *common, warm, capacity, 0, False)
-        require_valid(aux[1])
+    (state, cstate), static, frames = _warm_up(
+        cfg, state, cstate, common, static, capacity, restart, frames_every
+    )
     state0 = jax.block_until_ready(state)
     seconds["warmup"] = time.time() - t0
     t0 = time.time()
-    (final, cstate_final), aux = _run(
-        state0, cstate, *common, static, capacity, cfg["warmup"], capture
+    (final, cstate_final), aux, static = _run_grown(
+        state0, cstate, common, static, capacity, cfg["warmup"], capture
     )
     final = jax.block_until_ready(final)
     seconds["capture"] = time.time() - t0
@@ -772,7 +824,10 @@ def _checked_replay(
     """:func:`shape.replay` of the captured steps (epsilon = acc_delta = 0) at the record's
     tracker sizes (:func:`replay_static`), its replay error checked against
     :data:`REPLAY_TOL`; ``(replay, static)`` -- the sizes the shape VJP must use as well.  A
-    cut replay that misses the record is rerun at the forward's sizes."""
+    cut replay that misses the record is rerun at the forward's sizes.  ``A_max`` is set to 1:
+    the replay and the shape VJP do not collide (the record carries the pairs), and a grown
+    attempt bound (:func:`_run_grown`) must not recompile them (~20 min on an H200)."""
+    static = dataclasses.replace(static, A_max=1)
     seen = (static.N, static.K_bounce, static.lane_size)
     small = replay_static(static, rec.walls, _replay_seen.get(seen, (0, 0)))
     for sizes in (small, static) if small != static else (static,):

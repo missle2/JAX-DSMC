@@ -38,11 +38,16 @@ def summarise(path):
     print(f"{path}: {samples} samples")
     for uuid, i in sorted(index.items(), key=lambda t: t[1]):
         u, m = np.array(util[i]), np.array(mem[i])
-        busy = np.mean(u > 10) if u.size else np.nan
         procs = sorted(set(pids.get(uuid, [])))
-        print(f"  GPU {i}: util mean {np.nanmean(u):5.1f} % max {np.nanmax(u):5.1f} % "
-              f"(>10 % in {100 * busy:4.0f} % of samples), memory max {np.nanmax(m):8.0f} / "
-              f"{np.nanmax(total[i]):.0f} MiB, {len(procs)} distinct processes")  # fmt: skip
+        if np.isnan(u).all():
+            # MIG-partitioned cards report no utilisation, and the memory and processes are
+            # the whole card's: every job sharing it (the rtx nodes)
+            use = "util n/a (MIG: card-wide memory and processes)"
+        else:
+            use = (f"util mean {np.nanmean(u):5.1f} % max {np.nanmax(u):5.1f} % "
+                   f"(>10 % in {100 * np.mean(u > 10):4.0f} % of samples)")  # fmt: skip
+        print(f"  GPU {i}: {use}, memory max {np.nanmax(m):8.0f} / {np.nanmax(total[i]):.0f} MiB, "
+              f"{len(procs)} distinct processes")  # fmt: skip
 
 
 def main(argv=None):

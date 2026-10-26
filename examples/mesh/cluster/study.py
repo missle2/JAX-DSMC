@@ -206,8 +206,9 @@ KN05 = "--knudsen 0.5 --a-max 64"
 # M = 10 (3079 m/s), scaled from the Kn = 0.5 measurement rather than measured: the step
 # keeps a free-stream move at 0.15 cell; the slots hold the full box (1e5 at this fnum) plus
 # a shock layer at ~4x density; NTC attempts go as n^2 (sigma g)_max dt, ~16 x 1.9 x 1/4
-# ~ 8x the measured 21 behind the shock, so A_max 256 at Kn = 0.5.  Both limits fail loudly
-# when exceeded (attempts_clipped / inflow_shortfall stop the job) -- nothing regrows them
+# ~ 8x the measured 21 behind the shock, so A_max 256 at Kn = 0.5.  The slots fail loudly when
+# exceeded (inflow_shortfall stops the job); A_max is only the first guess since 2026-10-26 (the
+# mesh forward regrows it on a clipped step, ensemble_mesh._run_grown)
 MACH10 = "--mach 10 --dt 2.5e-5 --slots 160000"
 KN05_M10 = f"--knudsen 0.5 {MACH10} --a-max 256"
 # cellgate: the optc iterates whose gradients are FD-checked (cluster_job.sh SHAPE): the
@@ -739,21 +740,25 @@ LDOPT = ("ox_adam", "mma_s")
 def _ldopt_jobs(gpus_per_node: int) -> dict[str, str]:
     """``ldopt``: :data:`LDOPT` maximising L / D with ``--area-mode none`` and :data:`FIX` on
     both optrules problems, one seed, warm-started, 400 iterates; tags
-    ``circle_long_<problem>_S1_<arm>_ld_none_sm8_free_g32_w500``."""
+    ``circle_long_<problem>_S1_<arm>_ldrc_none_sm8_free_g32_w500`` (the first runs without
+    recentring: ``_ld_``)."""
     del gpus_per_node
     jobs = {}
     for name in OPTRULES_REGIMES:
         for arm in LDOPT:
             cmd = _optrules_tagged(
                 name,
-                f"{arm}_ld",
-                f"--optimizer {arm} --objective lift_drag --area-mode none {FIX}",
+                f"{arm}_ldrc",
+                # --recentre 1 (2026-10-26): the first runs' M 10 Adam body slid 0.05 m /
+                # iterate in -y towards the bottom face's keep-out; restarted from the circle
+                # under new tags (_ldrc_), the first runs (_ld_) kept for comparison
+                f"--optimizer {arm} --objective lift_drag --area-mode none --recentre 1 {FIX}",
                 seeds=1,
                 suffix="_w500",
                 extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
             )
             # the tag names the area mode: "_tan_" is _optrules_tagged's, overridden here
-            jobs[f"{name}_S1_{arm}_ld"] = cmd.replace("_ld_tan_sm8", "_ld_none_sm8", 1)
+            jobs[f"{name}_S1_{arm}_ldrc"] = cmd.replace("_ldrc_tan_sm8", "_ldrc_none_sm8", 1)
     return jobs
 
 
@@ -770,11 +775,14 @@ def _ldopt_jobs(gpus_per_node: int) -> dict[str, str]:
 # (opt3dcheck: ~10 GB at 42 k slots; the 2-D M 10 runs fit 195 k slots in a 24 GB slice;
 # expect tens of GB -- the job's GPU monitor log has the peak), resubmit to resume:
 #   GPU_KIND=h200_full bash examples/mesh/cluster/submit_curc.sh sph3d
+# --recentre 1 (2026-10-26) as the 2-D ldopt / optrc runs: the body held within half a knot of
+# its start by exact whole-knot shifts.  --a-max 16: a low first guess the forward grows on a
+# clipped step (ensemble_mesh._run_grown); the record's collision pairs are (A_max, cells) per
+# step, so 2-D's 256 over 20 k cells would hold ~10x what 16 particles per cell need
 SPHERE_LONG = (
     "--case sphere_long --fnum-scale 1 --levelset-h 0.1 --levelset-samples 16 --warmup 1000 "
-    "--step 0.02 "
-    "--smooth 3 --band 0.4 --keepout 0.3 --boundary free --restart-steps 300 --iterations 400 "
-    "--seeds-per-iterate 1 --workers 1"
+    "--step 0.02 --smooth 3 --band 0.4 --keepout 0.3 --boundary free --restart-steps 300 "
+    "--iterations 400 --seeds-per-iterate 1 --workers 1 --recentre 1"
 )
 SPH3D = {
     "drag": "--area-mode tangent",
@@ -786,13 +794,13 @@ def _sph3d_jobs(gpus_per_node: int) -> dict[str, str]:
     """``sph3d``: :data:`SPH3D` on ``sphere_long`` at both optrules conditions, ox_adam,
     :data:`FIX`; tags ``sphere_long_<condition>_S1_ox_adam_<objective>_free_w300``."""
     del gpus_per_node
-    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
-               "kn0.5_M10": f"--knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 {KNPULLBACK}"}  # fmt: skip
+    regimes = {"kn0.5": f"--knudsen 0.5 {KNPULLBACK}",
+               "kn0.5_M10": f"--knudsen 0.5 --mach 10 --dt 2.5e-5 {KNPULLBACK}"}  # fmt: skip
     return {
         f"sphere_long_{regime}_{name}": (
             f"python3 -m examples.mesh.optimize "
             f"--tag sphere_long_{regime}_S1_ox_adam_{name}_free_w300 {SPHERE_LONG} "
-            f"--optimizer ox_adam {flags} {extra} {FIX}"
+            f"--optimizer ox_adam {flags} {extra} --a-max 16 {FIX}"
         )
         for regime, extra in regimes.items()
         for name, flags in SPH3D.items()
