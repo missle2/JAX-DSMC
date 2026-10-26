@@ -155,7 +155,9 @@ def default_config():
             # coefficients: nu = area_linear * price, mu = area_penalty * price / A0) or
             # "tangent" (Lagrange multiplier per iterate: the step is projected onto the
             # constant-area set, the shift restores the second-order remainder; the default
-            # since 2026-10-21, required by the optax and optimizers.py rules)
+            # since 2026-10-21, required by the optax and optimizers.py rules) or "none" (no area
+            # constraint, 2026-10-25: the lift-to-drag runs; the optax and optimizers.py rules
+            # take it too)
             "area_mode": "tangent",
             "area_penalty": 100.0,
             "area_linear": 0.0,
@@ -176,6 +178,12 @@ def default_config():
             # inflow face, while the free bodies grew longer by sliding away from it -- with
             # fix_centroid the held centroid is the moved body's
             "start_shift": 0.0,
+            # the body moved back by whole knots after each step whenever its area centroid is
+            # more than half a knot from its start (2026-10-25; 1 = on): the coefficients and
+            # the optimiser's state shift with it, exactly -- no resampling, no projection of
+            # the gradient or the step (the fix_centroid versions of optcm / optct reshaped the
+            # body; the free M 10 runs slide downstream along a direction the drag does not see)
+            "recentre": 0,
         }
     )
     return cfg
@@ -263,6 +271,45 @@ def project_centroid(ls, target, lo, hi, iters=2):
     return ls, float(np.abs(c - target).max())
 
 
+def shift_knots(a, n):
+    """``a`` with its trailing ``len(n)`` axes (the knot axes) shifted by ``n`` knots: entry
+    ``i`` takes ``a[i + n]`` (the body moves by ``-n h``), the box edge's entries repeated."""
+    a = np.asarray(a)
+    lead = a.ndim - len(n)
+    for axis, shift in enumerate(n):
+        if shift:
+            size = a.shape[lead + axis]
+            idx = np.clip(np.arange(size) + int(shift), 0, size - 1)
+            a = np.take(a, idx, axis=lead + axis)
+    return a
+
+
+def recentre(ls, target, lo, hi):
+    """``(ls, n)``: ``ls`` moved by whole knots ``-n h`` (``i32[D]``, :func:`shift_knots`) so
+    its area centroid is within half a knot of ``target`` -- an exact translation of the
+    spline (an integer shift of its coefficients), unlike :func:`translate`'s resample."""
+    c = np.asarray(_centroid_of_coef(ls.coef, ls, lo, hi))
+    n = np.rint((c - np.asarray(target, float)) / ls.h).astype(int)
+    if not n.any():
+        return ls, n
+    return dataclasses.replace(ls, coef=jnp.asarray(shift_knots(ls.coef, n))), n
+
+
+def _shift_leaf(a, n, shape):
+    """:func:`shift_state` on one leaf."""
+    if not hasattr(a, "shape") or a.ndim < len(shape) or tuple(a.shape[-len(shape) :]) != shape:
+        return a
+    shifted = shift_knots(a, n)
+    return shifted if isinstance(a, np.ndarray) else jnp.asarray(shifted, dtype=a.dtype)
+
+
+def shift_state(tree, n, shape):
+    """Every array leaf of an optimiser state whose trailing axes are the coefficients'
+    ``shape`` shifted with them (:func:`shift_knots`; moments, previous iterates, MMA's
+    asymptotes, L-BFGS pairs); other leaves (counters, scalars) unchanged."""
+    return jax.tree.map(functools.partial(_shift_leaf, n=n, shape=tuple(shape)), tree)
+
+
 def _perimeter_of_coef(coef, ls, lo, hi):
     return L.body_perimeter(dataclasses.replace(ls, coef=coef), lo, hi, 4)
 
@@ -287,6 +334,9 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
         state = dict(state, **moment)
     g0 = smooth(g_full)
     area = float(L.body_volume(ls, lo, hi, 4))
+    if g_area is None:
+        # area_mode none: an inactive constraint (twice the target area, zero gradient)
+        g_area, area = np.zeros_like(coef), 2.0 * float(state["area0"])
     while g_area.ndim > coef.ndim:  # MMA's own: the area only
         g_area = g_area[0]
     xs, lam = OZ.mma_step(coef[mask], g0[mask], area, g_area[mask], float(state["area0"]),
@@ -331,14 +381,15 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     else:
         base, g_base, j_base = state["base_coef"], state["base_g"], state["base_objectives"]
     base_ls = dataclasses.replace(ls, coef=jnp.asarray(base))
-    if not accepted:  # the step's metric and constraint at the base point
+    if not accepted and g_area is not None:  # the step's metric and constraint at the base
         smooth = functools.partial(smoothed_direction, ls=base_ls, sigma=cfg["smooth"], band=band)
         g_area = constraint_gradients(base_ls, lo, hi, area_and_gradient(base_ls, lo, hi)[1], cfg)
     if lbfgs:
         direction, has_pairs = OZ.lbfgs_direction(g_base, pairs, smooth)
     else:
         direction, has_pairs = -smooth(g_base), False
-    direction, _ = tangent_component(direction, g_area)
+    if g_area is not None:
+        direction, _ = tangent_component(direction, g_area)
     if has_pairs and rule != "lbfgs_fs":
         delta, at_edge = OZ.fit_to_radius(direction, radius)
     else:
@@ -623,6 +674,8 @@ def parallel_terms(cfg, ls, seeds, out: Path, k: int, argv):
             "--eval-seeds",
             *mine,
         ]
+        # which seeds go to which GPU (the job's GPU monitor shows the worker processes there)
+        print(f"  worker {w}: seeds {mine} on GPU {dev} of {devices}", flush=True)
         log = open(out / f"eval_{k}_w{w}.log", "w")  # noqa: SIM115 -- closed after wait
         procs.append(
             (subprocess.Popen(cmd, env=env, stdout=log, stderr=subprocess.STDOUT), log, part)
@@ -642,6 +695,8 @@ def parallel_terms(cfg, ls, seeds, out: Path, k: int, argv):
 def evaluate_worker(cfg, coef_path: str, seeds, out_path: str, frames_for=None, out=None):
     """Worker entry: the level set of ``coef_path`` on the seeds ``seeds`` -> ``out_path``
     (the field movie too if ``frames_for`` is one of them)."""
+    print(f"worker seeds {seeds}: CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')} "
+          f"jax {jax.devices()}", flush=True)  # fmt: skip
     _grid, ls = initial_levelset(cfg)
     ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(coef_path)))
     np.savez(out_path, **seed_terms(cfg, ls, seeds, frames_for, out))
@@ -710,7 +765,7 @@ def after_step(stepped, mode, area0, lo, hi, keepout, centroid0=None):
     new = L.reinitialise(stepped)
     if centroid0 is not None:
         new, _err = project_centroid(new, centroid0, lo, hi)
-    if mode in ("lagrangian", "penalty"):
+    if mode in ("lagrangian", "penalty", "none"):
         clipped = 0
         if keepout > 0.0:
             new, clipped = keep_inside(new, lo, hi, keepout)
@@ -767,11 +822,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     mode = cfg["area_mode"]
     if cfg["fix_centroid"] and mode != "tangent":
         raise ValueError("--fix-centroid needs --area-mode tangent")
-    if (rule or ox) and mode != "tangent":
-        raise ValueError(f"--optimizer {cfg['optimizer']} needs --area-mode tangent")
+    if (rule or ox) and mode not in ("tangent", "none"):
+        raise ValueError(f"--optimizer {cfg['optimizer']} needs --area-mode tangent or none")
     if saved and saved["config"].get("area_mode", "projection") != mode:
         raise ValueError(f"{out} was run with area_mode {saved['config'].get('area_mode')}")
-    if mode not in ("projection", "lagrangian", "penalty", "tangent"):
+    if mode not in ("projection", "lagrangian", "penalty", "tangent", "none"):
         raise ValueError(f"area_mode {mode}")
     price = area_price(cfg)
     mu = cfg["area_penalty"] * price / area0
@@ -819,6 +874,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             g_area = constraint_gradients(ls, lo, hi, g_area, cfg)
             # the KKT gradient: Adam's moments then track the constrained gradient too
             g, nu = constrained_gradient(g, g_area)
+        else:
+            g_area = None  # area_mode none (projection: the step's shift after it)
         extra = {}
         if rule:
             from_ls, delta, predicted, rule_state, extra = rule_step(
@@ -863,6 +920,22 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             stepped, mode, area0, lo, hi, cfg["keepout"],
             centroid0 if cfg["fix_centroid"] else None,
         )  # fmt: skip
+        recentred = [0] * new.coef.ndim
+        if cfg["recentre"]:
+            new, n = recentre(new, centroid0, lo, hi)
+            recentred = n.tolist()
+            if n.any():
+                # the optimiser's per-coefficient state moves with the body
+                shape = np.asarray(new.coef).shape
+                if ox:
+                    ox_state = shift_state(ox_state, n, shape)
+                    OX.save_state(ox_path, ox_state)
+                if rule:
+                    rule_state = shift_state(rule_state, n, shape)
+                    OZ.save_state(state_path, rule_state)
+                if cfg["optimizer"] == "adam":
+                    adam_state = shift_state(adam_state, n, shape)
+                    np.savez(out / "adam_state.npz", m=adam_state[0], v=adam_state[1])
         area = float(L.body_volume(new, lo, hi, 4))
         nu_next = nu + mu * (area - area0) if mode == "lagrangian" else nu
         row = {
@@ -883,6 +956,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "eta": eta,
             "area_shift": shift,
             "keepout_knots": clipped,
+            "recentred_knots": recentred,
             "predicted_decrease": predicted,
             "seconds": time.time() - t0,
             "phase_seconds": avg["phase_seconds"],

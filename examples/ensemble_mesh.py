@@ -87,6 +87,11 @@ def default_config():
         "acc": 0.0,
         "silhouette_band": 0.0,
         "grazing": 0.0,
+        # "drag" (the windowed x force) or "lift_drag" (J = -L / D, the y force over the x
+        # force: maximised lift-to-drag; 2026-10-25).  The ratio's gradient is one backward:
+        # the per-hit momentum weighted by dJ/dF = (L / D^2, -1 / D) at the seed's forces
+        # (objective_weights), traced through the replay and the shape VJP
+        "objective": "drag",
         "grid_scale": 1,
         # "hit_ahead" (stratified grad-lambda fits) is DIAGNOSTIC ONLY, biased by
         # construction: the class is the particle's future, the fit drops grad P (lam_1 -
@@ -515,35 +520,46 @@ def drag_rewards(mass: float, dim: int, first: int, last: int, scale: float, wid
     return reward, jump
 
 
-def _drag_reward(events, tallies, rec_k, step, mass, dim, first, scale):
-    """Momentum along ``x`` given to the body by each element hit of a window step."""
+def _hit_momentum(events, mass, dim, weight):
+    """Momentum given to the body by each hit: along ``x``, or with ``weight`` (``f64[D]``,
+    traced: :func:`objective_weights`) its components weighted."""
+    dv = events.v_in - events.v_out
+    if weight is None:
+        return mass * dv[..., 0]
+    return mass * jnp.sum(dv[..., :dim] * weight, axis=-1)
+
+
+def _drag_reward(events, tallies, rec_k, step, mass, dim, first, scale, weight=None):
+    """Momentum along ``x`` (or weighted, :func:`_hit_momentum`) given to the body by each
+    element hit of a window step."""
     del tallies, rec_k
-    r = mass * (events.v_in[..., 0] - events.v_out[..., 0])
+    r = _hit_momentum(events, mass, dim, weight)
     return jnp.where((events.face >= 2 * dim) & (step >= first), r * scale, 0.0)
 
 
-def _drag_jump(events, rec_k, step, mass, dim, first, last, scale, width=1):
+def _drag_jump(events, rec_k, step, mass, dim, first, last, scale, width=1, weight=None):
     """Window-edge jumps of the per-hit drag reward (see ``ensemble_plane._shear_jump``):
     ``+r`` on the window's last step, ``-r`` on the step before the window -- or, with
     ``width > 1``, ``+-r / width`` on the ``width`` steps ending there (the edge's hit-time
     density from all their hits instead of a fraction of one step's)."""
     del rec_k
-    r = mass * (events.v_in[..., 0] - events.v_out[..., 0]) * scale
+    r = _hit_momentum(events, mass, dim, weight) * scale
     at_end = (step > last - width) & (step <= last)
     at_start = (step >= first - width) & (step < first)
     sign = jnp.where(at_end, 1.0, jnp.where(at_start, -1.0, 0.0)) / width
     return jnp.where(events.face >= 2 * dim, r * sign, 0.0)
 
 
-def _drag_setup(cfg, mass, dim, first, scale_r, timing_band):
-    """The windowed drag's reward, its edge jump and the step-fraction band of
-    :func:`timing_band_setting` for the captured steps of ``cfg``."""
+def _drag_setup(cfg, mass, dim, first, scale_r, timing_band, tallies):
+    """The windowed drag's reward, its edge jump, the step-fraction band of
+    :func:`timing_band_setting` for the captured steps of ``cfg`` and a ratio objective's
+    weights at this seed's forces (:func:`objective_weights`; ``None``: the drag)."""
     band, width = timing_band_setting(timing_band)
     if first - width < cfg["warmup"]:
         raise ValueError(f"timing band of {width} steps reaches before the captured steps")
     last = cfg["warmup"] + cfg["steps"] - 1
     reward, jump = drag_rewards(mass, dim, first, last, scale_r, width)
-    return reward, jump, band
+    return reward, jump, band, objective_weights(cfg, tallies, dim, scale_r)
 
 
 def timing_band_setting(value):
@@ -559,9 +575,37 @@ def timing_band_setting(value):
     return float(value), 1
 
 
-def objective_value(cfg, tallies, dim, scale):
+OBJECTIVES = ("drag", "lift_drag")
+
+
+def objective_forces(cfg, tallies, dim, scale):
+    """``f64[D]`` the windowed mean force on the body (N/m): ``x`` the drag, ``y`` the lift."""
     first = cfg["steps"] - cfg["window"]
-    return float(jnp.sum(tallies.momentum[first:, 2 * dim :, 0]) * scale)
+    return np.asarray(jnp.sum(tallies.momentum[first:, 2 * dim :, :dim], axis=(0, 1))) * scale
+
+
+def objective_value(cfg, tallies, dim, scale):
+    """The objective of the windowed tallies: the drag, or ``-L / D`` (``cfg["objective"]``)."""
+    kind = cfg.get("objective", "drag")
+    if kind == "drag":
+        first = cfg["steps"] - cfg["window"]
+        return float(jnp.sum(tallies.momentum[first:, 2 * dim :, 0]) * scale)
+    if kind == "lift_drag":
+        f = objective_forces(cfg, tallies, dim, scale)
+        return float(-f[1] / f[0])
+    raise ValueError(f"objective {kind!r} (one of {OBJECTIVES})")
+
+
+def objective_weights(cfg, tallies, dim, scale):
+    """``dJ/dF`` (``f64[D]``) of a nonlinear objective at this seed's forces, the weights of
+    the per-hit momentum (:func:`_hit_momentum`): ``(L / D^2, -1 / D)`` for ``J = -L / D``.
+    ``None`` for the drag (the unweighted ``x`` component, bit for bit the earlier rewards)."""
+    if cfg.get("objective", "drag") == "drag":
+        return None
+    f = objective_forces(cfg, tallies, dim, scale)
+    w = np.zeros(dim)
+    w[0], w[1] = f[1] / f[0] ** 2, -1.0 / f[0]
+    return jnp.asarray(w)
 
 
 def _check(diag):
@@ -635,9 +679,10 @@ the gradient misses their dependence on the shape (docs/math/shape_validation.te
 Finding 4) and a warning says so."""
 
 
-def _newborn_share(check, value):
-    """``(D_tally - sum r) / D_tally``, warned about above :data:`NEWBORN_HIT_MAX`."""
-    share = (check - value) / max(abs(check), 1e-300)
+def _newborn_share(check, value, norm=None):
+    """``(D_tally - sum r) / D_tally`` (``norm`` instead of ``|D_tally|``: a weighted
+    objective's sum can vanish), warned about above :data:`NEWBORN_HIT_MAX`."""
+    share = (check - value) / max(abs(check) if norm is None else norm, 1e-300)
     if abs(share) > NEWBORN_HIT_MAX:
         warnings.warn(
             f"{share:.2%} of the drag is from hits the adjoint does not differentiate "
@@ -648,12 +693,26 @@ def _newborn_share(check, value):
     return share
 
 
-def _drag_tally_cotangent(tallies, dim, mesh, scale_r):
-    """``dJ/d tally`` of the windowed drag: ``scale_r`` on the body's ``x`` momentum."""
+def _objective_newborn_share(cfg, tallies, dim, scale_r, check, value, weight):
+    """:func:`_newborn_share` of the objective, or of a weighted one's tally twin
+    ``dJ/dF . F`` against the hit rewards' sum (``-L / D`` is homogeneous of degree 0, so
+    that sum is ~0: normalised by ``|dJ/dF| |F|``)."""
+    if weight is None:
+        return _newborn_share(check, value)
+    forces = objective_forces(cfg, tallies, dim, scale_r)
+    w = np.asarray(weight)
+    norm = float(np.linalg.norm(w) * np.linalg.norm(forces))
+    return _newborn_share(float(w @ forces), value, norm)
+
+
+def _drag_tally_cotangent(tallies, dim, mesh, scale_r, weight=None):
+    """``dJ/d tally`` of the windowed drag: ``scale_r`` on the body's ``x`` momentum (or
+    ``scale_r * weight`` on its components, :func:`objective_weights`)."""
     n_surf = 2 * dim + mesh.n_elements
+    w = jnp.zeros(dim).at[0].set(1.0) if weight is None else weight
     return tallies.__class__(
         None,
-        jnp.zeros((n_surf, 3)).at[2 * dim :, 0].set(scale_r),
+        jnp.zeros((n_surf, 3)).at[2 * dim :, :dim].set(scale_r * w),
         jnp.zeros(n_surf),
         jnp.zeros(n_surf),
     )
@@ -707,7 +766,8 @@ def replay_static(static, walls, floor=(0, 0)):
 
 
 def _checked_replay(
-    rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, static, reward, jump, timing_band
+    rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, static, reward, jump, timing_band,
+    reward_weight=None,
 ):  # fmt: skip
     """:func:`shape.replay` of the captured steps (epsilon = acc_delta = 0) at the record's
     tracker sizes (:func:`replay_static`), its replay error checked against
@@ -718,7 +778,7 @@ def _checked_replay(
     for sizes in (small, static) if small != static else (static,):
         rep = shape.replay(
             rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, 0.0, 0.0, sizes,
-            reward=reward, timing_jump=jump, timing_band=timing_band,
+            reward=reward, timing_jump=jump, timing_band=timing_band, reward_weight=reward_weight,
         )  # fmt: skip
         if float(rep.replay_error) <= REPLAY_TOL:
             _replay_seen[seen] = (sizes.K_bounce, sizes.lane_size)
@@ -767,12 +827,14 @@ def shape_terms(
     scale_r = float(params.fnum[0]) / (w * float(dt))
     first = cfg["warmup"] + m - w
     steps = cfg["warmup"] + jnp.arange(m, dtype=jnp.int32)
-    reward, jump, timing_band = _drag_setup(cfg, float(mass), dim, first, scale_r, timing_band)
+    reward, jump, timing_band, weight = _drag_setup(
+        cfg, float(mass), dim, first, scale_r, timing_band, tallies
+    )
     t0 = time.time()
     # the replay and the shape VJP at the record's tracker sizes (replay_static)
     rep, traced = _checked_replay(
         rec, steps, state0, key, grid, s["faces"], wall, mass, dt, mesh, static, reward, jump,
-        timing_band,
+        timing_band, weight,
     )  # fmt: skip
     t_replay = time.time() - t0
     hit_reward = rep.hit_reward
@@ -783,8 +845,8 @@ def shape_terms(
     timing_total = rep.timing_total[:, None]
     del rep
     check = objective_value(cfg, tallies, dim, scale_r)
-    newborn_share = _newborn_share(check, value)
-    tally_cot = _drag_tally_cotangent(tallies, dim, mesh, scale_r)
+    newborn_share = _objective_newborn_share(cfg, tallies, dim, scale_r, check, value, weight)
+    tally_cot = _drag_tally_cotangent(tallies, dim, mesh, scale_r, weight)
     dx = (np.asarray(grid.hi) - np.asarray(grid.lo)) / np.asarray(grid.n)
     v_scale = float(np.sqrt(K_BOLTZ * F.TEMP / float(mass)))
     fit_scale = jnp.concatenate((jnp.asarray(dx), jnp.full(3, v_scale)))
@@ -839,6 +901,7 @@ def shape_terms(
         # post-move state, so the grad-lambda fits run there only (shape.gradient)
         hit_fits=True,
         batch=int(cfg.get("shape_batch", 1)),
+        reward_weight=weight,
     )
     s["volume"] = _volume_term(dev, rec, grid, mesh)
     t_shape = time.time() - t0

@@ -45,7 +45,8 @@ def setup(cfg, ls, key, full=False, static_over=None):
     scale_r = float(params.fnum[0]) / (w * float(dt))
     first = cfg["warmup"] + m - w
     steps = cfg["warmup"] + jnp.arange(m, dtype=jnp.int32)
-    reward, jump, band = EM._drag_setup(cfg, float(mass), dim, first, scale_r, cfg["timing_band"])
+    reward, jump, band, _w = EM._drag_setup(cfg, float(mass), dim, first, scale_r,
+                                          cfg["timing_band"], _tallies)  # fmt: skip
     rep, static = EM._checked_replay(rec, steps, state0, key, grid, s["faces"], wall, mass, dt, mesh,
                              static, reward, jump, band)  # fmt: skip
     v_scale = float(np.sqrt(K_BOLTZ * EM.F.TEMP / float(mass)))

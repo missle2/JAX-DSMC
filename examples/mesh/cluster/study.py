@@ -144,6 +144,15 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
 * ``stepfd`` (2026-10-25): the adjoint against paired finite differences along the free M 10
   runs' own steps (ox_adam_fix iterates 20 / 100 / 150 / 200, mma_s 150, and 150 on knots h / 2),
   whole step / nose part / rest / rigid shift; ``scratch/adjbias/cluster/stepfd_<name>.json``.
+* ``optrc`` (2026-10-25): the free M 10 runs with the slide removed (``--recentre 1``: the
+  body moved back by whole knots, the coefficients and optimiser state shifted exactly) and the
+  adjfix flags, ox_adam and mma_s; tags ``*_M10_S1_{ox_adam,mma_s}_rc_*_w500``.
+* ``ldopt`` (2026-10-25): maximum lift-to-drag (``--objective lift_drag``, J = -L / D) with no
+  area constraint (``--area-mode none``) and no centroid constraint, ox_adam and mma_s on both
+  optrules problems with the adjfix flags; tags ``*_S1_{ox_adam,mma_s}_ld_none_*_w500``.
+* ``sph3d`` (2026-10-25): the first 3-D production runs, the sphere in ``sphere_long`` at both
+  optrules conditions, ox_adam on one full H200 each: minimum drag at fixed volume, and maximum
+  L / D with no volume constraint; tags ``sphere_long_<condition>_S1_ox_adam_{drag,ld}_*``.
 * ``optrules3`` (2026-10-24): ``lbfgs_fs`` (the L-BFGS direction at a fixed largest step, no
   trust region) and ``mma_s`` (MMA on the averaged gradient with a smoothed step), one seed,
   warm-started, 400 iterates, optrules1seed's settings; tags ``*_S1_{lbfgs_fs,mma_s}_*_w500``.
@@ -690,6 +699,106 @@ def _stepfd_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# optrc (2026-10-25): stepfd found the adjoint right along the free M 10 runs' own steps
+# (FD within ~10 % at iterates 20 / 100 / 150, on knots h / 2 too, mma_s alike): the slide is
+# not a gradient error -- the drag barely sees a rigid translation, and the smoothed / Adam
+# steps carry one.  --recentre 1 moves the body back by whole knots whenever its centroid
+# drifts half a knot (exact: the coefficients and the optimiser state shift by an integer;
+# optct's projections and resamples roughened the bodies).  M 10 only (the Kn 0.5 fix run
+# stayed put); rtx, ~14 h at 400 iterates (ox_adam_fix: 123 s/iterate):
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh optrc
+OPTRC = ("ox_adam", "mma_s")
+
+
+def _optrc_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``optrc``: :data:`OPTRC` on the M 10 optrules problem with ``--recentre 1`` and
+    :data:`FIX`, one seed, warm-started, 400 iterates; tags ``*_S1_<arm>_rc_*_w500``."""
+    del gpus_per_node
+    return {
+        f"kn0.5_M10_S1_{arm}_rc": _optrules_tagged(
+            "kn0.5_M10",
+            f"{arm}_rc",
+            f"--optimizer {arm} --recentre 1 {FIX}",
+            seeds=1,
+            suffix="_w500",
+            extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
+        )
+        for arm in OPTRC
+    }
+
+
+# ldopt (2026-10-25): maximum lift-to-drag, J = -L / D (ensemble_mesh.objective_weights: one
+# backward per seed, the per-hit momentum weighted by (L / D^2, -1 / D) at the seed's forces),
+# no area constraint and no centroid constraint (the box keep-out stays), from the circle
+# (L = 0: the first steps are the lift gradient's), both optrules problems, the two rules that
+# did best on drag; rtx, ~8-14 h at 400 iterates:
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh ldopt
+LDOPT = ("ox_adam", "mma_s")
+
+
+def _ldopt_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``ldopt``: :data:`LDOPT` maximising L / D with ``--area-mode none`` and :data:`FIX` on
+    both optrules problems, one seed, warm-started, 400 iterates; tags
+    ``circle_long_<problem>_S1_<arm>_ld_none_sm8_free_g32_w500``."""
+    del gpus_per_node
+    jobs = {}
+    for name in OPTRULES_REGIMES:
+        for arm in LDOPT:
+            cmd = _optrules_tagged(
+                name,
+                f"{arm}_ld",
+                f"--optimizer {arm} --objective lift_drag --area-mode none {FIX}",
+                seeds=1,
+                suffix="_w500",
+                extra=f"--iterations {OPTAX_ITERATIONS} {WARM}",
+            )
+            # the tag names the area mode: "_tan_" is _optrules_tagged's, overridden here
+            jobs[f"{name}_S1_{arm}_ld"] = cmd.replace("_ld_tan_sm8", "_ld_none_sm8", 1)
+    return jobs
+
+
+# sph3d (2026-10-25): the 3-D counterparts of the 2-D problems on both optrules conditions
+# (Kn 0.5 at 100 m/s and at M 10), ox_adam, one seed, the adjfix flags: minimum drag at fixed
+# volume (tangent, free, no centroid constraint) and maximum L / D (lift along y) with neither
+# volume nor centroid constraint.  sphere_long: circle_long's proportions for the r = 1 m
+# sphere (opt3dcheck's lengths: knots 0.1 m, step 0.02, smoothing 3 knots, band 0.4 m, face
+# margin 0.3 m); the warm-up scaled from circle_long's 2800 steps for 3x the box length.
+# --fnum-scale 1: 16 particles per free-stream cell (~320 k particles, ~420 k slots).
+# opt3dcheck ran at the default 4.0: 4 per cell, 5 % of the gas cells at 1 -- far below the
+# usual DSMC 10-20 and the 2-D production's ~125 (its frames: dx = lambda / 5 in the free
+# stream, median lambda / 3.6 in the M 10 shock layer at 0.2 m cells).  One full H200 each
+# (opt3dcheck: ~10 GB at 42 k slots; the 2-D M 10 runs fit 195 k slots in a 24 GB slice;
+# expect tens of GB -- the job's GPU monitor log has the peak), resubmit to resume:
+#   GPU_KIND=h200_full bash examples/mesh/cluster/submit_curc.sh sph3d
+SPHERE_LONG = (
+    "--case sphere_long --fnum-scale 1 --levelset-h 0.1 --levelset-samples 16 --warmup 1000 "
+    "--step 0.02 "
+    "--smooth 3 --band 0.4 --keepout 0.3 --boundary free --restart-steps 300 --iterations 400 "
+    "--seeds-per-iterate 1 --workers 1"
+)
+SPH3D = {
+    "drag": "--area-mode tangent",
+    "ld": "--objective lift_drag --area-mode none",
+}
+
+
+def _sph3d_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``sph3d``: :data:`SPH3D` on ``sphere_long`` at both optrules conditions, ox_adam,
+    :data:`FIX`; tags ``sphere_long_<condition>_S1_ox_adam_<objective>_free_w300``."""
+    del gpus_per_node
+    regimes = {"kn0.5": f"{KN05} {KNPULLBACK}",
+               "kn0.5_M10": f"--knudsen 0.5 --mach 10 --dt 2.5e-5 --a-max 256 {KNPULLBACK}"}  # fmt: skip
+    return {
+        f"sphere_long_{regime}_{name}": (
+            f"python3 -m examples.mesh.optimize "
+            f"--tag sphere_long_{regime}_S1_ox_adam_{name}_free_w300 {SPHERE_LONG} "
+            f"--optimizer ox_adam {flags} {extra} {FIX}"
+        )
+        for regime, extra in regimes.items()
+        for name, flags in SPH3D.items()
+    }
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -758,6 +867,9 @@ NEW_GROUPS = {
     "adjfix": _adjfix_jobs,
     "adjm10": _adjm10_jobs,
     "stepfd": _stepfd_jobs,
+    "optrc": _optrc_jobs,
+    "ldopt": _ldopt_jobs,
+    "sph3d": _sph3d_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

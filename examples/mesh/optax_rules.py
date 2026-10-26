@@ -91,6 +91,8 @@ def _tangent(updates, state, params=None, *, ctx, **extra):
     from optimize import tangent_component  # noqa: PLC0415
 
     del params, extra
+    if ctx.g_area is None:  # area_mode none
+        return updates, state
     return jnp.asarray(tangent_component(np.asarray(updates), ctx.g_area)[0]), state
 
 

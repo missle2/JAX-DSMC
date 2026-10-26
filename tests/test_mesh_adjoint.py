@@ -425,15 +425,17 @@ def test_traced_events_are_consistent_with_the_geometry():
     assert np.asarray(ev.diffuse)[hit].all()
 
 
-def _drag_reward(events, tallies, rec_k, step, mass, dim):
+def _drag_reward(events, tallies, rec_k, step, mass, dim, weight=None):
     del tallies, rec_k, step
-    r = mass * (events.v_in[..., 0] - events.v_out[..., 0])
+    dv = events.v_in - events.v_out
+    r = mass * (dv[..., 0] if weight is None else jnp.sum(dv[..., :dim] * weight, axis=-1))
     return jnp.where(events.face >= 2 * dim, r, 0.0)
 
 
-def _replay_chain(tracker, record="full", **gradient_kw):
+def _replay_chain(tracker, record="full", weight=None, **gradient_kw):
     """Forward -> traced replay -> value-form backward -> shape VJP on a short specular
-    circle run: ``(terms, replay, diag, tallies, record)``."""
+    circle run: ``(terms, replay, diag, tallies, record)``; ``weight`` (``f64[2]``) the
+    traced momentum weights of the reward and the tally cotangent (``reward_weight``)."""
     grid, mesh = _circle_setup("analytic")
     grid = cut.with_volume(grid, mesh)
     sp = _sp()
@@ -477,8 +479,9 @@ def _replay_chain(tracker, record="full", **gradient_kw):
     steps = jnp.arange(static.n_steps, dtype=jnp.int32)
     reward = functools.partial(_drag_reward, mass=MASS, dim=2)
     rep = shape.replay(
-        rec, steps, state, key, grid, faces, wall, MASS, params.dt, mesh, 0.0, 0.0, static, reward
-    )
+        rec, steps, state, key, grid, faces, wall, MASS, params.dt, mesh, 0.0, 0.0, static, reward,
+        reward_weight=weight,
+    )  # fmt: skip
     # a backward with the drag as hit reward, then the shape terms
     scale = jnp.array([0.5, 0.5, 300.0, 300.0, 300.0])
     dev = ensemble_device.backward_virtual(
@@ -497,8 +500,9 @@ def _replay_chain(tracker, record="full", **gradient_kw):
         hit_reward=rep.hit_total[:, None],
     )
     assert np.isfinite(np.asarray(dev.lam)).all()
+    w = jnp.array([1.0, 0.0]) if weight is None else weight
     d_tally = tallies.__class__(
-        None, jnp.zeros((4 + 1, 3)).at[4, 0].set(1.0), jnp.zeros(5), jnp.zeros(5)
+        None, jnp.zeros((4 + 1, 3)).at[4, :2].set(w), jnp.zeros(5), jnp.zeros(5)
     )
     terms = shape.gradient(
         rec,
@@ -520,9 +524,35 @@ def _replay_chain(tracker, record="full", **gradient_kw):
         hit_reward=rep.hit_reward,
         tally_cotangent=d_tally,
         k=16,
+        reward_weight=weight,
         **gradient_kw,
     )
     return terms, rep, diag, tallies, rec
+
+
+def test_weighted_rewards_give_the_combination_of_the_component_gradients():
+    """``reward_weight`` (2026-10-25, the lift-to-drag objective): the per-hit momentum
+    weighted by ``(a, b)`` through the replay, backward and shape VJP is ``a`` times the drag
+    chain plus ``b`` times the lift chain (everything downstream is linear in the rewards),
+    and the weight ``(1, 0)`` is the unweighted drag."""
+    drag = _replay_chain("stencil")
+    x_only = _replay_chain("stencil", weight=jnp.array([1.0, 0.0]))
+    lift = _replay_chain("stencil", weight=jnp.array([0.0, 1.0]))
+    mixed = _replay_chain("stencil", weight=jnp.array([0.3, -2.0]))
+    np.testing.assert_allclose(
+        np.asarray(lift[1].hit_total).sum(axis=1),
+        np.asarray(lift[3].momentum[:, 4:, 1]).sum(axis=1),
+        rtol=1e-12,
+    )
+    for part in ("pathwise_x", "pathwise_v", "pathwise_tally", "score"):
+        leaves = [
+            [np.asarray(a) for a in jax.tree.leaves(getattr(t[0], part))]
+            for t in (drag, x_only, lift, mixed)
+        ]
+        for d, x, y, m in zip(*leaves, strict=True):
+            np.testing.assert_allclose(x, d, rtol=1e-13, atol=1e-15 * np.abs(d).max())
+            ref = 0.3 * x - 2.0 * y
+            np.testing.assert_allclose(m, ref, rtol=1e-9, atol=1e-10 * np.abs(ref).max())
 
 
 @pytest.mark.parametrize("tracker", ["stencil", "lane"])

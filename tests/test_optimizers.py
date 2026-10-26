@@ -2,8 +2,10 @@
 region's judgement (paired per-seed differences, pooled rho, the floor's re-evaluation on new
 seeds), L-BFGS on a quadratic, and one MMA subproblem under the area constraint."""
 
+import dataclasses
 import os
 import sys
+import types
 
 import numpy as np
 
@@ -372,3 +374,54 @@ def test_mma_averaged_smoothed_step_is_smooth_on_a_noisy_gradient(tmp_path):
     assert all(np.abs(d).max() > 0 for d in smoothed)
     assert high_frequency(smoothed[-1], near) < 0.25 * high_frequency(plain[-1], near_plain)
     assert np.all(np.isfinite(objectives))
+
+
+def test_recentre_moves_the_body_back_by_whole_knots_exactly():
+    """2026-10-25 (``recentre``): a body displaced by three knots and a bit is moved back to
+    within half a knot of its start by an integer shift of its coefficients -- the same
+    spline, no resample -- and an optimiser state's coefficient-shaped leaves move with it."""
+    import jax.numpy as jnp  # noqa: PLC0415
+    import optimize as O  # noqa: PLC0415
+
+    ls, lo, hi = _circle_levelset()
+    c0 = np.asarray(O._centroid_of_coef(ls.coef, ls, lo, hi))
+    coef = np.asarray(ls.coef)
+    moved = dataclasses.replace(ls, coef=jnp.asarray(O.shift_knots(coef, (-3, 1))))
+    back, n = O.recentre(moved, c0 + np.array([0.2 * ls.h, 0.0]), lo, hi)
+    assert n.tolist() == [3, -1]
+    np.testing.assert_array_equal(np.asarray(back.coef)[4:-4, 4:-4], coef[4:-4, 4:-4])
+    same, n0 = O.recentre(back, c0, lo, hi)
+    assert not n0.any() and same is back
+    state = {"m": coef, "pairs": np.stack([coef, 2 * coef]), "count": np.int32(7), "x": 1.5}
+    out = O.shift_state(state, np.array([2, 0]), coef.shape)
+    np.testing.assert_array_equal(out["m"], O.shift_knots(coef, (2, 0)))
+    np.testing.assert_array_equal(out["pairs"][1], O.shift_knots(2 * coef, (2, 0)))
+    assert out["count"] == 7 and out["x"] == 1.5
+
+
+def test_lift_drag_weights_are_the_ratio_gradient():
+    """2026-10-25 (``objective lift_drag``): the per-hit momentum weights are ``dJ/dF`` of
+    ``J = -L / D`` at the windowed forces, and the drag keeps its unweighted reward (a
+    weight ``(1, 0)`` gives it bit for bit)."""
+    import jax  # noqa: PLC0415
+    import jax.numpy as jnp  # noqa: PLC0415
+
+    from examples import ensemble_mesh as EM  # noqa: PLC0415
+
+    cfg = {"steps": 4, "window": 3, "objective": "lift_drag"}
+    rng = np.random.default_rng(1)
+    mom = np.zeros((4, 6, 3))
+    mom[:, 4:, 0] = rng.uniform(1.0, 2.0, (4, 2))
+    mom[:, 4:, 1] = rng.normal(0.0, 0.3, (4, 2))
+    tallies = types.SimpleNamespace(momentum=jnp.asarray(mom))
+    f = EM.objective_forces(cfg, tallies, 2, 0.5)
+    np.testing.assert_allclose(f, 0.5 * mom[1:, 4:, :2].sum(axis=(0, 1)))
+    assert EM.objective_value(cfg, tallies, 2, 0.5) == -f[1] / f[0]
+    w = np.asarray(EM.objective_weights(cfg, tallies, 2, 0.5))
+    np.testing.assert_allclose(w, jax.grad(lambda x: -x[1] / x[0])(jnp.asarray(f)), rtol=1e-12)
+    assert EM.objective_weights(dict(cfg, objective="drag"), tallies, 2, 0.5) is None
+    events = types.SimpleNamespace(
+        v_in=jnp.asarray(rng.normal(size=(5, 3))), v_out=jnp.asarray(rng.normal(size=(5, 3)))
+    )
+    plain = EM._hit_momentum(events, 2.0, 2, None)
+    np.testing.assert_array_equal(EM._hit_momentum(events, 2.0, 2, jnp.array([1.0, 0.0])), plain)

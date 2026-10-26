@@ -153,6 +153,22 @@ CASES = {
         "fnum": 5.0e-4,
         "capacity": 100_000,
     },
+    "sphere_long": {
+        # the sphere in circle_long's proportions (2026-10-25): 5 radii of free stream ahead of
+        # the centre and 5 of wake (circle_long: 15 m for r = 3), 2 radii to the side faces,
+        # the sphere's 0.2 m cells (lambda / 5 at Kn 0.5); 2.5x the sphere box's cells and
+        # capacity.  A free box sizes its slots from the free stream instead (1.3x its count,
+        # ensemble_mesh.build): ~420 k at --fnum-scale 1, 16 particles per cell
+        "dim": 3,
+        "lo": [-5.0, -2.0, -2.0],
+        "hi": [5.0, 2.0, 2.0],
+        "n": (50, 20, 20),
+        "surf": "data.sphere",
+        "centre": [0.0, 0.0, 0.0],
+        "radius": 1.0,
+        "fnum": 5.0e-4,
+        "capacity": 250_000,
+    },
 }
 CASES_FNUM = {c["n"]: c["fnum"] for c in CASES.values()}
 NRHO = 1.0

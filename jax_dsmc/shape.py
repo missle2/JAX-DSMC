@@ -128,6 +128,17 @@ def _per_part(fn, events, *args):
     return EventArray(fn(split.head, *args), fn(split.tail, *args))
 
 
+def _weighted(fn, setup):
+    """The reward function ``fn`` with the objective's traced weights bound
+    (``setup["reward_weight"]``: ``f64[D]``, ``dJ/d`` each component of the momentum the body
+    receives -- a ratio objective's chain rule at this seed's forces, e.g. lift / drag), or
+    ``fn`` itself without them.  Traced, so new weights per seed do not recompile."""
+    weight = setup.get("reward_weight")
+    if fn is None or weight is None:
+        return fn
+    return functools.partial(fn, weight=weight)
+
+
 def _masked(values, survivors, slot):
     """An :class:`EventArray` with the non-survivors' events zeroed."""
     return EventArray(
@@ -431,6 +442,7 @@ def _step_rewards(events, tallies, rec_k, step, survivors, reward, timing_jump, 
     split = as_split(events)
     dim = rec_k.x.shape[1]
     r = _as_event_array(None, events)
+    reward, timing_jump = _weighted(reward, setup), _weighted(timing_jump, setup)
     if reward is not None:
         r = _masked(_per_part(reward, events, tallies, rec_k, step), survivors, split.slot)
     tau = _as_event_array(None, events)
@@ -734,6 +746,7 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     carries ``g_x``, ``g_v``, ``g_sil`` are tuples over it, the rest is shared."""
     x, v, alive, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err = carry
     rec_k, lam_k, step, r_k, tally_weight, lam_timing_k, klass_k, coll_k = xs
+    reward, timing_jump = _weighted(reward, setup), _weighted(timing_jump, setup)
     key = key_for(setup["base_key"], step, STAGE_MOVE)
     f = functools.partial(wall_map, x=x, v=v, alive=alive, key=key, **setup["map"])
     _floats, vjp, primal = jax.vjp(functools.partial(_inexact_outputs, f), geom, has_aux=True)
@@ -891,9 +904,12 @@ def _fit_settings(fit):
     return {name: value for name, value in fit.items() if name != "along"}
 
 
-def _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static):
+def _setup(
+    base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static, reward_weight=None
+):
     return {
         "base_key": base_key,
+        "reward_weight": reward_weight,
         "map": {
             "grid": grid,
             "faces": faces,
@@ -978,6 +994,7 @@ def replay(
     reward=None,
     timing_jump=None,
     timing_band=0.2,
+    reward_weight=None,
 ):
     """Traced replay of the captured steps: a :class:`Replay`.
 
@@ -987,8 +1004,11 @@ def replay(
     bound with ``partial``) is the per-hit reward of the objective, already divided by
     its normalization; a survivor's rewards are kept, a newborn's are the source's.
     ``timing_jump`` (as in :func:`gradient`) adds the per-hit timing rewards.
+    ``reward_weight`` (``f64[D]``, traced) is bound to both as ``weight=`` (:func:`_weighted`).
     """
-    setup = _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static)
+    setup = _setup(
+        base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static, reward_weight
+    )
     body = functools.partial(
         _replay_step,
         geom=geometry(mesh),
@@ -1051,6 +1071,7 @@ def _gradient(
     hit_fits=False,
     collision=None,
     batch=1,
+    reward_weight=None,
 ):
     """:func:`gradient` for several ``grad lambda`` estimators ``(pool, k, along)`` at once
     (a tuple of :class:`ShapeTerms`, one per estimator): one wall-map replay and one
@@ -1058,7 +1079,9 @@ def _gradient(
     evaluates that many steps at once (:func:`_batched_scan`)."""
     if value_class not in ("hit_ahead", "none"):
         raise ValueError(value_class)
-    setup = _setup(base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static)
+    setup = _setup(
+        base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static, reward_weight
+    )
     geom = geometry(mesh)
     fits = tuple(
         {"npc_max": npc_max, "scale": scale, "k": k_e, "basis": basis, "chunk": chunk,
@@ -1157,6 +1180,7 @@ def gradient(
     value_class="none",
     hit_fits=False,
     batch=1,
+    reward_weight=None,
 ):
     """The shape gradient of the captured window: :class:`ShapeTerms` shaped like
     :func:`geometry` ``(mesh)``.  ``silhouette_band > 0`` (a length, level-set bodies
@@ -1197,6 +1221,7 @@ def gradient(
 
     ``batch > 1`` evaluates that many captured steps side by side (:func:`_batched_scan`):
     the same terms up to summation order, fewer kernel launches, more memory.
+    ``reward_weight`` as :func:`replay`.
     """
     _warn_value_class(value_class)
     (terms,) = _gradient(
@@ -1230,6 +1255,7 @@ def gradient(
         value_class=value_class,
         hit_fits=hit_fits,
         batch=batch,
+        reward_weight=reward_weight,
     )
     return terms
 
