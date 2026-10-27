@@ -1,0 +1,498 @@
+{
+ "M10 drag, Adam": {
+  "band": {
+   "iterates": 53,
+   "best": 0.783018447779142,
+   "best_at": 52,
+   "last25": 0.783018447779143,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.04999999999999998,
+   "seconds": 180.7479197439158,
+   "first": 1.7534824960289443,
+   "grad_norm": [
+    4.006647459500843,
+    4.006647459500843
+   ],
+   "measure": "J"
+  },
+  "Helmholtz": {
+   "iterates": 150,
+   "best": 0.10206964816455014,
+   "best_at": 149,
+   "last25": 0.10206964816454894,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.04999999999999999,
+   "seconds": 181.56165902614595,
+   "first": 1.7534824960289443,
+   "grad_norm": [
+    1.0454838493105738,
+    1.1494052104415835
+   ],
+   "measure": "J"
+  },
+  "band, reinitialised (optrc)": {
+   "iterates": 400,
+   "best": 0.181575461215657,
+   "best_at": 282,
+   "last25": 0.23494193691819426,
+   "stopped": false,
+   "multi_piece": 0.1,
+   "step_max": 0.05,
+   "seconds": 191.3806461519003,
+   "first": 1.7534824960289443,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "J"
+  }
+ },
+ "M10 L/D floor, Adam": {
+  "band": {
+   "iterates": 105,
+   "best": NaN,
+   "best_at": 54,
+   "last25": NaN,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": NaN,
+   "seconds": 159.66559144882928,
+   "first": 0.0025214107351648287,
+   "grad_norm": [
+    NaN,
+    1.949950551495602
+   ],
+   "measure": "L/D"
+  },
+  "band, reinitialised (ldopt)": {
+   "iterates": 190,
+   "best": 1.3748053917701646,
+   "best_at": 121,
+   "last25": 1.33552923537024,
+   "stopped": false,
+   "multi_piece": 0.2631578947368421,
+   "step_max": 0.05,
+   "seconds": 207.45362935819125,
+   "first": 0.0025214107351648326,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "L/D"
+  }
+ },
+ "M10 drag, MMA": {
+  "band": {
+   "iterates": 128,
+   "best": 0.5555548130968572,
+   "best_at": 127,
+   "last25": 0.5555548130968571,
+   "stopped": false,
+   "multi_piece": 0.038461538461538464,
+   "step_max": 0.04024370432243013,
+   "seconds": 180.6441206280142,
+   "first": 1.7534824960289443,
+   "grad_norm": [
+    2.4766333328563226,
+    2.655555407777109
+   ],
+   "measure": "J"
+  },
+  "Helmholtz": {
+   "iterates": 150,
+   "best": 0.3710648675237178,
+   "best_at": 149,
+   "last25": 0.3710648675237176,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.03319002102881497,
+   "seconds": 179.15457564194998,
+   "first": 1.7534824960289443,
+   "grad_norm": [
+    2.502758924134023,
+    2.502758924134023
+   ],
+   "measure": "J"
+  },
+  "band, reinitialised (optrc)": {
+   "iterates": 400,
+   "best": 0.15180667051383068,
+   "best_at": 226,
+   "last25": 0.1714909264924953,
+   "stopped": false,
+   "multi_piece": 0.1875,
+   "step_max": 0.044883349750438235,
+   "seconds": 188.32578724622726,
+   "first": 1.7534824960289443,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "J"
+  }
+ },
+ "M10 L/D floor, MMA": {
+  "band": {
+   "iterates": 72,
+   "best": 0.6825538480045978,
+   "best_at": 71,
+   "last25": 0.6825538480045981,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.03953077201875574,
+   "seconds": 206.60969344443745,
+   "first": 0.0025214107351648305,
+   "grad_norm": [
+    1.8072212145510962,
+    1.9257441298928402
+   ],
+   "measure": "L/D"
+  },
+  "band, reinitialised (ldopt)": {
+   "iterates": 192,
+   "best": 1.2677378325151307,
+   "best_at": 147,
+   "last25": 1.2142014387173738,
+   "stopped": false,
+   "multi_piece": 0.23076923076923078,
+   "step_max": 0.04594466035337777,
+   "seconds": 205.1373409703374,
+   "first": 0.0025214107351648296,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "L/D"
+  }
+ },
+ "Kn0.5 drag, Adam": {
+  "band": {
+   "iterates": 150,
+   "best": 0.004982354113084941,
+   "best_at": 87,
+   "last25": 0.005637880504819258,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.04999999999999999,
+   "seconds": 131.15245401700338,
+   "first": 0.008113975601840762,
+   "grad_norm": [
+    10.130453167911975,
+    10.749496597049362
+   ],
+   "measure": "J"
+  },
+  "Helmholtz": {
+   "iterates": 150,
+   "best": 0.0014447693225581038,
+   "best_at": 149,
+   "last25": 0.001444769322558103,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.04999999999999999,
+   "seconds": 134.14553645133972,
+   "first": 0.008113975601840762,
+   "grad_norm": [
+    1.3818545655478998,
+    1.4218873896420476
+   ],
+   "measure": "J"
+  }
+ },
+ "Kn0.5 L/D floor, Adam": {
+  "band": {
+   "iterates": 183,
+   "best": 0.9158376086484895,
+   "best_at": 182,
+   "last25": 0.9158376086484877,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.04999999999999999,
+   "seconds": 129.07302951552177,
+   "first": 0.01921466030581549,
+   "grad_norm": [
+    3.40746255345856,
+    3.4075572071175473
+   ],
+   "measure": "L/D"
+  },
+  "Helmholtz": {
+   "iterates": 153,
+   "best": 1.7173638564740963,
+   "best_at": 152,
+   "last25": 1.7173638564740974,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.049999999999999996,
+   "seconds": 130.3775952610315,
+   "first": 0.019214660305815486,
+   "grad_norm": [
+    1.4727590447830368,
+    1.4727590447830368
+   ],
+   "measure": "L/D"
+  },
+  "band, reinitialised (ldopt)": {
+   "iterates": 293,
+   "best": 1.6819595081348258,
+   "best_at": 250,
+   "last25": 1.6164370904377376,
+   "stopped": false,
+   "multi_piece": 0.01694915254237288,
+   "step_max": 0.049999999999999996,
+   "seconds": 134.3949419394288,
+   "first": 0.01921466030581545,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "L/D"
+  }
+ },
+ "Kn0.5 drag, MMA": {
+  "band": {
+   "iterates": 250,
+   "best": 0.006696815611060041,
+   "best_at": 249,
+   "last25": 0.006696815611060028,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.0023609912634434886,
+   "seconds": 126.5023557252884,
+   "first": 0.008113975601840762,
+   "grad_norm": [
+    1.0798060238287452,
+    1.0812275771521183
+   ],
+   "measure": "J"
+  },
+  "Helmholtz": {
+   "iterates": 212,
+   "best": 0.006785199356279144,
+   "best_at": 210,
+   "last25": 0.006785382858896766,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.002994534469783857,
+   "seconds": 127.19453563892617,
+   "first": 0.008113975601840764,
+   "grad_norm": [
+    1.200512824321675,
+    1.200512824321675
+   ],
+   "measure": "J"
+  }
+ },
+ "Kn0.5 L/D floor, MMA": {
+  "band": {
+   "iterates": 157,
+   "best": 0.8005324941091277,
+   "best_at": 156,
+   "last25": 0.8005324941091291,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.029740850265387468,
+   "seconds": 128.16835661754487,
+   "first": 0.019214660305815458,
+   "grad_norm": [
+    2.6096458733042525,
+    2.6096458733042525
+   ],
+   "measure": "L/D"
+  },
+  "Helmholtz": {
+   "iterates": 152,
+   "best": 1.3883817744334346,
+   "best_at": 151,
+   "last25": 1.3883817744334355,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.03992000122271172,
+   "seconds": 128.28967503183767,
+   "first": 0.019214660305815454,
+   "grad_norm": [
+    3.055781597607674,
+    3.056920334541924
+   ],
+   "measure": "L/D"
+  },
+  "band, reinitialised (ldopt)": {
+   "iterates": 287,
+   "best": 1.5451619804279495,
+   "best_at": 283,
+   "last25": 1.5421531215878121,
+   "stopped": false,
+   "multi_piece": 0.15517241379310345,
+   "step_max": 0.045807737938925355,
+   "seconds": 137.1829336013528,
+   "first": 0.019214660305815444,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "L/D"
+  }
+ },
+ "M10 drag, Helmholtz GD": {
+  "Helmholtz GD": {
+   "iterates": 150,
+   "best": 0.7574722579633248,
+   "best_at": 149,
+   "last25": 0.7574722579633247,
+   "stopped": false,
+   "multi_piece": 0.0,
+   "step_max": 0.04999999999999999,
+   "seconds": 176.95220732371013,
+   "first": 1.7534824960289443,
+   "grad_norm": [
+    1.828359169769993,
+    1.8289369067694448
+   ],
+   "measure": "J"
+  }
+ },
+ "M10 drag from a diamond": {},
+ "M10 L/D from a plate": {},
+ "3-D sphere drag, Kn0.5": {
+  "band, reinitialised (sph3d)": {
+   "iterates": 175,
+   "best": 0.0016566118884181558,
+   "best_at": 160,
+   "last25": 0.0016990231485251323,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.02,
+   "seconds": 223.69617431368147,
+   "first": 0.011850488432136265,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "J"
+  },
+  "Helmholtz": {
+   "iterates": 150,
+   "best": 0.0023551262556524045,
+   "best_at": 149,
+   "last25": 0.0023551262556524167,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.010687500000000003,
+   "seconds": 199.46461139520008,
+   "first": 0.011850488432136265,
+   "grad_norm": [
+    1.129422873546276,
+    1.172401697435193
+   ],
+   "measure": "J"
+  }
+ },
+ "3-D sphere L/D floor, Kn0.5": {
+  "band, reinitialised (sph3d)": {
+   "iterates": 127,
+   "best": 1.0240024025337497,
+   "best_at": 60,
+   "last25": 0.7490187540638388,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.020000000000000004,
+   "seconds": 305.3514244856797,
+   "first": -0.009681902858334316,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "L/D"
+  },
+  "Helmholtz": {
+   "iterates": 150,
+   "best": 1.6615485789816011,
+   "best_at": 149,
+   "last25": 1.6615485789816002,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.010687500000000003,
+   "seconds": 288.95742953618367,
+   "first": -0.009681902858334288,
+   "grad_norm": [
+    0.7934028709180926,
+    1.025457557915725
+   ],
+   "measure": "L/D"
+  }
+ },
+ "3-D sphere drag, M10": {
+  "band, reinitialised (sph3d)": {
+   "iterates": 165,
+   "best": 0.3426123277446655,
+   "best_at": 110,
+   "last25": 0.3500314350078366,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.02,
+   "seconds": 215.37178668542342,
+   "first": 2.3939663735431713,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "J"
+  },
+  "Helmholtz": {
+   "iterates": 150,
+   "best": 0.11221386713320072,
+   "best_at": 149,
+   "last25": 0.11221386713320072,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.010687500000000003,
+   "seconds": 191.99763535181683,
+   "first": 2.3939663735431718,
+   "grad_norm": [
+    0.8886400699522892,
+    1.0525270772965984
+   ],
+   "measure": "J"
+  }
+ },
+ "3-D sphere L/D floor, M10": {
+  "band, reinitialised (sph3d)": {
+   "iterates": 122,
+   "best": 0.999936141098015,
+   "best_at": 67,
+   "last25": 0.7176115719630556,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.020000000000000004,
+   "seconds": 291.9640763274959,
+   "first": -0.002635508140761891,
+   "grad_norm": [
+    NaN,
+    NaN
+   ],
+   "measure": "L/D"
+  },
+  "Helmholtz": {
+   "iterates": 150,
+   "best": 2.3662830593041497,
+   "best_at": 149,
+   "last25": 2.3662830593041493,
+   "stopped": false,
+   "multi_piece": NaN,
+   "step_max": 0.010687500000000003,
+   "seconds": 296.10361043930055,
+   "first": -0.0026355081407618904,
+   "grad_norm": [
+    0.6937238894944661,
+    1.0113174953134747
+   ],
+   "measure": "L/D"
+  }
+ },
+ "Newtonian drag": {},
+ "Newtonian L/D floor": {},
+ "Newtonian drag from a diamond": {},
+ "Newtonian L/D from a plate": {}
+}

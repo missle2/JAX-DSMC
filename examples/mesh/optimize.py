@@ -1164,6 +1164,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         g = avg["gradient"]
         if cfg["save_gradient"]:
             np.save(out / f"grad_{k}.npy", np.asarray(g, dtype=np.float32))
+        # stop rather than step: one nan spreads over the whole field through the filter,
+        # and the run then spends its remaining iterates on nan (2026-10-27, a flat patch)
+        if not (np.all(np.isfinite(np.asarray(g))) and np.isfinite(avg["objective"])):
+            raise FloatingPointError(f"iterate {k}: non-finite objective or shape gradient")
         objective = avg["objective"]
         objectives = np.asarray(avg["objectives"], float)
         perimeter = None

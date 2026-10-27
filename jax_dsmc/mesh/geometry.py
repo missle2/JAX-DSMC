@@ -693,7 +693,7 @@ def nearest_normal(
         elif mesh.kind == "levelset":
             phi, g = levelset_mod.value_and_grad(mesh.body, x)
             best = jnp.abs(phi)
-            normal = g / jnp.maximum(jnp.linalg.norm(g, axis=1, keepdims=True), 1e-300)
+            normal = levelset_mod.unit(g)
         else:
             rel = x - mesh.body.centre
             dist = jnp.linalg.norm(rel, axis=1)

@@ -5,7 +5,10 @@ the z = 0 side plane (the two central cell planes averaged: ~16 particles a cell
 snapshot) with the body's section, and the objective's history (J / J0 or L / D, running mean)
 with the iterate marked.  Playback as scratch/ldopt/movies.py.
 
-    PYTHONPATH=. python3 scratch/sph3d/movie3d.py [drag|drag_m10|ld|ld_m10 ...] [--frame K]
+``<name>_hz0`` (2026-10-27): the lsfilter3d run (Helmholtz filter, no reinitialisation), its
+sph3d run's history dashed in the history panel.
+
+    PYTHONPATH=. python3 scratch/sph3d/movie3d.py [drag|drag_m10|ld|ld_m10][_hz0 ...] [--frame K]
 """
 
 import argparse
@@ -49,6 +52,12 @@ RUNS = {
     "ld_m10": ("sphere_long_kn0.5_M10_S1_ox_adam_ldfl_free_w300",
                "Maximum L / D, volume >= 0.5 V0, Kn 0.5 M 10 (Adam)"),
 }  # fmt: skip
+RUNS.update({
+    f"{name}_hz0": (tag.replace("_free_w300", "_hz0_free_w300"),
+                    title.replace(" (Adam)", " (Adam, Helmholtz, not reinitialised)"))
+    for name, (tag, title) in list(RUNS.items())
+})  # fmt: skip
+OLD = "#8a8a8a"
 BODY_CMAP = LinearSegmentedColormap.from_list("body", ["#0d2f5c", ADAM, "#dbe9fa"])
 
 
@@ -90,6 +99,11 @@ class Run:
         u0 = f0["u"][-1].reshape(*self.n, 3)[0]
         self.u_inf = float(np.linalg.norm(u0, axis=-1).mean())
         self.phi0 = self.grid.phi(np.load(out / "coef_0.npy"))
+        self.reference = None
+        if name.endswith("_hz0"):
+            rows = json.loads((ROOT / RUNS[name[:-4]][0] / "history.json").read_text())["rows"]
+            j = np.array([r["objective"] for r in rows])
+            self.reference = running(-j) if self.lift else running(j) / j[0]
 
     def mid_plane(self, k):
         """Density / n_inf and speed / U_inf on the mid-plane normal to ``self.cut`` (z: the
@@ -185,6 +199,9 @@ def frame(run, k, path):
         ax.set_ylabel(f"{other} [m]", fontsize=9, color=MUTED)
     ax = fig.add_subplot(gs[1, 2])
     it = np.arange(len(run.value))
+    if run.reference is not None:
+        ax.plot(run.reference, color=OLD, lw=1.4, ls="--", label="sph3d: band, reinitialised")
+        ax.legend(fontsize=9, frameon=False)
     ax.plot(it, run.raw, ".", color=ADAM, ms=2.5, alpha=0.25)
     ax.plot(it, run.value, color=ADAM, lw=1.0, alpha=0.3)
     upto = min(k + 1, len(run.value))
@@ -192,7 +209,8 @@ def frame(run, k, path):
     ax.plot([upto - 1], [run.value[upto - 1]], "o", color=ADAM, ms=8, markeredgecolor="white",
             markeredgewidth=1.5)  # fmt: skip
     ax.axvline(k, color=MUTED, lw=0.8)
-    ax.set_xlim(0, len(run.value))
+    ax.set_xlim(0, len(run.value) if run.reference is None else max(len(run.value),
+                                                                     len(run.reference)))
     if run.lift:
         ax.set_ylabel(f"L / D  ({RUNNING}-it. mean; dots: each)", fontsize=10)
     else:

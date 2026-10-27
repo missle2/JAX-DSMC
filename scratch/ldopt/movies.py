@@ -10,7 +10,11 @@
 A run that ended holds its last body (marked "ended").  Playback as compare_movies: every
 iterate of the first ``SLOW`` at 10 iterates / s, then every third at 45 / s.
 
-    PYTHONPATH=. python3 scratch/ldopt/movies.py [ld|fl|rc] [--frame K]
+* ``lsfilter_<problem>.mp4`` (2026-10-27, ``movie/lsfilter``): the lsfilter runs, band (bd0)
+  and Helmholtz (hz0) without reinitialisation, Adam and MMA (``lsf_m10``, ``lsf_kn``,
+  ``lsf_knld``).  A run whose objective went non-finite is cut at its last finite iterate.
+
+    PYTHONPATH=. python3 scratch/ldopt/movies.py [ld|fl|rc|lsf_m10|lsf_kn|lsf_knld] [--frame K]
 """
 
 import argparse
@@ -90,6 +94,28 @@ MOVIES = {
         "lift": False,
     },
 }
+BAND, HELM = ADAM, MMA  # the lsfilter movies: colour = filter, line style = rule
+LSF = "circle_long_kn0.5{regime}_S1_{rule}_{mark}_sm8_free_g32_w500"
+for name, regime, kind, title, view in (
+    ("lsf_m10", "_M10", "{f}_tan", "Drag at fixed area, Kn 0.5 M 10", (-4.0, 11.0)),
+    ("lsf_kn", "", "{f}_tan", "Drag at fixed area, Kn 0.5 M 0.3", (-4.0, 14.0)),
+    ("lsf_knld", "", "ld{f}_floor", "Maximum L / D, area >= 0.5 A0, Kn 0.5 M 0.3",
+     (-2.0, 12.0)),
+):  # fmt: skip
+    MOVIES[name] = {
+        "runs": {
+            f"{rule} {f}": (LSF.format(regime=regime, rule=rule, mark=kind.format(f=f)),
+                            f"{rlabel}, {flabel}", colour, style)
+            for rule, rlabel, style in (("ox_adam", "Adam", "-"), ("mma_s", "MMA", "--"))
+            for f, flabel, colour in (("bd0", "band", BAND), ("hz0", "Helmholtz", HELM))
+        },  # fmt: skip
+        "view": view,
+        "title": f"{title}: band vs Helmholtz, not reinitialised",
+        "lift": "ld" in kind,
+        "out": name.replace("lsf", "lsfilter"),
+        "dir": "movie/lsfilter",
+        "ylim": (0.04, 1.05),
+    }
 
 
 def _running(x, w=RUNNING):
@@ -108,8 +134,7 @@ def cache(name):
     path = Path(f"scratch/ldopt/cache_{name}.pkl")
     runs = {}
     for key, (tag, *_rest) in spec["runs"].items():
-        rows = json.load(open(f"{ROOT}/{tag}/history.json"))["rows"]
-        runs[key] = len(rows)
+        runs[key] = len(_finite_rows(tag))
     cap = max(runs.values())
     shown = [k for k, _ in shown_iterates(cap)]
     if path.exists():
@@ -123,7 +148,7 @@ def cache(name):
     out = {"shown": shown, "lengths": runs, "cap": cap, "lo": lo, "hi": hi,
            "n": tuple(grid.n), "init": O.surface_polyline(ls0, lo, hi), "runs": {}}  # fmt: skip
     for key, (tag, *_rest) in spec["runs"].items():
-        rows = json.load(open(f"{ROOT}/{tag}/history.json"))["rows"]
+        rows = _finite_rows(tag)
         j = np.array([r["objective"] for r in rows])
         last = len(rows) - 1
         while not Path(f"{ROOT}/{tag}/coef_{last}.npy").exists():
@@ -148,6 +173,13 @@ def cache(name):
         print(f"{name} {key}: {len(lines)} bodies", flush=True)
     path.write_bytes(pickle.dumps(out))
     return out
+
+
+def _finite_rows(tag):
+    """The history's rows up to the first non-finite objective."""
+    rows = json.load(open(f"{ROOT}/{tag}/history.json"))["rows"]
+    j = np.array([r["objective"] for r in rows])
+    return rows if np.isfinite(j).all() else rows[: int(np.argmin(np.isfinite(j)))]
 
 
 def _grid(field, n):
@@ -183,7 +215,7 @@ def _body_panel(ax, c, spec, key, k):
         side.set_color(GRID)
     v = _value(spec, a)[kk]
     measure = f"L/D {v:.2f}" if spec["lift"] else f"J/J0 {v:.3f}"
-    ended = "  (ended)" if k > a["last"] else ""
+    ended = "  (last pulled)" if k > a["last"] else ""
     ax.set_title(f"{title}   {measure}   area {a['area'][kk]:.2f} A0{ended}", fontsize=12,
                  loc="left", color=INK, pad=3)  # fmt: skip
 
@@ -204,7 +236,7 @@ def _traces(ax, c, spec, k):
         ax.set_ylabel(f"L / D  ({RUNNING}-iterate running mean)", fontsize=13)
     else:
         ax.set_yscale("log")
-        ax.set_ylim(0.06, 1.05)
+        ax.set_ylim(*spec.get("ylim", (0.06, 1.05)))
         ax.set_ylabel(f"drag J / J0  ({RUNNING}-iterate running mean)", fontsize=13)
     ax.set_xlabel("iterate", fontsize=13)
     ax.tick_params(labelsize=11)
@@ -233,8 +265,10 @@ def frame(c, name, k, path):
 
 
 def movie(c, name):
-    out = {"ld": "ldopt_ldrc", "fl": "ldopt_ldfl", "rc": "optrc_m10"}[name]
-    frames = Path(figure_path("movie/ldopt", out))
+    spec = MOVIES[name]
+    out = spec.get("out") or {"ld": "ldopt_ldrc", "fl": "ldopt_ldfl", "rc": "optrc_m10"}[name]
+    where = spec.get("dir", "movie/ldopt")
+    frames = Path(figure_path(where, out))
     if frames.exists():
         shutil.rmtree(frames)
     frames.mkdir(parents=True)
@@ -248,7 +282,7 @@ def movie(c, name):
         for _ in range(repeat):
             (frames / f"f_{i:05d}.png").hardlink_to(drawn / f"d_{n:04d}.png")
             i += 1
-    mp4 = figure_path("movie/ldopt", f"{out}.mp4")
+    mp4 = figure_path(where, f"{out}.mp4")
     subprocess.run(
         ["ffmpeg", "-y", "-loglevel", "error", "-framerate", f"{FPS}",
          "-i", str(frames / "f_%05d.png"), "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",

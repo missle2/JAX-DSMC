@@ -123,6 +123,22 @@ def test_circle_values_and_normals_near_the_surface(dim):
     assert np.all((phi < 0) == (sd < 0))
 
 
+def test_normal_derivative_is_finite_on_a_flat_patch():
+    """A flat patch of coefficients (the far-field clamp, unreinitialised) has ``grad phi = 0``
+    exactly: the normal's derivative there must be finite, not ``0 / 0`` (2026-10-27: one
+    such particle made a whole shape gradient nan)."""
+    ls = _levelset(2)
+    coef = ls.coef.at[-6:, :6].set(ls.coef.max())
+    flat = dataclasses.replace(ls, coef=coef)
+    x = jnp.asarray(flat.lo)[None, :] + flat.h * jnp.array([[coef.shape[0] - 4.0, 2.0]])
+    assert float(L.safe_norm(L.value_and_grad(flat, x)[1])[0]) == 0.0
+
+    def normal_sum(c):
+        return jnp.sum(L.normal(dataclasses.replace(flat, coef=c), x))
+
+    assert np.all(np.isfinite(np.asarray(jax.grad(normal_sum)(coef))))
+
+
 # --- hits and their derivative ----------------------------------------------------------
 
 

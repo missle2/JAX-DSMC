@@ -861,8 +861,11 @@ LSFILTER_DRAG = {
 LSFILTER_LD = ("ox_adam", "mma_s")
 # iterate caps (2026-10-26, from every >= 200-iterate history: drag runs had 95-99 % of their
 # eventual gain by 150; the Kn 0.5 MMA drag runs 38-56 % and the L / D floor runs 84 %, so
-# 250 there).  A run resumes from its history: resubmit with a larger --iterations to extend
-LSFILTER_ITERATIONS = 150
+# 250 there).  A run resumes from its history: resubmit with a larger --iterations to extend.
+# 2026-10-27: 250 for all -- the Helmholtz Adam drag runs were still descending at 150 (M 10
+# J/J0 0.058, Kn 0.5 0.178), unlike the band runs the 150 came from; the patience test stops
+# a converged run (resubmit: ONLY='^kn0.5(_M10)?_S1_ox_adam_hz0$')
+LSFILTER_ITERATIONS = 250
 LSFILTER_SLOW_ITERATIONS = 250
 NEWTON = (
     "--surrogate newtonian --case circle_long --levelset-h 0.0625 --levelset-samples 16 "
@@ -962,7 +965,11 @@ def _lsfilter_jobs(gpus_per_node: int) -> dict[str, str]:
 # extend, resubmit with larger --iterations and --step-decay (the run resumes).
 # A 3g.71gb H200 slice each (~40-50 GB estimated, see sph3d):
 #   GPU_KIND=h200_71 bash examples/mesh/cluster/submit_curc.sh lsfilter3d
-LSFILTER3D_ITERATIONS = 150
+# 2026-10-27: extended to 250 (the Kn 0.5 drag and L / D runs were still improving at 150;
+# resumed, the cosine restarts from step x 0.38 at 150 and decays to step / 16 at 250):
+#   GPU_KIND=h200_71 ONLY='^sphere_long_kn0.5_(drag|ldfl)_hz0$' bash \
+#     examples/mesh/cluster/submit_curc.sh lsfilter3d
+LSFILTER3D_ITERATIONS = 250
 LSFILTER3D = f"{HELM} --reinit-every 0 --step-decay {LSFILTER3D_ITERATIONS}"
 
 

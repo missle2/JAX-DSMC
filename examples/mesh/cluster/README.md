@@ -121,6 +121,7 @@ row, and writes `study_results.json`.  `python3 -m examples.mesh.movie --tag <ta
 | `env.sh` | the job environment (venv, `JAX_ENABLE_X64=1`, `JAX_PLATFORMS`, no preallocation, compilation cache, `PYTHONPATH`) |
 | `check_env.py`, `check_env.sbatch` | JAX >= 0.4.36, an accelerator, float64, then a 40-step level-set circle with shape terms (`--quick`: devices only) |
 | `preflight.sh`, `collect.py`, `pull_results.sh`, `adopt_untracked.sh` | as above |
+| `truncate_run.py` | rewinds a run to its first `n` iterates (history rows, later `coef_k` / `grad_k` / `frames_k`, the rule state) so a resubmission resumes there, e.g. after a non-finite gradient: `python3 examples/mesh/cluster/truncate_run.py <run dir> <n> [--yes]` (dry run without `--yes`) |
 | `bad_nodes.txt` | nodes that failed the device check (untracked) |
 
 Sizing note: the finer circle (240 k slots x 300 captured steps; `mode2`, `opt`) needs

@@ -127,6 +127,9 @@ def summarise(tag, every, count_pieces):
         "multi_piece": pieces(out, cfg, rows, every) if count_pieces else float("nan"),
         "step_max": float(np.mean([r.get("step_max", r.get("direction_max", np.nan)) for r in rows])),
         "seconds": float(np.mean([r["seconds"] for r in rows])),
+        "first": float(value[0]),
+        "grad_norm": [float(r.get("surface_grad_norm", np.nan)) for r in rows[-1:]]
+        + [float(np.nanmax([r.get("surface_grad_norm", np.nan) for r in rows]))],
         "series": value.tolist(),
         "measure": "L/D" if lift else "J",
     }
@@ -148,7 +151,9 @@ def main():
             print(f"{title:32s} {label:28s} n {s['iterates']:3d}  best {s['measure']} "
                   f"{s['best']:.4g} @ {s['best_at']:3d}  last25 {s['last25']:.4g}  "
                   f"stopped {s['stopped']!s:5s}  multi {s['multi_piece']:.2f}  "
-                  f"step {s['step_max']:.3f}  {s['seconds']:.0f} s/it", flush=True)  # fmt: skip
+                  f"step {s['step_max']:.3f}  {s['seconds']:.0f} s/it  "
+                  f"ratio {s['best'] / s['first']:.3f}  |grad| last/max "
+                  f"{s['grad_norm'][0]:.2f}/{s['grad_norm'][1]:.2f}", flush=True)  # fmt: skip
     shown = [t for t in COMPARISONS if table[t]]
     if not shown:
         return

@@ -138,10 +138,26 @@ def value(ls: LevelSet, x: jax.Array) -> jax.Array:
     return _contract(block, w)
 
 
+def safe_norm(g: jax.Array) -> jax.Array:
+    """``|g|`` over the last axis, ``f64[N]``, with a finite (zero) derivative at ``g = 0``:
+    ``sqrt``'s is ``0 / 0`` there, and a masked or clamped use does not stop it (``0 * nan``).
+    A flat patch of coefficients -- the far-field clamp, unreinitialised -- has ``g = 0``
+    exactly, and a particle evaluated there turned a whole shape gradient into nan."""
+    n2 = jnp.sum(g * g, axis=-1)
+    positive = n2 > 0.0
+    return jnp.where(positive, jnp.sqrt(jnp.where(positive, n2, 1.0)), 0.0)
+
+
+def unit(g: jax.Array) -> jax.Array:
+    """``g / |g|`` over the last axis (``0`` where ``g = 0``), derivative finite everywhere."""
+    norm = safe_norm(g)
+    return g / jnp.where(norm > 0.0, norm, 1.0)[..., None]
+
+
 def normal(ls: LevelSet, x_hit: jax.Array) -> jax.Array:
     """Unit normal into the flow ``grad phi / |grad phi|`` at ``x_hit``, ``f64[N, D]``."""
     _phi, g = value_and_grad(ls, x_hit)
-    return g / jnp.maximum(jnp.linalg.norm(g, axis=1, keepdims=True), 1e-300)
+    return unit(g)
 
 
 # --- cull tables (convex hull of the coefficients) ---------------------------------------
@@ -801,7 +817,7 @@ def _moment_terms(ls, x, w):
 
 def _perimeter_terms(ls, x, w):
     phi, grad = value_and_grad(ls, x)
-    return (0.5 / w / jnp.cosh(phi / w) ** 2 * jnp.sqrt(jnp.sum(grad**2, axis=1)))[:, None]
+    return (0.5 / w / jnp.cosh(phi / w) ** 2 * safe_norm(grad))[:, None]
 
 
 def _chunk_sum(chunk, ls, terms, w):
