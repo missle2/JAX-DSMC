@@ -229,6 +229,11 @@ examples/.jax_cache/
 scratch/**/*.npz
 scratch/**/*.pkl
 scratch/**/*.done
+# optimiser run directories kept under scratch (coef_<k>.npy / grad_<k>.npy, history.json:
+# 2026-10-26, 459 MB of scratch/lsfilter/fixed_step went in by accident)
+scratch/**/coef_*.npy
+scratch/**/grad_*.npy
+scratch/lsfilter/fixed_step/
 scratch/perf/profile/**/plugins/
 
 # Bulk run data: moved between machines by rsync, not git (2026-10-14).  What stays tracked

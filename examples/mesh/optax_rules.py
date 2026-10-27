@@ -60,6 +60,7 @@ class Context:
         self.sigma = 0.0
         self.band = 0.0
         self.step = 0.0
+        self.smoothing = None  # optimize.Smoothing: the filter before and after the rule
 
 
 class _Empty(NamedTuple):
@@ -80,11 +81,16 @@ def _init_count(params):
     return _Count(jnp.zeros([], jnp.int32))
 
 
-def _smooth(updates, state, params=None, *, ctx, **extra):
-    from optimize import smoothed_direction  # noqa: PLC0415 -- optimize imports this module
-
+def _smooth_in(updates, state, params=None, *, ctx, **extra):
+    """The gradient the rule sees: the band Gaussian, or ``F^T`` of the Helmholtz filter."""
     del params, extra
-    return jnp.asarray(smoothed_direction(np.asarray(updates), ctx.ls, ctx.sigma, ctx.band)), state
+    return jnp.asarray(ctx.smoothing.into(np.asarray(updates))), state
+
+
+def _smooth_out(updates, state, params=None, *, ctx, **extra):
+    """The coefficient step of the rule's step: the band Gaussian, or ``F``."""
+    del params, extra
+    return jnp.asarray(ctx.smoothing.out(np.asarray(updates))), state
 
 
 def _tangent(updates, state, params=None, *, ctx, **extra):
@@ -140,15 +146,18 @@ def _cosine(count):
 
 
 def _direction_chain(rule, ctx):
-    return optax.chain(_host(_smooth, ctx), rule, _host(_smooth, ctx), _host(_tangent, ctx))
+    return optax.chain(_host(_smooth_in, ctx), rule, _host(_smooth_out, ctx), _host(_tangent, ctx))
 
 
 def build(name: str, ctx: Context, step: float) -> optax.GradientTransformationExtraArgs:
     """The arm ``name`` (:data:`ARMS`) on ``ctx``; ``step`` the nominal step (``cfg["step"]``),
     Prodigy's initial distance scale."""
     adam = optax.scale_by_adam(b1=0.9, b2=0.999, eps=EPS, eps_root=0.0)
-    if name == "ox_adam":
-        return optax.chain(_direction_chain(adam, ctx), _host(_rescale, ctx))
+    if name in ("ox_adam", "ox_gd"):
+        # ox_gd, steepest descent (2026-10-26): with the Helmholtz filter the step
+        # F F^T dJ/dphi is the Hilbertian descent of the filtered level-set method
+        rule = adam if name == "ox_adam" else optax.identity()
+        return optax.chain(_direction_chain(rule, ctx), _host(_rescale, ctx))
     if name == "ox_ademamix":
         rule = contrib.scale_by_ademamix(b1=0.9, b2=0.999, b3=0.995, alpha=5.0, eps=EPS)
         return optax.chain(_direction_chain(rule, ctx), _host(_rescale, ctx))
@@ -177,13 +186,14 @@ def build(name: str, ctx: Context, step: float) -> optax.GradientTransformationE
     raise ValueError(f"unknown optax arm {name!r} (one of {ARMS})")
 
 
-ARMS = ("ox_adam", "ox_ademamix", "ox_adamcos", "ox_sfadam", "ox_prodigy", "ox_prodigycos")
+ARMS = ("ox_adam", "ox_gd", "ox_ademamix", "ox_adamcos", "ox_sfadam", "ox_prodigy", "ox_prodigycos")
 
 
-def step(tx, state, ctx, g, ls, g_area, cfg):
+def step(tx, state, ctx, g, ls, g_area, cfg, smoothing):
     """One update: ``(coefficient step, new state)`` from the area-tangent gradient ``g`` of the
-    level set ``ls`` (whose coefficients are the parameters)."""
-    ctx.ls, ctx.g_area = ls, g_area
+    level set ``ls`` (whose coefficients are the parameters) with the regularisation
+    ``smoothing`` (:class:`optimize.Smoothing`)."""
+    ctx.ls, ctx.g_area, ctx.smoothing = ls, g_area, smoothing
     ctx.sigma, ctx.band, ctx.step = cfg["smooth"], cfg["band"] + ls.h, cfg["step"]
     updates, state = tx.update(jnp.asarray(g), state, jnp.asarray(ls.coef))
     return np.asarray(updates), state

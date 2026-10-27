@@ -3,13 +3,14 @@
 * ``ldopt_ldrc.mp4``: the four unconstrained maximum-L / D runs (``ldopt`` ``_ldrc_none_``: Adam
   and MMA at Kn 0.5 / M 0.3 and Kn 0.5 / M 10), bodies over their steady density 2 x 2, the
   L / D histories on the right;
+* ``ldopt_ldfl.mp4``: the same four with the area floor (``_ldfl_floor_``, area >= 0.5 A0);
 * ``optrc_m10.mp4``: the M 10 drag runs with the slide removed (``optrc``, ``--recentre 1``)
   beside the free runs they repeat (``ox_adam_fix``, ``mma_s``), J / J0 on the right.
 
 A run that ended holds its last body (marked "ended").  Playback as compare_movies: every
 iterate of the first ``SLOW`` at 10 iterates / s, then every third at 45 / s.
 
-    PYTHONPATH=. python3 scratch/ldopt/movies.py [ld|rc] [--frame K]
+    PYTHONPATH=. python3 scratch/ldopt/movies.py [ld|fl|rc] [--frame K]
 """
 
 import argparse
@@ -56,6 +57,21 @@ MOVIES = {
         },  # fmt: skip
         "view": (-2.0, 12.0),
         "title": "Maximum L / D, no area constraint (recentred)",
+        "lift": True,
+    },
+    "fl": {
+        "runs": {
+            "kn0.5 Adam": ("circle_long_kn0.5_S1_ox_adam_ldfl_floor_sm8_free_g32_w500",
+                           "Adam, Kn 0.5 M 0.3", ADAM, "-"),
+            "kn0.5 MMA": ("circle_long_kn0.5_S1_mma_s_ldfl_floor_sm8_free_g32_w500",
+                          "MMA, Kn 0.5 M 0.3", MMA, "-"),
+            "M10 Adam": ("circle_long_kn0.5_M10_S1_ox_adam_ldfl_floor_sm8_free_g32_w500",
+                         "Adam, Kn 0.5 M 10", ADAM, "--"),
+            "M10 MMA": ("circle_long_kn0.5_M10_S1_mma_s_ldfl_floor_sm8_free_g32_w500",
+                        "MMA, Kn 0.5 M 10", MMA, "--"),
+        },  # fmt: skip
+        "view": (-2.0, 12.0),
+        "title": "Maximum L / D, area >= 0.5 A0 (recentred)",
         "lift": True,
     },
     "rc": {
@@ -217,7 +233,7 @@ def frame(c, name, k, path):
 
 
 def movie(c, name):
-    out = {"ld": "ldopt_ldrc", "rc": "optrc_m10"}[name]
+    out = {"ld": "ldopt_ldrc", "fl": "ldopt_ldfl", "rc": "optrc_m10"}[name]
     frames = Path(figure_path("movie/ldopt", out))
     if frames.exists():
         shutil.rmtree(frames)

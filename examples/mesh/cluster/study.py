@@ -823,6 +823,161 @@ def _sph3d_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# lsfilter (2026-10-26): the filtered level-set formulation (van Dijk et al. 2013, Kreissl &
+# Maute 2012): the design a field s on the box, phi = F s with F the Helmholtz PDE filter of
+# radius smooth * h / sqrt 2 = 0.35 m (the band Gaussian's second moment), the rule on dJ/ds =
+# F^T dJ/dphi, its step mapped by F (--filter helmholtz, jax_dsmc.mesh.helmholtz) -- in place of
+# the Gaussian on the coefficient band before and after the rule.  Every run without
+# reinitialisation (--reinit-every 0, see lsfilter3d: reinitialising every iterate grows
+# knot-lattice lobes on features thinner than ~2-3 knots and breaks them up -- the 2-D M 10
+# needle nose's tip droplets), band (mark bd0) and Helmholtz (hz0) alike, so each pair differs
+# in the filter only; the earlier band runs (optrc, ldopt _ldfl_: reinitialised) are the old
+# method's reference.  Every run recentred, stopped by CONVERGE, its gradients saved (the
+# offline step replay, scratch/lsfilter):
+#   * drag at fixed area, M 10: ox_adam, mma_s, and ox_gd (Helmholtz only: steepest descent,
+#     the Hilbertian velocity method itself);
+#   * drag at fixed area, Kn 0.5: ox_adam, mma_s;
+#   * L / D with the area floor, both conditions: ox_adam, mma_s (marks ldbd0 / ldhz0);
+#   * sharp-edged starts (--initial, the edge cases of sharp bodies): M 10 drag at fixed area
+#     from a diamond (t / c 0.3, the circle's area) and M 10 L / D with the floor from a thin
+#     plate (8 m chord, 1 m thick, 10 deg; the floor at its own area), ox_adam (marks dm / pl
+#     + bd0 / hz0);
+#   * one job of deterministic canonical tests (--surrogate newtonian: the Newtonian drag at
+#     fixed area -- a sharp-nosed optimum -- and the Newtonian L / D with the floor) for both
+#     filters and both rules, the sharp starts, and the Helmholtz drag with a perimeter
+#     penalty, serially, 300 iterates each, the step on a cosine to step / 16 at 300 (with a
+#     fixed step band Adam cycled between J 1.14 and 1.53 around the drag optimum locally);
+#     the job is the group's last, so the DSMC jobs queue first.
+# rtx (the DSMC ones are optrc / ldopt-sized; the Newtonian job is light):
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh lsfilter
+HELM = "--filter helmholtz --save-gradient 1"
+NO_REINIT = "--reinit-every 0"
+LSFILTER_FILTERS = {"bd0": "--save-gradient 1", "hz0": HELM}
+# regime -> {filter mark: arms}
+LSFILTER_DRAG = {
+    "kn0.5_M10": {"bd0": ("ox_adam", "mma_s"), "hz0": ("ox_adam", "mma_s", "ox_gd")},
+    "kn0.5": {"bd0": ("ox_adam", "mma_s"), "hz0": ("ox_adam", "mma_s")},
+}
+LSFILTER_LD = ("ox_adam", "mma_s")
+# iterate caps (2026-10-26, from every >= 200-iterate history: drag runs had 95-99 % of their
+# eventual gain by 150; the Kn 0.5 MMA drag runs 38-56 % and the L / D floor runs 84 %, so
+# 250 there).  A run resumes from its history: resubmit with a larger --iterations to extend
+LSFILTER_ITERATIONS = 150
+LSFILTER_SLOW_ITERATIONS = 250
+NEWTON = (
+    "--surrogate newtonian --case circle_long --levelset-h 0.0625 --levelset-samples 16 "
+    "--iterations 300 --step 0.05 --smooth 8 --band 1.0 --keepout 1.0 --boundary free "
+    f"--recentre 1 --frames-every 0 --save-gradient 1 --step-decay 300 {NO_REINIT}"
+)
+NEWTON_RUNS = {
+    "drag": "--area-mode tangent",
+    "ld": f"--objective lift_drag --area-mode floor --area-floor {LDOPT_FLOOR}",
+}
+DIAMOND = "--initial diamond --initial-thickness 0.3"
+PLATE = "--initial plate --initial-thickness 0.125 --initial-aoa 10"
+# name -> (problem flags, start); ox_adam, band and Helmholtz
+# the plate keeps at least its own area (8 m^2: 1 m = 2 cells thick at its chord; half of it
+# would be one cell, below which the unconstrained L / D runs broke up)
+SHARP = {
+    "dm": (NEWTON_RUNS["drag"], DIAMOND),
+    "pl": ("--objective lift_drag --area-mode floor --area-floor 1.0", PLATE),
+}
+NEWTON_PERIMETER = 0.005  # J0 x P / P0 weight of the perimeter-penalised Helmholtz run
+
+
+def _lsfilter_run(regime: str, arm: str, mark: str, flags: str, floor: bool) -> str:
+    """One lsfilter DSMC run: ``regime``'s optrules problem, optimiser ``arm``, tag arm
+    ``<arm>_<mark>`` (``_floor_`` in place of ``_tan_`` for an area-floor problem)."""
+    flt = LSFILTER_FILTERS[mark[-3:]]
+    slow = floor or (regime == "kn0.5" and arm.startswith("mma"))
+    iterations = LSFILTER_SLOW_ITERATIONS if slow else LSFILTER_ITERATIONS
+    cmd = _optrules_tagged(
+        regime, f"{arm}_{mark}",
+        f"--optimizer {arm} {flags} --recentre 1 {NO_REINIT} {flt} {CONVERGE} {FIX}",
+        seeds=1, suffix="_w500", extra=f"--iterations {iterations} {WARM}",
+    )  # fmt: skip
+    return cmd.replace(f"_{arm}_{mark}_tan_sm8", f"_{arm}_{mark}_floor_sm8", 1) if floor else cmd
+
+
+def _lsfilter_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lsfilter``: the battery's DSMC runs, band and Helmholtz without reinitialisation
+    (tags ``*_<arm>_<mark>_*``, marks ``bd0`` / ``hz0``, ``ld`` / ``dm`` / ``pl`` before them
+    for the L / D, diamond and plate problems) and one job of the Newtonian surrogate runs
+    (``lsf_newton_<problem>_<filter>_<arm>``)."""
+    del gpus_per_node
+    jobs = {}
+    for regime, by_filter in LSFILTER_DRAG.items():
+        for mark, arms in by_filter.items():
+            for arm in arms:
+                jobs[f"{regime}_S1_{arm}_{mark}"] = _lsfilter_run(regime, arm, mark, "", False)
+    ld = f"--objective lift_drag --area-mode floor --area-floor {LDOPT_FLOOR}"
+    for regime in OPTRULES_REGIMES:
+        for mark in LSFILTER_FILTERS:
+            for arm in LSFILTER_LD:
+                jobs[f"{regime}_S1_{arm}_ld{mark}"] = _lsfilter_run(
+                    regime, arm, f"ld{mark}", ld, True
+                )
+    for shape, (flags, start) in SHARP.items():
+        for mark in LSFILTER_FILTERS:
+            jobs[f"kn0.5_M10_S1_ox_adam_{shape}{mark}"] = _lsfilter_run(
+                "kn0.5_M10", "ox_adam", f"{shape}{mark}", f"{flags} {start}", shape == "pl"
+            )
+    newton = "python3 -m examples.mesh.optimize --tag lsf_newton_"
+    runs = [
+        f"{newton}{problem}_{flt}_{arm} --filter {flt} --optimizer {arm} {flags} {NEWTON} "
+        f"{CONVERGE}"
+        for problem, flags in NEWTON_RUNS.items()
+        for flt in ("band", "helmholtz")
+        for arm in ("ox_adam", "mma_s", "ox_gd")
+        if not (flt == "band" and arm == "ox_gd")
+    ]
+    runs += [
+        f"{newton}{mark}_{flt}_ox_adam --filter {flt} --optimizer ox_adam {flags} {start} "
+        f"{NEWTON} {CONVERGE}"
+        for mark, (flags, start) in SHARP.items()
+        for flt in ("band", "helmholtz")
+    ]
+    runs.append(
+        f"{newton}drag_helmholtz_ox_adam_per --filter helmholtz --optimizer ox_adam "
+        f"{NEWTON_RUNS['drag']} --perimeter {NEWTON_PERIMETER} {NEWTON} {CONVERGE}"
+    )
+    jobs["newton"] = " ; ".join(runs)
+    return jobs
+
+
+# lsfilter3d (2026-10-26): the 3-D sphere in the filtered formulation without
+# reinitialisation, minimum drag at fixed volume and maximum L / D with the volume floor, both
+# conditions, ox_adam: --filter helmholtz (radius smooth * h / sqrt 2 = 0.21 m) and
+# --reinit-every 0.  sph3d's band runs (reinitialised every iterate) grew knot-lattice lobes and
+# broke up once the nose / plate thinned below ~2-3 knots: the redistance-then-interpolate
+# map is not idempotent there (scratch/sph3d/reinit_change*.py).  The deterministic 3-D
+# Newtonian battery (scratch/reinit, h = 0.2, the same knot units, 150 iterates) settled it:
+# reinitialised, band and Helmholtz alike broke into 5-19 pieces and lost ground (drag J/J0
+# 0.27 -> 0.36 / 0.39, L / D 0.74 -> 0.56); without, one piece throughout, drag J/J0 0.076
+# (band; its |grad phi| drifts to 2.9) and 0.023 (Helmholtz; |grad phi| stays 0.9-1.0),
+# L / D 1.90 (band).  A doubled radius (0.85 m) neither thickened the nose nor improved J,
+# so the default radius.  150 iterates (the 3-D Newtonian runs had converged by ~100; at
+# 200-490 s an iterate, 8-20 h: one 24 h job) with --step-decay 150 (a cosine to step / 16:
+# the fixed step leaves the single-seed runs wandering in a noise ball once converged); to
+# extend, resubmit with larger --iterations and --step-decay (the run resumes).
+# A 3g.71gb H200 slice each (~40-50 GB estimated, see sph3d):
+#   GPU_KIND=h200_71 bash examples/mesh/cluster/submit_curc.sh lsfilter3d
+LSFILTER3D_ITERATIONS = 150
+LSFILTER3D = f"{HELM} --reinit-every 0 --step-decay {LSFILTER3D_ITERATIONS}"
+
+
+def _lsfilter3d_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lsfilter3d``: :func:`_sph3d_jobs`' runs with :data:`LSFILTER3D`; tags
+    ``sphere_long_<condition>_S1_ox_adam_<objective>_hz0_free_w300``."""
+    return {
+        f"{name}_hz0": cmd.replace("_free_w300", "_hz0_free_w300", 1).replace(
+            "--iterations 400", f"--iterations {LSFILTER3D_ITERATIONS}", 1
+        )
+        + f" {LSFILTER3D}"
+        for name, cmd in _sph3d_jobs(gpus_per_node).items()
+    }
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -894,6 +1049,8 @@ NEW_GROUPS = {
     "optrc": _optrc_jobs,
     "ldopt": _ldopt_jobs,
     "sph3d": _sph3d_jobs,
+    "lsfilter": _lsfilter_jobs,
+    "lsfilter3d": _lsfilter3d_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

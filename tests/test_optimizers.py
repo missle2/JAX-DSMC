@@ -293,7 +293,8 @@ def test_prodigy_cosine_cap_bounds_the_step(tmp_path):
     signal = rng.normal(size=ls.coef.shape)
     for k in range(6):
         g = signal + 0.3 * rng.normal(size=ls.coef.shape)
-        delta, state = OX.step(tx, state, ctx, g, ls, g_area, cfg)
+        cfg["filter"] = "band"
+        delta, state = OX.step(tx, state, ctx, g, ls, g_area, cfg, O.smoothing(cfg, ls, lo, hi))
         cap = float(OX._cap_cosine(k)) * cfg["step"]
         assert np.abs(delta).max() <= cap * (1 + 1e-12)
         assert np.all(np.isfinite(delta))
@@ -319,7 +320,7 @@ def _rule_iterates(rule, n, noise, tmp_path):
 
     ls, lo, hi = _circle_levelset()
     target = np.asarray(_circle_levelset((5.5, 5.0))[0].coef)
-    cfg = {"optimizer": rule, "step": 0.05, "smooth": 2.0, "band": 1.0}
+    cfg = {"optimizer": rule, "step": 0.05, "smooth": 2.0, "band": 1.0, "filter": "band"}
     area0 = O.area_and_gradient(ls, lo, hi)[0]
     state = {"area0": area0}
     rng = np.random.default_rng(0)
@@ -465,3 +466,35 @@ def test_lift_drag_weights_are_the_ratio_gradient():
     )
     plain = EM._hit_momentum(events, 2.0, 2, None)
     np.testing.assert_array_equal(EM._hit_momentum(events, 2.0, 2, jnp.array([1.0, 0.0])), plain)
+
+
+def test_step_decay_is_a_cosine_to_a_sixteenth_then_held():
+    """2026-10-26 (``step_decay``): off it is the fixed step; on, ``step`` at iterate 0, half
+    way between ``step`` and ``step / 16`` at ``n / 2``, ``step / 16`` from ``n`` on."""
+    import optimize as O  # noqa: PLC0415
+
+    cfg = {"step": 0.05, "step_decay": 0}
+    assert O.decayed_step(cfg, 250) == 0.05
+    cfg["step_decay"] = 300
+    assert O.decayed_step(cfg, 0) == 0.05
+    assert abs(O.decayed_step(cfg, 150) - 0.05 * (1 + 1 / 16) / 2) < 1e-12
+    assert abs(O.decayed_step(cfg, 300) - 0.05 / 16) < 1e-12
+    assert O.decayed_step(cfg, 400) == O.decayed_step(cfg, 300)
+
+
+def test_after_step_without_reinitialisation_only_shifts_phi():
+    """2026-10-26 (``reinit_every``): with ``reinit=False`` the area projection is a uniform
+    shift of the stepped coefficients (no redistance), and it restores the area as with it."""
+    import optimize as O  # noqa: PLC0415
+
+    ls, lo, hi = _circle_levelset()
+    area = O.area_and_gradient(ls, lo, hi)[0]
+    x = np.asarray(O.L.knots(ls))
+    bump = 0.05 * np.exp(-np.sum((x - [5.0, 6.0]) ** 2, axis=1) / 0.5).reshape(ls.coef.shape)
+    stepped = dataclasses.replace(ls, coef=ls.coef + bump)
+    new, shift, _ = O.after_step(stepped, "tangent", area, lo, hi, 0.0, reinit=False)
+    np.testing.assert_allclose(np.asarray(new.coef), np.asarray(stepped.coef) + shift, atol=1e-12)
+    assert abs(O.area_and_gradient(new, lo, hi)[0] - area) < 1e-6 * area
+    redone, _s, _ = O.after_step(stepped, "tangent", area, lo, hi, 0.0)
+    assert np.abs(np.asarray(redone.coef) - np.asarray(stepped.coef)).max() > 1e-3
+    assert abs(O.surface_grad_norm(redone) - 1.0) < 0.05

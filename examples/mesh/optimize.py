@@ -106,6 +106,7 @@ import optimizers as OZ
 from examples import ensemble_mesh as EM
 from jax_dsmc import ensemble_backward
 from jax_dsmc.mesh import cut
+from jax_dsmc.mesh import helmholtz as HZ
 from jax_dsmc.mesh import levelset as L
 from jax_dsmc.mesh.types import LevelSet
 from jax_dsmc.state import CollideState, ParticleState
@@ -140,6 +141,11 @@ def default_config():
             "seeds_per_iterate": 2,
             "seed_start": 32,
             "step": 0.05,
+            # (2026-10-26; 0 = off) the step follows a cosine from `step` at iterate 0 to
+            # `step` / 16 at iterate `step_decay`, then holds (every rule: the optax arms'
+            # nominal step, MMA's move limit, the trust region's radius cap): with a fixed step
+            # the deterministic Newtonian runs cycled around their sharp-nosed optimum
+            "step_decay": 0,
             "smooth": 2.0,
             "band": 1.0,
             "variant": "along_pool_plane",
@@ -159,6 +165,14 @@ def default_config():
             # the body's smallest distance to the box faces (keep_inside; 0 = unbounded,
             # the optc runs of 2026-09-23 which grew through the outflow face)
             "keepout": 0.0,
+            # (2026-10-26) reinitialise phi to a signed distance after every `reinit_every`-th
+            # step (1: every step, the runs up to 2026-10-26; 0: never, phi = phi_0 + the steps
+            # + uniform shifts, the filtered formulation's own form).  Below ~2 knots of
+            # thickness (a needle nose's radius, a plate's half-thickness up to ~3) the
+            # redistance-then-interpolate map is not idempotent and grows knot-lattice lobes and
+            # bubbles on every pass (scratch/sph3d/reinit_change*.py: one extra pass alone gave
+            # 75-95 % of the 3-D runs' per-iterate change there)
+            "reinit_every": 1,
             # the area constraint: "projection" (uniform shift after the step, the runs up to
             # 2026-10-12), "lagrangian" (differentiated augmented Lagrangian, module doc; its
             # multiplier update winds up), "penalty" (the same objective, constant
@@ -199,6 +213,34 @@ def default_config():
             # the gradient or the step (the fix_centroid versions of optcm / optct reshaped the
             # body; the free M 10 runs slide downstream along a direction the drag does not see)
             "recentre": 0,
+            # the regularisation of the step (2026-10-26): "band" (a Gaussian of `smooth` knots
+            # on the coefficients within `band` of the surface, before and after the rule -- the
+            # runs up to 2026-10-26) or "helmholtz" (the filtered level set of van Dijk et al.
+            # 2013 / Kreissl & Maute 2012: the design is a field s on the box, phi = F s with F
+            # the Helmholtz PDE filter (-r^2 Lap + I)^-1 of radius `filter_radius` (m; 0 =
+            # smooth * h / sqrt 2, the Gaussian's second moment); the rule sees dJ/ds = F^T dJ/dphi
+            # and its step ds moves phi by F ds (jax_dsmc.mesh.helmholtz).  ox_* rules and
+            # mma / mma_s; MMA's variables are then s, every coefficient of the box)
+            "filter": "band",
+            "filter_radius": 0.0,
+            # an analytic objective instead of the DSMC ensemble (2026-10-26): "newtonian" (the
+            # Newtonian impact pressure p = 2 max(0, -n . e_x)^2 on the surface, flow along +x,
+            # force -int p n ds; the drag or -L / D per `objective`) -- the local canonical tests
+            # of the step rules ("" = DSMC)
+            "surrogate": "",
+            # save dJ/dphi of every iterate (grad_<k>.npy, float32; 1 = on): the offline
+            # comparison of the step rules on the same gradients
+            "save_gradient": 0,
+            # the initial body (2026-10-26; 2-D): "circle" (the case's), or sharp-edged
+            # polygons centred on the case's centre -- "diamond" (a rhombus of the circle's area,
+            # thickness / chord `initial_thickness`) or "plate" (a rectangle of chord
+            # `initial_chord`, 0 = 8/3 of the case's radius, thickness `initial_thickness` x
+            # chord) -- at `initial_aoa` degrees (leading edge up: lift along +y); the corners
+            # are the B-spline's (rounded at the knot spacing)
+            "initial": "circle",
+            "initial_chord": 0.0,
+            "initial_thickness": 0.3,
+            "initial_aoa": 0.0,
         }
     )
     return cfg
@@ -338,34 +380,58 @@ def perimeter_and_gradient(ls, lo, hi):
 def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
     """:func:`rule_step` for ``mma`` / ``mma_s``: the subproblem on the band's coefficients
     (the full gradient ``g_full`` against the area constraint, :mod:`optimizers`); ``mma_s``
-    averages the gradient first and smooths the step."""
+    averages the gradient first and smooths the step.  With the Helmholtz filter
+    (``smooth.mask`` set) the variables are the design field ``s`` of every coefficient in
+    the box (``state["mma_design"]``, accumulated from zero), the objective's and the area's
+    gradients ``F^T`` of theirs, and the step ``F ds`` (both rules)."""
     step, band = cfg["step"], cfg["band"] + ls.h
     coef = np.asarray(ls.coef)
-    mask = np.asarray(L.coefficient_band(ls, band))
-    low, upp = OZ.mma_asymptotes(state, coef, step, k)
+    helm = smooth.mask is not None
+    if helm:
+        mask, x = smooth.mask, np.asarray(state.get("mma_design", np.zeros_like(coef)))
+    else:
+        mask, x = np.asarray(L.coefficient_band(ls, band)), coef
+    low, upp = OZ.mma_asymptotes(state, x, step, k)
     averaged = cfg["optimizer"] == "mma_s"
     if averaged:
         g_full, moment = OZ.averaged_gradient(state, g_full)
         state = dict(state, **moment)
-    g0 = smooth(g_full)
+    g0 = smooth.into(g_full)
     area = float(L.body_volume(ls, lo, hi, 4))
     if g_area is None:
         # area_mode none: an inactive constraint (twice the target area, zero gradient)
         g_area, area = np.zeros_like(coef), 2.0 * float(state["area0"])
     while g_area.ndim > coef.ndim:  # MMA's own: the area only
         g_area = g_area[0]
-    xs, lam = OZ.mma_step(coef[mask], g0[mask], area, g_area[mask], float(state["area0"]),
+    if helm:
+        g_area = smooth.into(g_area)
+    xs, lam = OZ.mma_step(x[mask], g0[mask], area, g_area[mask], float(state["area0"]),
                           low[mask], upp[mask], step)  # fmt: skip
     delta = np.zeros_like(coef)
-    delta[mask] = xs - coef[mask]
-    if averaged:
-        delta = smooth(delta)
+    delta[mask] = xs - x[mask]
+    if helm:
+        state = dict(state, mma_design=x + delta)
+        delta = smooth.out(delta)
+    elif averaged:
+        delta = smooth.out(delta)
     previous = state.get("mma_x1")
-    state = dict(state, mma_x1=coef, mma_low=low, mma_upp=upp)
+    state = dict(state, mma_x1=x, mma_low=low, mma_upp=upp)
     if previous is not None:
         state["mma_x2"] = previous  # the asymptote update's x_{k-2} at the next iterate
     extra = {"mma_multipliers": lam.tolist(), "step_max": float(np.abs(delta).max())}
     return ls, delta, float(np.sum(g * delta)), state, extra
+
+
+STEP_DECAY_FLOOR = 1.0 / 16.0
+
+
+def decayed_step(cfg, k):
+    """``cfg["step"]`` at iterate ``k`` under ``cfg["step_decay"]`` (the cosine schedule)."""
+    n = cfg["step_decay"]
+    if n <= 0:
+        return cfg["step"]
+    c = 0.5 * (1.0 + np.cos(np.pi * min(k, n) / n))
+    return cfg["step"] * (STEP_DECAY_FLOOR + (1.0 - STEP_DECAY_FLOOR) * c)
 
 
 def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
@@ -379,11 +445,11 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     again on new seeds (:func:`optimizers.judge`)."""
     rule, step = cfg["optimizer"], cfg["step"]
     band = cfg["band"] + ls.h
-    smooth = functools.partial(smoothed_direction, ls=ls, sigma=cfg["smooth"], band=band)
     coef = np.asarray(ls.coef)
     extra = {}
     if rule in ("mma", "mma_s"):
-        return _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi)
+        return _mma_rule(cfg, ls, g, g_full, g_area, smoothing(cfg, ls, lo, hi), state, k, lo, hi)
+    smooth = functools.partial(smoothed_direction, ls=ls, sigma=cfg["smooth"], band=band)
     lbfgs = rule in ("lbfgs", "lbfgs_fs")
     verdict = OZ.fixed_verdict(step) if rule == "lbfgs_fs" else OZ.judge(state, objectives, step)
     accepted, radius = verdict["accepted"], verdict["radius"]
@@ -426,9 +492,47 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     return base_ls, delta, predicted, state, extra
 
 
+def polygon_vertices(cfg):
+    """``f64[V, 2]``: the vertices of ``cfg["initial"]``'s polygon (counter-clockwise)."""
+    c = F.CASES[cfg["case"]]
+    radius, centre = float(c["radius"]), np.asarray(c["centre"], float)
+    ratio = cfg["initial_thickness"]
+    if cfg["initial"] == "diamond":
+        chord = cfg["initial_chord"] or np.sqrt(2.0 * np.pi * radius**2 / ratio)
+        local = np.array([[-0.5, 0.0], [0.0, -0.5 * ratio], [0.5, 0.0], [0.0, 0.5 * ratio]])
+    elif cfg["initial"] == "plate":
+        chord = cfg["initial_chord"] or 8.0 * radius / 3.0
+        t = 0.5 * ratio
+        local = np.array([[-0.5, -t], [0.5, -t], [0.5, t], [-0.5, t]])
+    else:
+        raise ValueError(f"initial {cfg['initial']}")
+    a = -np.radians(cfg["initial_aoa"])  # leading edge (-x) up: the chord turned clockwise
+    rot = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+    return centre + chord * local @ rot.T
+
+
+def polygon_distance(vertices, x):
+    """Signed distance of the points ``x`` (``f64[N, 2]``) to the polygon ``vertices``
+    (negative inside)."""
+    from matplotlib.path import Path as MPath  # noqa: PLC0415
+
+    a, b = vertices, np.roll(vertices, -1, axis=0)
+    ab = b - a
+    t = np.clip(np.einsum("nvd,vd->nv", x[:, None] - a[None], ab) / np.sum(ab**2, axis=1), 0, 1)
+    nearest = a[None] + t[..., None] * ab[None]
+    dist = np.linalg.norm(x[:, None] - nearest, axis=2).min(axis=1)
+    return np.where(MPath(vertices).contains_points(x), -dist, dist)
+
+
 def initial_levelset(cfg):
     grid, *_ = F.build(cfg["case"], "analytic", cfg["tracker"], "Ar", 0.0, cfg["radius_cells"])
     _coef, ls = EM.levelset_coef(jnp.float64(EM.nominal(cfg, "radius")), cfg, "radius", grid)
+    if cfg.get("initial", "circle") != "circle":
+        if ls.coef.ndim != 2:
+            raise ValueError("--initial polygons are 2-D")
+        x = np.asarray(L.knots(ls))
+        values = polygon_distance(polygon_vertices(cfg), x).reshape(ls.coef.shape)
+        ls = dataclasses.replace(ls, coef=L.interpolate(jnp.asarray(values)))
     return grid, ls
 
 
@@ -437,6 +541,15 @@ def _volume_at_shift(c, ls, lo, hi):
     """One compilation per box (``lo``, ``hi`` static tuples): the level set is an argument,
     so the iterates share it (a closure over ``ls`` recompiled at every projection)."""
     return L.body_volume(dataclasses.replace(ls, coef=ls.coef + c), lo, hi, 4)
+
+
+def surface_grad_norm(ls) -> float:
+    """The median ``|grad phi|`` at the knots within one knot spacing of the surface
+    (``|phi| < h |grad phi|``): 1 for a signed distance, its drift without reinitialisation."""
+    phi, grad = L.value_and_grad(ls, L.knots(ls))
+    norm = np.linalg.norm(np.asarray(grad), axis=1)
+    near = np.abs(np.asarray(phi)) < float(ls.h) * norm
+    return float(np.median(norm[near])) if near.any() else float("nan")
 
 
 def project_area(ls: LevelSet, target: float, lo, hi, n_bisect: int = 40) -> tuple[LevelSet, float]:
@@ -492,6 +605,70 @@ def smoothed_direction(grad: np.ndarray, ls: LevelSet, sigma: float, band: float
     mask = np.asarray(L.coefficient_band(ls, band))
     g = gaussian_filter(grad * mask, sigma=sigma, mode="nearest")
     return g * mask
+
+
+class Smoothing:
+    """The step's regularisation (``cfg["filter"]``): ``into`` maps ``dJ/dphi`` to the gradient
+    the rule sees, ``out`` maps the rule's step to the coefficient step; ``mask`` the
+    variables (``None``: the band rules' own)."""
+
+    def __init__(self, into, out, mask=None):
+        self.into, self.out, self.mask = into, out, mask
+
+
+def filter_radius(cfg, ls) -> float:
+    """The Helmholtz radius: ``cfg["filter_radius"]`` or, 0, the band Gaussian's equivalent
+    ``smooth * h / sqrt 2`` (the same second moment, :mod:`jax_dsmc.mesh.helmholtz`)."""
+    return cfg["filter_radius"] or cfg["smooth"] * float(ls.h) / np.sqrt(2.0)
+
+
+def _project_out(v, basis):
+    """``v`` without its components along the orthonormal rows of ``basis`` (``[n, size]``)."""
+    flat = v.ravel()
+    return (flat - basis.T @ (basis @ flat)).reshape(v.shape)
+
+
+def _then(first, second, v):
+    return second(first(v))
+
+
+def smoothing(cfg, ls, lo, hi, rows=None) -> Smoothing:
+    """:class:`Smoothing` of ``cfg["filter"]`` at the level set ``ls``.  With the Helmholtz
+    filter and constraint gradients ``rows`` (``f64[n, *coef.shape]`` with respect to ``phi``:
+    the area, and the centroid with ``fix_centroid``) the constraints are kept in the design
+    space: the gradient the rule sees and the rule's step are projected orthogonally onto the
+    null space of ``F^T rows`` (the canonical projected gradient of the filtered formulation);
+    the coefficient step ``F ds`` then keeps every constraint to first order, its correction
+    directions the filtered fields ``F F^T rows`` (the band runs corrected along the raw rows
+    or rigid translations, :func:`tangent_component`)."""
+    if cfg["filter"] == "band":
+        smooth = functools.partial(
+            smoothed_direction, ls=ls, sigma=cfg["smooth"], band=cfg["band"] + ls.h
+        )
+        return Smoothing(smooth, smooth)
+    if cfg["filter"] == "helmholtz":
+        f = HZ.filter_for(ls, lo, hi, filter_radius(cfg, ls))
+        if rows is None:
+            return Smoothing(f.adjoint, f.forward, f.mask)
+        mapped = np.stack([f.adjoint(r).ravel() for r in rows])
+        basis = np.linalg.qr(mapped.T)[0].T  # orthonormal rows spanning F^T rows
+        project = functools.partial(_project_out, basis=basis)
+        into = functools.partial(_then, f.adjoint, project)
+        out = functools.partial(_then, project, f.forward)
+        return Smoothing(into, out, f.mask)
+    raise ValueError(f"filter {cfg['filter']}")
+
+
+def constraint_rows(g_area, coef_ndim):
+    """The constraint gradients with respect to ``phi`` as a stack ``f64[n, *coef.shape]``
+    from the forms :func:`constraint_gradients` returns (``None``: no active constraint)."""
+    if g_area is None:
+        return None
+    if g_area.ndim == coef_ndim:
+        return g_area[None]
+    if g_area.ndim == coef_ndim + 2:
+        return g_area[0]  # [rows, modes]: the rows
+    return g_area
 
 
 def adam_direction(g, state, k, beta1, beta2, eps=1e-30):
@@ -659,6 +836,74 @@ def averaged_terms(cfg, ls, seeds, out=None):
     return _combine([seed_terms(cfg, ls, seeds, seeds[0], out)])
 
 
+def _newtonian_terms(ls, x, w):
+    """The surface integrands of the Newtonian force ``-int p n ds`` (``p = 2 max(0, -n_x)^2``,
+    the stream along +x) with the smoothed delta of :func:`levelset.body_perimeter`."""
+    phi, grad = L.value_and_grad(ls, x)
+    norm = jnp.sqrt(jnp.sum(grad**2, axis=1))
+    n = grad / jnp.maximum(norm, 1e-12)[:, None]
+    p = 2.0 * jnp.maximum(-n[:, 0], 0.0) ** 2
+    delta = 0.5 / w / jnp.cosh(phi / w) ** 2 * norm
+    return -(delta * p)[:, None] * n
+
+
+NEWTON_REACH = 8.0  # half-widths of the smoothed delta kept (sech^2(8) = 5e-7)
+
+
+@jax.jit
+def _newtonian_forces(coef, ls, x, keep, w):
+    """``sum`` of :func:`_newtonian_terms` over the points ``x`` weighted by ``keep``."""
+    terms = _newtonian_terms(dataclasses.replace(ls, coef=coef), x, w)
+    return jnp.sum(terms * keep[:, None], axis=0)
+
+
+def _newtonian_points(ls, lo, hi):
+    """:func:`levelset.body_perimeter`'s sub-grid points within :data:`NEWTON_REACH`
+    half-widths of the surface (the integrand is negligible beyond), padded with zero-weight
+    copies to a power of two (few recompilations), the cell volume and the half-width."""
+    x, cell = L._subgrid(ls, lo, hi, 4)
+    w = ls.h / 2.0
+    phi = np.concatenate([np.asarray(L.value(ls, c)) for c in np.array_split(x, 64)])
+    near = np.asarray(x)[np.abs(phi) < NEWTON_REACH * w]
+    size = 1 << int(np.ceil(np.log2(max(len(near), 1))))
+    pad = np.broadcast_to(near[:1], (size - len(near), near.shape[1]))
+    keep = np.r_[np.ones(len(near)), np.zeros(size - len(near))]
+    return jnp.asarray(np.concatenate((near, pad))), jnp.asarray(keep), float(cell), w
+
+
+def surrogate_terms(cfg, ls, lo, hi):
+    """:func:`averaged_terms`' fields for ``cfg["surrogate"] == "newtonian"``: the Newtonian
+    drag (or ``-L / D`` with ``objective lift_drag``) of the body and its exact coefficient
+    gradient -- no particles, a deterministic objective."""
+    if cfg["surrogate"] != "newtonian":
+        raise ValueError(f"surrogate {cfg['surrogate']}")
+    t0 = time.time()
+    x, keep, cell, w = _newtonian_points(ls, lo, hi)
+    forces, vjp = jax.vjp(functools.partial(_newtonian_forces, ls=ls, x=x, keep=keep, w=w), ls.coef)
+    f = np.asarray(forces, dtype=float) * cell
+    weight = np.zeros_like(f)
+    if cfg["objective"] == "lift_drag":
+        value = -f[1] / f[0]
+        weight[0], weight[1] = f[1] / f[0] ** 2, -1.0 / f[0]
+    else:
+        value, weight[0] = f[0], 1.0
+    (grad,) = vjp(jnp.asarray(weight * cell))
+    return {
+        "frames": None,
+        "gradient": np.asarray(grad),
+        "gradient_seed_sd": float("nan"),
+        "objective": float(value),
+        "objectives": [float(value)],
+        "objective_se": float("nan"),
+        "hits": 0.0,
+        "stuck": 0.0,
+        "seconds": time.time() - t0,
+        "phase_seconds": dict.fromkeys(PHASES, float("nan")),
+        "replay_sizes": [0, 0],
+        "forces": f.tolist(),
+    }
+
+
 def visible_devices():
     """The GPU ids this job may use: SLURM's ``ROCR_VISIBLE_DEVICES`` (AMD) /
     ``CUDA_VISIBLE_DEVICES`` (NVIDIA) or, unset, every device JAX sees."""
@@ -806,14 +1051,15 @@ def floor_active(g, g_area, area, area0, rule):
     return g_area, g, nu
 
 
-def after_step(stepped, mode, area0, lo, hi, keepout, centroid0=None):
-    """Reinitialise the stepped level set, then the constraints: ``projection`` restores the
-    area by a uniform shift (with the face margin, :func:`constrain`); ``lagrangian`` /
-    ``penalty`` only apply the face margin (the area is in the differentiated objective);
-    ``floor`` restores the area only when the step left it below ``area0``.  Returns
-    ``(ls, area shift, knots the face floor moved)``."""
-    # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1
-    new = L.reinitialise(stepped)
+def after_step(stepped, mode, area0, lo, hi, keepout, centroid0=None, reinit=True):
+    """Reinitialise the stepped level set (``reinit``), then the constraints: ``projection``
+    restores the area by a uniform shift (with the face margin, :func:`constrain`);
+    ``lagrangian`` / ``penalty`` only apply the face margin (the area is in the differentiated
+    objective); ``floor`` restores the area only when the step left it below ``area0``.
+    Returns ``(ls, area shift, knots the face floor moved)``."""
+    # reinitialise first: the uniform shift of the projection keeps |grad phi| = 1 (without,
+    # the shift is uniform in phi, a normal displacement c / |grad phi|)
+    new = L.reinitialise(stepped) if reinit else stepped
     if centroid0 is not None:
         new, _err = project_centroid(new, centroid0, lo, hi)
     if mode in ("lagrangian", "penalty", "none", "floor"):
@@ -889,6 +1135,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         raise ValueError(f"{out} was run with area_mode {saved['config'].get('area_mode')}")
     if mode not in ("projection", "lagrangian", "penalty", "tangent", "none", "floor"):
         raise ValueError(f"area_mode {mode}")
+    if cfg["filter"] != "band" and not (ox or cfg["optimizer"] in ("mma", "mma_s")):
+        raise ValueError(f"--filter {cfg['filter']} needs an ox_* rule or mma / mma_s")
     price = area_price(cfg)
     mu = cfg["area_penalty"] * price / area0
     nu = history[-1]["area_multiplier_next"] if history and mode == "lagrangian" else -price
@@ -898,19 +1146,24 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         t0 = time.time()
         # the mesh of the current iterate (an uncovered box raises here; split cells get
         # sub-cells since 2026-09-23)
-        cut.build_mesh(
-            ls, dataclasses.replace(grid, volume=jnp.zeros(0)), radius=cfg["radius_cells"]
-        )
+        if not cfg["surrogate"]:  # the surrogate needs no mesh (34 s a 3-D build)
+            cut.build_mesh(
+                ls, dataclasses.replace(grid, volume=jnp.zeros(0)), radius=cfg["radius_cells"]
+            )
         # the trust region's re-evaluation on new seeds after a rejection at its floor
         # (optimizers.judge) moves every later iterate to the next seeds; the warm starts of
         # the new seed indices begin from the empty box
         shift = int(rule_state.get("seed_shift", 0)) if rule else 0
         iterate_seeds = [shift + i for i in seeds]
-        if cfg["workers"] > 1:
+        if cfg["surrogate"]:
+            avg = surrogate_terms(cfg, ls, lo, hi)
+        elif cfg["workers"] > 1:
             avg = parallel_terms(cfg, ls, iterate_seeds, out, k, argv)
         else:
             avg = averaged_terms(cfg, ls, iterate_seeds, out)
         g = avg["gradient"]
+        if cfg["save_gradient"]:
+            np.save(out / f"grad_{k}.npy", np.asarray(g, dtype=np.float32))
         objective = avg["objective"]
         objectives = np.asarray(avg["objectives"], float)
         perimeter = None
@@ -942,16 +1195,23 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         else:
             g_area = None  # area_mode none (projection: the step's shift after it)
         extra = {}
+        kcfg = dict(cfg, step=decayed_step(cfg, k))  # the iterate's step
         if rule:
             from_ls, delta, predicted, rule_state, extra = rule_step(
-                cfg, ls, g, g_full, g_area, objectives, rule_state, k, lo, hi
+                kcfg, ls, g, g_full, g_area, objectives, rule_state, k, lo, hi
             )
             OZ.save_state(state_path, rule_state)
             scale, eta = float(np.abs(delta).max()), 1.0
             stepped = dataclasses.replace(from_ls, coef=from_ls.coef + jnp.asarray(delta))
             direction = None
         elif ox:
-            delta, ox_state = OX.step(ox_tx, ox_state, ox_ctx, g, ls, g_area, cfg)
+            if cfg["filter"] == "helmholtz":
+                # the constraints projected in the design space (smoothing's rows), none after
+                rows = constraint_rows(g_area, ls.coef.ndim)
+                sm, g_tangent = smoothing(cfg, ls, lo, hi, rows), None
+            else:
+                sm, g_tangent = smoothing(cfg, ls, lo, hi), g_area
+            delta, ox_state = OX.step(ox_tx, ox_state, ox_ctx, g, ls, g_tangent, kcfg, sm)
             OX.save_state(ox_path, ox_state)
             scale, eta = float(np.abs(delta).max()), 1.0
             stepped = dataclasses.replace(ls, coef=ls.coef + jnp.asarray(delta))
@@ -977,13 +1237,14 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             direction, _ = tangent_component(direction, g_area)
         if not (rule or ox):
             scale = float(np.abs(direction).max())
-            eta = cfg["step"] / max(scale, 1e-300)
+            eta = kcfg["step"] / max(scale, 1e-300)
             stepped = dataclasses.replace(ls, coef=ls.coef - eta * jnp.asarray(direction))
             # predicted first-order decrease: g . delta coef (before the area projection)
             predicted = float(-eta * np.sum(g * direction))
+        reinit = cfg["reinit_every"] > 0 and (k + 1) % cfg["reinit_every"] == 0
         new, shift, clipped = after_step(
             stepped, mode, area0, lo, hi, cfg["keepout"],
-            centroid0 if cfg["fix_centroid"] else None,
+            centroid0 if cfg["fix_centroid"] else None, reinit,
         )  # fmt: skip
         recentred = [0] * new.coef.ndim
         if cfg["recentre"]:
@@ -1021,8 +1282,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "eta": eta,
             "area_shift": shift,
             "keepout_knots": clipped,
+            "reinitialised": reinit,
+            "surface_grad_norm": surface_grad_norm(new),
             "recentred_knots": recentred,
             "predicted_decrease": predicted,
+            "step_size": kcfg["step"],
             "seconds": time.time() - t0,
             "phase_seconds": avg["phase_seconds"],
             "replay_sizes": avg["replay_sizes"],
