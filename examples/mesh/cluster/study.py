@@ -991,21 +991,24 @@ def _lsfilter3d_jobs(gpus_per_node: int) -> dict[str, str]:
 # (2x the cells: ~600 s an iterate, ~140 a 24 h job; resubmit to resume).  A full H200 (the
 # sphere_long run fit a 3g.71gb slice; this one has twice the particles):
 #   GPU_KIND=h200_full bash examples/mesh/cluster/submit_curc.sh ld3dwide
+# 2026-10-28 (before its first start): with the thickness constraint (thin share T <= 0.02 at
+# 2 knots, multiplier from 1 at rate 10) and the topology guard, mark ``hz0th``: the 3-D L / D
+# bodies thin into sub-knot plates that split (sphere_long Kn 0.5 L / D: 2 pieces from ~215);
+# in the 3-D Newtonian battery (scratch/topo) the constraint held T ~0.03 in one piece at
+# ~15 % of L / D, and the guard (a backstop) never fired beside it.
 LD3DWIDE_ITERATIONS = 400
+LD3DWIDE = "--thickness 1 --thickness-rate 10 --topology-guard 1"
 
 
 def _ld3dwide_jobs(gpus_per_node: int) -> dict[str, str]:
     """``ld3dwide``: :func:`_lsfilter3d_jobs`' M 10 L / D run on ``sphere_wide``; tag
-    ``sphere_wide_kn0.5_M10_S1_ox_adam_ldfl_hz0_free_w300``."""
+    ``sphere_wide_kn0.5_M10_S1_ox_adam_ldfl_hz0th_free_w300`` (with :data:`LD3DWIDE`)."""
     cmd = _lsfilter3d_jobs(gpus_per_node)["sphere_long_kn0.5_M10_ldfl_hz0"]
-    cmd = cmd.replace("sphere_long", "sphere_wide").replace(
+    cmd = cmd.replace("sphere_long", "sphere_wide").replace("_hz0_free_w300", "_hz0th_free_w300")
+    cmd = cmd.replace(
         f"--iterations {LSFILTER3D_ITERATIONS}", f"--iterations {LD3DWIDE_ITERATIONS}", 1
-    )
-    return {
-        "sphere_wide_kn0.5_M10_ldfl_hz0": cmd.replace(
-            f"--step-decay {LSFILTER3D_ITERATIONS}", f"--step-decay {LD3DWIDE_ITERATIONS}", 1
-        )
-    }
+    ).replace(f"--step-decay {LSFILTER3D_ITERATIONS}", f"--step-decay {LD3DWIDE_ITERATIONS}", 1)
+    return {"sphere_wide_kn0.5_M10_ldfl_hz0th": f"{cmd} {LD3DWIDE}"}
 
 
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /

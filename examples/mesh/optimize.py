@@ -108,6 +108,7 @@ from jax_dsmc import ensemble_backward
 from jax_dsmc.mesh import cut
 from jax_dsmc.mesh import helmholtz as HZ
 from jax_dsmc.mesh import levelset as L
+from jax_dsmc.mesh import topology as T
 from jax_dsmc.mesh.types import LevelSet
 from jax_dsmc.state import CollideState, ParticleState
 
@@ -193,6 +194,23 @@ def default_config():
             # perimeter penalty (2026-10-19): J + perimeter * J_0 * P / P_0 (J_0, P_0 the first
             # iterate's drag and perimeter; 0 = off)
             "perimeter": 0.0,
+            # minimum thickness (2026-10-27): the constraint T <= thickness_tol, T the share of
+            # the surface thinner than thickness_min (levelset.body_thinness, Allaire et al.
+            # 2016; 0 = 2 knots), by its multiplier: J + lambda * scale * T, lambda starting at
+            # `thickness` and updated after every iterate by lambda <- max(0, lambda +
+            # thickness_rate * (T - thickness_tol)) (0 = a fixed weight); scale 1 for
+            # lift_drag (J = -L / D is O(1)), the first iterate's J for drag.  Off when both
+            # are 0.  The max-L / D bodies thinned below a knot (the 3-D Kn 0.5 one broke in
+            # two); a fixed weight does not carry over between conditions (single-iterate
+            # tests, scratch/topo/single.py: the penalty's filtered step matched the DSMC
+            # gradient's at weight ~4 at Kn 0.5, ~35 at M 10)
+            "thickness": 0.0,
+            "thickness_rate": 0.0,
+            "thickness_tol": 0.02,
+            "thickness_min": 0.0,
+            # topology guard (2026-10-27; 1 = on): after each step the knots' inside set keeps
+            # its face-connected components -- no pinch-off, no droplets (jax_dsmc.mesh.topology)
+            "topology_guard": 0,
             # the body's area centroid held at its start (2026-10-23; 1 = on, needs "tangent"):
             # the drag in a uniform stream does not depend on where the body sits, but every
             # Adam-type M 10 run slid ~10 m downstream onto the outflow face (the box's inflow
@@ -1051,6 +1069,36 @@ def floor_active(g, g_area, area, area0, rule):
     return g_area, g, nu
 
 
+GUARD_MARGIN = 0.25
+"""The topology guard's held knot value, in knot spacings (``phi`` units)."""
+
+
+def knot_values(ls) -> np.ndarray:
+    """``phi`` at the knots, ``f64[m_1, ..., m_D]``."""
+    return np.asarray(L.value(ls, L.knots(ls))).reshape(ls.coef.shape)
+
+
+def topology_guard(old, new):
+    """``new`` with its inside's face-connected components on the knots kept as ``old``'s
+    (:func:`jax_dsmc.mesh.topology.guard`): returns the level set and the guard's counts."""
+    values, counts = T.guard(knot_values(old), knot_values(new), GUARD_MARGIN * float(new.h))
+    del counts["pieces"]  # the row's own count, after the recentring
+    if counts["held_inside"] or counts["held_outside"]:
+        new = dataclasses.replace(new, coef=L.interpolate(jnp.asarray(values)))
+    return new, counts
+
+
+def thickness_min(cfg, ls) -> float:
+    """The thickness penalty's depth: ``thickness_min``, 0 = two knot spacings."""
+    return cfg["thickness_min"] or 2.0 * float(ls.h)
+
+
+def thinness_and_gradient(ls, lo, hi, depth):
+    """``(T, dT/dcoef)`` of :func:`levelset.body_thinness` (on the surface band)."""
+    t, g = L.thinness_and_gradient(ls, lo, hi, depth, 4)
+    return t, np.asarray(g)
+
+
 def after_step(stepped, mode, area0, lo, hi, keepout, centroid0=None, reinit=True):
     """Reinitialise the stepped level set (``reinit``), then the constraints: ``projection``
     restores the area by a uniform shift (with the face margin, :func:`constrain`);
@@ -1124,6 +1172,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     rule_state = OZ.load_state(state_path) if history else {}
     rule_state["area0"] = area0
     perimeter_ref = saved.get("perimeter_ref") if saved else None
+    thickness_ref = saved.get("thickness_ref") if saved else None
+    lam = cfg["thickness"]  # the thickness multiplier
+    if history:
+        lam = history[-1].get("thickness_multiplier_next", lam)
     mode = cfg["area_mode"]
     if cfg["fix_centroid"] and mode != "tangent":
         raise ValueError("--fix-centroid needs --area-mode tangent")
@@ -1179,6 +1231,17 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             objective = objective + weight * perimeter
             objectives = objectives + weight * perimeter
             g = g + weight * g_perimeter
+        thinness = None
+        if cfg["thickness"] > 0.0 or cfg["thickness_rate"] > 0.0:
+            thinness, g_thin = thinness_and_gradient(ls, lo, hi, thickness_min(cfg, ls))
+            if thickness_ref is None:
+                lift = cfg["objective"] == "lift_drag"
+                thickness_ref = 1.0 if lift else float(avg["objective"])
+            weight = lam * thickness_ref
+            lam_next = max(0.0, lam + cfg["thickness_rate"] * (thinness - cfg["thickness_tol"]))
+            objective = objective + weight * thinness
+            objectives = objectives + weight * thinness
+            g = g + weight * g_thin
         g_full = g
         area_err = 0.0
         if mode in ("lagrangian", "penalty"):
@@ -1250,6 +1313,9 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             stepped, mode, area0, lo, hi, cfg["keepout"],
             centroid0 if cfg["fix_centroid"] else None, reinit,
         )  # fmt: skip
+        topology = {}
+        if cfg["topology_guard"]:
+            new, topology = topology_guard(ls, new)
         recentred = [0] * new.coef.ndim
         if cfg["recentre"]:
             new, n = recentre(new, centroid0, lo, hi)
@@ -1298,6 +1364,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         }
         if perimeter is not None:
             row.update(perimeter=perimeter, penalised_objective=objective)
+        if thinness is not None:
+            row.update(thinness=thinness, penalised_objective=objective, thickness_multiplier=lam,
+                       thickness_multiplier_next=lam_next)  # fmt: skip
+            lam = lam_next
+        row.update(pieces=T.pieces(knot_values(new)), **topology)
         if mode in ("tangent", "floor"):
             row.update(area_multiplier=nu, area_error=area_err)
         if mode in ("lagrangian", "penalty"):
@@ -1320,6 +1391,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
                     "area_target": area0,
                     "centroid_target": centroid0,
                     "perimeter_ref": perimeter_ref,
+                    "thickness_ref": thickness_ref,
                     "converged": converged_objective(cfg, history),
                     "rows": history,
                     "elapsed": time.time() - t_start,

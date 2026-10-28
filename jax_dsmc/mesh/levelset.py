@@ -38,6 +38,7 @@ Every function is pure and jit-able; ``dim`` and the coefficient shape are stati
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import math
 
@@ -820,6 +821,30 @@ def _perimeter_terms(ls, x, w):
     return (0.5 / w / jnp.cosh(phi / w) ** 2 * safe_norm(grad))[:, None]
 
 
+def _local_distance(ls, x):
+    phi, grad = value_and_grad(ls, x)
+    norm = safe_norm(grad)
+    return phi / jnp.where(norm > 0.0, norm, 1.0), phi, grad, norm
+
+
+def _thickness_terms(ls, x, w, depth, probes):
+    """Per sub-grid point: the smoothed surface delta (as :func:`_perimeter_terms`) and it
+    times the share of the probes outside the body, ``x_s - e n`` with ``x_s = x - d n`` the
+    point moved onto the surface (``d = phi / |grad phi|``, the local distance) and ``e =
+    depth (j + 1) / probes`` (a smoothed indicator of the probe's local distance, half-width
+    half the probes' spacing: the steps of neighbouring probes overlap, so the measure varies
+    smoothly with the thickness, and the shallowest probe of a thick body counts ~0)."""
+    d, phi, grad, norm = _local_distance(ls, x)
+    delta = 0.5 / w / jnp.cosh(phi / w) ** 2 * norm
+    n = unit(grad)
+    e = depth * (jnp.arange(probes) + 1.0) / probes
+    points = (x - d[:, None] * n)[:, None, :] - e[None, :, None] * n[:, None, :]
+    d_p = _local_distance(ls, points.reshape(-1, x.shape[1]))[0]
+    width = 0.5 * depth / probes
+    outside = 0.5 * (1.0 + jnp.tanh(d_p / width)).reshape(x.shape[0], probes)
+    return jnp.stack((delta * jnp.mean(outside, axis=1), delta), axis=1)
+
+
 def _chunk_sum(chunk, ls, terms, w):
     x, keep = chunk
     return jnp.sum(terms(ls, x, w) * keep[:, None], axis=0)
@@ -861,6 +886,97 @@ def body_perimeter(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -
     |grad phi| dx`` on :func:`body_volume`'s sub-grid with the derivative of its smoothed
     Heaviside: differentiable in ``coef`` (the optimiser's optional perimeter penalty)."""
     return _integrate(ls, lo, hi, sub, width, _perimeter_terms)[0]
+
+
+def body_thinness(
+    ls: LevelSet, lo, hi, depth: float, sub: int, probes: int = 8, width: float | None = None
+) -> jax.Array:
+    """The share of the surface where the body is thinner than ``depth`` (Allaire, Jouve &
+    Michailidis 2016, "Thickness control in structural optimization via a level set method",
+    Struct. Multidisc. Optim. 53): ``int_Gamma mean_e H(phi(x - e n)) / int_Gamma``, the
+    inward probes ``e`` up to ``depth`` and ``H`` a smoothed outside indicator of the probe's
+    local distance ``phi / |grad phi|`` -- the zero set's thickness, so no signed distance
+    is needed.  0 for a body thicker than ``depth`` everywhere (a convex edge thinner than
+    ``depth`` near its tip counts: the constraint blunts edges to ~``depth``); on
+    :func:`body_volume`'s sub-grid with :func:`body_perimeter`'s delta, differentiable in
+    ``coef`` (the optimiser's optional thickness penalty)."""
+    terms = functools.partial(_thickness_terms, depth=float(depth), probes=probes)
+    total = _integrate(ls, lo, hi, sub, width, terms)
+    return total[0] / total[1]
+
+
+THIN_BAND = 4.0
+""":func:`thinness_and_gradient` keeps the sub-grid points with ``|phi| < THIN_BAND w``: the
+surface delta's ``sech^2`` is below 1.3e-3 of its peak beyond (a 3-D box's full sub-grid
+through reverse mode asked for 250 GB; its band is ~1 % of it)."""
+
+
+def _phi_chunk(x, ls):
+    return value(ls, x)
+
+
+def _thin_sums(coef, ls, x, keep, w, depth, probes, ratio):
+    """``sum (a - ratio b)`` over a chunk of :func:`_thickness_terms`' columns ``(a, b)``."""
+    s = _thickness_terms(dataclasses.replace(ls, coef=coef), x, w, depth, probes)
+    return jnp.sum((s[:, 0] - ratio * s[:, 1]) * keep)
+
+
+def _thin_value_step(carry, chunk, ls, w, depth, probes):
+    x, keep = chunk
+    s = _thickness_terms(ls, x, w, depth, probes)
+    return carry + jnp.sum(s * keep[:, None], axis=0), None
+
+
+def _thin_grad_step(carry, chunk, ls, w, depth, probes, ratio):
+    x, keep = chunk
+    return carry + jax.grad(_thin_sums)(ls.coef, ls, x, keep, w, depth, probes, ratio), None
+
+
+@functools.partial(jax.jit, static_argnames=("depth", "probes"))
+def _thin_band(ls, xs, keeps, w, depth, probes):
+    total, _ = jax.lax.scan(
+        functools.partial(_thin_value_step, ls=ls, w=w, depth=depth, probes=probes),
+        jnp.zeros(2), (xs, keeps),
+    )  # fmt: skip
+    ratio = total[0] / total[1]
+    grad, _ = jax.lax.scan(
+        functools.partial(_thin_grad_step, ls=ls, w=w, depth=depth, probes=probes, ratio=ratio),
+        jnp.zeros_like(ls.coef), (xs, keeps),
+    )  # fmt: skip
+    return ratio, grad / total[1]
+
+
+def thinness_and_gradient(
+    ls: LevelSet, lo, hi, depth: float, sub: int, probes: int = 8, width: float | None = None,
+    chunk: int = 4096,
+) -> tuple[float, jax.Array]:  # fmt: skip
+    """:func:`body_thinness` and its gradient in ``coef`` over the surface band only
+    (:data:`THIN_BAND`), chunk by chunk: ``T = A / B`` (the two integrals), ``dT = (dA - T
+    dB) / B`` accumulated per chunk, so memory does not grow with the box.  The band is
+    chosen at the current ``coef`` (points entering it carry a negligible delta)."""
+    x, _cell = _subgrid(ls, lo, hi, sub)
+    w = ls.h / 2.0 if width is None else float(width)
+    n = x.shape[0]
+    pad = -n % SUBGRID_CHUNK
+    xp = jnp.concatenate((x, jnp.broadcast_to(x[:1], (pad, x.shape[1]))))
+    phi = jax.lax.map(
+        functools.partial(_phi_chunk, ls=ls), xp.reshape(-1, SUBGRID_CHUNK, x.shape[1])
+    )
+    near = np.abs(np.asarray(phi).ravel()[:n]) < THIN_BAND * w
+    band = np.asarray(x)[near]
+    if not len(band):
+        return 0.0, jnp.zeros_like(ls.coef)
+    # pad to a power-of-two count of chunks: few distinct shapes, few compilations
+    chunks = 1 << max(0, math.ceil(math.log2(max(1, math.ceil(len(band) / chunk)))))
+    total = chunks * chunk
+    keep = np.zeros(total)
+    keep[: len(band)] = 1.0
+    xb = np.concatenate((band, np.broadcast_to(band[:1], (total - len(band), band.shape[1]))))
+    ratio, grad = _thin_band(
+        ls, jnp.asarray(xb.reshape(chunks, chunk, -1)), jnp.asarray(keep.reshape(chunks, chunk)),
+        w, float(depth), probes,
+    )  # fmt: skip
+    return float(ratio), grad
 
 
 def coefficient_band(ls: LevelSet, width: float) -> jax.Array:

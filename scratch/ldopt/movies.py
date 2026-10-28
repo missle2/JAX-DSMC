@@ -14,9 +14,12 @@ iterate of the first ``SLOW`` at 10 iterates / s, then every third at 45 / s.
   and Helmholtz (hz0) without reinitialisation, Adam and MMA (``lsf_m10``, ``lsf_kn``,
   ``lsf_knld``, ``lsf_m10ld``).  A run whose objective went non-finite is cut at its last
   finite iterate.
+* ``lsfilter_diamond.mp4`` / ``lsfilter_plate.mp4`` (2026-10-28): the sharp starts (Helmholtz,
+  Adam, Kn 0.5 M 10) beside the circle start of the same problem (``lsf_dm``: drag at fixed
+  area, absolute J; ``lsf_pl``: L / D, the plate at area >= 8 m^2, the circle at 0.5 A0).
 
     PYTHONPATH=. python3 scratch/ldopt/movies.py \
-        [ld|fl|rc|lsf_m10|lsf_kn|lsf_knld|lsf_m10ld] [--frame K]
+        [ld|fl|rc|lsf_m10|lsf_kn|lsf_knld|lsf_m10ld|lsf_dm|lsf_pl] [--frame K]
 """
 
 import argparse
@@ -120,6 +123,28 @@ for name, regime, kind, title, view in (
         "dir": "movie/lsfilter",
         "ylim": (0.04, 1.05),
     }
+SHARP = "circle_long_kn0.5_M10_S1_ox_adam_{mark}_sm8_free_g32_w500"
+for name, out, kind, start, title, view, lift in (
+    ("lsf_dm", "diamond", "{s}hz0_tan", "diamond", "M 10 drag", (-6.5, 12.0),
+     False),
+    ("lsf_pl", "plate", "{s}hz0_floor", "plate", "M 10 L / D", (-3.0, 11.0),
+     True),
+):  # fmt: skip
+    circle = "ld" if lift else ""
+    MOVIES[name] = {
+        "runs": {
+            start: (SHARP.format(mark=kind.format(s="dm" if not lift else "pl")),
+                    f"{start} start", HELM, "-"),
+            "circle": (SHARP.format(mark=kind.format(s=circle)), "circle start", BAND, "--"),
+        },  # fmt: skip
+        "view": view,
+        "title": f"{title}, Helmholtz + Adam: {start} vs circle start",
+        "lift": lift,
+        "absolute": True,
+        "out": f"lsfilter_{out}",
+        "dir": "movie/lsfilter",
+        "ylim": (0.025, 2.0),
+    }
 
 
 def _running(x, w=RUNNING):
@@ -172,7 +197,10 @@ def cache(name):
             if kf not in fields:
                 fields[kf] = np.load(f"{ROOT}/{tag}/frames_{kf}.npz")["nrho"][-1]
         area = np.array([r["area"] for r in rows])
-        out["runs"][key] = {"last": last, "frames": n_frames, "lines": lines, "fields": fields,
+        run_cfg = json.load(open(f"{ROOT}/{tag}/history.json"))["config"]
+        run_cfg = dict(O.default_config(), **run_cfg)
+        out["runs"][key] = {"init": O.surface_polyline(O.initial_levelset(run_cfg)[1], lo, hi),
+                            "last": last, "frames": n_frames, "lines": lines, "fields": fields,
                             "J": j, "area": area / area[0]}  # fmt: skip
         print(f"{name} {key}: {len(lines)} bodies", flush=True)
     path.write_bytes(pickle.dumps(out))
@@ -194,6 +222,8 @@ def _value(spec, a):
     """The traced quantity: L / D (running mean) or J / J0."""
     if spec["lift"]:
         return _running(-a["J"])
+    if spec.get("absolute"):
+        return _running(a["J"])
     return _running(a["J"]) / a["J"][0]
 
 
@@ -206,7 +236,7 @@ def _body_panel(ax, c, spec, key, k):
     n_inf = float(np.median(_grid(a["fields"][0], c["n"])[0]))  # the inflow column
     ax.imshow((field / n_inf).T, origin="lower", extent=(lo[0], hi[0], lo[1], hi[1]),
               cmap="Greys", vmin=0.0, vmax=DENSITY_MAX, interpolation="bilinear")  # fmt: skip
-    for seg in c["init"]:
+    for seg in a.get("init", c["init"]):
         ax.plot(seg[:, 0], seg[:, 1], color=MUTED, lw=0.9, ls="--")
     for seg in a["lines"][kk]:
         ax.fill(seg[:, 0], seg[:, 1], color=colour, alpha=0.85, lw=0)
@@ -218,7 +248,8 @@ def _body_panel(ax, c, spec, key, k):
     for side in ax.spines.values():
         side.set_color(GRID)
     v = _value(spec, a)[kk]
-    measure = f"L/D {v:.2f}" if spec["lift"] else f"J/J0 {v:.3f}"
+    measure = f"L/D {v:.2f}" if spec["lift"] else f"J {v:.3f}" if spec.get("absolute") else (
+        f"J/J0 {v:.3f}")
     ended = f"  (end {a['last']})" if k > a["last"] else ""
     ax.set_title(f"{title}  {measure}  area {a['area'][kk]:.2f} A0{ended}", fontsize=11,
                  loc="left", color=INK, pad=3)  # fmt: skip
@@ -241,7 +272,8 @@ def _traces(ax, c, spec, k):
     else:
         ax.set_yscale("log")
         ax.set_ylim(*spec.get("ylim", (0.06, 1.05)))
-        ax.set_ylabel(f"drag J / J0  ({RUNNING}-iterate running mean)", fontsize=13)
+        drag = "drag J" if spec.get("absolute") else "drag J / J0"
+        ax.set_ylabel(f"{drag}  ({RUNNING}-iterate running mean)", fontsize=13)
     ax.set_xlabel("iterate", fontsize=13)
     ax.tick_params(labelsize=11)
     ax.grid(True, which="both", color=GRID, lw=0.6)
@@ -257,12 +289,13 @@ def frame(c, name, k, path):
     fig = plt.figure(figsize=(19.2, 6.0) if span > 20 else (16.0, 7.2))
     outer = fig.add_gridspec(1, 2, width_ratios=(ratio, 1.0), left=0.008, right=0.99, top=0.9,
                              bottom=0.08, wspace=0.1)  # fmt: skip
-    left = outer[0].subgridspec(2, 2, wspace=0.025, hspace=0.14)
+    cols = 2 if len(spec["runs"]) > 2 else 1
+    left = outer[0].subgridspec(2, cols, wspace=0.025, hspace=0.14)
     for i, key in enumerate(spec["runs"]):
-        _body_panel(fig.add_subplot(left[i // 2, i % 2]), c, spec, key, k)
+        _body_panel(fig.add_subplot(left[i // cols, i % cols]), c, spec, key, k)
     _traces(fig.add_subplot(outer[1]), c, spec, k)
     fig.suptitle(f"{spec['title']}  --  iterate {k}        (flow from the left; grey: gas "
-                 "density; dashed: initial circle)", fontsize=15, color=INK, x=0.008,
+                 "density; dashed: initial body)", fontsize=15, color=INK, x=0.008,
                  ha="left")  # fmt: skip
     fig.savefig(path, dpi=100, facecolor="white")
     plt.close(fig)
