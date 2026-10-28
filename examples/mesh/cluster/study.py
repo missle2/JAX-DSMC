@@ -985,6 +985,29 @@ def _lsfilter3d_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# ld3dwide (2026-10-27): lsfilter3d's M 10 L / D run (L/D 2.37 @150, the best 3-D L / D) on
+# sphere_wide, twice sphere_long's span (z faces at +-4 m): its body pressed the z face
+# margin from iterate 46, its span box-limited.  400 iterates on a cosine step decay to 400
+# (2x the cells: ~600 s an iterate, ~140 a 24 h job; resubmit to resume).  A full H200 (the
+# sphere_long run fit a 3g.71gb slice; this one has twice the particles):
+#   GPU_KIND=h200_full bash examples/mesh/cluster/submit_curc.sh ld3dwide
+LD3DWIDE_ITERATIONS = 400
+
+
+def _ld3dwide_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``ld3dwide``: :func:`_lsfilter3d_jobs`' M 10 L / D run on ``sphere_wide``; tag
+    ``sphere_wide_kn0.5_M10_S1_ox_adam_ldfl_hz0_free_w300``."""
+    cmd = _lsfilter3d_jobs(gpus_per_node)["sphere_long_kn0.5_M10_ldfl_hz0"]
+    cmd = cmd.replace("sphere_long", "sphere_wide").replace(
+        f"--iterations {LSFILTER3D_ITERATIONS}", f"--iterations {LD3DWIDE_ITERATIONS}", 1
+    )
+    return {
+        "sphere_wide_kn0.5_M10_ldfl_hz0": cmd.replace(
+            f"--step-decay {LSFILTER3D_ITERATIONS}", f"--step-decay {LD3DWIDE_ITERATIONS}", 1
+        )
+    }
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -1058,6 +1081,7 @@ NEW_GROUPS = {
     "sph3d": _sph3d_jobs,
     "lsfilter": _lsfilter_jobs,
     "lsfilter3d": _lsfilter3d_jobs,
+    "ld3dwide": _ld3dwide_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

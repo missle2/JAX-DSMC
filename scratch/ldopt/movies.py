@@ -12,9 +12,11 @@ iterate of the first ``SLOW`` at 10 iterates / s, then every third at 45 / s.
 
 * ``lsfilter_<problem>.mp4`` (2026-10-27, ``movie/lsfilter``): the lsfilter runs, band (bd0)
   and Helmholtz (hz0) without reinitialisation, Adam and MMA (``lsf_m10``, ``lsf_kn``,
-  ``lsf_knld``).  A run whose objective went non-finite is cut at its last finite iterate.
+  ``lsf_knld``, ``lsf_m10ld``).  A run whose objective went non-finite is cut at its last
+  finite iterate.
 
-    PYTHONPATH=. python3 scratch/ldopt/movies.py [ld|fl|rc|lsf_m10|lsf_kn|lsf_knld] [--frame K]
+    PYTHONPATH=. python3 scratch/ldopt/movies.py \
+        [ld|fl|rc|lsf_m10|lsf_kn|lsf_knld|lsf_m10ld] [--frame K]
 """
 
 import argparse
@@ -97,10 +99,12 @@ MOVIES = {
 BAND, HELM = ADAM, MMA  # the lsfilter movies: colour = filter, line style = rule
 LSF = "circle_long_kn0.5{regime}_S1_{rule}_{mark}_sm8_free_g32_w500"
 for name, regime, kind, title, view in (
-    ("lsf_m10", "_M10", "{f}_tan", "Drag at fixed area, Kn 0.5 M 10", (-4.0, 11.0)),
+    ("lsf_m10", "_M10", "{f}_tan", "Drag at fixed area, Kn 0.5 M 10", (-6.5, 12.0)),
     ("lsf_kn", "", "{f}_tan", "Drag at fixed area, Kn 0.5 M 0.3", (-4.0, 14.0)),
     ("lsf_knld", "", "ld{f}_floor", "Maximum L / D, area >= 0.5 A0, Kn 0.5 M 0.3",
      (-2.0, 12.0)),
+    ("lsf_m10ld", "_M10", "ld{f}_floor", "Maximum L / D, area >= 0.5 A0, Kn 0.5 M 10",
+     (-3.0, 11.0)),
 ):  # fmt: skip
     MOVIES[name] = {
         "runs": {
@@ -110,7 +114,7 @@ for name, regime, kind, title, view in (
             for f, flabel, colour in (("bd0", "band", BAND), ("hz0", "Helmholtz", HELM))
         },  # fmt: skip
         "view": view,
-        "title": f"{title}: band vs Helmholtz, not reinitialised",
+        "title": f"{title}: band vs Helmholtz",
         "lift": "ld" in kind,
         "out": name.replace("lsf", "lsfilter"),
         "dir": "movie/lsfilter",
@@ -215,8 +219,8 @@ def _body_panel(ax, c, spec, key, k):
         side.set_color(GRID)
     v = _value(spec, a)[kk]
     measure = f"L/D {v:.2f}" if spec["lift"] else f"J/J0 {v:.3f}"
-    ended = "  (last pulled)" if k > a["last"] else ""
-    ax.set_title(f"{title}   {measure}   area {a['area'][kk]:.2f} A0{ended}", fontsize=12,
+    ended = f"  (end {a['last']})" if k > a["last"] else ""
+    ax.set_title(f"{title}  {measure}  area {a['area'][kk]:.2f} A0{ended}", fontsize=11,
                  loc="left", color=INK, pad=3)  # fmt: skip
 
 

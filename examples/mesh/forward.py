@@ -169,6 +169,20 @@ CASES = {
         "fnum": 5.0e-4,
         "capacity": 250_000,
     },
+    "sphere_wide": {
+        # sphere_long with twice the span (2026-10-27): z faces 4 radii out, so a lifting body
+        # can spread sideways (the M 10 L / D body in sphere_long pressed the z face margin
+        # from iterate 46); 2x the cells, ~840 k slots at --fnum-scale 1
+        "dim": 3,
+        "lo": [-5.0, -2.0, -4.0],
+        "hi": [5.0, 2.0, 4.0],
+        "n": (50, 20, 40),
+        "surf": "data.sphere",
+        "centre": [0.0, 0.0, 0.0],
+        "radius": 1.0,
+        "fnum": 5.0e-4,
+        "capacity": 500_000,
+    },
 }
 CASES_FNUM = {c["n"]: c["fnum"] for c in CASES.values()}
 NRHO = 1.0
