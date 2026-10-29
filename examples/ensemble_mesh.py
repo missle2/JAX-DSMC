@@ -1242,6 +1242,8 @@ def main(argv=None):
         row = ensemble_gradient(
             cfg, args.parameter, key, args.neighbors, args.timing_band, args.variant
         )
+        # the per-node heat (an array, for the optimiser's heat cap) is not part of the artifact
+        row.pop("patch_heat", None)
         row["fd"] = finite_differences(cfg, args.parameter, key, args.fd_steps)
         row["seed"] = i
         row["seconds"] = time.time() - t1

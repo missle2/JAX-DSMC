@@ -5,7 +5,7 @@
 # after a pull without picking up data, and the cluster's `git pull` never meets the files its
 # jobs keep writing.
 #
-#   bash examples/mesh/cluster/pull_results.sh            # results, logs, figures, scratch/*/cluster
+#   bash examples/mesh/cluster/pull_results.sh            # results (mesh + paper), logs, figures, scratch/*/cluster
 #   DRY=1 bash examples/mesh/cluster/pull_results.sh      # list what would change, copy nothing
 #   WARM=1 bash examples/mesh/cluster/pull_results.sh     # also the optimisers' warm-start gas
 #   bash examples/mesh/cluster/pull_results.sh examples/mesh/results/optimize   # just these paths
@@ -28,7 +28,8 @@ LOCAL_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 if [ $# -gt 0 ]; then
     PATHS=("$@")
 else
-    PATHS=(examples/mesh/results examples/mesh/cluster/logs examples/mesh/figures scratch)
+    PATHS=(examples/mesh/results examples/paper/results examples/mesh/cluster/logs examples/mesh/figures
+           scratch)
 fi
 
 CTL="${TMPDIR:-/tmp}/jaxdsmc-pull-$$.sock"

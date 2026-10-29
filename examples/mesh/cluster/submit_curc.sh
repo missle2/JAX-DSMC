@@ -26,6 +26,8 @@
 # jobs all landed on one node whose driver refuses cuInit); GPU_KIND=mi100 -> ami100 /
 # gpu:mi100 (needs a jax >= 0.4.36 module, see env.sh).  Nodes listed in bad_nodes.txt
 # (written by a job's preflight) and in EXCLUDE_NODES are excluded from every submission.
+# GPU_KIND=rtx_full -> one whole RTX PRO 6000 (96 GB; gres read from sinfo, GRES_TYPE/PART
+# override): the paper's runs that outgrow a 3g.71gb H200 slice when no whole H200 is free.
 # GPU_KIND=rtx -> the RTX PRO 6000 nodes: partition, gres name and per-GPU cores/memory are
 # read from `sinfo` (the first partition whose gres mentions "rtx"; RTX_MATCH overrides the
 # pattern), so nothing about those nodes is hard-coded.  They are Blackwell (sm_120): run
@@ -72,7 +74,34 @@ case "${GPU_KIND}" in
     # gpu-normal allows ONE rtx MIG slice per job (sbatch Error 8, 2026-09-23): an opt job's
     # S seeds then run one after another on its slice (optimize.py --workers 1)
     PER_NODE=1 ;;
-  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|h200_71|h200_full|a100|rtx|mi100)"; exit 1 ;;
+  rtx_full)
+    # a whole RTX PRO 6000 (96 GB), not a 1g.24gb MIG slice (2026-10-29: the paper's Newton
+    # FD gates and 3-D runs, when no whole H200 is free).  The gres is the first rtx entry of
+    # `sinfo` without a MIG profile ("<k>g.<m>gb") in its name; GRES_TYPE / PART override it
+    # (check: sinfo -h -o "%P %G" | grep -i rtx).  CPUs and host memory: a quarter node.
+    # "partition cpus memory_MB gres_entry" per whole-card rtx gres entry (a node's %G is a
+    # comma list: MIG entries and whole cards may be mixed)
+    LINE="$(sinfo -h -N -o "%P %c %m %G" | grep -i "${RTX_MATCH:-rtx}" | awk -v m="${RTX_MATCH:-rtx}" '
+      { n = split($4, g, ","); for (i = 1; i <= n; i++)
+          if (tolower(g[i]) ~ tolower(m) && g[i] !~ /[0-9]g\.[0-9]+gb/) { print $1, $2, $3, g[i]; exit } }' \
+      || true)"
+    if [ -z "${LINE}" ] && { [ -z "${GRES_TYPE:-}" ] || [ -z "${PART:-}" ]; }; then
+      echo "rtx_full: no whole-card rtx gres in sinfo (every rtx gres a MIG slice?); set GRES_TYPE and PART"
+      exit 1
+    fi
+    if [ -n "${LINE}" ]; then
+      read -r P_SINFO NCPU MEM_MB G_SINFO <<< "${LINE}"
+    else
+      P_SINFO="${PART}"; NCPU=64; MEM_MB=500000; G_SINFO="gpu:${GRES_TYPE}:4"
+    fi
+    PART="${PART:-${P_SINFO%\*}}"
+    GRES="${GRES_TYPE:-$(echo "${G_SINFO}" | cut -d: -f2)}"
+    CARDS="$(echo "${G_SINFO}" | cut -d: -f3 | cut -d'(' -f1)"
+    CARDS="${CARDS:-4}"
+    CORES=$((NCPU / CARDS)); MEM=$((MEM_MB / 1024 * 9 / 10 / CARDS))
+    echo "rtx_full: partition ${PART}, gres gpu:${GRES}, ${CARDS} cards/node -> ${CORES} cores, ${MEM} GB per card"
+    PER_NODE=1 ;;
+  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|h200_71|h200_full|a100|rtx|rtx_full|mi100)"; exit 1 ;;
 esac
 # a venv active in the submitting shell would ride into every job (--export=ALL) and break
 # env.sh's `module purge` (2026-10-22, see env.sh): submit without it

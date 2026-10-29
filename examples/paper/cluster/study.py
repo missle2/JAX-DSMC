@@ -16,7 +16,9 @@ Groups (figure numbers of docs/paper/outline.md):
 * ``paper_fd`` (Appendix A, gate G2): adjoint against paired central differences (8 seeds,
   ``examples.ensemble_mesh``) on the paper's conditions -- the Ma 2 airfoil box (diffuse,
   T_w = T_inf; drag and the body's heat rate, the heat path's gate), the Newton box at M 10
-  (Kn 0.5 diffuse drag and heat; free-molecular specular drag).  rtx / h200_71.
+  (Kn 0.5 diffuse drag and heat; free-molecular specular drag).  rtx (af_*) / h200_71 (nw_fm);
+  the Kn 0.5 Newton gates ran out of memory on h200_71 under JAX's default 75 % cap
+  (2026-10-29, A_max regrew to 142 in the M 10 stagnation region): rtx_full or h200_full.
 * ``paper_fwd`` (Fig. 8, gate G3): NACA 0012 at Ma 2 and the three Knudsen numbers, 8 seeds
   of one iterate each (the drag the BGK papers report for their start).  rtx.
 * ``paper_airfoil`` (Fig. 8): minimum drag at Ma 2, diffuse, T_w = T_inf, fixed chord (design
@@ -27,10 +29,12 @@ Groups (figure numbers of docs/paper/outline.md):
   containing its base disk, minimum drag, from the unit sphere.  h200_71.
 * ``paper_heat`` (Fig. 13): the same cylinder (H / R = 2) at Kn 0.5 M 10 with diffuse walls,
   minimum drag uncapped and with the peak heating capped at 0.8 and 0.6 of the start body's
-  (``--heat-cap-relative 1``, gate G1: examples/paper/reference/newton_fm.py).  h200_71.
+  (``--heat-cap-relative 1``, gate G1: examples/paper/reference/newton_fm.py).  The Newton FD
+  gates' box: rtx_full (h200_71 ran out of memory there).
 * ``paper_sph`` (Fig. 10): Zhang, Yuan & Wu 2025's sphere at Ma 2, their Kn 0.1 (ours 0.077),
   diffuse at T_inf, volume at least the sphere's: ``pilot`` (2 iterates: time and memory,
-  gate G4) then ``full``.  h200_full or a 4 x A100 node.
+  gate G4) then ``full``.  rtx_full (one whole 96 GB RTX PRO 6000; the box was shrunk to fit
+  it, 2026-10-29) or h200_full.
 * ``paper_ld2d`` (Fig. 11): the lsfilter M 10 L / D run (Helmholtz, Adam; L / D 3.19 at 250,
   still rising) resumed to 400 iterates under its own tag.  rtx.
 
@@ -74,9 +78,10 @@ def _optimize(tag: str, *flags: str) -> str:
     return " ".join(("python3 -m examples.mesh.optimize --tag", tag, *flags))
 
 
-def _fd(name: str, *flags: str) -> str:
+def _fd(name: str, *flags: str, seeds: int = 8) -> str:
     return " ".join((
-        "python3 -m examples.ensemble_mesh --body levelset --seeds 8 --substeps 4 --partners 8",
+        f"python3 -m examples.ensemble_mesh --body levelset --seeds {seeds} --substeps 4",
+        "--partners 8",
         "--backward-normals true --grazing 0.01 --timing-band 10",
         f"--output examples/paper/results/fd/{name}.json", *flags,
     ))  # fmt: skip
@@ -87,8 +92,12 @@ def _fd_jobs(gpus_per_node: int) -> dict[str, str]:
     airfoil = f"{AIRFOIL_FLOW} --knudsen 0.386 --warmup 1500 --levelset-h 0.1"
     newton = f"--case newton --levelset-h 0.1 --fnum-scale 1 --warmup 1000 {M10}"
     return {
-        "af_drag_radius": _fd("af_drag_radius", airfoil, "--parameter radius --fd-steps 0.1 0.05"),
-        "af_drag_mode2": _fd("af_drag_mode2", airfoil, "--parameter mode2 --fd-steps 0.1 0.05"),
+        # 16 seeds (2026-10-29): seed 4 of the first 8 carried a wild x term (-8.4 / -6.1 x the
+        # FD in both gates); a resubmission resumes the artifact at seed 8
+        "af_drag_radius": _fd("af_drag_radius", airfoil, "--parameter radius --fd-steps 0.1 0.05",
+                              seeds=16),
+        "af_drag_mode2": _fd("af_drag_mode2", airfoil, "--parameter mode2 --fd-steps 0.1 0.05",
+                             seeds=16),
         "af_heat_radius": _fd("af_heat_radius", airfoil, "--objective heat --heat-patch 0.6",
                               "--parameter radius --fd-steps 0.1 0.05"),
         "nw_drag_radius": _fd("nw_drag_radius", newton, f"{DIFFUSE} --knudsen 0.5",
@@ -158,7 +167,9 @@ def _sph_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     flow = f"--case sphere_ma2 --mach 2 --dt 1e-4 --boundary free {DIFFUSE} --t-wall 273.15"
     body = "--levelset-h 0.1 --levelset-samples 16 --smooth 3 --band 0.4 --keepout 0.3"
-    common = (flow, body, "--knudsen 0.077 --fnum-scale 1 --warmup 1500 --a-max 16", ITERATE,
+    # --fnum-scale 1.5: ~500 k slots, ~5 particles per lambda-sized cell (the 96 GB card's
+    # budget, scaled from sphere_long's ~420 k slots on a 71 GB slice)
+    common = (flow, body, "--knudsen 0.077 --fnum-scale 1.5 --warmup 1500 --a-max 16", ITERATE,
               "--area-mode floor --area-floor 1.0 --recentre 1 --step 0.02")  # fmt: skip
     return {
         "pilot": _optimize("paper_sph_pilot", *common, "--iterations 2"),

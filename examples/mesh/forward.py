@@ -217,17 +217,20 @@ CASES = {
     },
     "sphere_ma2": {
         # Zhang, Yuan & Wu 2025's sphere (Ma 2, their Kn 0.1 on the diameter = our 0.077,
-        # lambda = 0.154 m at R = 1): ~0.156 m cells (lambda), 4 radii of stream ahead, 6 of
-        # wake, 4 to the sides; ~180 k cells -- the pilot's size question
+        # lambda = 0.154 m at R = 1): lambda-sized cells (0.154 m), 2 radii of stream ahead of
+        # the nose, 4 of wake, 2 beyond the sides.  2026-10-29: shrunk from 4 / 6 / 4 radii
+        # (1.7 M slots at --fnum-scale 1, ~4x sphere_long: no single card) to fit one 96 GB RTX
+        # PRO 6000 -- 288 m^3, 79 k cells, ~750 k slots at --fnum-scale 1 (the free count rules:
+        # the capacity below is only the floor)
         "dim": 3,
-        "lo": [-4.0, -4.0, -4.0],
-        "hi": [6.0, 4.0, 4.0],
-        "n": (64, 52, 52),
+        "lo": [-3.0, -3.0, -3.0],
+        "hi": [5.0, 3.0, 3.0],
+        "n": (52, 39, 39),
         "surf": "data.sphere",
         "centre": [0.0, 0.0, 0.0],
         "radius": 1.0,
         "fnum": 5.0e-4,
-        "capacity": 4_000_000,
+        "capacity": 250_000,
     },
 }
 CASES_FNUM = {c["n"]: c["fnum"] for c in CASES.values()}

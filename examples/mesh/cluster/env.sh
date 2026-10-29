@@ -50,6 +50,10 @@ export JAX_ENABLE_X64=1
 # 2 h per seed on the CPU).  job.sbatch's preflight turns that into an immediate exit.
 if [ "${GPU_KIND}" = "mi100" ]; then export JAX_PLATFORMS=rocm; else export JAX_PLATFORMS=cuda; fi
 export XLA_PYTHON_CLIENT_PREALLOCATE=false   # several seed workers may share a GPU
+# without preallocation JAX still caps itself at 75 % of the device: the paper's Newton FD gates
+# ran out of memory at ~54 of a 3g.71gb slice's 71 GB (2026-10-29).  One process per GPU in
+# the jobs that need it; workers sharing a GPU grow lazily under the same cap
+export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.94}"
 # XLA's command buffers (CUDA graphs: a run of kernels launched as one) are ON here, XLA's
 # default set.  Until 2026-10-22 this file switched them off (`--xla_gpu_enable_command_buffer=`),
 # a copy of the laptop's WSL crash guard (run_locked.sh) that the cluster never needed; the
