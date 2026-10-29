@@ -86,6 +86,17 @@ def default_config():
         "levelset_h": 0.125,
         "levelset_samples": 8,
         "acc": 0.0,
+        # the body's wall temperature, K (0: forward.T_SURF, 300 K; 2026-10-28: the paper's
+        # airfoils at T_w = T_inf = forward.TEMP)
+        "t_wall": 0.0,
+        # (2026-10-28) the surface heat flux on a node lattice of this spacing (m; 0 = off):
+        # each window hit's heat 0.5 m (|v_in|^2 - |v_out|^2) shared among the lattice
+        # cell's corner nodes by the multilinear weights of its hit point (`info
+        # ["patch_heat"]`, W per node), and the objective's per-hit reward gains the heat
+        # times the node weights `heat_weights` interpolated there (dJ/dQ of a heat
+        # constraint, optimize.heat_terms).  Diffuse walls only (acc 1): the reward's own
+        # dependence on the normal is then the re-emission score (no tally cotangent)
+        "heat_patch": 0.0,
         "silhouette_band": 0.0,
         "grazing": 0.0,
         # "drag" (the windowed x force) or "lift_drag" (J = -L / D, the y force over the x
@@ -290,6 +301,7 @@ def build(cfg, parameter, value, steps, body=None):
         cfg["acc"],
         cfg["radius_cells"],
         boundary=cfg.get("boundary", "channel"),
+        t_wall=cfg.get("t_wall", 0.0),
     )
     k_grid = int(cfg["grid_scale"])
     if k_grid > 1:
@@ -602,6 +614,93 @@ def _drag_jump(events, rec_k, step, mass, dim, first, last, scale, width=1, weig
     return jnp.where(events.face >= 2 * dim, r * sign, 0.0)
 
 
+def heat_lattice(cfg, lo, hi):
+    """``(lo, h, n)`` of the heat node lattice over the box ``[lo, hi]`` (``cfg["heat_patch"]``
+    apart, the last node on or past the upper face): hashable, the static arguments of the
+    rewards."""
+    h = float(cfg["heat_patch"])
+    lo = np.asarray(lo, float)
+    n = np.ceil((np.asarray(hi, float) - lo) / h).astype(int) + 1
+    return tuple(lo.tolist()), h, tuple(int(v) for v in n)
+
+
+def _hit_heat(events, mass):
+    """Energy each hit gives the (resting) body: ``0.5 m (|v_in|^2 - |v_out|^2)``."""
+    return 0.5 * mass * (jnp.sum(events.v_in**2, axis=-1) - jnp.sum(events.v_out**2, axis=-1))
+
+
+def _patch_heat(part, step, mass, dim, first, scale, lo, h, n, n_nodes):
+    """:func:`shape.replay`'s ``patch_tally``: each window body hit's heat rate on the corner
+    nodes of its lattice cell (``n_nodes`` is read by ``shape._patch_totals``)."""
+    del n_nodes
+    index, weight = levelset_mod.multilinear_corners(part.x_hit, lo, h, n)
+    hit = (part.face >= 2 * dim) & (step >= first)
+    heat = jnp.where(hit, _hit_heat(part, mass) * scale, 0.0)
+    return index, heat[..., None] * weight
+
+
+def _heat_term(events, mass, lo, h, n, patch_weight):
+    """``heat x w(x_hit)``, ``w`` the node weights interpolated at the hit point."""
+    index, weight = levelset_mod.multilinear_corners(events.x_hit, lo, h, n)
+    return _hit_heat(events, mass) * jnp.sum(patch_weight[index] * weight, axis=-1)
+
+
+def _heat_reward(events, tallies, rec_k, step, mass, dim, first, scale, lo, h, n, weight):
+    """The weighted momentum (:func:`_hit_momentum`) plus the node-weighted heat of each
+    window body hit; ``weight = {"momentum": f64[D], "patch": f64[P]}``."""
+    del tallies, rec_k
+    r = _hit_momentum(events, mass, dim, weight["momentum"])
+    r = r + _heat_term(events, mass, lo, h, n, weight["patch"])
+    return jnp.where((events.face >= 2 * dim) & (step >= first), r * scale, 0.0)
+
+
+def _heat_jump(events, rec_k, step, mass, dim, first, last, scale, lo, h, n, width=1, weight=None):
+    """:func:`_drag_jump` of :func:`_heat_reward`."""
+    del rec_k
+    r = _hit_momentum(events, mass, dim, weight["momentum"])
+    r = (r + _heat_term(events, mass, lo, h, n, weight["patch"])) * scale
+    at_end = (step > last - width) & (step <= last)
+    at_start = (step >= first - width) & (step < first)
+    sign = jnp.where(at_end, 1.0, jnp.where(at_start, -1.0, 0.0)) / width
+    return jnp.where(events.face >= 2 * dim, r * sign, 0.0)
+
+
+@functools.lru_cache(maxsize=16)
+def heat_rewards(mass, dim, first, last, scale, width, lo, h, n):
+    """:func:`drag_rewards` of the heat-weighted objective, plus the replay's patch tally
+    (cached on the hashable settings, as there)."""
+    lattice = {"lo": lo, "h": h, "n": n}
+    reward = functools.partial(
+        _heat_reward, mass=mass, dim=dim, first=first, scale=scale, **lattice
+    )
+    jump = functools.partial(
+        _heat_jump, mass=mass, dim=dim, first=first, last=last, scale=scale, width=width,
+        **lattice,
+    )  # fmt: skip
+    patch = functools.partial(
+        _patch_heat, mass=mass, dim=dim, first=first, scale=scale, n_nodes=int(np.prod(n)),
+        **lattice,
+    )  # fmt: skip
+    return reward, jump, patch
+
+
+def _heat_setup(cfg, grid, mass, dim, first, scale_r, timing_band, weight, heat_weights):
+    """``(reward, jump, patch_tally, weight)`` of the heat-weighted objective
+    (``heat_patch``): the drag's (or ratio's) momentum weight beside the node weights
+    ``heat_weights`` (zeros: the drag alone, the heat still tallied)."""
+    if cfg["acc"] != 1.0:
+        raise ValueError("heat_patch needs diffuse walls (acc 1)")
+    lo, h, n = heat_lattice(cfg, grid.lo, grid.hi)
+    last = cfg["warmup"] + cfg["steps"] - 1
+    width = timing_band_setting(timing_band)[1]
+    reward, jump, patch = heat_rewards(mass, dim, first, last, scale_r, width, lo, h, n)
+    momentum = jnp.zeros(dim).at[0].set(1.0) if weight is None else weight
+    nodes = np.zeros(int(np.prod(n))) if heat_weights is None else np.asarray(heat_weights, float)
+    if cfg["objective"] == "heat":  # the total heat rate alone
+        momentum, nodes = jnp.zeros(dim), np.ones(int(np.prod(n)))
+    return reward, jump, patch, {"momentum": momentum, "patch": jnp.asarray(nodes)}
+
+
 def _drag_setup(cfg, mass, dim, first, scale_r, timing_band, tallies):
     """The windowed drag's reward, its edge jump, the step-fraction band of
     :func:`timing_band_setting` for the captured steps of ``cfg`` and a ratio objective's
@@ -627,7 +726,7 @@ def timing_band_setting(value):
     return float(value), 1
 
 
-OBJECTIVES = ("drag", "lift_drag")
+OBJECTIVES = ("drag", "lift_drag", "heat")
 
 
 def objective_forces(cfg, tallies, dim, scale):
@@ -645,6 +744,10 @@ def objective_value(cfg, tallies, dim, scale):
     if kind == "lift_drag":
         f = objective_forces(cfg, tallies, dim, scale)
         return float(-f[1] / f[0])
+    if kind == "heat":
+        # the body's windowed heat rate, W (W / m in 2-D): the heat path's gradient gate
+        first = cfg["steps"] - cfg["window"]
+        return float(jnp.sum(tallies.heat[first:, 2 * dim :]) * scale)
     raise ValueError(f"objective {kind!r} (one of {OBJECTIVES})")
 
 
@@ -652,7 +755,7 @@ def objective_weights(cfg, tallies, dim, scale):
     """``dJ/dF`` (``f64[D]``) of a nonlinear objective at this seed's forces, the weights of
     the per-hit momentum (:func:`_hit_momentum`): ``(L / D^2, -1 / D)`` for ``J = -L / D``.
     ``None`` for the drag (the unweighted ``x`` component, bit for bit the earlier rewards)."""
-    if cfg.get("objective", "drag") == "drag":
+    if cfg.get("objective", "drag") in ("drag", "heat"):
         return None
     f = objective_forces(cfg, tallies, dim, scale)
     w = np.zeros(dim)
@@ -819,7 +922,7 @@ def replay_static(static, walls, floor=(0, 0)):
 
 def _checked_replay(
     rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, static, reward, jump, timing_band,
-    reward_weight=None,
+    reward_weight=None, patch_tally=None,
 ):  # fmt: skip
     """:func:`shape.replay` of the captured steps (epsilon = acc_delta = 0) at the record's
     tracker sizes (:func:`replay_static`), its replay error checked against
@@ -834,6 +937,7 @@ def _checked_replay(
         rep = shape.replay(
             rec, steps, state0, key, grid, faces, wall, mass, dt, mesh, 0.0, 0.0, sizes,
             reward=reward, timing_jump=jump, timing_band=timing_band, reward_weight=reward_weight,
+            patch_tally=patch_tally,
         )  # fmt: skip
         if float(rep.replay_error) <= REPLAY_TOL:
             _replay_seen[seen] = (sizes.K_bounce, sizes.lane_size)
@@ -848,7 +952,7 @@ def _checked_replay(
     raise RuntimeError(f"replay error {float(rep.replay_error):g}")
 
 
-def shape_terms(
+def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
     cfg,
     key,
     body=None,
@@ -858,6 +962,7 @@ def shape_terms(
     variants=None,
     frames_every=0,
     restart=None,
+    heat_weights=None,
 ):
     """One seed: forward, traced replay (hit rewards), value-form backward, shape terms
     on the geometry (all four ``grad_x lambda`` variants, or the ``variants`` named).
@@ -885,23 +990,37 @@ def shape_terms(
     reward, jump, timing_band, weight = _drag_setup(
         cfg, float(mass), dim, first, scale_r, timing_band, tallies
     )
+    heat = cfg.get("heat_patch", 0.0) > 0.0
+    if cfg.get("objective") == "heat" and not heat:
+        raise ValueError("objective heat needs heat_patch > 0")
+    patch = None
+    if heat:
+        reward, jump, patch, weight = _heat_setup(
+            cfg, grid, float(mass), dim, first, scale_r, timing_band, weight, heat_weights
+        )
     t0 = time.time()
     # the replay and the shape VJP at the record's tracker sizes (replay_static)
     rep, traced = _checked_replay(
         rec, steps, state0, key, grid, s["faces"], wall, mass, dt, mesh, static, reward, jump,
-        timing_band, weight,
+        timing_band, weight, patch,
     )  # fmt: skip
     t_replay = time.time() - t0
     hit_reward = rep.hit_reward
     value = float(jnp.sum(rep.hit_total))
+    patch_heat = None if rep.patch is None else np.asarray(rep.patch)
     # the timing rewards enter only the second backward, which needs each slot's per-step
     # total: keep that and let the per-event form go (the replay's outputs otherwise stay
     # alive through both backwards and the shape VJP -- the chain's memory peak)
     timing_total = rep.timing_total[:, None]
     del rep
     check = objective_value(cfg, tallies, dim, scale_r)
-    newborn_share = _objective_newborn_share(cfg, tallies, dim, scale_r, check, value, weight)
-    tally_cot = _drag_tally_cotangent(tallies, dim, mesh, scale_r, weight)
+    if heat:
+        # the hit rewards carry the heat term too: no tally twin to compare; the whole
+        # reward's dependence on the normal is the diffuse re-emission's score
+        newborn_share, tally_cot = float("nan"), None
+    else:
+        newborn_share = _objective_newborn_share(cfg, tallies, dim, scale_r, check, value, weight)
+        tally_cot = _drag_tally_cotangent(tallies, dim, mesh, scale_r, weight)
     dx = (np.asarray(grid.hi) - np.asarray(grid.lo)) / np.asarray(grid.n)
     v_scale = float(np.sqrt(K_BOLTZ * F.TEMP / float(mass)))
     fit_scale = jnp.concatenate((jnp.asarray(dx), jnp.full(3, v_scale)))
@@ -970,6 +1089,8 @@ def shape_terms(
         "hits": int(diag.surface_hits.sum()),
         "stuck": int(diag.surface_stuck.sum()),
         "newborn_hit_share": newborn_share,
+        # heat_patch: the window's mean heat rate per lattice node, W (W / m in 2-D)
+        "patch_heat": patch_heat,
         "alive_final": int(final.alive.sum()),
         "lambda_rms": [float(np.sqrt(np.mean(lam[k][alive[k]] ** 2))) for k in (0, m // 2, m - 1)],
         # a few wild carried values hide in the rms (thin-body gate, 2026-10-17): every step

@@ -183,6 +183,52 @@ CASES = {
         "fnum": 5.0e-4,
         "capacity": 500_000,
     },
+    # the paper's cases (2026-10-28, examples/paper).  Knudsen numbers follow ensemble_mesh:
+    # the VHS mean free path over 2 R, R the case's "radius".  The BGK papers' Kn (Yuan & Wu
+    # 2025; Li et al. 2025: (mu / p) sqrt(pi R T / 2) over the chord) is pi / (2 (5 - 2 w)
+    # (7 - 2 w) / 15) = 1.296 x ours for argon (w = 0.81): their Kn 0.5 is our 0.386
+    "airfoil": {
+        # a 6 m chord (R = 3: Kn on the chord) centred at the origin, 0.3 m cells (lambda / 3
+        # at their Kn 0.2), free faces 2 chords upstream of the leading edge, 2.2 downstream
+        # of the trailing edge, 1.25 to the sides
+        "dim": 2,
+        "lo": [-15.0, -7.5],
+        "hi": [16.2, 7.5],
+        "n": (104, 50),
+        "surf": "data.circle",
+        "centre": [0.0, 0.0],
+        "radius": 3.0,
+        "fnum": 2.5e-3,
+        "capacity": 300_000,
+    },
+    "newton": {
+        # Newton's problem (height H = 2, base radius 1): the design cylinder x in [-1, 1],
+        # r <= 1 about the x axis, the base disk at x = 1; 0.2 m cells (lambda / 5 at Kn 0.5),
+        # 2 m of free stream ahead of the nose plane, 4 m of wake, 1 m beyond the cylinder
+        "dim": 3,
+        "lo": [-3.0, -2.0, -2.0],
+        "hi": [5.0, 2.0, 2.0],
+        "n": (40, 20, 20),
+        "surf": "data.sphere",
+        "centre": [0.0, 0.0, 0.0],
+        "radius": 1.0,
+        "fnum": 5.0e-4,
+        "capacity": 250_000,
+    },
+    "sphere_ma2": {
+        # Zhang, Yuan & Wu 2025's sphere (Ma 2, their Kn 0.1 on the diameter = our 0.077,
+        # lambda = 0.154 m at R = 1): ~0.156 m cells (lambda), 4 radii of stream ahead, 6 of
+        # wake, 4 to the sides; ~180 k cells -- the pilot's size question
+        "dim": 3,
+        "lo": [-4.0, -4.0, -4.0],
+        "hi": [6.0, 4.0, 4.0],
+        "n": (64, 52, 52),
+        "surf": "data.sphere",
+        "centre": [0.0, 0.0, 0.0],
+        "radius": 1.0,
+        "fnum": 5.0e-4,
+        "capacity": 4_000_000,
+    },
 }
 CASES_FNUM = {c["n"]: c["fnum"] for c in CASES.values()}
 NRHO = 1.0
@@ -210,6 +256,7 @@ def build(
     radius_cells: int,
     body_radius: float | None = None,
     boundary: str = "channel",
+    t_wall: float = 0.0,
 ):
     """Everything a run needs; ``body_radius`` overrides the analytic body's radius.
 
@@ -259,7 +306,8 @@ def build(
     else:
         raise ValueError(f"boundary {boundary!r}: channel or free")
     res = inflow.InflowParams.uniform(D, NRHO, TEMP, [VSTREAM, 0.0, 0.0])
-    wall = WallParams.uniform(D, T_SURF, acc=0.0, n_models=1).with_model(D, 0, temp=T_SURF, acc=acc)
+    t_wall = t_wall or T_SURF  # the body's temperature (0: T_SURF)
+    wall = WallParams.uniform(D, T_SURF, acc=0.0, n_models=1).with_model(D, 0, temp=t_wall, acc=acc)
     target = float(inflow.target_count(res, grid, 0, 0, sp.mass[0], params.fnum[0], params.dt))
     capacity = injection_bound(res, grid, faces, sp.mass[0], params.fnum[0], params.dt)
     return grid, mesh, sp, params, static, faces, res, wall, target, capacity

@@ -865,6 +865,56 @@ def _integrate(ls, lo, hi, sub, width, terms):
     return jnp.sum(sums, axis=0) * cell
 
 
+def multilinear_corners(x: jax.Array, lo, h: float, n) -> tuple[jax.Array, jax.Array]:
+    """``(index, weight)``: the ``2^D`` nodes of the cell of the node lattice (``lo``, spacing
+    ``h``, ``n`` nodes per axis, flat C-order index) holding each point ``x`` (``f64[..., D']``,
+    ``D' >= D``: the first ``D`` components) and their multilinear weights, each ``[...,
+    2^D]`` -- a partition of unity, continuous in ``x``; points outside are clamped to the
+    nearest cell."""
+    dim = len(n)
+    g = (x[..., :dim] - jnp.asarray(lo, dtype=jnp.float64)) / h
+    i0 = jnp.clip(jnp.floor(g), 0, jnp.asarray(n) - 2).astype(jnp.int32)
+    f = jnp.clip(g - i0, 0.0, 1.0)
+    index, weight = [], []
+    for corner in range(2**dim):
+        flat = jnp.zeros(x.shape[:-1], jnp.int32)
+        w = jnp.ones(x.shape[:-1])
+        for a in range(dim):
+            bit = (corner >> a) & 1
+            flat = flat * n[a] + i0[..., a] + bit
+            w = w * (f[..., a] if bit else 1.0 - f[..., a])
+        index.append(flat)
+        weight.append(w)
+    return jnp.stack(index, axis=-1), jnp.stack(weight, axis=-1)
+
+
+def _node_chunk(total, chunk, ls, w, lattice):
+    x, keep = chunk
+    delta = _perimeter_terms(ls, x, w)[:, 0] * keep
+    index, weight = multilinear_corners(x, *lattice)
+    return total.at[index.reshape(-1)].add((delta[:, None] * weight).reshape(-1)), None
+
+
+def surface_on_nodes(
+    ls: LevelSet, lo, hi, sub: int, lattice, width: float | None = None
+) -> jax.Array:
+    """``f64[P]``: the surface measure of ``phi = 0`` (:func:`body_perimeter`'s smoothed
+    ``delta |grad phi|``) shared among the nodes of ``lattice = (lo, h, n)`` by the
+    multilinear weights -- each node's surface area (2-D: length); sums to the perimeter.
+    Differentiable in ``coef`` (the heat constraint's per-node areas, ``optimize``)."""
+    x, cell = _subgrid(ls, lo, hi, sub)
+    w = ls.h / 2.0 if width is None else float(width)
+    n = x.shape[0]
+    pad = -n % SUBGRID_CHUNK
+    x = jnp.concatenate((x, jnp.broadcast_to(x[:1], (pad, x.shape[1]))))
+    keep = jnp.concatenate((jnp.ones(n), jnp.zeros(pad)))
+    k = x.shape[0] // SUBGRID_CHUNK
+    chunks = (x.reshape(k, SUBGRID_CHUNK, -1), keep.reshape(k, SUBGRID_CHUNK))
+    step = functools.partial(_node_chunk, ls=ls, w=w, lattice=lattice)
+    total, _ = jax.lax.scan(step, jnp.zeros(int(np.prod(lattice[2]))), chunks)
+    return total * cell
+
+
 def body_volume(ls: LevelSet, lo, hi, sub: int, width: float | None = None) -> jax.Array:
     """Volume of ``phi < 0`` inside the box ``[lo, hi]`` by a ``sub``-per-knot-spacing
     centred sub-grid with a smoothed Heaviside of half-width ``width`` (default ``h / 2``):

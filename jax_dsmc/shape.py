@@ -175,6 +175,9 @@ class Replay(NamedTuple):
     ``timing_jump``), laid out as ``hit_reward``: the change of the objective per unit
     delay of the particle's trajectory, what the along-flight identity's second backward
     carries."""
+    patch: jax.Array | None = None
+    """``f64[P]``: the survivors' hits summed onto the nodes of ``patch_tally`` over the
+    replayed steps (``None`` without one): e.g. the surface heat flux on a node lattice."""
 
     @property
     def hit_total(self):
@@ -464,8 +467,23 @@ def _step_rewards(events, tallies, rec_k, step, survivors, reward, timing_jump, 
     return r, tau, n_hits
 
 
-def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
-    """Forward-only traced replay of one step: hit rewards, timing rewards, replay check."""
+def _patch_totals(events, survivors, step, patch_tally):
+    """``f64[P]``: ``patch_tally(part_events, step) -> (index, value)`` (``i32`` / ``f64`` of
+    the events' shape plus a trailing corner axis) scattered over its ``n_nodes`` nodes, the
+    non-survivors' events left out."""
+    split = as_split(events)
+    total = jnp.zeros(patch_tally.keywords["n_nodes"])
+    parts = ((split.head, survivors[None, :]), (split.tail, _tail_of(survivors, split.slot)[None, :]))
+    for part, keep in parts:
+        index, value = patch_tally(part, step)
+        value = jnp.where(keep[..., None], value, 0.0)
+        total = total.at[index.reshape(-1)].add(value.reshape(-1))
+    return total
+
+
+def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup, patch_tally=None):
+    """Forward-only traced replay of one step: hit rewards, timing rewards, replay check
+    (and the step's ``patch_tally`` totals, :func:`_patch_totals`)."""
     x, v, alive, err = carry
     rec_k, step = xs
     key = key_for(setup["base_key"], step, STAGE_MOVE)
@@ -480,6 +498,9 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
         events, tallies, rec_k, step, survivors, reward, timing_jump, setup, timing_band
     )
     slot = as_split(events).slot
+    patch = jnp.zeros(0) if patch_tally is None else _patch_totals(
+        events, survivors, step, patch_tally
+    )
     if isinstance(events, SplitEvents):
         r = HitRewards(r, slot)
         tau = HitRewards(tau, slot)
@@ -487,7 +508,7 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup):
         # dense trackers: the (K, N) layout the callers have always had
         r = jnp.concatenate((r.head, r.tail))
         tau = jnp.concatenate((tau.head, tau.tail))
-    return (rec_k.x, step_v_post(rec_k), rec_k.alive, err), (r, tallies, n_hits, tau)
+    return (rec_k.x, step_v_post(rec_k), rec_k.alive, err), (r, tallies, n_hits, tau, patch)
 
 
 def _mismatch(x_post, v_post, alive, alive_post, rec_k, survivors, grid):
@@ -975,7 +996,8 @@ def _batched_scan(body, init, xs, batch):
 
 
 @functools.partial(
-    jax.jit, static_argnames=("faces", "static", "reward", "timing_jump", "timing_band")
+    jax.jit,
+    static_argnames=("faces", "static", "reward", "timing_jump", "timing_band", "patch_tally"),
 )
 def replay(
     records,
@@ -995,6 +1017,7 @@ def replay(
     timing_jump=None,
     timing_band=0.2,
     reward_weight=None,
+    patch_tally=None,
 ):
     """Traced replay of the captured steps: a :class:`Replay`.
 
@@ -1004,7 +1027,9 @@ def replay(
     bound with ``partial``) is the per-hit reward of the objective, already divided by
     its normalization; a survivor's rewards are kept, a newborn's are the source's.
     ``timing_jump`` (as in :func:`gradient`) adds the per-hit timing rewards.
-    ``reward_weight`` (``f64[D]``, traced) is bound to both as ``weight=`` (:func:`_weighted`).
+    ``reward_weight`` (``f64[D]``, or any pytree the reward takes, traced) is bound to both as
+    ``weight=`` (:func:`_weighted`).  ``patch_tally`` (module-level, a ``partial`` carrying
+    ``n_nodes``) sums the survivors' hits onto a node lattice (:attr:`Replay.patch`).
     """
     setup = _setup(
         base_key, grid, faces, wall, mass, dt, mesh, epsilon, acc_delta, static, reward_weight
@@ -1016,10 +1041,11 @@ def replay(
         timing_jump=timing_jump,
         timing_band=timing_band,
         setup=setup,
+        patch_tally=patch_tally,
     )
     init = (state0.x, state0.v, state0.alive, jnp.float64(0.0))
-    (_, _, _, err), (r, tallies, hits, tau) = lax.scan(body, init, (records, steps))
-    return Replay(r, tallies, err, hits, tau)
+    (_, _, _, err), (r, tallies, hits, tau, patch) = lax.scan(body, init, (records, steps))
+    return Replay(r, tallies, err, hits, tau, None if patch_tally is None else patch.sum(axis=0))
 
 
 @functools.partial(

@@ -64,6 +64,22 @@ def element_fluxes(s_n, s_t, n, mass, temp):
     return ndot, p_i, tau_i
 
 
+def stagnation_heat_flux(n, mass, temp, u, t_wall):
+    """Heat flux (W/m^2) into a flat, fully accommodating face normal to a drifting
+    Maxwellian (density ``n``, speed ``u``, temperature ``temp``) at ``t_wall``: the incident
+    energy flux ``0.5 m n E[c^3 + c (u_t^2 + 2 sigma^2); c > 0]`` (``c`` the normal velocity,
+    no tangential drift here) less the re-emitted ``2 k T_w`` per molecule -- the reference
+    of the heat constraint (examples/paper/reference/newton_fm.py has the inclined faces)."""
+    sigma = math.sqrt(K_BOLTZ * temp / mass)
+    a = u / sigma
+    big = 0.5 * (1.0 + erf(a / math.sqrt(2.0)))
+    small = math.exp(-0.5 * a * a) / math.sqrt(2.0 * math.pi)
+    m1 = u * big + sigma * small
+    m3 = (u**3 + 3.0 * u * sigma**2) * big + (u**2 + 2.0 * sigma**2) * sigma * small
+    incident = 0.5 * n * mass * (m3 + m1 * 2.0 * sigma**2)
+    return incident - n * m1 * 2.0 * K_BOLTZ * t_wall
+
+
 def reference_drag(dim, radius, n, mass, temp, u, t_wall, diffuse, m=4000):
     """Drag force on a circle (per unit depth) or sphere in free-molecular flow."""
     beta = 1.0 / math.sqrt(2.0 * K_BOLTZ * temp / mass)

@@ -259,6 +259,36 @@ def default_config():
             "initial_chord": 0.0,
             "initial_thickness": 0.3,
             "initial_aoa": 0.0,
+            # the design region (2026-10-28, the paper's validation cases; "" = the whole box):
+            # the body stays inside it -- "box:x0_x1_y0_y1[_z0_z1]" (an axis bound "inf" for
+            # none: a fixed chord is "box:x0_x1_-inf_inf") or "cylinder:x0_x1_r" (about the x
+            # axis through the case's centre: Newton's problem of a given height and base;
+            # "," separates as well, but sbatch --export splits a command on commas).
+            # phi at the knots is floored at the signed distance to the region after every
+            # step (as keep_inside), so the zero set cannot leave it
+            "design_region": "",
+            # a region the body must contain (same syntax; "" = none): phi at the knots capped
+            # at the signed distance to it (Newton's problem: the base disk, a thin slab of the
+            # cylinder at its downstream end)
+            "solid_region": "",
+            # peak-heating cap (2026-10-28; 0 = off): the constraint G <= heat_cap, G the
+            # p-norm (`heat_p`) over the heat lattice's nodes (ensemble_mesh `heat_patch`) of
+            # the node heat flux q_n = max(Q_n, 0) / A_n (Q_n the window's heat rate on node
+            # n, A_n its surface area, levelset.surface_on_nodes) in units of the free-stream
+            # stagnation value of a flat face (free_molecular.stagnation_heat_flux) -- the
+            # area-weighted mean (sum A q^p / sum A)^(1/p), a smooth max.  By its multiplier
+            # as the thickness constraint: J + mu * J_0 * G, mu from `heat_multiplier`,
+            # mu <- max(0, mu + heat_rate (G - heat_cap)) after every iterate.  dG/dQ_n
+            # weighs each hit's heat in the DSMC objective (at the previous iterate's seed-
+            # mean Q: the first iterate is the drag's alone); dG/dA_n is differentiated here
+            "heat_cap": 0.0,
+            "heat_p": 8.0,
+            "heat_rate": 1.0,
+            "heat_multiplier": 0.0,
+            # 1: heat_cap in units of the first iterate's G (the start body's own peak) rather
+            # than of the free-molecular stagnation value (the transitional shock layer
+            # lowers the stagnation heating below it by a condition-dependent factor)
+            "heat_cap_relative": 0,
         }
     )
     return cfg
@@ -518,6 +548,23 @@ def polygon_vertices(cfg):
     if cfg["initial"] == "diamond":
         chord = cfg["initial_chord"] or np.sqrt(2.0 * np.pi * radius**2 / ratio)
         local = np.array([[-0.5, 0.0], [0.0, -0.5 * ratio], [0.5, 0.0], [0.0, 0.5 * ratio]])
+    elif cfg["initial"] == "ellipse":
+        # semi-axes chord / 2 and ratio x chord / 2 (2026-10-28: the airfoil cases' start at
+        # the NACA 0012 area, ratio 0.1040), as a 256-gon
+        chord = cfg["initial_chord"] or 2.0 * radius
+        t = np.linspace(0.0, 2.0 * np.pi, 256, endpoint=False)
+        local = 0.5 * np.stack((np.cos(t), ratio * np.sin(t)), axis=1)
+    elif cfg["initial"] == "naca0012":
+        # the 4-digit section of thickness ratio `initial_thickness` (0.12) with the closed
+        # trailing edge (-0.1036 x^4), cosine-spaced (the BGK papers' starting airfoil: the
+        # paper's point evaluations, examples/paper)
+        chord = cfg["initial_chord"] or 2.0 * radius
+        u = 0.5 * (1.0 - np.cos(np.linspace(0.0, np.pi, 129)))
+        yt = 5.0 * ratio * (0.2969 * np.sqrt(u) - 0.1260 * u - 0.3516 * u**2 + 0.2843 * u**3
+                            - 0.1036 * u**4)  # fmt: skip
+        lower = np.stack((u - 0.5, -yt), axis=1)  # leading edge to trailing edge
+        upper = np.stack((u[-2:0:-1] - 0.5, yt[-2:0:-1]), axis=1)  # and back
+        local = np.concatenate((lower, upper))
     elif cfg["initial"] == "plate":
         chord = cfg["initial_chord"] or 8.0 * radius / 3.0
         t = 0.5 * ratio
@@ -770,7 +817,7 @@ def load_warm(path):
 (``phase_seconds``, summed over the seeds)."""
 
 
-def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
+def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None):
     """Per-seed coefficient gradient (pathwise + score), objective, hits and seconds of the
     seeds ``seeds`` (indices; key ``seed_start + i``), stacked.  The seed ``frames_for``
     (if in ``seeds``) also records the field movie of its forward (``cfg["frames_every"]``;
@@ -778,7 +825,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
     each seed starts from its own final gas of the previous iterate (``<run_dir>/warm/``,
     :func:`EM.forward`'s ``restart``) instead of the empty box: the warm-up shrinks to
     ``restart_steps`` re-equilibration steps on the new body."""
-    grads, objs, hits, secs, stuck, phases, sizes = [], [], [], [], [], [], []
+    grads, objs, hits, secs, stuck, phases, sizes, heats = [], [], [], [], [], [], [], []
     out = {}
     for i in seeds:
         key = jax.random.key(cfg["seed_start"] + int(i))
@@ -788,8 +835,10 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
         restart = load_warm(_warm_path(run_dir, i)) if warm else None
         all_terms, info, s = EM.shape_terms(
             cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],), every,
-            restart,
+            restart, heat_weights,
         )  # fmt: skip
+        if info.get("patch_heat") is not None:
+            heats.append(info["patch_heat"])
         if warm:
             save_warm(_warm_path(run_dir, i), s["final"])
         info["warm"] = restart is not None
@@ -809,6 +858,8 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None):
         sizes.append(info.get("replay_sizes", [0, 0]))
         if s["frames"] is not None:
             out.update({f"frame_{name}": s["frames"][name] for name in FRAME_KEYS})
+    if heats:
+        out["patch_heat"] = np.stack(heats)
     out.update(
         {
             "gradient": np.stack(grads),
@@ -845,13 +896,57 @@ def _combine(parts):
         # the largest traced-replay (passes, lane) of the seeds (EM.replay_static)
         "replay_sizes": np.concatenate([p.get("replay_sizes", np.zeros((1, 2), np.int64))
                                         for p in parts]).max(axis=0).tolist(),
+        # the seeds' mean heat rate per heat-lattice node (heat_patch), else None
+        "patch_heat": (np.concatenate([p["patch_heat"] for p in parts]).mean(axis=0)
+                       if all("patch_heat" in p for p in parts) else None),
     }  # fmt: skip
 
 
-def averaged_terms(cfg, ls, seeds, out=None):
+def averaged_terms(cfg, ls, seeds, out=None, heat_weights=None):
     """Mean over the seeds of the coefficient gradient and the objective, in this process;
     the field movie of the first seed (``out``: the run directory of the warm starts)."""
-    return _combine([seed_terms(cfg, ls, seeds, seeds[0], out)])
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0], out, heat_weights)])
+
+
+HEAT_AREA_MIN = 1e-3
+"""Heat-lattice nodes with less surface than this share of the largest node's are left out
+of the heat constraint (a node grazing the surface: q = Q / A is noise over nothing)."""
+
+
+def heat_reference(cfg) -> float:
+    """The heat constraint's unit: the free-stream stagnation heat flux of a flat, fully
+    accommodating face at the body's wall temperature (W/m^2)."""
+    import free_molecular as FM  # noqa: PLC0415 -- the heat runs only
+
+    n = F.NRHO * EM.knudsen_density(cfg)
+    t_wall = cfg["t_wall"] or F.T_SURF
+    mass = float(EM.sd.BY_SYMBOL["Ar"].mass)
+    return FM.stagnation_heat_flux(n, mass, F.TEMP, EM.stream_speed(cfg), t_wall)
+
+
+def _heat_measure(coef, q_heat, ls, lo, hi, lattice, p, ref):
+    """``G``: the area-weighted p-mean of the node heat flux ``max(Q, 0) / A`` over the nodes
+    with surface, in units of ``ref`` (:func:`heat_terms`)."""
+    area = L.surface_on_nodes(dataclasses.replace(ls, coef=coef), lo, hi, 2, lattice)
+    keep = area > HEAT_AREA_MIN * jnp.max(area)
+    a = jnp.where(keep, area, 1.0)
+    q = jnp.where(keep, jnp.maximum(q_heat, 0.0) / a / ref, 0.0)
+    total = jnp.sum(jnp.where(keep, area, 0.0))
+    # floored: the p-th root's derivative is infinite at a body with no heating at all
+    return jnp.maximum(jnp.sum(jnp.where(keep, area * q**p, 0.0)) / total, 1e-300) ** (1.0 / p)
+
+
+def heat_terms(cfg, ls, lo, hi, q_heat):
+    """``(G, dG/dcoef, dG/dQ)`` of the heat constraint at the node heat rates ``q_heat``
+    (:func:`_heat_measure`; ``dG/dcoef`` through the node areas only -- the heat rates' own
+    dependence on the shape is the DSMC adjoint's, by the hit weights ``dG/dQ``)."""
+    lattice = EM.heat_lattice(cfg, lo, hi)
+    measure = functools.partial(
+        _heat_measure, ls=ls, lo=tuple(lo.tolist()), hi=tuple(hi.tolist()), lattice=lattice,
+        p=float(cfg["heat_p"]), ref=heat_reference(cfg),
+    )  # fmt: skip
+    g, (d_coef, d_q) = jax.value_and_grad(measure, argnums=(0, 1))(ls.coef, jnp.asarray(q_heat))
+    return float(g), np.asarray(d_coef), np.asarray(d_q)
 
 
 def _newtonian_terms(ls, x, w):
@@ -1035,6 +1130,55 @@ def keep_inside(ls: LevelSet, lo, hi, margin: float) -> tuple[LevelSet, int]:
     return dataclasses.replace(ls, coef=coef), moved
 
 
+def parse_region(text: str, centre):
+    """``(kind, numbers)`` of a ``design_region`` / ``solid_region`` setting (``None`` for
+    ""), the cylinder's axis through ``centre``."""
+    if not text:
+        return None
+    kind, _, body = text.partition(":")
+    numbers = [float(v) for v in body.replace(",", "_").split("_")]
+    if kind == "box" and len(numbers) % 2 == 0:
+        return kind, np.asarray(numbers).reshape(-1, 2)
+    if kind == "cylinder" and len(numbers) == 3:
+        return kind, (numbers, np.asarray(centre, float))
+    raise ValueError(f"region {text!r}: box:x0_x1_y0_y1[_z0_z1] or cylinder:x0_x1_r")
+
+
+def region_distance(region, x):
+    """Signed distance of the points ``x`` (``f64[N, D]``) to ``region`` (negative inside;
+    exact outside a box or cylinder up to the corner rounding of the max)."""
+    kind, data = region
+    if kind == "box":
+        lo, hi = data[:, 0], data[:, 1]
+        return np.max(np.maximum(lo - x, x - hi), axis=1)
+    (x0, x1, radius), centre = data
+    r = np.linalg.norm(x[:, 1:] - centre[1:], axis=1)
+    return np.maximum(np.maximum(x0 - x[:, 0], x[:, 0] - x1), r - radius)
+
+
+def hold_regions(ls: LevelSet, design, solid) -> tuple[LevelSet, int]:
+    """The level set with the body inside ``design`` and containing ``solid`` (regions of
+    :func:`parse_region`, either ``None``): ``phi`` at the knots floored at the signed distance
+    to ``design`` and capped at the signed distance to ``solid``, each bound clipped to one
+    knot spacing (farther out only the sign matters; the far field's clamped values stay).
+    Returns the level set and the number of knots moved."""
+    if design is None and solid is None:
+        return ls, 0
+    x = np.asarray(L.knots(ls))
+    values = np.asarray(L.value(ls, jnp.asarray(x)))
+    held = values
+    h = float(ls.h)
+    if design is not None:
+        held = np.maximum(held, np.minimum(region_distance(design, x), h))
+    if solid is not None:
+        held = np.minimum(held, np.maximum(region_distance(solid, x), -h))
+    moved = int(np.sum(held != values))
+    if not moved:
+        return ls, 0
+    coef = L.interpolate(jnp.asarray(held.reshape(ls.coef.shape)))
+    return dataclasses.replace(ls, coef=coef), moved
+
+
 def constrain(ls, area0, lo, hi, margin, shift, passes: int = 12):
     """Area and face margin together: alternate :func:`keep_inside` and
     :func:`project_area` (the floor removes area next to a face, the uniform shift restores
@@ -1134,12 +1278,18 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     history = saved["rows"] if saved else []
     grid, ls = initial_levelset(cfg)
     lo, hi = np.asarray(grid.lo), np.asarray(grid.hi)
+    centre = F.CASES[cfg["case"]]["centre"]
+    design = parse_region(cfg["design_region"], centre)
+    solid = parse_region(cfg["solid_region"], centre)
+    if (design or solid) and cfg["recentre"]:
+        raise ValueError("--design-region / --solid-region fix the body's place: --recentre 0")
     if history:
         # coef_k.npy is the level set *entering* iterate k
         ls = dataclasses.replace(ls, coef=jnp.asarray(np.load(out / f"coef_{len(history)}.npy")))
     else:
         if cfg["start_shift"]:
             ls = translate(ls, np.array([cfg["start_shift"]] + [0.0] * (ls.coef.ndim - 1)))
+        ls, _ = hold_regions(ls, design, solid)  # the start body in its regions too
         np.save(out / "coef_0.npy", np.asarray(ls.coef))
     area0 = saved["area_target"] if saved else float(L.body_volume(ls, lo, hi, 4))
     if not saved and cfg["area_mode"] == "floor":
@@ -1176,6 +1326,17 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     lam = cfg["thickness"]  # the thickness multiplier
     if history:
         lam = history[-1].get("thickness_multiplier_next", lam)
+    heat_on = cfg["heat_cap"] > 0.0
+    if heat_on and (cfg["heat_patch"] <= 0.0 or cfg["workers"] > 1 or cfg["surrogate"]):
+        raise ValueError("--heat-cap needs --heat-patch > 0, --workers 1 and the DSMC objective")
+    mu_heat = cfg["heat_multiplier"]
+    heat_ref = saved.get("heat_ref") if saved else None
+    heat_g0 = saved.get("heat_g0") if saved else None
+    q_prev = None  # the previous iterate's seed-mean node heat rates (heat_<k>.npy)
+    if history and heat_on:
+        mu_heat = history[-1].get("heat_multiplier_next", mu_heat)
+        if (out / f"heat_{len(history) - 1}.npy").exists():
+            q_prev = np.load(out / f"heat_{len(history) - 1}.npy")
     mode = cfg["area_mode"]
     if cfg["fix_centroid"] and mode != "tangent":
         raise ValueError("--fix-centroid needs --area-mode tangent")
@@ -1212,7 +1373,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         elif cfg["workers"] > 1:
             avg = parallel_terms(cfg, ls, iterate_seeds, out, k, argv)
         else:
-            avg = averaged_terms(cfg, ls, iterate_seeds, out)
+            heat_weights = None
+            if heat_on and q_prev is not None and heat_ref is not None:
+                # dJ/dQ of the penalty at the previous iterate's heat (lagged, seed-averaged)
+                heat_weights = mu_heat * heat_ref * heat_terms(cfg, ls, lo, hi, q_prev)[2]
+            avg = averaged_terms(cfg, ls, iterate_seeds, out, heat_weights)
         g = avg["gradient"]
         if cfg["save_gradient"]:
             np.save(out / f"grad_{k}.npy", np.asarray(g, dtype=np.float32))
@@ -1242,6 +1407,22 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             objective = objective + weight * thinness
             objectives = objectives + weight * thinness
             g = g + weight * g_thin
+        heat_g = None
+        if heat_on:
+            q_heat = np.asarray(avg["patch_heat"])
+            np.save(out / f"heat_{k}.npy", q_heat)
+            heat_g, g_heat_area, _dq = heat_terms(cfg, ls, lo, hi, q_heat)
+            if heat_ref is None:
+                heat_ref = float(avg["objective"])
+            weight = mu_heat * heat_ref
+            if heat_g0 is None:
+                heat_g0 = heat_g
+            cap = cfg["heat_cap"] * (heat_g0 if cfg["heat_cap_relative"] else 1.0)
+            mu_heat_next = max(0.0, mu_heat + cfg["heat_rate"] * (heat_g - cap))
+            objective = objective + weight * heat_g
+            objectives = objectives + weight * heat_g
+            g = g + weight * g_heat_area
+            q_prev = q_heat
         g_full = g
         area_err = 0.0
         if mode in ("lagrangian", "penalty"):
@@ -1313,6 +1494,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             stepped, mode, area0, lo, hi, cfg["keepout"],
             centroid0 if cfg["fix_centroid"] else None, reinit,
         )  # fmt: skip
+        new, region_knots = hold_regions(new, design, solid)
         topology = {}
         if cfg["topology_guard"]:
             new, topology = topology_guard(ls, new)
@@ -1352,6 +1534,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             "eta": eta,
             "area_shift": shift,
             "keepout_knots": clipped,
+            "region_knots": region_knots,
             "reinitialised": reinit,
             "surface_grad_norm": surface_grad_norm(new),
             "recentred_knots": recentred,
@@ -1368,6 +1551,10 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             row.update(thinness=thinness, penalised_objective=objective, thickness_multiplier=lam,
                        thickness_multiplier_next=lam_next)  # fmt: skip
             lam = lam_next
+        if heat_g is not None:
+            row.update(heat_measure=heat_g, penalised_objective=objective,
+                       heat_multiplier=mu_heat, heat_multiplier_next=mu_heat_next)  # fmt: skip
+            mu_heat = mu_heat_next
         row.update(pieces=T.pieces(knot_values(new)), **topology)
         if mode in ("tangent", "floor"):
             row.update(area_multiplier=nu, area_error=area_err)
@@ -1392,6 +1579,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
                     "centroid_target": centroid0,
                     "perimeter_ref": perimeter_ref,
                     "thickness_ref": thickness_ref,
+                    "heat_ref": heat_ref,
+                    "heat_g0": heat_g0,
                     "converged": converged_objective(cfg, history),
                     "rows": history,
                     "elapsed": time.time() - t_start,
