@@ -143,8 +143,8 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   0.25 m DSMC cells; ``scratch/{adjbias,boxcheck}/cluster/adjm10_<name>.json``.
 * ``fitgate`` (2026-10-29): the shape adjoint's grad-lambda fits (k-nearest and per-cell
   polynomial variants, the pooled collision field, dt and particle-count gates, the airfoil
-  seed-4 outlier) against central differences at transitional diffuse conditions
-  (:func:`_fitgate_jobs`; ``scratch/fitgate/``).  ``smoke`` first.
+  seed-4 outlier) against central differences, 2-D specular / diffuse pairs at Kn 0.5 and
+  M 0.32 / 10 plus the paper's airfoil (:func:`_fitgate_jobs`; ``scratch/fitgate/``).
 * ``stepfd`` (2026-10-25): the adjoint against paired finite differences along the free M 10
   runs' own steps (ox_adam_fix iterates 20 / 100 / 150 / 200, mma_s 150, and 150 on knots h / 2),
   whole step / nose part / rest / rigid shift; ``scratch/adjbias/cluster/stepfd_<name>.json``.
@@ -1067,58 +1067,42 @@ def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
-FITGATE_NEWTON = (
-    "--case newton --levelset-h 0.1 --fnum-scale 1 --warmup 1000 --mach 10 --dt 2.5e-5 "
-    "--boundary free --a-max 16 --acc 1 --silhouette-band 0.03 --knudsen 0.5"
-)
-FITGATE_FD = (
-    "python3 -m examples.ensemble_mesh --body levelset --seeds 8 --substeps 4 --partners 8 "
-    "--backward-normals true --grazing 0.01 --timing-band 10 --parameter radius "
-    "--fd-steps 0.05 0.02"
-)
-
-
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at the
-    paper's transitional diffuse conditions, where the slope (pathwise x) term is 35-65 % of
-    the gradient and the shipped estimator is ~10 % low (examples/paper/results/fd):
+    """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
+    transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
+    examples/mesh/results/fitgate/).  Every grad-lambda estimator of jax_dsmc.shape.VARIANTS
+    (k-nearest and per-cell polynomial; pooled or not; with or without the along-flight
+    identity), each with its own silhouette, on the same realisations, under the shipped
+    collision field (``base``) and the pooled one (``pool1``), 16 seeds per gate in two blocks:
 
-    * ``smoke``, then ``af_r_*`` / ``af_m2_*`` (rtx) and ``nw_d_*`` / ``nw_h_*`` / ``nw_s_*``
-      (rtx_full): every grad-lambda estimator of jax_dsmc.shape.VARIANTS (k-nearest and
-      per-cell polynomial; pooled or not; with or without the along-flight identity), each
-      with its own silhouette, on the paper FD gates' realisations
-      (scratch/fitgate/variant_gate.py; airfoil drag radius / cos 2 theta, seeds 0-15 with
-      the seed-4 outlier, also under the pooled collision field ``pool1``; Newton Kn 0.5 M 10
-      diffuse drag and heat, FD reused; specular drag, FD computed);
-    * ``nw_drag_dt2`` / ``nw_drag_f2`` (rtx_full): the Newton diffuse drag gate with dt halved
-      (the along-flight identity's O(nu dt) error) and with half the particles (the fits'
-      kernel width);
-    * ``af_seed4_diag`` (rtx): the airfoil gate's seed 4 with every slope fit's node count and
-      conditioning recorded (scratch/fitgate/seed_outlier.py; the realisation needs the
-      cluster GPU).
-    Results in examples/mesh/results/fitgate/."""
+    * ``sq_spec`` / ``sq_diff``: the Kn 0.5 M 0.32 squash at s = 0.6 that passed specular, and
+      its diffuse twin; ``c10_spec`` / ``c10_diff``: the R = 3 circle at Kn 0.5 M 10 (the L / D
+      box), specular and diffuse; ``af_r`` / ``af_m2``: the paper's airfoil gates (FD reused;
+      seed 4 the outlier);
+    * ``c10_diff_dt2`` / ``c10_diff_f2`` (``base`` only): the diffuse M 10 circle with dt
+      halved (the along-flight identity's O(nu dt) error) and with half the particles (the
+      fits' kernel width);
+    * ``af_seed4_diag``: the airfoil seed 4 with every slope fit's node count and conditioning
+      (scratch/fitgate/seed_outlier.py; the realisation needs the cluster GPU);
+    * ``smoke`` first.  All 2-D (rtx); a chosen configuration gets one 3-D check (the paper's
+      Newton box) before the 3-D showcases."""
     del gpus_per_node
     run = "python3 scratch/fitgate/variant_gate.py"
     out = "examples/mesh/results/fitgate"
     jobs = {"smoke": f"{run} --gate af_drag_radius --seeds 0 1 --bases base pool1 --smoke"}
-    for gate, short in (("af_drag_radius", "af_r"), ("af_drag_mode2", "af_m2")):
-        for block in range(4):
+    gates = {"sq_spec": "sq_spec", "sq_diff": "sq_diff", "c10_spec": "c10_spec",
+             "c10_diff": "c10_diff", "af_drag_radius": "af_r", "af_drag_mode2": "af_m2"}  # fmt: skip
+    for gate, short in gates.items():
+        for block in range(2):
             for basis in ("base", "pool1"):
                 jobs[f"{short}_{block}_{basis}"] = (
-                    f"{run} --gate {gate} --seeds {4 * block} {4 * block + 4} --bases {basis}"
+                    f"{run} --gate {gate} --seeds {8 * block} {8 * block + 8} --bases {basis}"
                 )
-    for gate, short in (("nw_drag_radius", "nw_d"), ("nw_heat_radius", "nw_h"),
-                        ("nw_spec_radius", "nw_s")):  # fmt: skip
-        for block in range(4):
-            jobs[f"{short}_{block}"] = (
-                f"{run} --gate {gate} --seeds {2 * block} {2 * block + 2} --bases base"
+    for gate in ("c10_diff_dt2", "c10_diff_f2"):
+        for block in range(2):
+            jobs[f"{gate}_{block}"] = (
+                f"{run} --gate {gate} --seeds {8 * block} {8 * block + 8} --bases base"
             )
-    jobs["nw_drag_dt2"] = (
-        f"{FITGATE_FD} {FITGATE_NEWTON} --dt 1.25e-5 --warmup 2000 --output {out}/nw_drag_dt2.json"
-    )
-    jobs["nw_drag_f2"] = (
-        f"{FITGATE_FD} {FITGATE_NEWTON} --fnum-scale 2 --output {out}/nw_drag_f2.json"
-    )
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

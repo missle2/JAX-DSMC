@@ -36,17 +36,47 @@ BASES = {
     # the collision field pooled over the 3^D block (tricube-weighted around each cell)
     "pool1": ensemble_backward.CELL_BASIS + ":pool1",
 }
-# gates without an FD artifact: (config overrides of EM.default_config, parameter, FD steps)
+# gates without an FD artifact: (config overrides of EM.default_config, parameter, FD steps),
+# 2-D specular / diffuse pairs on identical bodies and boxes (production fit settings:
+# one-sided backward, grazing floor 0.01; diffuse: T_w = T_inf and the silhouette band)
+SQUASH = {
+    "case": "ellipse",
+    "fnum_scale": 1.0,
+    "body": "levelset",
+    "levelset_h": 0.0625,
+    "levelset_samples": 16,
+    "knudsen": 0.5,
+    "a_max": 64,
+    "squash": 0.6,
+}
+CIRCLE_M10 = {
+    "case": "circle_long",
+    "fnum_scale": 2.0,
+    "warmup": 2800,
+    "boundary": "free",
+    "knudsen": 0.5,
+    "mach": 10.0,
+    "dt": 2.5e-5,
+    "a_max": 256,
+    "body": "levelset",
+    "levelset_h": 0.0625,
+    "levelset_samples": 16,
+}
+COMMON = {"backward_normals": True, "grazing": 0.01, "timing_band": 10.0}
+DIFFUSE = {"acc": 1.0, "t_wall": 273.15, "silhouette_band": 0.03}
 NEW_GATES = {
-    # the Newton box at Kn 0.5, M 10 with SPECULAR walls (the paper's nw_drag_radius otherwise)
-    "nw_spec_radius": (
-        {"case": "newton", "levelset_h": 0.1, "fnum_scale": 1.0, "warmup": 1000, "mach": 10.0,
-         "dt": 2.5e-5, "boundary": "free", "a_max": 16, "acc": 0.0, "silhouette_band": 0.0,
-         "knudsen": 0.5, "body": "levelset", "backward_normals": True, "grazing": 0.01,
-         "timing_band": 10.0},
-        "radius",
-        [0.05, 0.02],
-    ),
+    # the squash gate that passed specular (-1.4 % vs FD, 2026-10-19): s = 0.6, M 0.32, Kn 0.5
+    "sq_spec": ({**SQUASH, **COMMON}, "squash_y", [0.1, 0.05]),
+    "sq_diff": ({**SQUASH, **COMMON, **DIFFUSE}, "squash_y", [0.1, 0.05]),
+    # the L / D showcase's box: the R = 3 circle at M 10, Kn 0.5
+    "c10_spec": ({**CIRCLE_M10, **COMMON}, "radius", [0.1, 0.05]),
+    "c10_diff": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "radius", [0.1, 0.05]),
+    # the diffuse M 10 circle with dt halved (the along-flight identity's O(nu dt) error; the
+    # same physical warm-up) and with half the particles (the fits' kernel width)
+    "c10_diff_dt2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "dt": 1.25e-5, "warmup": 5600},
+                     "radius", [0.1, 0.05]),
+    "c10_diff_f2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "fnum_scale": 4.0}, "radius",
+                    [0.1, 0.05]),
 }  # fmt: skip
 _CACHE = {}
 
