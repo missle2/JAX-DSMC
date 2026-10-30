@@ -90,9 +90,9 @@ per cell after 1000 steps. It matches SPARTA's run of the same case within the s
 | Embedded bodies | validated vs SPARTA | cylinder drag within 0.3 % (z = 1.4); free-molecular drag vs closed form (`examples/mesh`) |
 | Pathwise derivatives | exact | match the papers' hand-coded adjoints to 1e-11 (`tests/test_adjoint_oracle.py`) |
 | Ensemble adjoint | validated vs finite differences | wall, gas, inflow and shape parameters; e.g. -0.7 +- 0.8 % on a rarefied (Kn 0.5) shape gradient, 16 seeds |
-| 2-D shape optimisation | working, research in progress | drag 0.20 (Kn 0.5) and 0.10 (Mach 10) of the circle's; optimiser study ongoing; shapes develop roughness below the grid scale (open) |
+| 2-D shape optimisation | working, research in progress | drag 0.15 (Kn 0.5) and 0.045 (Mach 10) of the circle's; L/D maximization analysis ongoing; optimizer, filter, and level set constraint study ongoing. |
 | Multi-GPU decomposition | built, tested on simulated devices | not benchmarked on real multi-GPU |
-| 3-D shape optimisation | not done | the 3-D shape gradient is validated; no optimiser runs yet |
+| 3-D shape optimisation | working, research in progress | Successful minimum drag of sphere at above cases, similar drag reductions. L/D and heat constrained drag minimization studies ongoing. |
 
 Monte Carlo results here are quoted with standard errors over >= 16 independent seeds; fewer seeds
 have misled this project more than once.
