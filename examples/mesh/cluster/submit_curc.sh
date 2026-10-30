@@ -170,7 +170,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
       && [ "${group}" != "squashkn2" ] && [ "${group}" != "optrules2" ] \
       && [ "${group}" != "optrules1seed" ] && [ "${group}" != "optax1seed" ] \
       && [ "${group}" != "optcm" ] && [ "${group}" != "optct" ] \
-      && [ "${group}" != "optrules3" ] && [[ "${group}" != paper_* ]]; then
+      && [ "${group}" != "optrules3" ] && [ "${group}" != "fitgate" ] && [[ "${group}" != paper_* ]]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi
