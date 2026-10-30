@@ -264,6 +264,7 @@ scratch/profile/
 # pulled copy.
 examples/mesh/results/optimize/
 examples/mesh/results/optimize_squash/
+examples/mesh/results/fitgate/
 examples/mesh/cluster/logs/
 examples/mesh/cluster/bad_nodes.txt
 scratch/*/cluster/

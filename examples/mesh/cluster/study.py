@@ -1068,15 +1068,21 @@ def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
 
 
 def _fitgate_blocks(gate: str, short: str, seeds: int, bases) -> dict[str, str]:
-    """``fitgate``'s jobs of one gate: blocks of 4 seeds, one job per block and basis."""
+    """``fitgate``'s jobs of one gate: blocks of 4 seeds, one job per block and entry of
+    ``bases`` (a basis, or a tuple of bases run in one job: one forward and one set of FD
+    runs per seed shared by its bases)."""
     run = "python3 scratch/fitgate/variant_gate.py"
     return {
-        f"{short}_s{first}_{basis}": (
-            f"{run} --gate {gate} --seeds {first} {first + 4} --bases {basis}"
+        f"{short}_s{first}_{'-'.join(_tuple(basis))}": (
+            f"{run} --gate {gate} --seeds {first} {first + 4} --bases {' '.join(_tuple(basis))}"
         )
         for first in range(0, seeds, 4)
         for basis in bases
     }
+
+
+def _tuple(basis) -> tuple[str, ...]:
+    return (basis,) if isinstance(basis, str) else tuple(basis)
 
 
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1091,14 +1097,15 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
       its diffuse twin; ``c10_spec`` / ``c10_diff``: the R = 3 circle at Kn 0.5 M 10 (the L / D
       box), specular and diffuse; ``af_r`` / ``af_m2``: the paper's airfoil gates (FD reused
       for seeds 0-15, computed beyond; seed 4 the outlier); 32 seeds in blocks of 4, the
-      5^D-pooled collision field ``pool2`` too on ``c10_diff`` and ``af_r``;
+      5^D-pooled collision field ``pool2`` too on ``af_r``;
     * ``c10_diff_kn0.2`` / ``c10_diff_kn2``: the diffuse M 10 circle's Kn sweep (16 seeds);
     * ``c10_diff_dt2`` / ``c10_diff_f2`` (``base`` only, 16 seeds): the diffuse M 10 circle with dt
       halved (the along-flight identity's O(nu dt) error) and with half the particles (the
       fits' kernel width);
     * ``af_seed4_diag``: the airfoil seed 4 with every slope fit's node count and conditioning
       (scratch/fitgate/seed_outlier.py; the realisation needs the cluster GPU);
-    * ``smoke`` first.  All 2-D (rtx); a chosen configuration gets one 3-D check (the paper's
+    * ``smoke`` first.  All 2-D: rtx slices, except the diffuse M 10 circle's ``c10d_*`` jobs
+      (``GPU_KIND=h200 ONLY='^c10d_'``: they need more than a 24 GB slice); a chosen configuration gets one 3-D check (the paper's
       Newton box) before the 3-D showcases."""
     del gpus_per_node
     run = "python3 scratch/fitgate/variant_gate.py"
@@ -1109,12 +1116,17 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     for gate, short in (("sq_spec", "sq_spec"), ("sq_diff", "sq_diff"), ("c10_spec", "c10_spec"),
                         ("af_drag_mode2", "af_m2")):  # fmt: skip
         jobs |= _fitgate_blocks(gate, short, 32, ("base", "pool1"))
-    for gate, short in (("c10_diff", "c10_diff"), ("af_drag_radius", "af_r")):
-        jobs |= _fitgate_blocks(gate, short, 32, ("base", "pool1", "pool2"))
+    jobs |= _fitgate_blocks("af_drag_radius", "af_r", 32, ("base", "pool1", "pool2"))
+    # the diffuse M 10 circle: the cold wall's compressed layer (peak ~500 NTC attempts per
+    # cell-step, A_max 256 -> ~700) needs ~23 GB with base / pool1 and ~81 GB with pool2, past
+    # the 24 GB rtx slice (every c10_diff job OOMed, 2026-10-30) -> GPU_KIND=h200 (35 GB
+    # slices), its bases in one job (``c10d_``: one forward and FD set per seed); no pool2
+    # (fits no slice)
+    jobs |= _fitgate_blocks("c10_diff", "c10d", 32, (("base", "pool1"),))
     for gate in ("c10_diff_kn0.2", "c10_diff_kn2"):
-        jobs |= _fitgate_blocks(gate, gate, 16, ("base", "pool1"))
+        jobs |= _fitgate_blocks(gate, gate.replace("c10_diff", "c10d"), 16, (("base", "pool1"),))
     for gate in ("c10_diff_dt2", "c10_diff_f2"):
-        jobs |= _fitgate_blocks(gate, gate, 16, ("base",))
+        jobs |= _fitgate_blocks(gate, gate.replace("c10_diff", "c10d"), 16, ("base",))
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 
