@@ -31,7 +31,7 @@
    1.409536883002147
   ],
   [
-   "sparta_jax CPU all cores",
+   "sparta_jax CPU, 16 threads (see cpu_threads.png)",
    "sparta_jax (JAX)",
    1.9264344389957841
   ],

@@ -22,7 +22,7 @@ The code follows SPARTA's routines step by step. This has two uses: comparing **
 | `examples/sparta_jax/profile.py` | per-stage profile (named scopes and an HLO dump, read with `xspace.py`) |
 | `examples/sparta_jax/validate.py` | comparison with SPARTA |
 | `examples/sparta_jax/check_emit.py` | unit check of emit/face |
-| `examples/sparta_jax/plot.py` | timing figure |
+| `examples/sparta_jax/plot.py` | timing figures (`timings.png`, `step_breakdown.png`) |
 | `tests/test_sparta_jax.py` | 8 tests, about 15 s |
 | `examples/sparta_jax/sparta_ref/` | SPARTA reference runs, seeds 101-108 |
 | `examples/sparta_jax/results/` | all outputs |
@@ -104,15 +104,19 @@ Each timing is 1000 steps from an empty box, about 36.9 M particle moves (counte
 | SPARTA MPI x8, deck without computes | 8 cores | 0.209 | 0.40 |
 | sparta_jax | CPU, 1 core (`taskset`, eigen threading off) | **1.295** | **2.5** |
 | sparta_jax, with tallies (vs SPARTA's full deck) | CPU, 1 core | 1.523 | 2.3 (vs 0.650) |
-| sparta_jax | CPU, all 16 cores (XLA default threading) | 1.926 | 3.7 |
+| sparta_jax | CPU, all 16 hardware threads (XLA default threading) | 1.926 | 3.7 (slower than 1 core: see below) |
 | sparta_jax, `sort=full` | GPU (RTX 3050 Ti), command buffers off (WSL-safe flags) | 1.410 | 2.7 |
 | sparta_jax, `sort=full` | GPU, command buffers on | **0.805** | 1.6 |
 | main code (JAX-DSMC main, polygon, lane tracker, partition sort) | CPU, 1 core | 6.31 | 12.2 |
 | main code | GPU, command buffers off | 4.48 | 8.6 |
 
+### Why more CPU threads are slower
+
+The time per 1000 steps rises with the hardware threads the process may use: 1.34, 1.52, 1.64, 1.79 and 1.94 s on 1, 2, 4, 8 and 16 threads (`taskset`, 2026-10-02, `scratch/sparta_jax/threads.sh`; figure `results/cpu_threads.png`). Turning XLA's intra-op (Eigen) threading off does not help (1.92 s on 16 threads). With more than one core, XLA:CPU hands ops to a thread pool, and every hand-off is a thread sleep and wake-up. Over 7 runs of 1000 steps, the 16-thread run made 584k voluntary context switches (3.4k on one core), spent 10.6 s in the kernel (0.3 s) and used 226 % CPU for a slower wall time. A step is about 435 ops of about 3 us each, so there is no work large enough to share, and every hand-off is pure overhead. One pinned core is the right CPU configuration for this code.
+
 ### Per-stage breakdown on one CPU core
 
-ms per step at steady state (about 46-47.6k particles). sparta_jax: `results/profile_cpu1_final.json`; main code: main's `scratch/perf/profile/forward_cpu_serial.json` (2026-10-01 evening, after the partition sort). SPARTA's own timers average over the 1000-step fill (mean 37k particles), so they are scaled by 1.26 to steady state.
+ms per step at steady state (about 46-47.6k particles). Figure: `results/step_breakdown.png` (sparta_jax's named stages against SPARTA's timers, and the XLA ops each stage executes per step; `python3 examples/sparta_jax/plot.py`). sparta_jax: `results/profile_cpu1_final.json`; main code: main's `scratch/perf/profile/forward_cpu_serial.json` (2026-10-01 evening, after the partition sort). SPARTA's own timers average over the 1000-step fill (mean 37k particles), so they are scaled by 1.26 to steady state.
 
 | Stage | SPARTA serial | sparta_jax | ratio | main code |
 |---|---|---|---|---|

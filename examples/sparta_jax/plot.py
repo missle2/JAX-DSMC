@@ -1,6 +1,11 @@
-"""Timing figure: seconds per 1000 steps of the circle deck, SPARTA vs sparta_jax vs the main code,
-and the per-stage split on one CPU core.  Reads examples/sparta_jax/results/*.json and the numbers
-in TIMES below (SPARTA and main-code timings measured outside this script).
+"""Timing figures of the circle deck.
+
+* ``results/timings.png``: seconds per 1000 steps, SPARTA vs sparta_jax vs the main code, and the
+  per-stage split on one CPU core (``results/timings.json``; the SPARTA and main-code numbers in it
+  were measured outside this script).
+* ``results/step_breakdown.png``: the profiled step of sparta_jax on one CPU core
+  (``results/profile_cpu1_final.json``, from ``profile.py``), stage by stage against SPARTA's own
+  timers, and the XLA ops each stage executes per step.
 
     python3 examples/sparta_jax/plot.py
 """
@@ -84,5 +89,106 @@ def main():
     print(out)
 
 
+STAGE_LABELS = {
+    "move_walk": "move: cell walk + surface collisions (near particles)",
+    "move_dense": "move: straight move of every particle",
+    "move_select": "move: pick the near particles (lane compaction)",
+    "sort": "sort (partition sort by cell)",
+    "emit": "emit/face (inflow)",
+    "collide": "collide (VSS NTC, 0 attempts at this Kn)",
+    "other": "other (step glue, outside the named stages)",
+}
+SPARTA_STAGE = {"move_walk": "move", "sort": "sort", "emit": "emit/inflow", "collide": "collide"}
+
+
+def breakdown():
+    """Where one sparta_jax step goes on one CPU core, against SPARTA serial."""
+    prof = load("profile_cpu1_final.json")
+    sparta = load("timings.json")["stages_cpu1"]["SPARTA serial (x1.26 to steady state)"]
+    stages = dict(prof["stages"])
+    order = [s for s in STAGE_LABELS if s in stages]
+    fig, (ax, bx) = plt.subplots(
+        1, 2, figsize=(14, 5.0), gridspec_kw={"width_ratios": [1.6, 1]}, facecolor="#fcfcfb"
+    )
+    y = list(range(len(order)))[::-1]
+    h = 0.38
+    for yi, s in zip(y, order, strict=True):
+        ms = stages[s]["ms_per_step"]
+        ax.barh(yi + h / 2, ms, height=h, color=ORANGE, edgecolor="#fcfcfb", linewidth=1.5)
+        ax.text(ms + 0.01, yi + h / 2, f"{ms:.2f}", va="center", fontsize=8, color=INK2)
+        if s in SPARTA_STAGE:  # SPARTA's move timer covers all three move scopes
+            ref = sparta[SPARTA_STAGE[s]]
+            ax.barh(yi - h / 2, ref, height=h, color=BLUE, edgecolor="#fcfcfb", linewidth=1.5)
+            note = " (whole move)" if s == "move_walk" else ""
+            ax.text(ref + 0.01, yi - h / 2, f"{ref:.2f}{note}", va="center", fontsize=8,
+                    color=INK2)  # fmt: skip
+    ax.set_yticks(y, [STAGE_LABELS[s] for s in order], fontsize=9, color=INK)
+    ax.set_xlabel("ms per step, one CPU core (steady state, ~47.6k particles)", color=INK2)
+    total = sum(v["ms_per_step"] for v in stages.values())
+    ax.set_title(
+        f"sparta_jax step {total:.2f} ms profiled ({prof['wall_ms_per_step']:.2f} ms wall, "
+        f"1.30 ms untraced) vs SPARTA serial {sum(sparta.values()):.2f} ms",
+        color=INK, fontsize=10,
+    )  # fmt: skip
+    ax.legend(
+        [plt.Rectangle((0, 0), 1, 1, color=c) for c in (ORANGE, BLUE)],
+        ["sparta_jax (XLA:CPU)", "SPARTA serial (own timers, x1.26 to steady state)"],
+        frameon=False, fontsize=8, loc="lower right",
+    )  # fmt: skip
+
+    ops = [stages[s]["ops_per_step"] for s in order]
+    bx.barh(y, ops, height=0.6, color=ORANGE, edgecolor="#fcfcfb", linewidth=1.5)
+    for yi, s, n in zip(y, order, ops, strict=True):
+        us = stages[s]["ms_per_step"] * 1e3 / max(n, 1e-9)
+        bx.text(n + 2, yi, f"{n:.0f} ops, {us:.1f} us/op", va="center", fontsize=8, color=INK2)
+    bx.set_yticks(y, [""] * len(order))
+    bx.set_xlim(0, max(ops) * 1.55)
+    bx.set_xlabel("XLA ops executed per step", color=INK2)
+    bx.set_title(f"{prof['ops_per_step']:.0f} ops per step", color=INK, fontsize=10)
+    for a in (ax, bx):
+        for side in ("top", "right"):
+            a.spines[side].set_visible(False)
+        a.grid(axis="x", color=GRID, linewidth=0.8)
+        a.set_axisbelow(True)
+    fig.tight_layout()
+    out = os.path.join(RES, "step_breakdown.png")
+    fig.savefig(out, dpi=150)
+    print(out)
+
+
+THREAD_COUNTS = (1, 2, 4, 8, 16)
+
+
+def threads():
+    """Seconds per 1000 steps against the hardware threads the process may use (``taskset``;
+    ``results/bench_cpu_threads_<n>.json``, ``scratch/sparta_jax/threads.sh``), with XLA's
+    intra-op threading off on the whole machine for comparison."""
+    sec = [load(f"bench_cpu_threads_{n}.json")["seconds"] for n in THREAD_COUNTS]
+    off = load("bench_cpu_all_eigen_off.json")["seconds"]
+    fig, ax = plt.subplots(figsize=(6.4, 4.0), facecolor="#fcfcfb")
+    ax.plot(THREAD_COUNTS, sec, "o-", color=ORANGE, lw=2, ms=7, label="sparta_jax, XLA threading on")
+    ax.plot([16], [off], "s", color=BLUE, ms=8, label="16 threads, XLA intra-op threading off")
+    for n, t in zip(THREAD_COUNTS, sec, strict=True):
+        ax.annotate(f"{t:.2f}", (n, t), xytext=(0, 8), textcoords="offset points", ha="center",
+                    fontsize=8, color=INK2)  # fmt: skip
+    ax.set_xscale("log", base=2)
+    ax.set_xticks(THREAD_COUNTS, [str(n) for n in THREAD_COUNTS])
+    ax.set_ylim(0, max(sec) * 1.2)
+    ax.set_xlabel("hardware threads available (taskset; 8 cores x 2)", color=INK2)
+    ax.set_ylabel("seconds per 1000 steps", color=INK2)
+    ax.set_title("More threads only add hand-offs: ~3 us ops, 435 per step", color=INK, fontsize=10)
+    ax.legend(frameon=False, fontsize=8, loc="lower right")
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.grid(axis="y", color=GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    fig.tight_layout()
+    out = os.path.join(RES, "cpu_threads.png")
+    fig.savefig(out, dpi=150)
+    print(out)
+
+
 if __name__ == "__main__":
     main()
+    breakdown()
+    threads()

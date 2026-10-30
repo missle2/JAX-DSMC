@@ -1,0 +1,31 @@
+{
+ "tag": "cpu_threads_16",
+ "platform": "cpu",
+ "device": "cpu",
+ "xla_flags": "",
+ "config": {},
+ "sort": "partition",
+ "tally": false,
+ "seconds_first_incl_compile": 6.08937252900796,
+ "seconds": 1.93595068398281,
+ "seconds_all": [
+  2.2051119949901477,
+  2.0453492310189176,
+  1.93595068398281
+ ],
+ "moves": 36876461,
+ "moves_per_second": 19048243.999756474,
+ "final_particles": 47740,
+ "work_second_half": {
+  "np_mean": 45801.546,
+  "np_max": 47608.0,
+  "nlane_mean": 4808.048,
+  "nlane_max": 5056.0,
+  "nwalk_mean": 4.346,
+  "nwalk_max": 5.0,
+  "nscheck_mean": 8456.536,
+  "nscheck_max": 8970.0,
+  "nscoll_mean": 138.342,
+  "nscoll_max": 173.0
+ }
+}

@@ -1,7 +1,7 @@
 [project]
-name = "jax-dsmc"
+name = "sparta-jax"
 version = "0.0.0"
-description = "Differentiable DSMC in JAX with a DTO adjoint"
+description = "SPARTA's circle deck, algorithm for algorithm, in JAX (branch sparta-match)"
 requires-python = ">=3.10"
 
 [tool.ruff]
@@ -10,7 +10,7 @@ target-version = "py310"
 # scratch/ holds throwaway probes: linted loosely, never auto-formatted.
 # *.md is excluded because docstring-code-format would otherwise rewrite the
 # illustrative code blocks in the spec, which are prose and not compiled.
-extend-exclude = ["papers_reference", "scratch", "*.md"]
+extend-exclude = ["scratch", "*.md"]
 
 [tool.ruff.lint]
 select = [
@@ -57,11 +57,6 @@ ignore = [
 # would be noisier than the warning.
 "tests/*"    = ["PLR2004", "ARG", "SIM300", "RUF059"]
 "__init__.py" = ["F401"]      # re-exports
-# `output.py` is deliberately host-side and JAX-free at import time (section 10.2:
-# "all output is host-side, called outside the jitted step"), and `h5py` is an
-# optional dependency.  Both make PLC0415 a false positive here: the deferred
-# imports ARE the design, not an oversight.
-"jax_dsmc/output.py" = ["PLC0415"]
 
 [tool.ruff.lint.pylint]
 max-statements = 40           # a physics kernel is legitimately longer than the default 50->40 guard
@@ -69,7 +64,7 @@ max-branches = 12
 max-locals = 25               # collision kernels genuinely carry many named quantities
 
 [tool.ruff.lint.isort]
-known-first-party = ["jax_dsmc"]
+known-first-party = ["sparta_jax"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -82,7 +77,7 @@ docstring-code-format = true
 # during collection -- taking the whole suite with it, not just the probe.  ruff already
 # excludes the same directory; this is the pytest half of that same rule.
 testpaths = ["tests"]
-norecursedirs = ["scratch", "papers_reference", "examples", ".git", ".ruff_cache", "*.egg"]
+norecursedirs = ["scratch", "examples", ".git", ".ruff_cache", "*.egg"]
 markers = [
     "perf: cost-budget and compile-time checks (see tests/test_perf_budget.py)",
 ]
