@@ -1067,19 +1067,33 @@ def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+def _fitgate_blocks(gate: str, short: str, seeds: int, bases) -> dict[str, str]:
+    """``fitgate``'s jobs of one gate: blocks of 4 seeds, one job per block and basis."""
+    run = "python3 scratch/fitgate/variant_gate.py"
+    return {
+        f"{short}_s{first}_{basis}": (
+            f"{run} --gate {gate} --seeds {first} {first + 4} --bases {basis}"
+        )
+        for first in range(0, seeds, 4)
+        for basis in bases
+    }
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
     examples/mesh/results/fitgate/).  Every grad-lambda estimator of jax_dsmc.shape.VARIANTS
     (k-nearest and per-cell polynomial; pooled or not; with or without the along-flight
     identity), each with its own silhouette, on the same realisations, under the shipped
-    collision field (``base``) and the pooled one (``pool1``), 16 seeds per gate in two blocks:
+    collision field (``base``) and the pooled one (``pool1``):
 
     * ``sq_spec`` / ``sq_diff``: the Kn 0.5 M 0.32 squash at s = 0.6 that passed specular, and
       its diffuse twin; ``c10_spec`` / ``c10_diff``: the R = 3 circle at Kn 0.5 M 10 (the L / D
-      box), specular and diffuse; ``af_r`` / ``af_m2``: the paper's airfoil gates (FD reused;
-      seed 4 the outlier);
-    * ``c10_diff_dt2`` / ``c10_diff_f2`` (``base`` only): the diffuse M 10 circle with dt
+      box), specular and diffuse; ``af_r`` / ``af_m2``: the paper's airfoil gates (FD reused
+      for seeds 0-15, computed beyond; seed 4 the outlier); 32 seeds in blocks of 4, the
+      5^D-pooled collision field ``pool2`` too on ``c10_diff`` and ``af_r``;
+    * ``c10_diff_kn0.2`` / ``c10_diff_kn2``: the diffuse M 10 circle's Kn sweep (16 seeds);
+    * ``c10_diff_dt2`` / ``c10_diff_f2`` (``base`` only, 16 seeds): the diffuse M 10 circle with dt
       halved (the along-flight identity's O(nu dt) error) and with half the particles (the
       fits' kernel width);
     * ``af_seed4_diag``: the airfoil seed 4 with every slope fit's node count and conditioning
@@ -1090,19 +1104,17 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     run = "python3 scratch/fitgate/variant_gate.py"
     out = "examples/mesh/results/fitgate"
     jobs = {"smoke": f"{run} --gate af_drag_radius --seeds 0 1 --bases base pool1 --smoke"}
-    gates = {"sq_spec": "sq_spec", "sq_diff": "sq_diff", "c10_spec": "c10_spec",
-             "c10_diff": "c10_diff", "af_drag_radius": "af_r", "af_drag_mode2": "af_m2"}  # fmt: skip
-    for gate, short in gates.items():
-        for block in range(2):
-            for basis in ("base", "pool1"):
-                jobs[f"{short}_{block}_{basis}"] = (
-                    f"{run} --gate {gate} --seeds {8 * block} {8 * block + 8} --bases {basis}"
-                )
+
+    # 32 seeds in blocks of 4 (one job ~30-60 min on an rtx slice)
+    for gate, short in (("sq_spec", "sq_spec"), ("sq_diff", "sq_diff"), ("c10_spec", "c10_spec"),
+                        ("af_drag_mode2", "af_m2")):  # fmt: skip
+        jobs |= _fitgate_blocks(gate, short, 32, ("base", "pool1"))
+    for gate, short in (("c10_diff", "c10_diff"), ("af_drag_radius", "af_r")):
+        jobs |= _fitgate_blocks(gate, short, 32, ("base", "pool1", "pool2"))
+    for gate in ("c10_diff_kn0.2", "c10_diff_kn2"):
+        jobs |= _fitgate_blocks(gate, gate, 16, ("base", "pool1"))
     for gate in ("c10_diff_dt2", "c10_diff_f2"):
-        for block in range(2):
-            jobs[f"{gate}_{block}"] = (
-                f"{run} --gate {gate} --seeds {8 * block} {8 * block + 8} --bases base"
-            )
+        jobs |= _fitgate_blocks(gate, gate, 16, ("base",))
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

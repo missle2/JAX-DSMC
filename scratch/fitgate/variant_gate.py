@@ -35,6 +35,8 @@ BASES = {
     "base": ensemble_backward.CELL_BASIS,
     # the collision field pooled over the 3^D block (tricube-weighted around each cell)
     "pool1": ensemble_backward.CELL_BASIS + ":pool1",
+    # the 5^D block (tricube support 3 cells)
+    "pool2": ensemble_backward.CELL_BASIS + ":pool2",
 }
 # gates without an FD artifact: (config overrides of EM.default_config, parameter, FD steps),
 # 2-D specular / diffuse pairs on identical bodies and boxes (production fit settings:
@@ -75,6 +77,10 @@ NEW_GATES = {
     # same physical warm-up) and with half the particles (the fits' kernel width)
     "c10_diff_dt2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "dt": 1.25e-5, "warmup": 5600},
                      "radius", [0.1, 0.05]),
+    # the collisionality sweep of the diffuse M 10 circle: a collisional modelling error grows
+    # as Kn falls and vanishes toward free-molecular flow
+    "c10_diff_kn0.2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "knudsen": 0.2}, "radius", [0.1, 0.05]),
+    "c10_diff_kn2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "knudsen": 2.0}, "radius", [0.1, 0.05]),
     "c10_diff_f2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "fnum_scale": 4.0}, "radius",
                     [0.1, 0.05]),
 }  # fmt: skip
