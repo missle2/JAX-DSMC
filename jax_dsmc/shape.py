@@ -1110,7 +1110,8 @@ def _gradient(
     )
     geom = geometry(mesh)
     fits = tuple(
-        {"npc_max": npc_max, "scale": scale, "k": k_e, "basis": basis, "chunk": chunk,
+        {"npc_max": npc_max, "scale": scale, "k": k_e,
+         "basis": e[4] if len(e) > 4 else basis, "chunk": chunk,
          "pool": pool, "along": along, "halfspace": e[3] if len(e) > 3 else None}
         for e in estimators
         for pool, k_e, along in (e[:3],)
@@ -1317,8 +1318,9 @@ def hit_ahead(records, mesh):
 
 
 VARIANTS = {
-    # name: (pool, k, along-flight) -- the estimators of grad_x lambda compared in review
-    # section 7.6 item 5; every one of them is one-sided (the last hit's normal)
+    # name: (pool, k, along-flight[, half-space[, basis]]) -- the estimators of grad_x lambda
+    # compared in review section 7.6 item 5; every one of them is one-sided (the last hit's
+    # normal)
     "one": (0, 32, False),
     "one_pool": (1, 96, False),
     "along": (0, 32, True),
@@ -1328,7 +1330,31 @@ VARIANTS = {
     # (2026-10-02 bias study)
     "one_pool_plane": (1, 96, False, 0.25),
     "along_pool_plane": (1, 96, True, 0.25),
+    # (2026-10-29 variant gate) a fifth entry is the fit's basis: a "cell:..." polynomial
+    # (jax_dsmc.cell_fit) fitted to the query's selected nodes -- the cell's or the pooled
+    # block's, tricube-weighted around the query -- with its order cap and leverage guard,
+    # differentiated analytically (ensemble_device._polynomial_query); k is unused.  The
+    # collision field's own polynomial (cubic in v), the per-query fit's (quad, guarded) and
+    # one with the x-v products (quadfull)
+    **{
+        f"{fit}{'_along' if along else ''}{'_pool' if pool else ''}_plane": (
+            pool,
+            0,
+            along,
+            0.25,
+            f"cell:{poly}:adapt1.5:guard32{':pool1' if pool else ''}",
+        )
+        for fit, poly in (("cell", "cubicv"), ("cellq", "quad"), ("cellxv", "quadfull"))
+        for pool in (0, 1)
+        for along in (False, True)
+    },
 }
+
+REVIEW_VARIANTS = (
+    "one", "one_pool", "along", "along_pool", "one_pool_plane", "along_pool_plane",
+)  # fmt: skip
+"""The estimators an FD gate reports by default (examples/ensemble_mesh): the per-query
+k-nearest fits; the polynomial ones are asked for by name (scratch/fitgate/variant_gate.py)."""
 
 
 def _warn_value_class(value_class):

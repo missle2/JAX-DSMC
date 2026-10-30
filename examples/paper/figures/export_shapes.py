@@ -5,7 +5,8 @@ mean, area):
 
 * ``shape_<name>_<k>.csv`` (``x, y``) for each iterate ``k`` (``last``: the last saved one);
 * ``run_<name>.csv`` (``iterate, value, mean, area``): value is ``L / D`` for a lift-to-drag
-  run and ``J / J_0`` otherwise.
+  run and ``J / J_0`` otherwise, ``J_0`` the reference run's first objective where one is
+  named (the airfoils: the NACA 0012's drag at the same Knudsen number, paper_fwd).
 
     PYTHONPATH=. python3 examples/paper/figures/export_shapes.py --out docs/paper/figures/data
 """
@@ -24,11 +25,14 @@ from examples.mesh import optimize as O
 from examples.paper.figures.export_histories import running
 
 ROOT = Path(O.RESULTS)
-# name -> (tag, iterates)
+# name -> (tag, iterates[, reference tag])
 RUNS = {
-    "ld2d": ("circle_long_kn0.5_M10_S1_ox_adam_ldhz0_floor_sm8_free_g32_w500", (0, 50, 150, 250)),
+    # 261: the end of the best 25-iterate mean (3.37; pieces broke off after ~300)
+    "ld2d": ("circle_long_kn0.5_M10_S1_ox_adam_ldhz0_floor_sm8_free_g32_w500", (0, 100, 200, 261)),
     "naca": ("paper_fwd_naca0012_kn0.5", (0,)),
-}
+    **{f"af{kn}": (f"paper_airfoil_kn{kn}", (0,), f"paper_fwd_naca0012_kn{kn}")
+       for kn in ("0.2", "0.5", "1.0")},
+}  # fmt: skip
 
 
 def _last(out):
@@ -43,7 +47,7 @@ def _write_polyline(path, segments):
     np.savetxt(path, np.array(rows), delimiter=",", header="x,y", comments="", fmt="%.5g")
 
 
-def export(name, tag, iterates, out):
+def export(name, tag, iterates, out, ref=None):
     run = ROOT / tag
     hist = json.loads((run / "history.json").read_text())
     cfg = dict(O.default_config(), **hist["config"])
@@ -61,7 +65,10 @@ def export(name, tag, iterates, out):
     n = len(j) if np.isfinite(j).all() else int(np.argmin(np.isfinite(j)))
     j = j[:n]
     lift = cfg["objective"] == "lift_drag"
-    value = -j if lift else j / j[0]
+    j0 = j[0]
+    if ref:
+        j0 = json.loads((ROOT / ref / "history.json").read_text())["rows"][0]["objective"]
+    value = -j if lift else j / j0
     area = np.array([r["area"] for r in rows[:n]])
     np.savetxt(
         out / f"run_{name}.csv",
@@ -81,9 +88,9 @@ def main(argv=None):
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     for name in args.only:
-        tag, iterates = RUNS[name]
+        tag, iterates, *ref = RUNS[name]
         if (ROOT / tag / "history.json").exists():
-            export(name, tag, iterates, args.out)
+            export(name, tag, iterates, args.out, *ref)
         else:
             print(f"missing {tag}")
 

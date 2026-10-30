@@ -390,10 +390,28 @@ def _chunk_query(
     valid = valid & (same_side | ~one_sided[:, None])
     if node_class is not None:
         valid = valid & (node_class[c] == q_class[:, None])
+    if cell_fit.is_cell(basis):
+        out = _polynomial_query(node_x[c], node_v[c], valid, node_val[c], q_x, q_v, scale, basis)
+        return out if gradients else out[0]
     value, grad_x, grad_v = field_query(
         node_x[c], node_v[c], valid, node_val[c], q_x, q_v, scale, k, basis
     )
     return (value, grad_x, grad_v) if gradients else value
+
+
+def _polynomial_query(node_x, node_v, valid, node_val, q_x, q_v, scale, basis):
+    """``(value, grad_x, grad_v)`` at each query from the per-cell polynomial of a
+    ``"cell:..."`` ``basis`` (:mod:`cell_fit`) fitted to that query's own selected nodes
+    ``(Q, P, .)`` -- every valid node, unweighted, with the basis' order cap and leverage
+    guard -- and differentiated analytically (:func:`cell_fit.evaluate`): the collision
+    field's polynomial as a slope estimator (2026-10-29).  A ``pool<r>`` basis weights the
+    pooled block by its tricube around the query's own position."""
+    own = {}
+    if cell_fit.parse(basis).pool:
+        own = {"own_x": q_x[:, None, :], "own_valid": jnp.ones((q_x.shape[0], 1), bool)}
+    field = cell_fit.fit(node_x, node_v, valid, node_val, scale, basis, **own)
+    rows = jnp.arange(q_x.shape[0])
+    return cell_fit.evaluate(field, rows, q_x, q_v, scale, basis, gradients=True)
 
 
 def fit_chunk(q, width, chunk):

@@ -21,12 +21,15 @@ Groups (figure numbers of docs/paper/outline.md):
   (2026-10-29, A_max regrew to 142 in the M 10 stagnation region): rtx_full or h200_full.
 * ``paper_fwd`` (Fig. 8, gate G3): NACA 0012 at Ma 2 and the three Knudsen numbers, 8 seeds
   of one iterate each (the drag the BGK papers report for their start).  rtx.
-* ``paper_airfoil`` (Fig. 8): minimum drag at Ma 2, diffuse, T_w = T_inf, fixed chord (design
-  region a 6 m slab), area at least NACA 0012's, from the ellipse of that area and chord, at
-  the BGK Kn 0.2 / 0.5 / 1 (ours 0.154 / 0.386 / 0.772).  rtx.
+* ``paper_airfoil`` (Fig. 8): minimum drag at Ma 2, diffuse, T_w = T_inf, fixed chord, area at
+  least NACA 0012's, from the ellipse of that area and chord, at the BGK Kn 0.2 / 0.5 / 1
+  (ours 0.154 / 0.386 / 0.772).  The 6 m design slab alone only caps the chord: the first runs
+  (tags without ``_chord``, 2026-10-29) shortened it to ~4.1 m and thickened to ~0.9 m; the
+  chord is held by a solid strip on the chord line (``AIRFOIL_CHORD``).  rtx.
 * ``paper_newton`` (Fig. 9): Newton's problem in free-molecular flow -- specular, M 10, Kn 10
   (collisions on), the body inside the cylinder of radius 1 and height H (H / R = 2 and 1)
-  containing its base disk, minimum drag, from the unit sphere.  h200_71.
+  containing its base disk, minimum drag, from the unit sphere, with the thickness
+  constraint and the topology guard (tags ``_tg``).  h200_71.
 * ``paper_heat`` (Fig. 13): the same cylinder (H / R = 2) at Kn 0.5 M 10 with diffuse walls,
   minimum drag uncapped and with the peak heating capped at 0.8 and 0.6 of the start body's
   (``--heat-cap-relative 1``, gate G1: examples/paper/reference/newton_fm.py).  The Newton FD
@@ -35,8 +38,9 @@ Groups (figure numbers of docs/paper/outline.md):
   diffuse at T_inf, volume at least the sphere's: ``pilot`` (2 iterates: time and memory,
   gate G4) then ``full``.  rtx_full (one whole 96 GB RTX PRO 6000; the box was shrunk to fit
   it, 2026-10-29) or h200_full.
-* ``paper_ld2d`` (Fig. 11): the lsfilter M 10 L / D run (Helmholtz, Adam; L / D 3.19 at 250,
-  still rising) resumed to 400 iterates under its own tag.  rtx.
+* ``paper_ld2d`` (Fig. 11): the lsfilter M 10 L / D run (Helmholtz, Adam) resumed to 400
+  iterates under its own tag (done), and the same problem under the paper's method
+  (``m10_ld_decay``: step decay, thickness constraint, topology guard).  rtx.
 
 Fig. 12 (3-D L / D) is examples/mesh/cluster's ``ld3dwide``; Fig. 5 (cost) is read from the
 runs' own ``phase_seconds``.
@@ -46,8 +50,11 @@ from __future__ import annotations
 
 import argparse
 
+# the patience rule only (--converge-window 0): the window rule (5 iterates within 0.125 %)
+# fired falsely on the low-noise free-molecular Newton runs at iterates 48 / 54 (2026-10-29)
 ITERATE = (
     "--seeds-per-iterate 1 --workers 1 --restart-steps 300 --converge-patience 100 "
+    "--converge-window 0 "
     "--backward-normals true --grazing 0.01 --substeps 4 --partners 8 --filter helmholtz "
     "--reinit-every 0 --optimizer ox_adam --save-gradient 1 --frames-every 25"
 )
@@ -59,6 +66,9 @@ DIFFUSE = "--acc 1 --silhouette-band 0.03"
 AIRFOIL_FLOW = f"--case airfoil {DIFFUSE} --t-wall 273.15 --mach 2 --dt 1e-4 --boundary free"
 AIRFOIL_BODY = "--levelset-h 0.1 --levelset-samples 16 --smooth 3 --band 0.4 --keepout 0.3"
 AIRFOIL_ITERATIONS = 200
+# the body contains the chord line: the y = 0 knot row from x = -2.9 to 2.9 is held inside (the
+# knots are 0.1 apart, on y = 0), the design slab ends it at +-3: chord 5.9-6 m
+AIRFOIL_CHORD = "--solid-region box:-2.95_2.95_-0.01_0.01"
 M10 = "--mach 10 --dt 2.5e-5 --boundary free --a-max 16"
 NEWTON_BODY = (
     "--case newton --levelset-h 0.1 --levelset-samples 16 --smooth 3 --band 0.4 --keepout 0.3 "
@@ -70,6 +80,10 @@ NEWTON_REGIONS = {
     "h1": "--design-region cylinder:0_1_1 --solid-region cylinder:0.8_1_1",
 }
 NEWTON_ITERATIONS = 300
+# the geometry constraints of the 3-D L / D run (thickness >= 2 knots by its multiplier, the
+# topology guard): without them the first paper_newton runs (tags without _tg) broke in two
+# at iterate ~15 -- the shadowed material behind the widest station thinned to a gap
+NEWTON_GEOMETRY = "--thickness 1 --thickness-rate 10 --topology-guard 1"
 HEAT_CAPS = {"cap0": "", "cap0.8": 0.8, "cap0.6": 0.6}
 SPH_ITERATIONS = 150
 
@@ -127,7 +141,8 @@ def _airfoil_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     return {
         f"kn{bgk}": _optimize(
-            f"paper_airfoil_kn{bgk}", AIRFOIL_FLOW, AIRFOIL_BODY, f"--knudsen {ours}", ITERATE,
+            f"paper_airfoil_kn{bgk}_chord", AIRFOIL_FLOW, AIRFOIL_BODY, f"--knudsen {ours}",
+            ITERATE, AIRFOIL_CHORD,
             "--initial ellipse --initial-thickness 0.1040 --design-region box:-3_3_-inf_inf",
             "--area-mode floor --area-floor 1.0 --recentre 0 --warmup 1500 --step 0.01",
             f"--iterations {AIRFOIL_ITERATIONS} --step-decay {AIRFOIL_ITERATIONS}",
@@ -140,8 +155,8 @@ def _newton_jobs(gpus_per_node: int) -> dict[str, str]:
     del gpus_per_node
     return {
         f"fm_{name}": _optimize(
-            f"paper_newton_fm_{name}", NEWTON_BODY, M10, "--knudsen 10 --acc 0", regions,
-            ITERATE, "--area-mode none --recentre 0 --step 0.02",
+            f"paper_newton_fm_{name}_tg", NEWTON_BODY, M10, "--knudsen 10 --acc 0", regions,
+            NEWTON_GEOMETRY, ITERATE, "--area-mode none --recentre 0 --step 0.02",
             f"--iterations {NEWTON_ITERATIONS} --step-decay {NEWTON_ITERATIONS}",
         )
         for name, regions in NEWTON_REGIONS.items()
@@ -157,7 +172,7 @@ def _heat_jobs(gpus_per_node: int) -> dict[str, str]:
             heat += f" --heat-cap {cap} --heat-cap-relative 1 --heat-multiplier 1 --heat-rate 2"
         out[name] = _optimize(
             f"paper_heat_kn0.5_M10_{name}", NEWTON_BODY, M10, f"--knudsen 0.5 {DIFFUSE}",
-            NEWTON_REGIONS["h2"], ITERATE, heat, "--area-mode none --recentre 0 --step 0.02",
+            NEWTON_REGIONS["h2"], NEWTON_GEOMETRY, ITERATE, heat, "--area-mode none --recentre 0 --step 0.02",
             f"--iterations {NEWTON_ITERATIONS} --step-decay {NEWTON_ITERATIONS}",
         )
     return out
@@ -180,14 +195,22 @@ def _sph_jobs(gpus_per_node: int) -> dict[str, str]:
 
 def _ld2d_jobs(gpus_per_node: int) -> dict[str, str]:
     """The lsfilter M 10 L / D Helmholtz Adam run (examples/mesh/cluster/study.py, group
-    lsfilter, job kn0.5_M10_S1_ox_adam_ldhz0) to 400 iterates: the same command, resumed."""
+    lsfilter, job kn0.5_M10_S1_ox_adam_ldhz0) to 400 iterates: the same command, resumed
+    (``m10_ld``; done 2026-10-29: patience stop at 358, best 25-iterate mean 3.37 at 261, then
+    pieces broke off at a constant step); and ``m10_ld_decay``, the same problem under the
+    paper's method -- the cosine step decay, the patience rule only, and the thickness
+    constraint and topology guard of the 3-D L / D run (examples/mesh/cluster ``ld3dwide``)."""
     from examples.mesh.cluster import study as mesh_study  # noqa: PLC0415
 
     cmd = mesh_study.jobs("lsfilter", gpus_per_node)["kn0.5_M10_S1_ox_adam_ldhz0"]
     old = f"--iterations {mesh_study.LSFILTER_SLOW_ITERATIONS}"
     if old not in cmd:
         raise ValueError(f"the lsfilter command changed: {cmd}")
-    return {"m10_ld": cmd.replace(old, "--iterations 400", 1)}
+    decay = " ".join((  # later flags win (argparse)
+        cmd.replace(old, "--iterations 400", 1), "--tag paper_ld2d_m10_decay --step-decay 400",
+        "--converge-window 0", mesh_study.LD3DWIDE,
+    ))  # fmt: skip
+    return {"m10_ld": cmd.replace(old, "--iterations 400", 1), "m10_ld_decay": decay}
 
 
 GROUPS = {

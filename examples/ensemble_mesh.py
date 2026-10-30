@@ -1044,7 +1044,7 @@ def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
     t0 = time.time()
     all_terms = shape.gradient_variants(
         dev_t.lam,
-        names=variants,
+        names=shape.REVIEW_VARIANTS if variants is None else variants,
         # v . grad_x lambda = -T - L* lambda: the collision term of the along-flight identity
         collision=dev.collision,
         records=rec,

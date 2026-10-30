@@ -141,6 +141,10 @@ run resubmitted exits at once.  The groups (``submit_curc.sh`` sizes one SLURM j
   the term breakdown on the M 10 Adam body (also free-molecular) and the circle, and the
   adjoint-vs-FD with the fit's neighbour count 16 / 64, 2x / 4x the particles per cell and
   0.25 m DSMC cells; ``scratch/{adjbias,boxcheck}/cluster/adjm10_<name>.json``.
+* ``fitgate`` (2026-10-29): the shape adjoint's grad-lambda fits (k-nearest and per-cell
+  polynomial variants, the pooled collision field, dt and particle-count gates, the airfoil
+  seed-4 outlier) against central differences at transitional diffuse conditions
+  (:func:`_fitgate_jobs`; ``scratch/fitgate/``).  ``smoke`` first.
 * ``stepfd`` (2026-10-25): the adjoint against paired finite differences along the free M 10
   runs' own steps (ox_adam_fix iterates 20 / 100 / 150 / 200, mma_s 150, and 150 on knots h / 2),
   whole step / nose part / rest / rigid shift; ``scratch/adjbias/cluster/stepfd_<name>.json``.
@@ -1063,6 +1067,62 @@ def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+FITGATE_NEWTON = (
+    "--case newton --levelset-h 0.1 --fnum-scale 1 --warmup 1000 --mach 10 --dt 2.5e-5 "
+    "--boundary free --a-max 16 --acc 1 --silhouette-band 0.03 --knudsen 0.5"
+)
+FITGATE_FD = (
+    "python3 -m examples.ensemble_mesh --body levelset --seeds 8 --substeps 4 --partners 8 "
+    "--backward-normals true --grazing 0.01 --timing-band 10 --parameter radius "
+    "--fd-steps 0.05 0.02"
+)
+
+
+def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at the
+    paper's transitional diffuse conditions, where the slope (pathwise x) term is 35-65 % of
+    the gradient and the shipped estimator is ~10 % low (examples/paper/results/fd):
+
+    * ``smoke``, then ``af_r_*`` / ``af_m2_*`` (rtx) and ``nw_d_*`` / ``nw_h_*`` / ``nw_s_*``
+      (rtx_full): every grad-lambda estimator of jax_dsmc.shape.VARIANTS (k-nearest and
+      per-cell polynomial; pooled or not; with or without the along-flight identity), each
+      with its own silhouette, on the paper FD gates' realisations
+      (scratch/fitgate/variant_gate.py; airfoil drag radius / cos 2 theta, seeds 0-15 with
+      the seed-4 outlier, also under the pooled collision field ``pool1``; Newton Kn 0.5 M 10
+      diffuse drag and heat, FD reused; specular drag, FD computed);
+    * ``nw_drag_dt2`` / ``nw_drag_f2`` (rtx_full): the Newton diffuse drag gate with dt halved
+      (the along-flight identity's O(nu dt) error) and with half the particles (the fits'
+      kernel width);
+    * ``af_seed4_diag`` (rtx): the airfoil gate's seed 4 with every slope fit's node count and
+      conditioning recorded (scratch/fitgate/seed_outlier.py; the realisation needs the
+      cluster GPU).
+    Results in examples/mesh/results/fitgate/."""
+    del gpus_per_node
+    run = "python3 scratch/fitgate/variant_gate.py"
+    out = "examples/mesh/results/fitgate"
+    jobs = {"smoke": f"{run} --gate af_drag_radius --seeds 0 1 --bases base pool1 --smoke"}
+    for gate, short in (("af_drag_radius", "af_r"), ("af_drag_mode2", "af_m2")):
+        for block in range(4):
+            for basis in ("base", "pool1"):
+                jobs[f"{short}_{block}_{basis}"] = (
+                    f"{run} --gate {gate} --seeds {4 * block} {4 * block + 4} --bases {basis}"
+                )
+    for gate, short in (("nw_drag_radius", "nw_d"), ("nw_heat_radius", "nw_h"),
+                        ("nw_spec_radius", "nw_s")):  # fmt: skip
+        for block in range(4):
+            jobs[f"{short}_{block}"] = (
+                f"{run} --gate {gate} --seeds {2 * block} {2 * block + 2} --bases base"
+            )
+    jobs["nw_drag_dt2"] = (
+        f"{FITGATE_FD} {FITGATE_NEWTON} --dt 1.25e-5 --warmup 2000 --output {out}/nw_drag_dt2.json"
+    )
+    jobs["nw_drag_f2"] = (
+        f"{FITGATE_FD} {FITGATE_NEWTON} --fnum-scale 2 --output {out}/nw_drag_f2.json"
+    )
+    jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
+    return jobs
+
+
 NEW_GROUPS = {
     "optab": _optab_jobs,
     "optm": _optm_jobs,
@@ -1079,6 +1139,7 @@ NEW_GROUPS = {
     "adjfix": _adjfix_jobs,
     "adjm10": _adjm10_jobs,
     "stepfd": _stepfd_jobs,
+    "fitgate": _fitgate_jobs,
     "optrc": _optrc_jobs,
     "ldopt": _ldopt_jobs,
     "sph3d": _sph3d_jobs,

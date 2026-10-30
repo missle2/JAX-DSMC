@@ -756,6 +756,53 @@ def test_pooled_one_sided_node_gradients_are_exact_on_a_quadratic_field():
     np.testing.assert_array_equal(np.asarray(tables[2]).sum(axis=1), expect)
 
 
+@pytest.mark.parametrize(
+    ("basis", "cross"),
+    [("cell:cubicv:adapt1.5:guard32", 0.0), ("cell:quadfull:adapt1.5:guard32:pool1", 0.4)],
+)
+def test_polynomial_slopes_are_exact_on_a_field_in_their_span(basis, cross):
+    """The per-cell polynomial as the slope estimator (2026-10-29 variant gate): a field in
+    the basis' span -- cubic in v for cubicv, with an x-v product for quadfull -- is
+    differentiated exactly at queried slots, from the query's one-sided cell or (pool1) its
+    tricube-weighted block, as the shape adjoint calls it."""
+    key = jax.random.PRNGKey(5)
+    n, dim = 4000, 2
+    grid = GridSpec(jnp.zeros(dim), jnp.ones(dim), (2, 2))
+    x = jax.random.uniform(key, (n, dim))
+    v = jax.random.normal(jax.random.fold_in(key, 1), (n, 3))
+    b, a, c = jnp.array([0.7, -1.3]), jnp.array([0.3, -0.6]), jnp.array([0.2, 0.5, -0.4])
+    cubic = 0.05 * v[:, 0] ** 3 if cross == 0.0 else 0.0
+    lam = 1.5 + x @ b + (x**2) @ a + v @ c + 0.1 * v[:, 0] * v[:, 1] + cubic
+    lam = lam + cross * x[:, 0] * v[:, 2]
+    alive = jnp.ones(n, bool)
+    scale = jnp.array([0.5, 0.5, 1.0, 1.0, 1.0])
+    direction = jnp.zeros((n, 3)).at[:, 0].set(jnp.sign(v[:, 0]))
+    queries = jnp.arange(0, n, 125)
+    pool = 1 if "pool" in basis else 0
+    gx, gv = ensemble_device.node_gradients(
+        x, v, alive, lam, grid, 1400, scale, 0, basis=basis, pool=pool, direction=direction,
+        queries=queries,
+    )  # fmt: skip
+    gx, gv, xq, vq = (np.asarray(t)[queries] for t in (gx, gv, x, v))
+    expect_x = np.asarray(b) + 2 * np.asarray(a) * xq + np.c_[cross * vq[:, 2], 0 * vq[:, 2]]
+    np.testing.assert_allclose(gx, expect_x, rtol=1e-6, atol=1e-6)
+    expect_v = np.asarray(c) + 0.1 * np.c_[vq[:, 1], vq[:, 0], 0 * vq[:, 0]]
+    expect_v[:, 0] += 0.15 * vq[:, 0] ** 2 if cross == 0.0 else 0.0
+    expect_v[:, 2] += cross * xq[:, 0]
+    np.testing.assert_allclose(gv, expect_v, rtol=1e-6, atol=1e-6)
+    # the silhouette's value query (same fit, no slopes) at shifted virtual states
+    xs, vs = x[queries] * 0.9 + 0.05, v[queries] + 0.1
+    got = ensemble_device.value_query(
+        x, v, alive, lam, grid, xs, vs, 1400, scale, 0, basis=basis, pool=pool,
+        direction=direction[queries],
+    )  # fmt: skip
+    xs, vs = np.asarray(xs), np.asarray(vs)
+    want = (1.5 + xs @ np.asarray(b) + (xs**2) @ np.asarray(a) + vs @ np.asarray(c)
+            + 0.1 * vs[:, 0] * vs[:, 1] + cross * xs[:, 0] * vs[:, 2]
+            + (0.05 * vs[:, 0] ** 3 if cross == 0.0 else 0.0))  # fmt: skip
+    np.testing.assert_allclose(np.asarray(got), want, rtol=1e-6, atol=1e-6)
+
+
 def test_stratified_node_gradients_ignore_the_other_class():
     """Two populations in every cell -- "about to hit" with ``lam = 2 m v_x`` and
     "reflected" with ``lam = 0`` (the phase-space split next to a wall): the mixed fit of
