@@ -1102,11 +1102,14 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     * ``c10_diff_dt2`` / ``c10_diff_f2`` (``base`` only, 16 seeds): the diffuse M 10 circle with dt
       halved (the along-flight identity's O(nu dt) error) and with half the particles (the
       fits' kernel width);
+    * ``c10_spec_dt2`` (``base``, 16 seeds): the specular M 10 circle with dt halved (its
+      variant-independent +11-14 %, 2026-10-30);
     * ``af_seed4_diag``: the airfoil seed 4 with every slope fit's node count and conditioning
       (scratch/fitgate/seed_outlier.py; the realisation needs the cluster GPU);
     * ``smoke`` first.  All 2-D: rtx slices, except the diffuse M 10 circle's ``c10d_*`` jobs
-      (``GPU_KIND=h200 ONLY='^c10d_'``: they need more than a 24 GB slice); a chosen configuration gets one 3-D check (the paper's
-      Newton box) before the 3-D showcases."""
+      (``GPU_KIND=h200 ONLY='^c10d_(s|kn2)'``, Kn 0.2 ``GPU_KIND=h200_71
+      ONLY='^c10d_kn0'``: more than a 24 GB slice); a chosen configuration gets one 3-D check
+      (the paper's Newton box) before the 3-D showcases."""
     del gpus_per_node
     run = "python3 scratch/fitgate/variant_gate.py"
     out = "examples/mesh/results/fitgate"
@@ -1118,15 +1121,25 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
         jobs |= _fitgate_blocks(gate, short, 32, ("base", "pool1"))
     jobs |= _fitgate_blocks("af_drag_radius", "af_r", 32, ("base", "pool1", "pool2"))
     # the diffuse M 10 circle: the cold wall's compressed layer (peak ~500 NTC attempts per
-    # cell-step, A_max 256 -> ~700) needs ~23 GB with base / pool1 and ~81 GB with pool2, past
-    # the 24 GB rtx slice (every c10_diff job OOMed, 2026-10-30) -> GPU_KIND=h200 (35 GB
-    # slices), its bases in one job (``c10d_``: one forward and FD set per seed); no pool2
-    # (fits no slice)
-    jobs |= _fitgate_blocks("c10_diff", "c10d", 32, (("base", "pool1"),))
-    for gate in ("c10_diff_kn0.2", "c10_diff_kn2"):
-        jobs |= _fitgate_blocks(gate, gate.replace("c10_diff", "c10d"), 16, (("base", "pool1"),))
+    # cell-step, A_max 256 -> ~700) needs ~23 GB with base, past the 24 GB rtx slice (every
+    # c10_diff job OOMed, 2026-10-30) -> GPU_KIND=h200 (35 GB slices); base only: pool1's
+    # backward needs ~31 GB + a 25 GB buffer (OOMed on the 35 GB slice after seed 0's base row,
+    # 2026-10-31) and reads 3 % low on the squash, pool2 ~81 GB.  Seeds 0, 4, ..., 28 are done
+    # (c10_diff_base-pool1_s*.jsonl); each block's other three, ~2.7 h a seed
+    jobs |= {
+        f"c10d_s{first + 1}_base": (
+            f"{run} --gate c10_diff --seeds {first + 1} {first + 4} --bases base"
+        )
+        for first in range(0, 32, 4)
+    }
+    # Kn 0.2: base OOMed on the 35 GB slice (an 18 GB buffer) -> GPU_KIND=h200_71
+    jobs |= _fitgate_blocks("c10_diff_kn0.2", "c10d_kn0.2", 16, ("base",))
+    jobs |= _fitgate_blocks("c10_diff_kn2", "c10d_kn2", 16, ("base",))
     for gate in ("c10_diff_dt2", "c10_diff_f2"):
         jobs |= _fitgate_blocks(gate, gate.replace("c10_diff", "c10d"), 16, ("base",))
+    # the specular M 10 circle with dt halved (fits a 24 GB rtx slice: c10_spec never outgrew
+    # A_max 256)
+    jobs |= _fitgate_blocks("c10_spec_dt2", "c10_spec_dt2", 16, ("base",))
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

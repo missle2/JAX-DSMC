@@ -80,9 +80,17 @@ NEW_GATES = {
     # the collisionality sweep of the diffuse M 10 circle: a collisional modelling error grows
     # as Kn falls and vanishes toward free-molecular flow
     "c10_diff_kn0.2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "knudsen": 0.2}, "radius", [0.1, 0.05]),
-    "c10_diff_kn2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "knudsen": 2.0}, "radius", [0.1, 0.05]),
+    # Kn 2 ran out of particle slots in the warm-up (inflow_shortfall ~2.4e5, 2026-10-31: the
+    # default 1.3 x the free stream's ~1.5e5): twice the slots
+    "c10_diff_kn2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "knudsen": 2.0, "slots": 400_000},
+                     "radius", [0.1, 0.05]),
     "c10_diff_f2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "fnum_scale": 4.0}, "radius",
                     [0.1, 0.05]),
+    # the specular M 10 circle with dt halved (2026-10-30: every variant +11-14 % on c10_spec,
+    # the same with either collision field, where the Kn 10 Newton box passes at 0.1 %): an
+    # O(nu dt) error of the collision pull-back halves, free of the diffuse wall's terms
+    "c10_spec_dt2": ({**CIRCLE_M10, **COMMON, "dt": 1.25e-5, "warmup": 5600}, "radius",
+                     [0.1, 0.05]),
 }  # fmt: skip
 _CACHE = {}
 
