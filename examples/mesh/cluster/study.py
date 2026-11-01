@@ -1194,6 +1194,18 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     for gate, short in (("c10_spec_gz001", "c10p_gz"), ("c10_spec_two", "c10p_two"),
                         ("c10_spec_v816", "c10p_v816")):  # fmt: skip
         jobs |= _fitgate_blocks(gate, short, 8, ("base",), few)
+    # the cell-membership term (paired with c10_spec seeds 0-7 / c10_diff's done seeds 0, 4,
+    # ..., 28; FD reused) and the specular circle at 2 dt (16 seeds, the term on): rtx (24 GB)
+    # for the specular ones, the diffuse one as c10_diff (~23 GB + the term: rtx_48);
+    # GPU_KIND=rtx ONLY='^c10(mem|_2dt)_', GPU_KIND=rtx_48 ONLY='^c10dmem_'
+    jobs |= _fitgate_blocks("c10_spec_mem", "c10mem", 8, ("base",), few)
+    jobs |= {
+        f"c10dmem_s{first}_base": (
+            f"{run} --gate c10_diff_mem --seeds {first} {first + 8} --stride 4 --bases base{few}"
+        )
+        for first in (0, 8, 16, 24)
+    }
+    jobs |= _fitgate_blocks("c10_spec_2dt", "c10_2dt", 16, ("base",), few)
     # the collision pull-back in situ (scratch/fitgate/volume_gate.py): the collision volumes
     # of every / the cut cells scaled by 1 +- eps, FD against the backward's prediction; the
     # squash as the low-Mach control.  rtx slices, except the diffuse M 10 circle (> 24 GB):

@@ -1070,6 +1070,8 @@ def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
         timing_band=timing_band,
         silhouette_band=float(cfg["silhouette_band"]),
         reward=reward if cfg["silhouette_band"] > 0.0 else None,
+        # the cell-membership term (shape.membership_cotangent; band in cells, 0 = off)
+        membership_band=float(cfg.get("membership_band", 0.0)),
         value_class=cfg.get("value_class", "none"),
         # epsilon = 0 above: only the slots with a body hit have a geometry-dependent
         # post-move state, so the grad-lambda fits run there only (shape.gradient)

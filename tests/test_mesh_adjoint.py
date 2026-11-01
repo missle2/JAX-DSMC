@@ -432,10 +432,13 @@ def _drag_reward(events, tallies, rec_k, step, mass, dim, weight=None):
     return jnp.where(events.face >= 2 * dim, r, 0.0)
 
 
-def _replay_chain(tracker, record="full", weight=None, **gradient_kw):
+def _replay_chain(tracker, record="full", weight=None, membership=None, **gradient_kw):
     """Forward -> traced replay -> value-form backward -> shape VJP on a short specular
     circle run: ``(terms, replay, diag, tallies, record)``; ``weight`` (``f64[2]``) the
-    traced momentum weights of the reward and the tally cotangent (``reward_weight``)."""
+    traced momentum weights of the reward and the tally cotangent (``reward_weight``).
+    ``membership`` (a band in cells) runs the collisional path instead: the backward's
+    collision increments into ``shape.gradient_variants`` (the ``one`` estimator) with the
+    cell-membership term."""
     grid, mesh = _circle_setup("analytic")
     grid = cut.with_volume(grid, mesh)
     sp = _sp()
@@ -498,12 +501,22 @@ def _replay_chain(tracker, record="full", weight=None, **gradient_kw):
         substeps=1,
         partners=1,
         hit_reward=rep.hit_total[:, None],
+        collision_out=membership is not None,
     )
     assert np.isfinite(np.asarray(dev.lam)).all()
     w = jnp.array([1.0, 0.0]) if weight is None else weight
     d_tally = tallies.__class__(
         None, jnp.zeros((4 + 1, 3)).at[4, :2].set(w), jnp.zeros(5), jnp.zeros(5)
     )
+    if membership is not None:
+        variants = shape.gradient_variants(
+            None, names=("one",), collision=dev.collision, records=rec, lam=dev.lam,
+            steps=steps, state0=state, base_key=key, grid=grid, faces=faces, wall=wall,
+            mass=MASS, dt=params.dt, mesh=mesh, epsilon=0.0, acc_delta=0.0, static=static,
+            scale=scale, npc_max=64, hit_reward=rep.hit_reward, tally_cotangent=d_tally,
+            membership_band=membership, **gradient_kw,
+        )  # fmt: skip
+        return variants["one"], rep, diag, tallies, rec
     terms = shape.gradient(
         rec,
         dev.lam,
@@ -590,6 +603,21 @@ def test_batched_steps_give_the_sequential_shape_terms(tracker):
         for leaf_a, leaf_b in zip(jax.tree.leaves(a), jax.tree.leaves(b), strict=True):
             np.testing.assert_allclose(np.asarray(leaf_b), np.asarray(leaf_a), rtol=1e-12,
                                        atol=1e-14 * float(np.max(np.abs(leaf_a))))  # fmt: skip
+
+
+def test_membership_term_is_off_by_default_and_leaves_the_other_terms_unchanged():
+    """The cell-membership term (2026-11-01) is ``None`` with ``membership_band = 0``; with a
+    band it is finite and geometry-shaped, and every other term is the same to the bit (it is
+    one more cotangent through the same VJP)."""
+    off = _replay_chain("stencil", membership=0.0)[0]
+    on = _replay_chain("stencil", membership=0.1)[0]
+    assert off.membership is None
+    leaves = jax.tree.leaves(on.membership)
+    assert leaves and all(np.isfinite(np.asarray(a)).all() for a in leaves)
+    for part in ("pathwise_x", "pathwise_v", "pathwise_tally", "score", "order"):
+        for a, b in zip(jax.tree.leaves(getattr(off, part)), jax.tree.leaves(getattr(on, part)),
+                        strict=True):  # fmt: skip
+            np.testing.assert_array_equal(np.asarray(b), np.asarray(a))
 
 
 @pytest.mark.parametrize("tracker", ["stencil", "lane", "walk"])

@@ -138,6 +138,14 @@ NEW_GATES = {
     "c10_spec_two": ({**CIRCLE_M10, **COMMON, "backward_normals": False}, "radius",
                      [0.1, 0.05]),
     "c10_spec_v816": ({**CIRCLE_M10, **COMMON, "virtual": [8, 16]}, "radius", [0.1, 0.05]),
+    # 2026-11-01: the cell-membership term (shape.membership_cotangent, a band of 0.1 cell
+    # about each face), paired with c10_spec / c10_diff (their forwards and FD), and a second
+    # dt point for the specular circle (2 dt, the same physical warm-up; the term on too)
+    "c10_spec_mem": ({**CIRCLE_M10, **COMMON, "membership_band": 0.1}, "radius", [0.1, 0.05]),
+    "c10_diff_mem": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "membership_band": 0.1}, "radius",
+                     [0.1, 0.05]),
+    "c10_spec_2dt": ({**CIRCLE_M10, **COMMON, "dt": 5e-5, "warmup": 1400,
+                      "membership_band": 0.1}, "radius", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
@@ -147,6 +155,8 @@ FD_FROM = {
     "c10_spec_gz001": "c10_spec",
     "c10_spec_two": "c10_spec",
     "c10_spec_v816": "c10_spec",
+    "c10_spec_mem": "c10_spec",
+    "c10_diff_mem": "c10_diff",
 }
 _CACHE = {}
 
@@ -196,6 +206,9 @@ def terms_row(cfg, parameter, all_terms, s):
     for name, t in all_terms.items():
         out[name] = {k: pick(getattr(t, k)) for k in names}
         out[name]["order"] = 0.0 if t.order is None else pick(t.order)
+        if t.membership is not None:
+            # reported, not in the analyses' totals until gated (2026-11-01)
+            out[name]["membership"] = pick(t.membership)
     volume = 0.0 if s["volume"] is None else pick(s["volume"])
     return out, volume
 

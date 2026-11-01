@@ -39,8 +39,11 @@ areas) from it.  Cut volumes are not re-derived by the replay; their dependence 
 NTC attempt count carries ``1 / V_c`` -- is the separate **cut-volume term**
 (:func:`volume_weights`, :func:`volume_cotangent`: ``-sum_k sum_c (dV_c / V_c) C_kc``
 with ``C_kc`` the expected change of the objective by cell ``c``'s collisions at step
-``k``, from the virtual pull-back's collision increments).  The cell tables are fixed by
-design (no membership term).  What the VJP cannot see -- the element-assignment jumps of a flat-normal
+``k``, from the virtual pull-back's collision increments).  The cells are fixed by design
+(no face moves), but a hit particle's post-move position does, and crossing a face changes
+the cell it collides in this step: the **cell-membership term**
+(:func:`membership_cotangent`, ``membership_band > 0``; 2026-11-01, diagnostic until
+gated).  What the VJP cannot see -- the element-assignment jumps of a flat-normal
 polygon and the silhouette of a diffuse body -- is the edge-band score of plan
 section 2, item 5: the polygon's is not built; the level set's silhouette band term is
 :func:`silhouette_cotangent` (``gradient(silhouette_band=)``, 2026-09-21).
@@ -234,6 +237,11 @@ class ShapeTerms(NamedTuple):
     from the end of step ``k`` into step ``k + 1`` collides in step ``k`` as the incoming
     particle instead of as the reflected one.  Zero without collisions; ``None`` unless
     ``gradient`` was given the collision increments."""
+    membership: object = None
+    """Geometry-shaped: the cell-membership term (:func:`membership_cotangent`): a hit
+    particle whose post-move position crosses a cell face collides this step in the
+    neighbouring cell.  ``None`` unless the collision increments and ``membership_band > 0``
+    were given."""
 
 
 def geometry(mesh: Mesh | None):
@@ -473,7 +481,10 @@ def _patch_totals(events, survivors, step, patch_tally):
     non-survivors' events left out."""
     split = as_split(events)
     total = jnp.zeros(patch_tally.keywords["n_nodes"])
-    parts = ((split.head, survivors[None, :]), (split.tail, _tail_of(survivors, split.slot)[None, :]))
+    parts = (
+        (split.head, survivors[None, :]),
+        (split.tail, _tail_of(survivors, split.slot)[None, :]),
+    )
     for part, keep in parts:
         index, value = patch_tally(part, step)
         value = jnp.where(keep[..., None], value, 0.0)
@@ -498,8 +509,8 @@ def _replay_step(carry, xs, geom, reward, timing_jump, timing_band, setup, patch
         events, tallies, rec_k, step, survivors, reward, timing_jump, setup, timing_band
     )
     slot = as_split(events).slot
-    patch = jnp.zeros(0) if patch_tally is None else _patch_totals(
-        events, survivors, step, patch_tally
+    patch = (
+        jnp.zeros(0) if patch_tally is None else _patch_totals(events, survivors, step, patch_tally)
     )
     if isinstance(events, SplitEvents):
         r = HitRewards(r, slot)
@@ -749,7 +760,60 @@ def order_jump(events, survivors, rec_k, coll_k, grid, npc_max, scale, chunk):
     return jnp.zeros(n_slots).at[target].set(jnp.where(used, c_in - c_out, 0.0), mode="drop")
 
 
-def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
+def membership_cotangent(events, survivors, rec_k, coll_k, direction, grid, npc_max, scale, chunk,
+                         band):  # fmt: skip
+    """``f64[N, D]``: the cotangent on the hit slots' post-move positions of their cell
+    membership.  The step's collisions are drawn per cell from the post-move positions, so
+    the value at the post-move state jumps across a cell face by the difference of the
+    step's collision effect, ``c_B - c_A`` with ``c = dt L* lambda`` (the backward's per-slot
+    increment ``coll_k``, fitted in the query's own cell -- :data:`ORDER_FIT` -- at the
+    hit's post-move state, one-sided on its last normal ``direction``): ``A`` the particle's
+    cell, ``B`` the neighbour across the face.  Smoothed over a band of ``band`` cells about
+    each face, the jump's derivative is ``+-(c_B - c_A) / (band dx)`` along the face normal
+    for the slots within ``band / 2`` of it.  The fits of ``grad lambda`` see nothing of it:
+    within a cell the step's collisions do not depend on position, and a per-cell fit has
+    no node across the face (a pooled one smears it into its slope, so for those variants
+    part of it may already be in ``pathwise_x``).  Later steps' crossings are not jumps of
+    the current value: they shift the particle's residence time per cell continuously and
+    are in the fitted slope.  Only the slots with a body event (the post-move states that
+    depend on the geometry); a face into the body or out of the box is skipped."""
+    dim = rec_k.x.shape[1]
+    slots, _lost = _body_hit_slots(events, survivors, dim)
+    used = slots >= 0
+    q = jnp.where(used, slots, 0)
+    x, v, nrm = rec_k.x[q], rec_k.v[q], direction[q]
+    fit = {"npc_max": npc_max, "scale": scale, "chunk": chunk, **ORDER_FIT}
+    query = functools.partial(
+        ensemble_device.value_query, rec_k.x, rec_k.v, rec_k.alive, coll_k.astype(jnp.float64),
+        grid, direction=nrm, **fit,
+    )  # fmt: skip
+    c_here = query(x, v)
+    dx = spacing(grid)
+    n_axis = jnp.asarray(grid.n)
+    rel = (x - grid.lo) / dx
+    i = jnp.clip(jnp.floor(rel), 0, n_axis - 1)
+    frac = rel - i
+    volume = grid.volume
+    cot = jnp.zeros_like(x)
+    for a in range(dim):
+        for side, sign in ((0, -1.0), (1, 1.0)):
+            dist = frac[:, a] if side == 0 else 1.0 - frac[:, a]
+            neighbour = i[:, a] + sign
+            face = grid.lo[a] + (i[:, a] + side) * dx[a]
+            across = x.at[:, a].set(face + sign * 1e-6 * dx[a])
+            ok = used & (dist < 0.5 * band) & (neighbour >= 0) & (neighbour <= n_axis[a] - 1)
+            if volume.shape[0]:
+                ok = ok & (
+                    volume[jnp.minimum(collision_cell(across, grid), volume.shape[0] - 1)] > 0
+                )
+            c_across = query(across, v)
+            cot = cot.at[:, a].add(jnp.where(ok, sign * (c_across - c_here) / (band * dx[a]), 0.0))
+    n_slots = rec_k.x.shape[0]
+    target = jnp.where(used, slots, n_slots)
+    return jnp.zeros_like(rec_k.x).at[target].set(cot, mode="drop")
+
+
+def _gradient_step(  # noqa: PLR0912, PLR0915 -- one step's cotangents, kept in one place
     carry,
     xs,
     geom,
@@ -761,11 +825,12 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
     silhouette_band,
     reward,
     hit_fits,
+    membership_band=0.0,
 ):
     """One step of the shape VJP (module-level ``scan`` body).  ``fits`` is a tuple of
     ``grad lambda`` estimators (the fit settings plus ``"along"``); the per-estimator
     carries ``g_x``, ``g_v``, ``g_sil`` are tuples over it, the rest is shared."""
-    x, v, alive, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err = carry
+    x, v, alive, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, g_mem, err = carry
     rec_k, lam_k, step, r_k, tally_weight, lam_timing_k, klass_k, coll_k = xs
     reward, timing_jump = _weighted(reward, setup), _weighted(timing_jump, setup)
     key = key_for(setup["base_key"], step, STAGE_MOVE)
@@ -865,6 +930,15 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
             events, "time", EventArray(head_o, jnp.zeros_like(split.tail.time))
         )
         cotangents.append((zeros[0], zeros[1], zeros[2], zeros[3], zeros[4], cot_order))
+    membership = coll_k is not None and membership_band > 0.0
+    if membership:
+        fit0 = fits[0]
+        cot_mem = membership_cotangent(
+            events, survivors, rec_k, coll_k, direction, setup["map"]["grid"],
+            fit0["npc_max"], fit0["scale"], fit0["chunk"], membership_band,
+        )  # fmt: skip
+        cot_mem = jnp.where(survivors[:, None], cot_mem, 0.0)
+        cotangents.append((cot_mem, zeros[1], zeros[2], zeros[3], zeros[4], zeros[5]))
     pulled = _pullbacks(vjp, cotangents)
     n_fit = 2 * len(fits)
     g_x = tuple(jax.tree.map(jnp.add, g, d) for g, d in zip(g_x, pulled[0:n_fit:2], strict=True))
@@ -877,6 +951,8 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         g_time = jax.tree.map(jnp.add, g_time, rest.pop(0))
     if coll_k is not None:
         g_order = jax.tree.map(jnp.add, g_order, rest.pop(0))
+    if membership:
+        g_mem = jax.tree.map(jnp.add, g_mem, rest.pop(0))
     if silhouette_band > 0.0:
         mesh_g = with_geometry(setup["map"]["mesh"], geom)
         sil = []
@@ -915,6 +991,7 @@ def _gradient_step(  # noqa: PLR0915 -- one step's cotangents, kept in one place
         g_time,
         g_sil,
         g_order,
+        g_mem,
         err,
     ), n_hits
 
@@ -1063,6 +1140,7 @@ def replay(
         "value_class",
         "hit_fits",
         "batch",
+        "membership_band",
     ),
 )
 def _gradient(
@@ -1098,6 +1176,7 @@ def _gradient(
     collision=None,
     batch=1,
     reward_weight=None,
+    membership_band=0.0,
 ):
     """:func:`gradient` for several ``grad lambda`` estimators ``(pool, k, along)`` at once
     (a tuple of :class:`ShapeTerms`, one per estimator): one wall-map replay and one
@@ -1129,6 +1208,7 @@ def _gradient(
         silhouette_band=silhouette_band if mesh is not None and mesh.kind == "levelset" else 0.0,
         reward=reward,
         hit_fits=hit_fits,
+        membership_band=membership_band,
     )
     m = lam.shape[0]
     if tally_weight is None:
@@ -1147,15 +1227,16 @@ def _gradient(
         zero_g,
         per,
         zero_g,
+        zero_g,
         jnp.float64(0.0),
     )
     xs = (records, lam, steps, hit_reward, tally_weight, lam_timing, klass, collision)
     if batch > 1:
-        (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err), hits = _batched_scan(
-            body, init, xs, batch
+        (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, g_mem, err), hits = (
+            _batched_scan(body, init, xs, batch)
         )
     else:
-        (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, err), hits = lax.scan(
+        (_, _, _, g_x, g_v, g_tally, g_score, g_time, g_sil, g_order, g_mem, err), hits = lax.scan(
             body, init, xs
         )
     return tuple(
@@ -1170,6 +1251,7 @@ def _gradient(
             err,
             hits,
             None if collision is None else g_order,
+            None if collision is None or membership_band <= 0.0 else g_mem,
         )
         for gx, gv, gs in zip(g_x, g_v, g_sil, strict=True)
     )
