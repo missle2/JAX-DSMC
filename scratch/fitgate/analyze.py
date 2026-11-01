@@ -34,6 +34,8 @@ GATES = (
     ("c10_spec", "circle M10 Kn0.5 specular"),
     ("c10_spec_dt2", "circle M10 specular, dt/2"),
     ("c10_spec_g2n", "circle M10 specular, cells/2"),
+    ("c10_spec_g4n", "circle M10 specular, cells/4"),
+    ("c10_diff_g2n", "circle M10 diffuse, cells/2"),
     ("c10_diff", "circle M10 Kn0.5 diffuse"),
     ("c10_diff_dt2", "circle M10 diffuse, dt/2"),
     ("c10_diff_f2", "circle M10 diffuse, N/2"),
@@ -100,7 +102,7 @@ def fd_band(rows):
 
 
 def forest(data, variants):
-    fig, axes = plt.subplots(2, 5, figsize=(21, 10), sharey=True)
+    fig, axes = plt.subplots(3, 4, figsize=(21, 15), sharey=True)
     y = np.arange(len(variants))
     for ax, (gate, title) in zip(axes.flat, GATES, strict=True):
         bases = [b for b in BASES if (gate, b) in data]
@@ -138,7 +140,7 @@ def forest(data, variants):
 
 
 def spread_plot(data):
-    fig, axes = plt.subplots(2, 5, figsize=(21, 8.5))
+    fig, axes = plt.subplots(3, 4, figsize=(21, 12))
     markers = dict(zip(CANDIDATES, "osD^vP", strict=True))
     for ax, (gate, title) in zip(axes.flat, GATES, strict=True):
         for b in BASES:
@@ -198,7 +200,7 @@ def tables(data, variants):
                           f"{s['spread']:.3f}"]  # fmt: skip
             lines.append(f"| {v} | " + " | ".join(cells) + " |")
     # scorecard: over the gates each (variant, basis) has
-    lines += ["", "## Scorecard (base field over all 10 gates; pool1 over its 5: no c10_diff run)", "",
+    lines += ["", "## Scorecard (base field over all 12 gates; pool1 over its 5: no c10_diff run)", "",
               "| variant | basis | gates | RMS(ratio - 1) | max abs(ratio - 1) | RMS t | "
               "median spread | airfoil spread (r, m2) |",
               "|---|---|---|---|---|---|---|---|"]  # fmt: skip

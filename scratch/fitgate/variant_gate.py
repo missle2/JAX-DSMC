@@ -122,10 +122,32 @@ NEW_GATES = {
                      "radius", [0.1, 0.05]),
     "c10_diff_g2n": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grid_scale": 2, "fnum_scale": 8.0,
                       "a_max": 160}, "radius", [0.1, 0.05]),
+    # 2026-11-01: the specular bias is NOT cell size -- the adjoint stays ~0.56 at k = 1 / 2 / 4
+    # (g2n's 1.05 was its FD 3 % high); the terms trade (pathwise_x + volume constant), the total
+    # does not.  Is it collisional at all on THIS body and box?  (The Kn 10 Newton box passes,
+    # but another body.)  slots: a free box at high Kn holds the back-reflected gas (Kn 2
+    # diffuse ran out of slots); a_max: attempts scale with the density
+    "c10_spec_kn10": ({**CIRCLE_M10, **COMMON, "knudsen": 10.0, "slots": 400_000, "a_max": 32},
+                      "radius", [0.1, 0.05]),
+    "c10_spec_kn2": ({**CIRCLE_M10, **COMMON, "knudsen": 2.0, "slots": 400_000, "a_max": 96},
+                     "radius", [0.1, 0.05]),
+    # the derivative-only settings, paired with c10_spec seed by seed (its forward, its FD): the
+    # grazing cut-off 0.01 -> 0.001 (the hit derivative's floor), two-sided backward fits, and
+    # 4 x 8 -> 8 x 16 virtual substeps x partners (the volume gate's -6 %)
+    "c10_spec_gz001": ({**CIRCLE_M10, **COMMON, "grazing": 0.001}, "radius", [0.1, 0.05]),
+    "c10_spec_two": ({**CIRCLE_M10, **COMMON, "backward_normals": False}, "radius",
+                     [0.1, 0.05]),
+    "c10_spec_v816": ({**CIRCLE_M10, **COMMON, "virtual": [8, 16]}, "radius", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
-FD_FROM = {"c10_spec_h1000": "c10_spec", "c10_diff_h1000": "c10_diff"}
+FD_FROM = {
+    "c10_spec_h1000": "c10_spec",
+    "c10_diff_h1000": "c10_diff",
+    "c10_spec_gz001": "c10_spec",
+    "c10_spec_two": "c10_spec",
+    "c10_spec_v816": "c10_spec",
+}
 _CACHE = {}
 
 
@@ -211,7 +233,8 @@ def main(argv=None):
         for basis in args.bases:
             if (seed, basis) in done:
                 continue
-            ensemble_backward.configure("virtual", 4, 8, "staged", BASES[basis])
+            sk = cfg.get("virtual", (4, 8))  # substeps x partners of the virtual pull-back
+            ensemble_backward.configure("virtual", sk[0], sk[1], "staged", BASES[basis])
             t0 = time.time()
             all_terms, info, s = EM.shape_terms(
                 cfg, key, None, parameter, 32, cfg.get("timing_band", 10.0),

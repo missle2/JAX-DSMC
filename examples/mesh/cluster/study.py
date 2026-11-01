@@ -1186,6 +1186,14 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     few = " --variants " + " ".join(FITGATE_CANDIDATES)
     jobs |= _fitgate_blocks("c10_spec_g4n", "c10g4n", 16, ("base",), few)
     jobs |= _fitgate_blocks("c10_diff_g2n", "c10dg2n", 16, ("base",), few)
+    # 2026-11-01 (cell size ruled out): the specular circle at Kn 10 / 2 (is the bias
+    # collisional on this body?), 16 seeds, GPU_KIND=rtx_48 ONLY='^c10kn'; the derivative-only
+    # settings paired with c10_spec (FD reused, seeds 0-7): GPU_KIND=rtx ONLY='^c10p_'
+    for gate, short in (("c10_spec_kn10", "c10kn10"), ("c10_spec_kn2", "c10kn2")):
+        jobs |= _fitgate_blocks(gate, short, 16, ("base",))
+    for gate, short in (("c10_spec_gz001", "c10p_gz"), ("c10_spec_two", "c10p_two"),
+                        ("c10_spec_v816", "c10p_v816")):  # fmt: skip
+        jobs |= _fitgate_blocks(gate, short, 8, ("base",), few)
     # the collision pull-back in situ (scratch/fitgate/volume_gate.py): the collision volumes
     # of every / the cut cells scaled by 1 +- eps, FD against the backward's prediction; the
     # squash as the low-Mach control.  rtx slices, except the diffuse M 10 circle (> 24 GB):
