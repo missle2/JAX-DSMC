@@ -26,6 +26,7 @@
 # jobs all landed on one node whose driver refuses cuInit); GPU_KIND=mi100 -> ami100 /
 # gpu:mi100 (needs a jax >= 0.4.36 module, see env.sh).  Nodes listed in bad_nodes.txt
 # (written by a job's preflight) and in EXCLUDE_NODES are excluded from every submission.
+# GPU_KIND=rtx_48 -> a 2g.48gb slice of an RTX PRO 6000 (artxpro6000, 16 cores, 120 GB).
 # GPU_KIND=rtx_full -> one whole RTX PRO 6000 (96 GB; gres read from sinfo, GRES_TYPE/PART
 # override): the paper's runs that outgrow a 3g.71gb H200 slice when no whole H200 is free.
 # GPU_KIND=rtx -> the RTX PRO 6000 nodes: partition, gres name and per-GPU cores/memory are
@@ -101,7 +102,12 @@ case "${GPU_KIND}" in
     CORES=$((NCPU / CARDS)); MEM=$((MEM_MB / 1024 * 9 / 10 / CARDS))
     echo "rtx_full: partition ${PART}, gres gpu:${GRES}, ${CARDS} cards/node -> ${CORES} cores, ${MEM} GB per card"
     PER_NODE=1 ;;
-  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|h200_71|h200_full|a100|rtx|rtx_full|mi100)"; exit 1 ;;
+  # a 2g.48gb MIG slice of an RTX PRO 6000 (half a card; CURC docs 2026-11-01: partition
+  # artxpro6000, 16 cores and ~130 GB host memory per slice, 4 per user): the 2-D jobs past a
+  # 1g.24gb slice (the diffuse M 10 circle, ~23 GB + buffers) without a whole card
+  rtx_48) PART="${PART:-artxpro6000}"; GRES="${GRES_TYPE:-rtx_pro_6000_2g.48gb}"; CORES=16; MEM=120
+    PER_NODE=1 ;;
+  *) echo "unknown GPU_KIND ${GPU_KIND} (h200|h200_71|h200_full|a100|rtx|rtx_48|rtx_full|mi100)"; exit 1 ;;
 esac
 # a venv active in the submitting shell would ride into every job (--export=ALL) and break
 # env.sh's `module purge` (2026-10-22, see env.sh): submit without it

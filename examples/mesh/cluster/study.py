@@ -1106,6 +1106,9 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
       variant-independent +11-14 %, 2026-10-30);
     * ``c10_spec_h1000`` / ``c10_diff_h1000`` (``base``, 8 seeds, h200_71): the M 10 circles'
       backward over the last 1000 captured steps instead of 300, the same forwards (2026-11-01);
+    * ``vol_*`` (2026-11-01): the collision pull-back's volume weights against FD of scaled
+      collision volumes (every cell / the cut cells, eps 0.2 and 0.1) on c10_spec, c10_diff
+      and the sq_spec control;
     * ``af_seed4_diag``: the airfoil seed 4 with every slope fit's node count and conditioning
       (scratch/fitgate/seed_outlier.py; the realisation needs the cluster GPU);
     * ``smoke`` first.  All 2-D: rtx slices, except the diffuse M 10 circle's ``c10d_*`` jobs
@@ -1152,6 +1155,16 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
         )
         for first in (0, 16)
     }
+    # the collision pull-back in situ (scratch/fitgate/volume_gate.py): the collision volumes
+    # of every / the cut cells scaled by 1 +- eps, FD against the backward's prediction; the
+    # squash as the low-Mach control.  rtx slices, except the diffuse M 10 circle (> 24 GB):
+    # GPU_KIND=rtx ONLY='^vol_(c10_spec|sq)', GPU_KIND=rtx_48 ONLY='^vol_c10_diff'
+    vol = "python3 scratch/fitgate/volume_gate.py"
+    for gate, seeds in (("c10_spec", 16), ("c10_diff", 8), ("sq_spec", 8)):
+        jobs |= {
+            f"vol_{gate}_s{first}": f"{vol} --gate {gate} --seeds {first} {first + 4}"
+            for first in range(0, seeds, 4)
+        }
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 
