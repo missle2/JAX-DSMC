@@ -1067,7 +1067,7 @@ def _optab_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
-def _fitgate_blocks(gate: str, short: str, seeds: int, bases) -> dict[str, str]:
+def _fitgate_blocks(gate: str, short: str, seeds: int, bases, extra: str = "") -> dict[str, str]:
     """``fitgate``'s jobs of one gate: blocks of 4 seeds, one job per block and entry of
     ``bases`` (a basis, or a tuple of bases run in one job: one forward and one set of FD
     runs per seed shared by its bases)."""
@@ -1075,6 +1075,7 @@ def _fitgate_blocks(gate: str, short: str, seeds: int, bases) -> dict[str, str]:
     return {
         f"{short}_s{first}_{'-'.join(_tuple(basis))}": (
             f"{run} --gate {gate} --seeds {first} {first + 4} --bases {' '.join(_tuple(basis))}"
+            + extra
         )
         for first in range(0, seeds, 4)
         for basis in bases
@@ -1083,6 +1084,17 @@ def _fitgate_blocks(gate: str, short: str, seeds: int, bases) -> dict[str, str]:
 
 def _tuple(basis) -> tuple[str, ...]:
     return (basis,) if isinstance(basis, str) else tuple(basis)
+
+
+FITGATE_CANDIDATES = (
+    "along_pool_plane",
+    "cell_pool_plane",
+    "cell_along_pool_plane",
+    "cellxv_along_pool_plane",
+    "one_pool_plane",
+)
+"""The fits carried by the memory-bound fitgate gates (2026-11-01): the leaders at half-size
+cells plus the k-nearest fit that did not respond to the cell size (the control)."""
 
 
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1167,9 +1179,13 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     jobs |= _fitgate_blocks("c10_spec_g2n", "c10g2n", 16, ("base",))
     jobs |= _fitgate_blocks("c10_spec_g2", "c10g2", 8, ("base",))
     # the cell scaling (a quarter cell, same particles) and the diffuse circle on half cells:
-    # GPU_KIND=h200_71 ONLY='^c10(g4n|dg2n)_' (c10g2n ran there, 2026-11-01)
-    jobs |= _fitgate_blocks("c10_spec_g4n", "c10g4n", 16, ("base",))
-    jobs |= _fitgate_blocks("c10_diff_g2n", "c10dg2n", 16, ("base",))
+    # GPU_KIND=h200_71 ONLY='^c10(g4n|dg2n)_'.  Both OOMed there with all 18 variants
+    # (2026-11-01; c10g2n used 66 of 71 GB, its 35 GB attempt died in the shape VJP, which
+    # carries every estimator's fit tables -- cells x npc_max, padded to the densest cell, 3^D
+    # that for the pooled fits): the five candidates only
+    few = " --variants " + " ".join(FITGATE_CANDIDATES)
+    jobs |= _fitgate_blocks("c10_spec_g4n", "c10g4n", 16, ("base",), few)
+    jobs |= _fitgate_blocks("c10_diff_g2n", "c10dg2n", 16, ("base",), few)
     # the collision pull-back in situ (scratch/fitgate/volume_gate.py): the collision volumes
     # of every / the cut cells scaled by 1 +- eps, FD against the backward's prediction; the
     # squash as the low-Mach control.  rtx slices, except the diffuse M 10 circle (> 24 GB):

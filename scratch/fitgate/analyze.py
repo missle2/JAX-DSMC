@@ -69,8 +69,11 @@ def total(row, variant):
 
 
 def stats(rows, variant):
-    """Adjoint / FD_h, its 2 s.e., adjoint / FD_h/2, paired t, per-seed sd / |FD|, n."""
+    """Adjoint / FD_h, its 2 s.e., adjoint / FD_h/2, paired t, per-seed sd / |FD|, n (NaN for a
+    variant the gate did not carry: the memory-bound gates run a few)."""
     n = len(rows)
+    if variant not in rows[0]["terms"]:
+        return dict.fromkeys(("ratio", "ratio_2se", "ratio_h2", "t", "spread"), np.nan) | {"n": n}
     a = np.array([total(r, variant) for r in rows])
     fd = np.array([r["fd"][0] for r in rows])
     fd2 = np.array([r["fd"][1] for r in rows])
