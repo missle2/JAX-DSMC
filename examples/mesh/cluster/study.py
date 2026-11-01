@@ -1166,6 +1166,10 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     # rtx_full ONLY='^c10g2_')
     jobs |= _fitgate_blocks("c10_spec_g2n", "c10g2n", 16, ("base",))
     jobs |= _fitgate_blocks("c10_spec_g2", "c10g2", 8, ("base",))
+    # the cell scaling (a quarter cell, same particles) and the diffuse circle on half cells:
+    # GPU_KIND=h200_71 ONLY='^c10(g4n|dg2n)_' (c10g2n ran there, 2026-11-01)
+    jobs |= _fitgate_blocks("c10_spec_g4n", "c10g4n", 16, ("base",))
+    jobs |= _fitgate_blocks("c10_diff_g2n", "c10dg2n", 16, ("base",))
     # the collision pull-back in situ (scratch/fitgate/volume_gate.py): the collision volumes
     # of every / the cut cells scaled by 1 +- eps, FD against the backward's prediction; the
     # squash as the low-Mach control.  rtx slices, except the diffuse M 10 circle (> 24 GB):

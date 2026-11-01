@@ -109,6 +109,13 @@ NEW_GATES = {
     "c10_spec_g2": ({**CIRCLE_M10, **COMMON, "grid_scale": 2}, "radius", [0.1, 0.05]),
     "c10_spec_g2n": ({**CIRCLE_M10, **COMMON, "grid_scale": 2, "fnum_scale": 8.0}, "radius",
                      [0.1, 0.05]),
+    # 2026-11-01: g2n halved every along / cell variant's bias (+11 -> +5 %, cellxv_along_pool
+    # +9 -> +1 %), one_pool_plane unchanged: the scaling with the cell (g4n, a quarter the cell,
+    # the same particles) and the diffuse circle on the half cells
+    "c10_spec_g4n": ({**CIRCLE_M10, **COMMON, "grid_scale": 4, "fnum_scale": 32.0}, "radius",
+                     [0.1, 0.05]),
+    "c10_diff_g2n": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grid_scale": 2, "fnum_scale": 8.0},
+                     "radius", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
