@@ -91,7 +91,20 @@ NEW_GATES = {
     # O(nu dt) error of the collision pull-back halves, free of the diffuse wall's terms
     "c10_spec_dt2": ({**CIRCLE_M10, **COMMON, "dt": 1.25e-5, "warmup": 5600}, "radius",
                      [0.1, 0.05]),
+    # the captured horizon (2026-11-01: dt / 2 left c10_spec's +12-18 % and every term but
+    # pathwise_v unchanged, N / 2 c10_diff's): the same forward (warm-up + steps = 3100, the
+    # window the last 200) with the backward over its last 1000 steps instead of 300 -- the
+    # adjoint treats the state at the capture's start as fixed, so a shock layer slower than
+    # the 300 steps (7.5 ms) is missed.  Paired with c10_spec / c10_diff seed by seed; their FD
+    # rows are reused (FD_FROM)
+    "c10_spec_h1000": ({**CIRCLE_M10, **COMMON, "warmup": 2100, "steps": 1000}, "radius",
+                       [0.1, 0.05]),
+    "c10_diff_h1000": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "warmup": 2100, "steps": 1000},
+                       "radius", [0.1, 0.05]),
 }  # fmt: skip
+# gates whose forward is another gate's (the same objective, seeds and run): FD reused from
+# that gate's rows in OUT_DIR when it has the seed, else computed
+FD_FROM = {"c10_spec_h1000": "c10_spec", "c10_diff_h1000": "c10_diff"}
 _CACHE = {}
 
 
@@ -113,12 +126,24 @@ def gate_config(gate):
     art = FD_DIR / f"{gate}.json"
     if gate in NEW_GATES:
         over, parameter, steps = NEW_GATES[gate]
-        return {**EM.default_config(), **over}, parameter, steps, 32, {}
+        return {**EM.default_config(), **over}, parameter, steps, 32, reused_fd(gate)
     data = json.loads(art.read_text())
     conf = data["config"]
     cfg = {**EM.default_config(), **{k: v for k, v in conf.items() if k in EM.default_config()}}
     rows = {r["seed"]: r for r in data["rows"]}
     return cfg, conf["parameter"], data["fd_steps"], conf["seed_start"], rows
+
+
+def reused_fd(gate):
+    """``{seed: {"fd": ..}}`` of :data:`FD_FROM`'s gate (its rows in OUT_DIR), ``{}`` else."""
+    rows = {}
+    if gate in FD_FROM:
+        for path in sorted(OUT_DIR.glob(f"{FD_FROM[gate]}_*.jsonl")):
+            for line in path.read_text().splitlines():
+                r = json.loads(line)
+                if r["gate"] == FD_FROM[gate]:
+                    rows[r["seed"]] = {"fd": r["fd"], "objective": r["objective"]}
+    return rows
 
 
 def terms_row(cfg, parameter, all_terms, s):
@@ -136,6 +161,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gate", required=True)
     ap.add_argument("--seeds", type=int, nargs=2, required=True, help="first, end (exclusive)")
+    ap.add_argument("--stride", type=int, default=1, help="every stride-th seed of the range")
     ap.add_argument("--bases", nargs="+", default=["base"], choices=list(BASES))
     ap.add_argument("--variants", nargs="*", default=list(shape.VARIANTS))
     ap.add_argument(
@@ -158,7 +184,7 @@ def main(argv=None):
             r = json.loads(line)
             done.add((r["seed"], r["basis"]))
     EM.forward = functools.partial(cached_forward, EM.forward)
-    for seed in range(*args.seeds):
+    for seed in range(*args.seeds, args.stride):
         key = jax.random.key(seed_start + seed)
         fd = art_rows[seed]["fd"] if seed in art_rows else None
         for basis in args.bases:

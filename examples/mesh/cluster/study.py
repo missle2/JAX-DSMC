@@ -1104,6 +1104,8 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
       fits' kernel width);
     * ``c10_spec_dt2`` (``base``, 16 seeds): the specular M 10 circle with dt halved (its
       variant-independent +11-14 %, 2026-10-30);
+    * ``c10_spec_h1000`` / ``c10_diff_h1000`` (``base``, 8 seeds, h200_71): the M 10 circles'
+      backward over the last 1000 captured steps instead of 300, the same forwards (2026-11-01);
     * ``af_seed4_diag``: the airfoil seed 4 with every slope fit's node count and conditioning
       (scratch/fitgate/seed_outlier.py; the realisation needs the cluster GPU);
     * ``smoke`` first.  All 2-D: rtx slices, except the diffuse M 10 circle's ``c10d_*`` jobs
@@ -1140,6 +1142,16 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     # the specular M 10 circle with dt halved (fits a 24 GB rtx slice: c10_spec never outgrew
     # A_max 256)
     jobs |= _fitgate_blocks("c10_spec_dt2", "c10_spec_dt2", 16, ("base",))
+    # the captured horizon, 1000 steps instead of 300, paired with c10_spec / c10_diff (their
+    # FD reused: c10_spec seeds 0-7, c10_diff's done seeds 0, 4, ..., 28): records ~3.3x ->
+    # GPU_KIND=h200_71 ONLY='^c10h_'
+    jobs |= _fitgate_blocks("c10_spec_h1000", "c10h_spec", 8, ("base",))
+    jobs |= {
+        f"c10h_diff_s{first}_base": (
+            f"{run} --gate c10_diff_h1000 --seeds {first} {first + 16} --stride 4 --bases base"
+        )
+        for first in (0, 16)
+    }
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

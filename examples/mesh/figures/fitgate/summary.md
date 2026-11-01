@@ -9,6 +9,7 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | sq_spec | 32 | ±1.5 % | 0.987 ± 0.031 |
 | sq_diff | 32 | ±2.2 % | 1.003 ± 0.046 |
 | c10_spec | 32 | ±2.5 % | 1.008 ± 0.048 |
+| c10_spec_dt2 | 16 | ±5.7 % | 1.029 ± 0.093 |
 | c10_diff | 8 | ±3.3 % | 1.029 ± 0.139 |
 | c10_diff_dt2 | 16 | ±3.5 % | 0.984 ± 0.081 |
 | c10_diff_f2 | 16 | ±4.3 % | 0.966 ± 0.062 |
@@ -83,6 +84,29 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | cellxv_along_plane | 1.112 ± 0.009 | +8.8 | 0.026 | 1.106 ± 0.010 | +8.0 | 0.027 |
 | cellxv_pool_plane | 1.085 ± 0.007 | +6.4 | 0.020 | 1.073 ± 0.008 | +5.4 | 0.023 |
 | cellxv_along_pool_plane | 1.090 ± 0.005 | +7.1 | 0.014 | 1.086 ± 0.006 | +6.5 | 0.017 |
+
+## c10_spec_dt2 (circle M10 specular, dt/2)
+
+| variant | base ratio | t | spread |
+|---|---|---|---|
+| one | 1.154 ± 0.036 | +5.0 | 0.073 |
+| one_pool | 1.162 ± 0.021 | +5.5 | 0.042 |
+| along | 1.128 ± 0.021 | +4.5 | 0.042 |
+| along_pool | 1.120 ± 0.020 | +4.3 | 0.041 |
+| one_pool_plane | 1.163 ± 0.021 | +5.5 | 0.042 |
+| along_pool_plane | 1.120 ± 0.020 | +4.3 | 0.040 |
+| cell_plane | 1.165 ± 0.065 | +3.7 | 0.130 |
+| cell_along_plane | 1.138 ± 0.024 | +4.6 | 0.048 |
+| cell_pool_plane | 1.179 ± 0.022 | +6.0 | 0.044 |
+| cell_along_pool_plane | 1.143 ± 0.020 | +5.1 | 0.040 |
+| cellq_plane | 1.159 ± 0.065 | +3.6 | 0.130 |
+| cellq_along_plane | 1.140 ± 0.024 | +4.7 | 0.047 |
+| cellq_pool_plane | 1.163 ± 0.022 | +5.6 | 0.045 |
+| cellq_along_pool_plane | 1.145 ± 0.020 | +5.3 | 0.039 |
+| cellxv_plane | 1.133 ± 0.069 | +2.7 | 0.138 |
+| cellxv_along_plane | 1.128 ± 0.022 | +4.3 | 0.043 |
+| cellxv_pool_plane | 1.117 ± 0.021 | +4.2 | 0.043 |
+| cellxv_along_pool_plane | 1.104 ± 0.020 | +3.8 | 0.040 |
 
 ## c10_diff (circle M10 Kn0.5 diffuse)
 
@@ -199,28 +223,28 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | cellxv_pool_plane | 0.976 ± 0.271 | +0.2 | 0.767 | 1.183 ± 0.064 | -3.3 | 0.180 |
 | cellxv_along_pool_plane | 1.244 ± 0.158 | -2.4 | 0.447 | 1.153 ± 0.039 | -2.8 | 0.110 |
 
-## Scorecard (base field over all 8 gates; pool1 over its 5: no c10_diff run)
+## Scorecard (base field over all 9 gates; pool1 over its 5: no c10_diff run)
 
 | variant | basis | gates | RMS(ratio - 1) | max abs(ratio - 1) | RMS t | median spread | airfoil spread (r, m2) |
 |---|---|---|---|---|---|---|---|
-| one | base | 8 | 0.801 | 1.837 | 3.6 | 0.297 | 7.11 / 5.26 |
-| one_pool | base | 8 | 0.114 | 0.218 | 4.8 | 0.084 | 1.65 / 1.67 |
-| along | base | 8 | 0.359 | 0.778 | 4.1 | 0.251 | 2.36 / 1.43 |
-| along_pool | base | 8 | 0.178 | 0.396 | 4.2 | 0.123 | 1.75 / 1.40 |
-| one_pool_plane | base | 8 | 0.110 | 0.214 | 4.7 | 0.084 | 1.64 / 1.67 |
-| along_pool_plane | base | 8 | 0.175 | 0.394 | 4.1 | 0.123 | 1.75 / 1.40 |
-| cell_plane | base | 8 | 0.221 | 0.453 | 4.0 | 0.173 | 1.73 / 1.55 |
-| cell_along_plane | base | 8 | 0.128 | 0.240 | 4.3 | 0.135 | 0.77 / 0.48 |
-| cell_pool_plane | base | 8 | 0.108 | 0.204 | 6.3 | 0.079 | 0.63 / 0.63 |
-| cell_along_pool_plane | base | 8 | 0.136 | 0.281 | 4.4 | 0.125 | 0.63 / 0.43 |
-| cellq_plane | base | 8 | 0.221 | 0.464 | 3.8 | 0.171 | 1.73 / 1.55 |
-| cellq_along_plane | base | 8 | 0.125 | 0.235 | 4.3 | 0.139 | 0.77 / 0.48 |
-| cellq_pool_plane | base | 8 | 0.114 | 0.200 | 6.2 | 0.081 | 0.65 / 0.65 |
-| cellq_along_pool_plane | base | 8 | 0.134 | 0.276 | 4.5 | 0.126 | 0.61 / 0.43 |
-| cellxv_plane | base | 8 | 0.244 | 0.428 | 3.1 | 0.336 | 1.56 / 1.36 |
-| cellxv_along_plane | base | 8 | 0.155 | 0.325 | 4.1 | 0.171 | 0.77 / 0.46 |
-| cellxv_pool_plane | base | 8 | 0.122 | 0.216 | 5.3 | 0.079 | 0.72 / 0.77 |
-| cellxv_along_pool_plane | base | 8 | 0.166 | 0.244 | 4.2 | 0.125 | 0.63 / 0.45 |
+| one | base | 9 | 0.757 | 1.837 | 3.7 | 0.264 | 7.11 / 5.26 |
+| one_pool | base | 9 | 0.120 | 0.218 | 4.9 | 0.067 | 1.65 / 1.67 |
+| along | base | 9 | 0.341 | 0.778 | 4.2 | 0.242 | 2.36 / 1.43 |
+| along_pool | base | 9 | 0.172 | 0.396 | 4.2 | 0.074 | 1.75 / 1.40 |
+| one_pool_plane | base | 9 | 0.117 | 0.214 | 4.8 | 0.069 | 1.64 / 1.67 |
+| along_pool_plane | base | 9 | 0.170 | 0.394 | 4.1 | 0.074 | 1.75 / 1.40 |
+| cell_plane | base | 9 | 0.215 | 0.453 | 4.0 | 0.146 | 1.73 / 1.55 |
+| cell_along_plane | base | 9 | 0.129 | 0.240 | 4.4 | 0.085 | 0.77 / 0.48 |
+| cell_pool_plane | base | 9 | 0.118 | 0.204 | 6.3 | 0.065 | 0.63 / 0.63 |
+| cell_along_pool_plane | base | 9 | 0.137 | 0.281 | 4.5 | 0.076 | 0.63 / 0.43 |
+| cellq_plane | base | 9 | 0.215 | 0.464 | 3.8 | 0.142 | 1.73 / 1.55 |
+| cellq_along_plane | base | 9 | 0.127 | 0.235 | 4.3 | 0.087 | 0.77 / 0.48 |
+| cellq_pool_plane | base | 9 | 0.121 | 0.200 | 6.2 | 0.066 | 0.65 / 0.65 |
+| cellq_along_pool_plane | base | 9 | 0.135 | 0.276 | 4.6 | 0.076 | 0.61 / 0.43 |
+| cellxv_plane | base | 9 | 0.234 | 0.428 | 3.1 | 0.286 | 1.56 / 1.36 |
+| cellxv_along_plane | base | 9 | 0.152 | 0.325 | 4.1 | 0.139 | 0.77 / 0.46 |
+| cellxv_pool_plane | base | 9 | 0.121 | 0.216 | 5.2 | 0.070 | 0.72 / 0.77 |
+| cellxv_along_pool_plane | base | 9 | 0.160 | 0.244 | 4.2 | 0.075 | 0.63 / 0.45 |
 | one | pool1 | 5 | 0.175 | 0.323 | 3.6 | 0.367 | 1.28 / 0.87 |
 | one_pool | pool1 | 5 | 0.102 | 0.145 | 5.7 | 0.066 | 0.38 / 0.29 |
 | along | pool1 | 5 | 0.119 | 0.199 | 4.5 | 0.168 | 0.63 / 0.38 |
@@ -247,6 +271,7 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | sq_spec | +0.012 | -0.051 | +1.030 | +0.000 | +0.001 | +0.000 | +0.007 | -0.012 |
 | sq_diff | -0.036 | +0.000 | +0.496 | -0.060 | +0.005 | +0.489 | +0.012 | -0.035 |
 | c10_spec | +0.215 | -0.104 | +1.240 | +0.000 | -0.001 | +0.000 | +0.004 | -0.151 |
+| c10_spec_dt2 | +0.165 | -0.061 | +1.222 | +0.000 | -0.010 | +0.000 | +0.004 | -0.140 |
 | c10_diff | -0.247 | +0.000 | +0.099 | -0.024 | -0.021 | +0.914 | +0.354 | -0.086 |
 | c10_diff_dt2 | -0.439 | +0.000 | +0.099 | -0.017 | -0.017 | +0.860 | +0.313 | +0.167 |
 | c10_diff_f2 | -0.241 | +0.000 | +0.098 | -0.023 | -0.003 | +0.862 | +0.320 | -0.085 |
