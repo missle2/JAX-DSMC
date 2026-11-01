@@ -1109,6 +1109,8 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     * ``vol_*`` (2026-11-01): the collision pull-back's volume weights against FD of scaled
       collision volumes (every cell / the cut cells, eps 0.2 and 0.1) on c10_spec, c10_diff
       and the sq_spec control;
+    * ``c10_spec_g2n`` / ``c10_spec_g2`` (``base``): the specular M 10 circle on collision
+      cells half the size, same particle count / same particles per cell (2026-11-01);
     * ``af_seed4_diag``: the airfoil seed 4 with every slope fit's node count and conditioning
       (scratch/fitgate/seed_outlier.py; the realisation needs the cluster GPU);
     * ``smoke`` first.  All 2-D: rtx slices, except the diffuse M 10 circle's ``c10d_*`` jobs
@@ -1149,12 +1151,21 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     # FD reused: c10_spec seeds 0-7, c10_diff's done seeds 0, 4, ..., 28): records ~3.3x ->
     # GPU_KIND=h200_71 ONLY='^c10h_'
     jobs |= _fitgate_blocks("c10_spec_h1000", "c10h_spec", 8, ("base",))
+    # the diffuse one OOMed on the 71 GB slice (2026-11-01: ~66 GB in use, then the backward's
+    # [1000, N, 2] reward columns, 3.1 GB) -> GPU_KIND=rtx_full ONLY='^c10h_diff', two seeds a
+    # job (the diffuse backward is the slow one)
     jobs |= {
         f"c10h_diff_s{first}_base": (
-            f"{run} --gate c10_diff_h1000 --seeds {first} {first + 16} --stride 4 --bases base"
+            f"{run} --gate c10_diff_h1000 --seeds {first} {first + 8} --stride 4 --bases base"
         )
-        for first in (0, 16)
+        for first in (0, 8, 16, 24)
     }
+    # collision cells half the size on the specular M 10 circle: at the same particle count
+    # (c10_spec_g2n, 16 seeds, GPU_KIND=h200 or rtx_48 ONLY='^c10g2n_') and at the same
+    # particles per cell (c10_spec_g2, 8 seeds, 4x the particles: GPU_KIND=h200_full or
+    # rtx_full ONLY='^c10g2_')
+    jobs |= _fitgate_blocks("c10_spec_g2n", "c10g2n", 16, ("base",))
+    jobs |= _fitgate_blocks("c10_spec_g2", "c10g2", 8, ("base",))
     # the collision pull-back in situ (scratch/fitgate/volume_gate.py): the collision volumes
     # of every / the cut cells scaled by 1 +- eps, FD against the backward's prediction; the
     # squash as the low-Mach control.  rtx slices, except the diffuse M 10 circle (> 24 GB):

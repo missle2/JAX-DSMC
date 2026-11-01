@@ -101,6 +101,14 @@ NEW_GATES = {
                        [0.1, 0.05]),
     "c10_diff_h1000": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "warmup": 2100, "steps": 1000},
                        "radius", [0.1, 0.05]),
+    # collision cells half the size (2026-11-01: the user's hypothesis -- the M 10 bias lives
+    # in the compressed shock layer, whose cells are too coarse for the dynamics there; the
+    # horizon gave -3 %, the in-situ collision-volume gate -6 %): grid_scale 2 at the same
+    # particles per cell (4x the particles, a whole card) and at the same particle count
+    # (fnum x 4: a quarter the particles per cell)
+    "c10_spec_g2": ({**CIRCLE_M10, **COMMON, "grid_scale": 2}, "radius", [0.1, 0.05]),
+    "c10_spec_g2n": ({**CIRCLE_M10, **COMMON, "grid_scale": 2, "fnum_scale": 8.0}, "radius",
+                     [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
