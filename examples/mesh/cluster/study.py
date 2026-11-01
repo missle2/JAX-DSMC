@@ -1206,6 +1206,19 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
         for first in (0, 8, 16, 24)
     }
     jobs |= _fitgate_blocks("c10_spec_2dt", "c10_2dt", 16, ("base",), few)
+    # the wall-probe gate (scratch/fitgate/probe_gate.py, 2026-11-01): the fitted grad lambda
+    # at the body-hit particles against FD of imposed post-move perturbations (normal push,
+    # speed scale, rotation), geometry unchanged; the M 10 specular circle at Kn 0.5 and at
+    # Kn 10 (the gate's own control: nearly collisionless, same body and free box -- the
+    # squash's channel has reflecting walls, which the probe's hit test cannot tell from the
+    # body).  The laptop smoke ran out of host memory after the predictions.
+    # GPU_KIND=rtx ONLY='^probe_c10_spec_s', GPU_KIND=rtx_48 ONLY='^probe_c10_spec_kn10'
+    probe = "python3 scratch/fitgate/probe_gate.py"
+    for gate in ("c10_spec", "c10_spec_kn10"):
+        jobs |= {
+            f"probe_{gate}_s{first}": f"{probe} --gate {gate} --seeds {first} {first + 4}"
+            for first in (0, 4)
+        }
     # the collision pull-back in situ (scratch/fitgate/volume_gate.py): the collision volumes
     # of every / the cut cells scaled by 1 +- eps, FD against the backward's prediction; the
     # squash as the low-Mach control.  rtx slices, except the diffuse M 10 circle (> 24 GB):
