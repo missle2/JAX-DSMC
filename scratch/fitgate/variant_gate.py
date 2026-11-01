@@ -112,10 +112,16 @@ NEW_GATES = {
     # 2026-11-01: g2n halved every along / cell variant's bias (+11 -> +5 %, cellxv_along_pool
     # +9 -> +1 %), one_pool_plane unchanged: the scaling with the cell (g4n, a quarter the cell,
     # the same particles) and the diffuse circle on the half cells
-    "c10_spec_g4n": ({**CIRCLE_M10, **COMMON, "grid_scale": 4, "fnum_scale": 32.0}, "radius",
-                     [0.1, 0.05]),
-    "c10_diff_g2n": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grid_scale": 2, "fnum_scale": 8.0},
+    # a_max: the captured pair record is (steps, A_max, cells[, 3]) -- c10_spec_g4n's first try
+    # kept CIRCLE_M10's 256 on 16x the cells and died allocating one 35.4 GB velocity array
+    # (300 x 256 x 19 200 x 3 x 8 B, 2026-11-01).  NTC attempts per cell scale as N_c^2 / V_c,
+    # i.e. 1 / k^D at the same particle count: <= 16 at k = 4 (c10_spec never outgrew 256),
+    # ~125 for the diffuse circle at k = 2 (peak 499 at k = 1).  The cap is only the first
+    # guess -- a clipped run is redone at 1.4x its peak, the same draws (_run_grown)
+    "c10_spec_g4n": ({**CIRCLE_M10, **COMMON, "grid_scale": 4, "fnum_scale": 32.0, "a_max": 24},
                      "radius", [0.1, 0.05]),
+    "c10_diff_g2n": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grid_scale": 2, "fnum_scale": 8.0,
+                      "a_max": 160}, "radius", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
