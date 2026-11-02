@@ -13,6 +13,11 @@ same pull-back), free of the geometry, the fits of grad lambda and the wall term
 cut-volume term weighs); two eps per set (linearity: the FD's own curvature).
 
     PYTHONPATH=. python3 scratch/fitgate/volume_gate.py --gate c10_spec --seeds 0 4
+
+``--field NAME --reuse-fd`` (2026-11-01, after the diffuse circle read pred / FD ~1.4): the
+backward's collision field fit swapped (:data:`FIELDS`) and only the prediction recomputed,
+the FD read from the base run's rows (the scaled forwards do not depend on the backward).
+One backward per seed; rows to ``volume_<gate>_<field>_s*.jsonl``.
 """
 
 from __future__ import annotations
@@ -38,6 +43,19 @@ from jax_dsmc.mesh import cut  # noqa: E402
 jax.config.update("jax_enable_x64", True)
 OUT_DIR = Path("examples/mesh/results/fitgate")
 EPS = (0.2, 0.1)
+FIELDS = {
+    "base": ensemble_backward.CELL_BASIS,
+    # the leverage guard off / tighter (it lowers the order at gap queries: biased toward the mean)
+    "noguard": "cell:cubicv:adapt1.5:align0.9:both",
+    "guard8": "cell:cubicv:adapt1.5:guard8:align0.9:both",
+    # the full cubic (x-v cross terms) and the quadratic
+    "cubic": "cell:cubic:adapt1.5:guard32:align0.9:both",
+    "quad": "cell:quad:adapt1.5:guard32:align0.9:both",
+    # pooled over the 3^D block
+    "pool1": ensemble_backward.CELL_BASIS + ":pool1",
+    # the per-query k-nearest quadratic (local in velocity: a bimodal cell is two clouds)
+    "knn": "quadratic_full",
+}
 _BUILD = EM.build
 _VOLUME_TERM = EM._volume_term
 SCALE = {}
@@ -75,24 +93,34 @@ def masks(cfg, parameter, value):
     return {"all": jnp.asarray(grid.volume > 0.0), "cut": cells}
 
 
+def base_fds(gate):
+    """``{seed: row}`` of the base field's rows of ``gate`` (their FDs)."""
+    paths = sorted(OUT_DIR.glob(f"volume_{gate}_s*.jsonl"))
+    return {r["seed"]: r for p in paths for r in map(json.loads, p.read_text().splitlines())}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gate", required=True)
     ap.add_argument("--seeds", type=int, nargs=2, required=True, help="first, end (exclusive)")
+    ap.add_argument("--field", default="base", choices=sorted(FIELDS))
+    ap.add_argument("--reuse-fd", action="store_true", help="read the FD from the base rows")
     args = ap.parse_args(argv)
     cfg, parameter, _steps, seed_start, _rows = V.gate_config(args.gate)
     value = float(EM.nominal(cfg, parameter))
-    out = OUT_DIR / f"volume_{args.gate}_s{args.seeds[0]}-{args.seeds[1]}.jsonl"
+    tag = "" if args.field == "base" else f"_{args.field}"
+    out = OUT_DIR / f"volume_{args.gate}{tag}_s{args.seeds[0]}-{args.seeds[1]}.jsonl"
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     done = set()
     if out.exists():
         done = {json.loads(line)["seed"] for line in out.read_text().splitlines()}
-    ensemble_backward.configure("virtual", 4, 8, "staged", V.BASES["base"])
+    reused = base_fds(args.gate) if args.reuse_fd else {}
+    ensemble_backward.configure("virtual", 4, 8, "staged", FIELDS[args.field])
     EM.build = build_scaled
     EM._volume_term = grab_volume_term
     sets = masks(cfg, parameter, value)
     for seed in range(*args.seeds):
-        if seed in done:
+        if seed in done or (args.reuse_fd and seed not in reused):
             continue
         key = jax.random.key(seed_start + seed)
         t0 = time.time()
@@ -100,10 +128,14 @@ def main(argv=None):
         _t, info, _s = EM.shape_terms(
             cfg, key, None, parameter, 32, cfg.get("timing_band", 10.0), ("cell_pool_plane",)
         )
-        row = {"gate": args.gate, "seed": seed, "objective": info["objective"], "eps": list(EPS)}
+        row = {"gate": args.gate, "field": args.field, "seed": seed,
+               "objective": info["objective"], "eps": list(EPS)}  # fmt: skip
         for name, mask in sets.items():
             m = np.asarray(mask)
             row[f"pred_{name}"] = float(np.sum(CAPTURED["w"][m] * CAPTURED["v"][m]))
+            if args.reuse_fd:
+                row[f"fd_{name}"] = reused[seed][f"fd_{name}"]
+                continue
             fds = []
             for eps in EPS:
                 vals = []

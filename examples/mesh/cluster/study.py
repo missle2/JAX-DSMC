@@ -1229,6 +1229,18 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
             f"vol_{gate}_s{first}": f"{vol} --gate {gate} --seeds {first} {first + 4}"
             for first in range(0, seeds, 4)
         }
+    # the same gate's prediction under other collision-field fits, the FD reused (one backward
+    # per seed; 2026-11-01: base read pred / FD 1.4 diffuse, 0.94 specular):
+    # GPU_KIND=rtx ONLY='^volf_c10_spec', GPU_KIND=h200 ONLY='^volf_c10_diff_(noguard|guard8|cubic|quad)',
+    # GPU_KIND=h200_71 ONLY='^volf_c10_diff_(pool1|knn)'
+    for gate in ("c10_spec", "c10_diff"):
+        for field in ("noguard", "guard8", "cubic", "quad", "pool1", "knn"):
+            jobs |= {
+                f"volf_{gate}_{field}_s{first}": (
+                    f"{vol} --gate {gate} --seeds {first} {first + 4} --field {field} --reuse-fd"
+                )
+                for first in (0, 4)
+            }
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

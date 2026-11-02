@@ -35,13 +35,24 @@ GATES = (
     ("c10_spec_dt2", "circle M10 specular, dt/2"),
     ("c10_spec_g2n", "circle M10 specular, cells/2"),
     ("c10_spec_g4n", "circle M10 specular, cells/4"),
-    ("c10_diff_g2n", "circle M10 diffuse, cells/2"),
+    ("c10_spec_2dt", "circle M10 specular, 2 dt"),
+    ("c10_spec_h1000", "circle M10 specular, 1000 captured steps"),
+    ("c10_spec_mem", "circle M10 specular (+ membership, not in total)"),
+    ("c10_spec_gz001", "circle M10 specular, grazing 0.001"),
+    ("c10_spec_two", "circle M10 specular, two-sided fits"),
+    ("c10_spec_v816", "circle M10 specular, virtual 8x16"),
+    ("c10_spec_kn2", "circle M10 Kn2 specular"),
+    ("c10_spec_kn10", "circle M10 Kn10 specular"),
     ("c10_diff", "circle M10 Kn0.5 diffuse"),
     ("c10_diff_dt2", "circle M10 diffuse, dt/2"),
     ("c10_diff_f2", "circle M10 diffuse, N/2"),
+    ("c10_diff_g2n", "circle M10 diffuse, cells/2"),
+    ("c10_diff_mem", "circle M10 diffuse (+ membership, not in total)"),
     ("af_drag_radius", "airfoil Kn0.39 diffuse, radius"),
     ("af_drag_mode2", "airfoil Kn0.39 diffuse, cos2θ"),
 )
+NCOLS = 5
+NROWS = -(-len(GATES) // NCOLS)
 BASES = {"base": "#2a78d6", "pool1": "#eb6834", "pool2": "#1baf7a"}
 # the estimators worth carrying forward (the rest: the scorecard table only)
 CANDIDATES = (
@@ -58,7 +69,7 @@ def load():
     """``{(gate, basis): [row per seed]}``, the last row of a repeated seed winning."""
     by = collections.defaultdict(dict)
     for path in sorted(RESULTS.glob("*.jsonl")):
-        if "smoke" in path.name or path.name.startswith("volume_"):
+        if "smoke" in path.name or path.name.startswith(("volume_", "probe_")):
             continue
         for line in path.read_text().splitlines():
             row = json.loads(line)
@@ -102,9 +113,11 @@ def fd_band(rows):
 
 
 def forest(data, variants):
-    fig, axes = plt.subplots(3, 4, figsize=(21, 15), sharey=True)
+    fig, axes = plt.subplots(NROWS, NCOLS, figsize=(5.2 * NCOLS, 5 * NROWS), sharey=True)
     y = np.arange(len(variants))
-    for ax, (gate, title) in zip(axes.flat, GATES, strict=True):
+    for ax in axes.flat[len(GATES) :]:
+        ax.set_visible(False)
+    for ax, (gate, title) in zip(axes.flat, GATES, strict=False):
         bases = [b for b in BASES if (gate, b) in data]
         rows0 = data[(gate, bases[0])]
         band = fd_band(rows0)
@@ -129,7 +142,7 @@ def forest(data, variants):
         ax.tick_params(labelsize=7)
         if gate == "af_drag_radius":
             ax.legend(fontsize=7, loc="lower right", title="collision field", title_fontsize=7)
-    for ax in axes[:, 0]:
+    for ax in axes.flat:
         ax.set_yticks(y, variants, fontsize=7)
     axes[0, 0].invert_yaxis()
     fig.suptitle("Shape-adjoint fits against central differences (mean over seeds ±2 s.e.; "
@@ -140,9 +153,11 @@ def forest(data, variants):
 
 
 def spread_plot(data):
-    fig, axes = plt.subplots(3, 4, figsize=(21, 12))
+    fig, axes = plt.subplots(NROWS, NCOLS, figsize=(5.2 * NCOLS, 4 * NROWS))
     markers = dict(zip(CANDIDATES, "osD^vP", strict=True))
-    for ax, (gate, title) in zip(axes.flat, GATES, strict=True):
+    for ax in axes.flat[len(GATES) :]:
+        ax.set_visible(False)
+    for ax, (gate, title) in zip(axes.flat, GATES, strict=False):
         for b in BASES:
             if (gate, b) not in data:
                 continue
@@ -200,7 +215,7 @@ def tables(data, variants):
                           f"{s['spread']:.3f}"]  # fmt: skip
             lines.append(f"| {v} | " + " | ".join(cells) + " |")
     # scorecard: over the gates each (variant, basis) has
-    lines += ["", "## Scorecard (base field over all 12 gates; pool1 over its 5: no c10_diff run)", "",
+    lines += ["", "## Scorecard (base field over every gate; pool1 over the gates that ran it)", "",
               "| variant | basis | gates | RMS(ratio - 1) | max abs(ratio - 1) | RMS t | "
               "median spread | airfoil spread (r, m2) |",
               "|---|---|---|---|---|---|---|---|"]  # fmt: skip
