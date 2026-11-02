@@ -1,7 +1,7 @@
 """Fitgate trends (2026-11-01): the M 10 circle's adjoint bias against Knudsen number, time
 step, cell size and the derivative-only settings (paired), with the in-situ collision-volume
-gate and the wall-probe gate.  Writes examples/mesh/figures/fitgate/trends.png and
-trends.md.
+gate and the wall-probe gate.  Writes examples/mesh/figures/fitgate/trends.png, and
+fields.png: the volume gate with the collision field swapped (volf jobs, FD shared per seed).
 
     PYTHONPATH=. python3 scratch/fitgate/trends.py
 """
@@ -126,7 +126,8 @@ def paired_panel(ax, data):
 
 def volume_rows(gate):
     paths = sorted(A.RESULTS.glob(f"volume_{gate}_s*.jsonl"))
-    return [json.loads(line) for p in paths for line in p.read_text().splitlines()]
+    rows = [json.loads(line) for p in paths for line in p.read_text().splitlines()]
+    return [r for r in rows if not r.get("smoke")]
 
 
 def volume_panel(ax):
@@ -157,6 +158,57 @@ def volume_panel(ax):
     ax.set_title("collision pull-back in situ (volume gate)", fontsize=9)
     ax.grid(axis="x", color="0.93", lw=0.6)
     ax.tick_params(labelsize=7)
+
+
+FIELDS = ("base", "noguard", "guard8", "cubic", "quad", "pool1", "knn")
+
+
+def field_rows(gate, field):
+    tag = gate if field == "base" else f"{gate}_{field}"
+    return {r["seed"]: r for r in volume_rows(tag) if r.get("field", "base") == field}
+
+
+def cell_part(r, key, cells):
+    """A row's pred or FD (FD: mean of its eps) on all cells or all minus the cut cells."""
+    out = np.mean(r[f"{key}_all"])
+    return out if cells == "all" else out - np.mean(r[f"{key}_cut"])
+
+
+def field_panel(ax, gate, title):
+    """pred / FD per collision field, on the seeds each field ran (the FD's seeds' mean)."""
+    base = field_rows(gate, "base")
+    labels = []
+    for k, field in enumerate(FIELDS):
+        rows = field_rows(gate, field)
+        seeds = sorted(set(rows) & set(base))
+        for i, (cells, mk, c) in enumerate((("all", "o", "#2a78d6"), ("noncut", "s", "#eb6834"))):
+            if len(seeds) < 2:
+                continue
+            r, se = ratio_se([cell_part(rows[s], "pred", cells) for s in seeds],
+                             [cell_part(base[s], "fd", cells) for s in seeds])  # fmt: skip
+            ax.errorbar(r, k + 0.15 * (i - 0.5), xerr=2 * se, fmt=mk, ms=5, color=c, lw=1.2,
+                        label=f"{cells} cells" if k == 0 else None)  # fmt: skip
+        labels.append(f"{field} (n = {len(seeds)})")
+    ax.axvline(1.0, color="0.45", lw=1)
+    ax.set_xlim(0.6, 2.0)
+    ax.set_yticks(range(len(FIELDS)), labels, fontsize=8)
+    ax.invert_yaxis()
+    ax.legend(fontsize=7, loc="lower right")
+    ax.set_xlabel("predicted / FD of the collision-volume scaling (±2 s.e.; FD of both eps)",
+                  fontsize=8)  # fmt: skip
+    ax.set_title(title, fontsize=9)
+    ax.grid(axis="x", color="0.93", lw=0.6)
+    ax.tick_params(labelsize=7)
+
+
+def fields_figure():
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+    field_panel(axes[0], "c10_spec", "M10 Kn0.5 specular: collision field swapped")
+    field_panel(axes[1], "c10_diff", "M10 Kn0.5 diffuse: collision field swapped")
+    fig.tight_layout()
+    fig.savefig(OUT / "fields.png", dpi=150)
+    plt.close(fig)
+    print(f"wrote {OUT}/fields.png")
 
 
 def probe_rows(tag):
@@ -214,6 +266,7 @@ def main():
     fig.savefig(OUT / "trends.png", dpi=150)
     plt.close(fig)
     print(f"wrote {OUT}/trends.png")
+    fields_figure()
 
 
 if __name__ == "__main__":

@@ -1241,6 +1241,19 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
                 )
                 for first in (0, 4)
             }
+    # the same gate under more virtual substeps / partners, FD reused (2026-11-01: every field
+    # read the diffuse circle's 1.48, so the shared virtual pull-back's O(rate dt / S)
+    # linearisation is next; specular 8 x 16 moved the shape gradient 0 +- 1 %).  Every row
+    # also maps the collision rate per particle per step (v4x8: the default, for the maps):
+    # GPU_KIND=rtx_48 ONLY='^volp_'  (h200 if rtx_48 is full)
+    for gate, virtuals in (("c10_diff", ("4 8", "8 16", "16 8", "32 8")), ("c10_spec", ("4 8",))):
+        for virtual in virtuals:
+            name = "v" + virtual.replace(" ", "x")
+            for first in (0, 2) if virtual != "4 8" else (0,):
+                jobs[f"volp_{gate}_{name}_s{first}"] = (
+                    f"{vol} --gate {gate} --seeds {first} {first + 2} --virtual {virtual} "
+                    "--reuse-fd"
+                )
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

@@ -24,7 +24,7 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | c10_diff_dt2 | 16 | ±3.5 % | 0.984 ± 0.081 |
 | c10_diff_f2 | 16 | ±4.3 % | 0.966 ± 0.062 |
 | c10_diff_g2n | 16 | ±2.7 % | 1.051 ± 0.070 |
-| c10_diff_mem | 6 | ±4.4 % | 0.992 ± 0.175 |
+| c10_diff_mem | 8 | ±3.3 % | 1.029 ± 0.139 |
 | af_drag_radius | 32 | ±8.8 % | 1.133 ± 0.160 |
 | af_drag_mode2 | 32 | ±10.1 % | 0.979 ± 0.174 |
 
@@ -450,12 +450,12 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | one_pool | nan ± nan | +nan | nan |
 | along | nan ± nan | +nan | nan |
 | along_pool | nan ± nan | +nan | nan |
-| one_pool_plane | 0.926 ± 0.051 | -2.6 | 0.062 |
-| along_pool_plane | 0.880 ± 0.068 | -3.9 | 0.083 |
+| one_pool_plane | 0.927 ± 0.038 | -3.5 | 0.054 |
+| along_pool_plane | 0.878 ± 0.052 | -5.2 | 0.074 |
 | cell_plane | nan ± nan | +nan | nan |
 | cell_along_plane | nan ± nan | +nan | nan |
-| cell_pool_plane | 0.994 ± 0.058 | -0.2 | 0.071 |
-| cell_along_pool_plane | 0.949 ± 0.070 | -1.6 | 0.086 |
+| cell_pool_plane | 0.989 ± 0.043 | -0.5 | 0.060 |
+| cell_along_pool_plane | 0.949 ± 0.054 | -2.1 | 0.076 |
 | cellq_plane | nan ± nan | +nan | nan |
 | cellq_along_plane | nan ± nan | +nan | nan |
 | cellq_pool_plane | nan ± nan | +nan | nan |
@@ -463,7 +463,7 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | cellxv_plane | nan ± nan | +nan | nan |
 | cellxv_along_plane | nan ± nan | +nan | nan |
 | cellxv_pool_plane | nan ± nan | +nan | nan |
-| cellxv_along_pool_plane | 0.856 ± 0.070 | -4.6 | 0.085 |
+| cellxv_along_pool_plane | 0.857 ± 0.053 | -6.1 | 0.075 |
 
 ## af_drag_radius (airfoil Kn0.39 diffuse, radius)
 
@@ -520,7 +520,7 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | along | base | 21 | nan | nan | nan | nan | 2.36 / 1.43 |
 | along_pool | base | 21 | nan | nan | nan | nan | 1.75 / 1.40 |
 | one_pool_plane | base | 21 | 0.143 | 0.431 | 5.1 | 0.026 | 1.64 / 1.67 |
-| along_pool_plane | base | 21 | 0.127 | 0.394 | 3.9 | 0.019 | 1.75 / 1.40 |
+| along_pool_plane | base | 21 | 0.127 | 0.394 | 4.0 | 0.019 | 1.75 / 1.40 |
 | cell_plane | base | 21 | nan | nan | nan | nan | 1.73 / 1.55 |
 | cell_along_plane | base | 21 | nan | nan | nan | nan | 0.77 / 0.48 |
 | cell_pool_plane | base | 21 | 0.154 | 0.402 | 6.7 | 0.044 | 0.63 / 0.63 |
@@ -532,7 +532,7 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | cellxv_plane | base | 21 | nan | nan | nan | nan | 1.56 / 1.36 |
 | cellxv_along_plane | base | 21 | nan | nan | nan | nan | 0.77 / 0.46 |
 | cellxv_pool_plane | base | 21 | nan | nan | nan | nan | 0.72 / 0.77 |
-| cellxv_along_pool_plane | base | 21 | 0.118 | 0.244 | 3.5 | 0.025 | 0.63 / 0.45 |
+| cellxv_along_pool_plane | base | 21 | 0.118 | 0.244 | 3.6 | 0.025 | 0.63 / 0.45 |
 | one | pool1 | 5 | 0.175 | 0.323 | 3.6 | 0.367 | 1.28 / 0.87 |
 | one_pool | pool1 | 5 | 0.102 | 0.145 | 5.7 | 0.066 | 0.38 / 0.29 |
 | along | pool1 | 5 | 0.119 | 0.199 | 4.5 | 0.168 | 0.63 / 0.38 |
@@ -574,6 +574,6 @@ Ratio = seed-mean adjoint / seed-mean FD at step h, ±2 s.e. of the adjoint mean
 | c10_diff_dt2 | -0.439 | +0.000 | +0.099 | -0.017 | -0.017 | +0.860 | +0.313 | +0.167 |
 | c10_diff_f2 | -0.241 | +0.000 | +0.098 | -0.023 | -0.003 | +0.862 | +0.320 | -0.085 |
 | c10_diff_g2n | -0.241 | +0.000 | +0.101 | -0.024 | -0.002 | +0.873 | +0.371 | +0.323 |
-| c10_diff_mem | -0.246 | +0.000 | +0.099 | -0.022 | -0.023 | +0.923 | +0.349 | -0.086 |
+| c10_diff_mem | -0.247 | +0.000 | +0.099 | -0.024 | -0.021 | +0.914 | +0.354 | -0.086 |
 | af_drag_radius | -0.523 | +0.000 | +0.290 | -0.036 | -0.002 | +0.853 | +0.144 | +0.347 |
 | af_drag_mode2 | +0.404 | -0.000 | +0.556 | -0.136 | -0.019 | +0.595 | -0.047 | -0.201 |

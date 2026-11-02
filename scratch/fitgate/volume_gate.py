@@ -18,12 +18,22 @@ cut-volume term weighs); two eps per set (linearity: the FD's own curvature).
 backward's collision field fit swapped (:data:`FIELDS`) and only the prediction recomputed,
 the FD read from the base run's rows (the scaled forwards do not depend on the backward).
 One backward per seed; rows to ``volume_<gate>_<field>_s*.jsonl``.
+
+``--virtual S P`` (2026-11-01, after every field read the diffuse circle's 1.48): the virtual
+pull-back's substeps x partners (default 4 x 8; its linearisation error is O(rate dt / S),
+validated to rate dt 0.16).  Each row also carries the collision rate per particle per step
+of every collision cell (accepted collisions x 2 / occupancy, over the captured steps) binned
+in :data:`RATE_EDGES`, with the prediction summed per bin -- where the substeps move it --
+and ``ratemap_<gate>[_<field>][_v<S>x<P>]_s<seed>.npz`` (rate, g_c V_c, cell centres).  Rows to
+``volume_<gate>[_<field>]_v<S>x<P>_s*.jsonl``.  (The sequential pull-back has no
+per-cell increments, so it cannot be gated here.)
 """
 
 from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import json
 import sys
 import time
@@ -37,7 +47,7 @@ sys.path.insert(0, "scratch/fitgate")
 import variant_gate as V  # noqa: E402
 
 from examples import ensemble_mesh as EM  # noqa: E402
-from jax_dsmc import ensemble_backward, shape  # noqa: E402
+from jax_dsmc import ensemble_backward, grid as grid_mod, shape  # noqa: E402
 from jax_dsmc.mesh import cut  # noqa: E402
 
 jax.config.update("jax_enable_x64", True)
@@ -56,6 +66,8 @@ FIELDS = {
     # the per-query k-nearest quadratic (local in velocity: a bimodal cell is two clouds)
     "knn": "quadratic_full",
 }
+RATE_EDGES = (0.0, 0.025, 0.05, 0.1, 0.2, 0.4, 0.8, 1.6, float("inf"))
+"""Bins of collisions per particle per step (the virtual default was validated to 0.16)."""
 _BUILD = EM.build
 _VOLUME_TERM = EM._volume_term
 SCALE = {}
@@ -76,7 +88,27 @@ def grab_volume_term(dev, rec, grid, mesh):
     """``EM._volume_term``, keeping the weights and the volumes it saw."""
     CAPTURED["w"] = np.asarray(shape.volume_weights(dev.cell_collision, grid))
     CAPTURED["v"] = np.asarray(grid.volume)
+    CAPTURED["rate"] = np.asarray(collision_rate(rec.x, rec.alive, rec.pairs, grid))
     return _VOLUME_TERM(dev, rec, grid, mesh)
+
+
+def step_occupancy(xs, grid):
+    """One captured step's alive particles per collision cell, ``f64[C]``."""
+    x, alive = xs
+    n_cells = grid.volume.shape[0]
+    cell = grid_mod.collision_cell(x, grid)
+    ok = alive & (cell >= 0) & (cell < n_cells)
+    return jnp.zeros(n_cells).at[jnp.where(ok, cell, 0)].add(ok.astype(jnp.float64))
+
+
+@jax.jit
+def collision_rate(x, alive, pairs, grid):
+    """Accepted collisions per particle per step of every collision cell over the captured
+    steps: ``2 sum_k accepted_kc / sum_k occupancy_kc`` (0 in empty cells)."""
+    count = jnp.sum(jax.lax.map(functools.partial(step_occupancy, grid=grid), (x, alive)), axis=0)
+    real = pairs.accept & (pairs.pi < x.shape[1])  # attempt slots on the scratch slot: none
+    accepted = jnp.sum(real, axis=(0, 1)).astype(jnp.float64)
+    return jnp.where(count > 0, 2.0 * accepted / jnp.maximum(count, 1.0), 0.0)
 
 
 def objective(cfg, parameter, value, key):
@@ -99,23 +131,46 @@ def base_fds(gate):
     return {r["seed"]: r for p in paths for r in map(json.loads, p.read_text().splitlines())}
 
 
+def rate_columns(mask, name, seed, cfg, parameter, value):
+    """The row's collision-rate columns (prediction and cells per :data:`RATE_EDGES` bin) and
+    the seed's rate map, from the backward just run (:data:`CAPTURED`)."""
+    rate, wv = CAPTURED["rate"], CAPTURED["w"] * CAPTURED["v"]
+    m = np.asarray(mask) & (CAPTURED["v"] > 0.0)
+    bins = np.digitize(rate, RATE_EDGES[1:-1])
+    grid = _BUILD(cfg, parameter, value, 1)[0]
+    centres = np.asarray(grid_mod.cell_centers(grid))
+    np.savez(OUT_DIR / f"ratemap_{name}_s{seed}.npz",
+             rate=rate, wv=wv, mask=m, centres=centres)  # fmt: skip
+    return {
+        "rate_edges": [e if np.isfinite(e) else None for e in RATE_EDGES],
+        "pred_by_rate": [float(np.sum(wv[m & (bins == b)])) for b in range(len(RATE_EDGES) - 1)],
+        "cells_by_rate": [int(np.sum(m & (bins == b))) for b in range(len(RATE_EDGES) - 1)],
+        "rate_quantiles": [float(q) for q in np.quantile(rate[m], (0.5, 0.9, 0.99, 1.0))],
+    }
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gate", required=True)
     ap.add_argument("--seeds", type=int, nargs=2, required=True, help="first, end (exclusive)")
     ap.add_argument("--field", default="base", choices=sorted(FIELDS))
     ap.add_argument("--reuse-fd", action="store_true", help="read the FD from the base rows")
+    ap.add_argument("--virtual", type=int, nargs=2, default=None, metavar=("S", "P"),
+                    help="virtual pull-back substeps, partners (default 4 8, untagged)")  # fmt: skip
     args = ap.parse_args(argv)
     cfg, parameter, _steps, seed_start, _rows = V.gate_config(args.gate)
     value = float(EM.nominal(cfg, parameter))
     tag = "" if args.field == "base" else f"_{args.field}"
+    virtual = (4, 8) if args.virtual is None else tuple(args.virtual)
+    if args.virtual is not None:
+        tag += f"_v{virtual[0]}x{virtual[1]}"
     out = OUT_DIR / f"volume_{args.gate}{tag}_s{args.seeds[0]}-{args.seeds[1]}.jsonl"
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     done = set()
     if out.exists():
         done = {json.loads(line)["seed"] for line in out.read_text().splitlines()}
     reused = base_fds(args.gate) if args.reuse_fd else {}
-    ensemble_backward.configure("virtual", 4, 8, "staged", FIELDS[args.field])
+    ensemble_backward.configure("virtual", *virtual, "staged", FIELDS[args.field])
     EM.build = build_scaled
     EM._volume_term = grab_volume_term
     sets = masks(cfg, parameter, value)
@@ -128,8 +183,9 @@ def main(argv=None):
         _t, info, _s = EM.shape_terms(
             cfg, key, None, parameter, 32, cfg.get("timing_band", 10.0), ("cell_pool_plane",)
         )
-        row = {"gate": args.gate, "field": args.field, "seed": seed,
+        row = {"gate": args.gate, "field": args.field, "virtual": list(virtual), "seed": seed,
                "objective": info["objective"], "eps": list(EPS)}  # fmt: skip
+        row |= rate_columns(sets["all"], f"{args.gate}{tag}", seed, cfg, parameter, value)
         for name, mask in sets.items():
             m = np.asarray(mask)
             row[f"pred_{name}"] = float(np.sum(CAPTURED["w"][m] * CAPTURED["v"][m]))
