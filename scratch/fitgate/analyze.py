@@ -48,6 +48,10 @@ GATES = (
     ("c10_diff_f2", "circle M10 diffuse, N/2"),
     ("c10_diff_g2n", "circle M10 diffuse, cells/2"),
     ("c10_diff_mem", "circle M10 diffuse (+ membership, not in total)"),
+    ("c10_diff_h600", "circle M10 diffuse, 600 captured steps"),
+    ("c10_diff_h1000", "circle M10 diffuse, 1000 captured steps"),
+    ("c10_diff_kn2", "circle M10 Kn2 diffuse"),
+    ("c10_diff_kn10", "circle M10 Kn10 diffuse"),
     ("af_drag_radius", "airfoil Kn0.39 diffuse, radius"),
     ("af_drag_mode2", "airfoil Kn0.39 diffuse, cos2θ"),
 )
@@ -247,8 +251,11 @@ def tables(data, variants):
 
 
 def main():
+    global GATES, NROWS  # noqa: PLW0603 -- the gates with rows (queued ones are listed early)
     OUT.mkdir(parents=True, exist_ok=True)
     data = load()
+    GATES = tuple((g, t) for g, t in GATES if data.get((g, "base")))
+    NROWS = -(-len(GATES) // NCOLS)
     variants = list(data[("sq_spec", "base")][0]["terms"])
     forest(data, variants)
     spread_plot(data)

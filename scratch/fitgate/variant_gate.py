@@ -101,6 +101,11 @@ NEW_GATES = {
                        [0.1, 0.05]),
     "c10_diff_h1000": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "warmup": 2100, "steps": 1000},
                        "radius", [0.1, 0.05]),
+    # 600 steps (2026-11-01): the diffuse wall's cold re-emitted gas (~340 m/s against the 3 km/s
+    # beam) may remember longer than 300 steps; with h1000 a convergence read (h1000 needs
+    # rtx_full, the 71 GB slice OOMed)
+    "c10_diff_h600": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "warmup": 2500, "steps": 600},
+                      "radius", [0.1, 0.05]),
     # collision cells half the size (2026-11-01: the user's hypothesis -- the M 10 bias lives
     # in the compressed shock layer, whose cells are too coarse for the dynamics there; the
     # horizon gave -3 %, the in-situ collision-volume gate -6 %): grid_scale 2 at the same
@@ -131,6 +136,10 @@ NEW_GATES = {
                       "radius", [0.1, 0.05]),
     "c10_spec_kn2": ({**CIRCLE_M10, **COMMON, "knudsen": 2.0, "slots": 400_000, "a_max": 96},
                      "radius", [0.1, 0.05]),
+    # the diffuse circle's collisionless anchor (2026-11-01: the specular adjoint captures 60-90 %
+    # of the collisions' share of dJ/dR, read against Kn 10 scaled to the Kn 0.5 density)
+    "c10_diff_kn10": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "knudsen": 10.0, "slots": 400_000,
+                       "a_max": 32}, "radius", [0.1, 0.05]),
     # the derivative-only settings, paired with c10_spec seed by seed (its forward, its FD): the
     # grazing cut-off 0.01 -> 0.001 (the hit derivative's floor), two-sided backward fits, and
     # 4 x 8 -> 8 x 16 virtual substeps x partners (the volume gate's -6 %)
@@ -152,6 +161,7 @@ NEW_GATES = {
 FD_FROM = {
     "c10_spec_h1000": "c10_spec",
     "c10_diff_h1000": "c10_diff",
+    "c10_diff_h600": "c10_diff",
     "c10_spec_gz001": "c10_spec",
     "c10_spec_two": "c10_spec",
     "c10_spec_v816": "c10_spec",

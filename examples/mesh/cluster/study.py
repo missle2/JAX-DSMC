@@ -1191,6 +1191,18 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     # settings paired with c10_spec (FD reused, seeds 0-7): GPU_KIND=rtx ONLY='^c10p_'
     for gate, short in (("c10_spec_kn10", "c10kn10"), ("c10_spec_kn2", "c10kn2")):
         jobs |= _fitgate_blocks(gate, short, 16, ("base",))
+    # the diffuse circle's collisionless anchor (with c10d_kn2 above: the collisions' share of
+    # the diffuse dJ/dR, as for the specular one), GPU_KIND=rtx_48 ONLY='^c10dkn10'
+    jobs |= _fitgate_blocks("c10_diff_kn10", "c10dkn10", 16, ("base",))
+    # the diffuse captured horizon at 600 steps beside c10h_diff's 1000 (2026-11-01: the cold
+    # re-emitted gas may outlive 300 steps), the same seeds and FD (c10_diff's done seeds 0, 4,
+    # ..., 28): ~2x c10_diff's 23 GB -> GPU_KIND=h200_71 ONLY='^c10h600_diff'
+    jobs |= {
+        f"c10h600_diff_s{first}_base": (
+            f"{run} --gate c10_diff_h600 --seeds {first} {first + 8} --stride 4 --bases base"
+        )
+        for first in (0, 8, 16, 24)
+    }
     for gate, short in (("c10_spec_gz001", "c10p_gz"), ("c10_spec_two", "c10p_two"),
                         ("c10_spec_v816", "c10p_v816")):  # fmt: skip
         jobs |= _fitgate_blocks(gate, short, 8, ("base",), few)
@@ -1254,6 +1266,16 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
                     f"{vol} --gate {gate} --seeds {first} {first + 2} --virtual {virtual} "
                     "--reuse-fd"
                 )
+    # the volume gate over a longer captured horizon, the same forward, c10_diff's FD (its FD
+    # covers the collisions before the capture, the prediction only those inside it):
+    # GPU_KIND=h200_71 ONLY='^volh_c10_diff_h600', GPU_KIND=rtx_full ONLY='^volh_c10_diff_h1000'
+    for horizon in ("h600", "h1000"):
+        jobs |= {
+            f"volh_c10_diff_{horizon}_s{first}": (
+                f"{vol} --gate c10_diff_{horizon} --seeds {first} {first + 2} --reuse-fd"
+            )
+            for first in (0, 2)
+        }
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

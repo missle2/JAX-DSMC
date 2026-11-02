@@ -58,3 +58,18 @@ for gate, virtuals in (("c10_diff", ("4x8", "8x16", "16x8", "32x8")), ("c10_spec
         for lo, hi, c, b in zip(r0["rate_edges"][:-1], r0["rate_edges"][1:], r0["cells_by_rate"],
                                 by, strict=True):  # fmt: skip
             print(f"  rate [{lo}, {hi}) cells {c:6d} pred {b:+.4f}")
+
+# the captured horizon (volh jobs): the same forward and FD as c10_diff, 600 / 1000 steps
+base = rows("c10_diff", "base")
+for horizon in ("h600", "h1000"):
+    rr = rows(f"c10_diff_{horizon}", "base")
+    seeds = sorted(set(rr) & set(base))
+    if not seeds:
+        continue
+    same = all(abs(rr[s]["objective"] - base[s]["objective"]) < 1e-9 for s in seeds)
+    for cells in ("all", "cut"):
+        fdp, _ = mse([np.mean(base[s][f"fd_{cells}"]) for s in seeds])
+        p, ps = mse([rr[s][f"pred_{cells}"] for s in seeds])
+        d, ds = mse([rr[s][f"pred_{cells}"] - base[s][f"pred_{cells}"] for s in seeds])
+        print(f"c10_diff {horizon} {cells} n={len(seeds)} pred {p:.4f}+-{ps:.4f} "
+              f"pred-h300 {d:+.4f}+-{ds:.4f} pred/FD {p / fdp:.2f} same forward {same}")  # fmt: skip

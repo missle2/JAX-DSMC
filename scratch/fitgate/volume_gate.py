@@ -17,7 +17,9 @@ cut-volume term weighs); two eps per set (linearity: the FD's own curvature).
 ``--field NAME --reuse-fd`` (2026-11-01, after the diffuse circle read pred / FD ~1.4): the
 backward's collision field fit swapped (:data:`FIELDS`) and only the prediction recomputed,
 the FD read from the base run's rows (the scaled forwards do not depend on the backward).
-One backward per seed; rows to ``volume_<gate>_<field>_s*.jsonl``.
+One backward per seed; rows to ``volume_<gate>_<field>_s*.jsonl``.  A gate in
+``variant_gate.FD_FROM`` (``c10_diff_h600`` / ``_h1000``: the same forward, a longer captured
+horizon) reads the FD of the gate it shares the forward with; ``fd_objective`` is that row's J.
 
 ``--virtual S P`` (2026-11-01, after every field read the diffuse circle's 1.48): the virtual
 pull-back's substeps x partners (default 4 x 8; its linearisation error is O(rate dt / S),
@@ -126,8 +128,9 @@ def masks(cfg, parameter, value):
 
 
 def base_fds(gate):
-    """``{seed: row}`` of the base field's rows of ``gate`` (their FDs)."""
-    paths = sorted(OUT_DIR.glob(f"volume_{gate}_s*.jsonl"))
+    """``{seed: row}`` of the base field's rows of ``gate`` (their FDs), or of the gate whose
+    forward it shares (``variant_gate.FD_FROM``: the captured-horizon gates)."""
+    paths = sorted(OUT_DIR.glob(f"volume_{V.FD_FROM.get(gate, gate)}_s*.jsonl"))
     return {r["seed"]: r for p in paths for r in map(json.loads, p.read_text().splitlines())}
 
 
@@ -190,6 +193,8 @@ def main(argv=None):
             m = np.asarray(mask)
             row[f"pred_{name}"] = float(np.sum(CAPTURED["w"][m] * CAPTURED["v"][m]))
             if args.reuse_fd:
+                # the shared forward: its objective must be the FD rows' (checked below)
+                row["fd_objective"] = reused[seed]["objective"]
                 row[f"fd_{name}"] = reused[seed][f"fd_{name}"]
                 continue
             fds = []
@@ -201,6 +206,11 @@ def main(argv=None):
                     SCALE.clear()
                 fds.append((vals[0] - vals[1]) / (2 * eps))
             row[f"fd_{name}"] = fds
+        if args.reuse_fd and abs(row["objective"] - row["fd_objective"]) > 1e-9 * abs(
+            row["objective"]
+        ):
+            print(f"WARNING seed {seed}: J {row['objective']} != the FD rows' "
+                  f"{row['fd_objective']} -- not the same forward", flush=True)  # fmt: skip
         row["seconds"] = time.time() - t0
         print(json.dumps(row), flush=True)
         with out.open("a") as fh:
