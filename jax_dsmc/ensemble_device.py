@@ -437,6 +437,7 @@ def cell_query(
     direction=None,
     q_class=None,
     halfspace=None,
+    active=None,
 ):
     """Field value at ``Q`` queries in cells ``q_c`` from per-cell node tables ``(C, P, .)``,
     at most ``chunk`` queries at a time (the per-query node gather is ``P x (D+3)``
@@ -447,7 +448,18 @@ def cell_query(
     behind the query's plane normal to ``direction``.  A fifth table ``node_class`` (``bool[C, P]``) with ``q_class``
     ``bool[Q]`` restricts them to the query's class -- the stratified fit of the shape
     adjoint (:func:`node_gradients`).  A node-value table with trailing columns
-    ``(C, P, R)`` gives ``R`` columns per query (:func:`field_query`)."""
+    ``(C, P, R)`` gives ``R`` columns per query (:func:`field_query`).
+
+    ``active`` ``bool[Q]`` (2026-11-02): only those queries are fitted -- moved to the front,
+    and only the passes that hold one run (a dynamic trip count; forward use only, not
+    reverse-differentiable) -- the rest read zero.  The silhouette band term's queries are
+    every survivor but its band holds a few of them: fitting all of them made the diffuse
+    shape VJP ~100x the specular one."""
+    if active is not None:
+        return _active_query(
+            tables, q_c, q_x, q_v, scale, k, basis, chunk, gradients, direction, q_class,
+            halfspace, active,
+        )  # fmt: skip
     node_x, node_v, node_valid, node_val, *rest = tables
     node_class = rest[0] if rest else None
     q = q_c.shape[0]
@@ -477,6 +489,67 @@ def cell_query(
     )
     out = lax.map(body, (c, x, v, d, qc))
     return jax.tree.map(functools.partial(_unchunk, q=q), out)
+
+
+def _active_query(
+    tables, q_c, q_x, q_v, scale, k, basis, chunk, gradients, direction, q_class, halfspace, active
+):
+    """:func:`cell_query` on the ``active`` queries only (zeros elsewhere)."""
+    node_x, node_v, node_valid, node_val, *rest = tables
+    q = q_c.shape[0]
+    order = jnp.argsort(~active, stable=True)  # the active queries first, in slot order
+    chunk = fit_chunk(q, node_valid.shape[1], chunk)
+    pad = (-q) % chunk
+    if direction is None:
+        direction = jnp.zeros((q, 3))
+    if q_class is None:
+        q_class = jnp.zeros(q, dtype=bool)
+    chunks = tuple(
+        jnp.pad(a[order], ((0, pad),) + ((0, 0),) * (a.ndim - 1)).reshape(-1, chunk, *a.shape[1:])
+        for a in (q_c, q_x, q_v, direction, q_class)
+    )
+    body = functools.partial(
+        _chunk_query,
+        node_x=node_x,
+        node_v=node_v,
+        node_valid=node_valid,
+        node_val=node_val,
+        node_class=rest[0] if rest else None,
+        scale=scale,
+        k=k,
+        basis=basis,
+        gradients=gradients,
+        halfspace=halfspace,
+    )
+    first = tuple(a[0] for a in chunks)
+    out = jax.tree.map(
+        functools.partial(_pass_zeros, passes=chunks[0].shape[0]), jax.eval_shape(body, first)
+    )
+    passes = (jnp.sum(active, dtype=jnp.int32) + chunk - 1) // chunk
+    out = lax.fori_loop(0, passes, functools.partial(_active_pass, body=body, chunks=chunks), out)
+    flat = jax.tree.map(functools.partial(_unchunk, q=q), out)
+    return jax.tree.map(functools.partial(_scatter_rows, order=order, active=active), flat)
+
+
+def _active_pass(i, out, body, chunks):
+    """One pass of :func:`_active_query`: chunk ``i``'s fits written into ``out``."""
+    res = body(tuple(a[i] for a in chunks))
+    return jax.tree.map(functools.partial(_set_row, i=i), out, res)
+
+
+def _pass_zeros(t, passes):
+    return jnp.zeros((passes, *t.shape), t.dtype)
+
+
+def _set_row(o, r, i):
+    return o.at[i].set(r)
+
+
+def _scatter_rows(a, order, active):
+    """Rows of ``a`` (in ``order``) back to slot order, zero where not ``active``."""
+    back = jnp.zeros_like(a).at[order].set(a)
+    mask = active.reshape(active.shape + (1,) * (a.ndim - 1))
+    return jnp.where(mask, back, jnp.zeros_like(back))
 
 
 def _unchunk(a, q):
@@ -646,13 +719,14 @@ def value_query(
     direction=None,
     pool=0,
     halfspace=None,
+    active=None,
 ):
     """``f64[Q]``: the carried adjoint at arbitrary query states ``(q_x, q_v)`` from the
     per-cell fit of ``lam`` over the population ``(x, v, alive)`` -- the value of a
     *virtual* post-move state (the silhouette term of :mod:`jax_dsmc.shape` asks for the
     value a particle would carry had its hit / miss gone the other way).  Queries outside
     the box are clipped to it.  ``direction`` / ``pool`` / ``halfspace`` as
-    :func:`node_gradients`."""
+    :func:`node_gradients`; ``active`` as :func:`cell_query` (zeros elsewhere)."""
     ids, valid, _cell, _, count = cell_nodes(x, alive, grid, npc_max)
     tables = (x[ids], v[ids], valid, lam[ids])
     if pool:
@@ -662,7 +736,7 @@ def value_query(
     q_c = jnp.minimum(collision_cell(q_x, grid), count.shape[0] - 1)
     return cell_query(
         tables, q_c, q_x, q_v, scale, k, basis, chunk, direction=direction,
-        halfspace=_halfspace_length(halfspace, grid),
+        halfspace=_halfspace_length(halfspace, grid), active=active,
     )  # fmt: skip
 
 

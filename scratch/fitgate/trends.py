@@ -30,12 +30,25 @@ VARIANTS = {
 }
 FD_COLOR = "0.25"
 PAIRED = (
-    ("c10_spec_h1000", "horizon 1000"),
-    ("c10_spec_gz001", "grazing 0.001"),
-    ("c10_spec_two", "two-sided fits"),
-    ("c10_spec_v816", "virtual 8x16"),
-    ("c10_spec_mem", "+ membership"),
+    ("c10_spec_h600", "c10_spec", "spec: horizon 600"),
+    ("c10_spec_h1000", "c10_spec", "spec: horizon 1000"),
+    ("c10_spec_gz001", "c10_spec", "spec: grazing 0.001"),
+    ("c10_spec_two", "c10_spec", "spec: two-sided fits"),
+    ("c10_spec_v816", "c10_spec", "spec: virtual 8x16"),
+    ("c10_spec_mem", "c10_spec", "spec: + membership"),
+    ("c10_diff_h600", "c10_diff", "diff: horizon 600"),
+    ("c10_diff_h1000", "c10_diff", "diff: horizon 1000"),
+    ("c10_diff_mem", "c10_diff", "diff: + membership"),
 )
+PULLBACK = (
+    ("c10_diff", "horizon 300, virtual 4x8 (base)"),
+    ("c10_diff_v8x16", "virtual 8x16"),
+    ("c10_diff_v16x8", "virtual 16x8"),
+    ("c10_diff_v32x8", "virtual 32x8"),
+    ("c10_diff_h600", "horizon 600"),
+    ("c10_diff_h1000", "horizon 1000"),
+)
+"""The diffuse volume gate's pull-back / captured-horizon rows (tag, label), FD of c10_diff."""
 
 
 def mean_se(a):
@@ -68,6 +81,8 @@ def series(data, gates, variant, membership=False):
 
 
 def sweep_panel(ax, data, gates, xs, xlabel, title, absolute):
+    keep = [i for i, g in enumerate(gates) if data.get((g, "base"))]
+    gates, xs = [gates[i] for i in keep], [xs[i] for i in keep]
     for j, (v, c) in enumerate(VARIANTS.items()):
         s = series(data, gates, v)
         xv = np.array(xs) * (1 + (j - 1.5) * 0.03)
@@ -96,12 +111,13 @@ def sweep_panel(ax, data, gates, xs, xlabel, title, absolute):
 
 def paired_panel(ax, data):
     """(setting - baseline) adjoint per shared seed, over the baseline FD."""
-    base = {r["seed"]: r for r in data[("c10_spec", "base")]}
-    fd = np.mean([r["fd"][0] for r in data[("c10_spec", "base")]])
-    y = np.arange(len(PAIRED))
+    paired = [p for p in PAIRED if data.get((p[0], "base"))]
+    y = np.arange(len(paired))
     for j, (v, c) in enumerate(VARIANTS.items()):
         m, e = [], []
-        for g, _ in PAIRED:
+        for g, b, _ in paired:
+            base = {r["seed"]: r for r in data[(b, "base")]}
+            fd = np.mean([r["fd"][0] for r in data[(b, "base")]])
             rows = data[(g, "base")]
             d = [A.total(r, v) + r["terms"][v].get("membership", 0.0) - A.total(base[r["seed"]], v)
                  for r in rows]  # fmt: skip
@@ -110,16 +126,17 @@ def paired_panel(ax, data):
             e.append(2 * ss)
         ax.errorbar(m, y + (j - 1.5) * 0.15, xerr=e, fmt="o", ms=5, lw=1.2, color=c)
     ax.axvline(0.0, color="0.45", lw=1)
+    fd = np.mean([r["fd"][0] for r in data[("c10_spec", "base")]])
     base_bias = (
         np.mean([A.total(r, "along_pool_plane") for r in data[("c10_spec", "base")]]) / fd - 1
     )
     ax.axvline(-base_bias, color="#e87ba4", lw=1.4, ls="--")
-    ax.annotate("shift needed to remove\nalong_pool_plane's bias", (-base_bias, len(PAIRED) - 0.6),
+    ax.annotate("specular: shift needed to remove\nalong_pool_plane's bias", (-base_bias, len(paired) - 0.6),
                 fontsize=7, color="0.3", ha="left", xytext=(4, 0), textcoords="offset points")  # fmt: skip
-    ax.set_yticks(y, [t for _, t in PAIRED], fontsize=8)
+    ax.set_yticks(y, [t for _, _, t in paired], fontsize=8)
     ax.invert_yaxis()
     ax.set_xlabel("paired change of the adjoint / FD (same seeds, same FD)", fontsize=8)
-    ax.set_title("circle M10 Kn0.5 specular: derivative-only settings (8 seeds)", fontsize=9)
+    ax.set_title("circle M10 Kn0.5: paired settings, same forward and FD (8 seeds)", fontsize=9)
     ax.grid(axis="x", color="0.93", lw=0.6)
     ax.tick_params(labelsize=7)
 
@@ -201,10 +218,37 @@ def field_panel(ax, gate, title):
     ax.tick_params(labelsize=7)
 
 
+def pullback_panel(ax):
+    """The diffuse volume gate under more virtual substeps and longer captured horizons."""
+    base = field_rows("c10_diff", "base")
+    labels = []
+    for k, (tag, label) in enumerate(PULLBACK):
+        rows = {r["seed"]: r for r in volume_rows(tag) if r.get("field", "base") == "base"}
+        seeds = sorted(set(rows) & set(base))
+        for i, (cells, mk, c) in enumerate((("all", "o", "#2a78d6"), ("noncut", "s", "#eb6834"))):
+            if len(seeds) < 2:
+                continue
+            r, se = ratio_se([cell_part(rows[s], "pred", cells) for s in seeds],
+                             [cell_part(base[s], "fd", cells) for s in seeds])  # fmt: skip
+            ax.errorbar(r, k + 0.15 * (i - 0.5), xerr=2 * se, fmt=mk, ms=5, color=c, lw=1.2,
+                        label=f"{cells} cells" if k == 0 else None)  # fmt: skip
+        labels.append(f"{label} (n = {len(seeds)})")
+    ax.axvline(1.0, color="0.45", lw=1)
+    ax.set_xlim(0.6, 2.0)
+    ax.set_yticks(range(len(PULLBACK)), labels, fontsize=8)
+    ax.invert_yaxis()
+    ax.legend(fontsize=7, loc="lower right")
+    ax.set_xlabel("predicted / FD of the collision-volume scaling (±2 s.e.)", fontsize=8)
+    ax.set_title("M10 Kn0.5 diffuse: virtual substeps and captured horizon", fontsize=9)
+    ax.grid(axis="x", color="0.93", lw=0.6)
+    ax.tick_params(labelsize=7)
+
+
 def fields_figure():
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
+    fig, axes = plt.subplots(1, 3, figsize=(19.5, 4.5))
     field_panel(axes[0], "c10_spec", "M10 Kn0.5 specular: collision field swapped")
     field_panel(axes[1], "c10_diff", "M10 Kn0.5 diffuse: collision field swapped")
+    pullback_panel(axes[2])
     fig.tight_layout()
     fig.savefig(OUT / "fields.png", dpi=150)
     plt.close(fig)
@@ -247,19 +291,22 @@ def probe_panel(ax):
 
 def main():
     data = A.load()
-    fig, axes = plt.subplots(2, 3, figsize=(19, 10.5))
+    fig, axes = plt.subplots(2, 4, figsize=(25, 10.5))
     sweep_panel(axes[0, 0], data, ("c10_spec_kn10", "c10_spec_kn2", "c10_spec"), [0.1, 0.5, 2.0],
                 "1 / Kn", "circle M10 specular: bias against collisionality (16-32 seeds)", False)  # fmt: skip
-    sweep_panel(axes[0, 1], data, ("c10_spec_dt2", "c10_spec", "c10_spec_2dt"), [0.5, 1.0, 2.0],
+    sweep_panel(axes[0, 1], data, ("c10_diff_kn10", "c10_diff_kn2", "c10_diff"), [0.1, 0.5, 2.0],
+                "1 / Kn", "circle M10 diffuse: bias against collisionality (7-16 seeds)", False)  # fmt: skip
+    sweep_panel(axes[0, 2], data, ("c10_spec_dt2", "c10_spec", "c10_spec_2dt"), [0.5, 1.0, 2.0],
                 "dt / dt_0", "circle M10 Kn0.5 specular: time step", True)  # fmt: skip
-    sweep_panel(axes[0, 2], data, ("c10_spec", "c10_spec_g2n", "c10_spec_g4n"), [1.0, 0.5, 0.25],
+    sweep_panel(axes[0, 3], data, ("c10_spec", "c10_spec_g2n", "c10_spec_g4n"), [1.0, 0.5, 0.25],
                 "cell size / dx_0 (same N per cell)", "circle M10 Kn0.5 specular: cell size", True)  # fmt: skip
-    axes[0, 2].invert_xaxis()
+    axes[0, 3].invert_xaxis()
     axes[0, 0].legend(fontsize=7, loc="upper left")
-    axes[0, 1].legend(fontsize=7, loc="lower left")
+    axes[0, 2].legend(fontsize=7, loc="lower left")
     paired_panel(axes[1, 0], data)
     volume_panel(axes[1, 1])
-    probe_panel(axes[1, 2])
+    pullback_panel(axes[1, 2])
+    probe_panel(axes[1, 3])
     fig.suptitle("M 10 circle shape-adjoint bias: what it does and does not depend on "
                  "(seed means ±2 s.e.)", fontsize=11)  # fmt: skip
     fig.tight_layout()

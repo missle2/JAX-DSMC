@@ -241,9 +241,11 @@ One bucket: a second, smaller one was not measurably faster and cost compile tim
 
 
 def _rows_none(args, fill):
-    """No candidate: every row gets ``fill``."""
+    """No candidate: every row gets ``fill`` (a scalar, or ``f64[R]`` for ``R`` columns)."""
     _ls, rows, _slot = args
-    return jnp.full(rows[0].shape[0], fill)
+    if jnp.ndim(fill) == 0:
+        return jnp.full(rows[0].shape[0], fill)
+    return jnp.broadcast_to(fill, (rows[0].shape[0], *jnp.shape(fill)))
 
 
 def _rows_dense(args, fn):
@@ -260,23 +262,25 @@ def _rows_compact(args, fn, fill, size):
     take = jnp.maximum(slot, 0)
     out = fn(ls, *(r[take] for r in rows))
     put = jnp.where(slot >= 0, slot, n)
-    return jnp.full(n, fill, out.dtype).at[put].set(out, mode="drop")
+    base = jnp.broadcast_to(jnp.asarray(fill, out.dtype), (n, *out.shape[1:]))
+    return base.at[put].set(out, mode="drop")
 
 
-def _culled(fn, fill, ls, rows, candidate):
+def _culled(fn, fill, ls, rows, candidate, buckets=None):
     """``where(candidate, fn(ls, *rows), fill)`` with ``fn`` (row-wise) evaluated only on
     the candidate rows: skipped when there is none, on the candidates compacted into the
     smallest of the ``N // CULL_BUCKETS`` sizes that holds them, else on every row (a
     runtime ``switch``; ``N < CULL_MIN``: a ``cond`` between skipped and every row).  The
     caller guarantees that ``fn`` gives ``fill`` on a non-candidate row; every branch
-    then returns, row for row, what ``fn`` does on all of them."""
+    then returns, row for row, what ``fn`` does on all of them.  ``buckets`` replaces
+    :data:`CULL_BUCKETS` (a sparser caller: :func:`closest_approach_culled`)."""
     n = candidate.shape[0]
     none = functools.partial(_rows_none, fill=fill)
     dense = functools.partial(_rows_dense, fn=fn)
     if n < CULL_MIN:
         args = (ls, rows, jnp.zeros(0, jnp.int32))
         return jax.lax.cond(step_axis.any_(candidate), dense, none, args)
-    sizes = tuple(n // b for b in CULL_BUCKETS)
+    sizes = tuple(n // b for b in (CULL_BUCKETS if buckets is None else buckets))
     slot, count = _near_slots(candidate, sizes[-1])
     branch = jnp.where(count == 0, 0, 1 + sum((count > s).astype(jnp.int32) for s in sizes))
     compact = [functools.partial(_rows_compact, fn=fn, fill=fill, size=s) for s in sizes]
@@ -471,6 +475,18 @@ def _reach_radii(ls: LevelSet) -> tuple[int, ...]:
     return (*(k for k in REACH_TIERS if k < wide), wide)
 
 
+def path_lower_bound(ls: LevelSet, x: jax.Array, path: jax.Array) -> jax.Array:
+    """``f64[N]``: a lower bound of ``phi`` on every point a path of length ``path`` from
+    ``x`` can reach (:func:`may_reach`'s windows; ``-inf`` beyond the search reach, which
+    no window covers)."""
+    radii = _reach_radii(ls)
+    lower = block_min_table(ls, radii[-1])[_table_index(ls, x, radii[-1])]
+    for k in reversed(radii[:-1]):
+        bound = block_min_table(ls, k)[_table_index(ls, x, k)]
+        lower = jnp.where(path <= (1.0 - CULL_SLACK) * k * ls.h, bound, lower)
+    return jnp.where(path > (1.0 - CULL_SLACK) * ls.reach, -jnp.inf, lower)
+
+
 def may_reach(ls: LevelSet, x: jax.Array, path: jax.Array) -> jax.Array:
     """``bool[N]``: may a path of length ``path`` from ``x`` (any path: a straight move,
     or one folded at a box face) meet ``phi <= 0``?  ``False`` only where the coefficient
@@ -481,12 +497,7 @@ def may_reach(ls: LevelSet, x: jax.Array, path: jax.Array) -> jax.Array:
     in :data:`REACH_TIERS`, else the search's ``n_sample // 2 + 1``.  A path beyond the
     search reach is always ``True`` (the hit search covers no more; the tracker counts
     the overrun).  The reference of :func:`free_path` (which the tracker reads)."""
-    radii = _reach_radii(ls)
-    lower = block_min_table(ls, radii[-1])[_table_index(ls, x, radii[-1])]
-    for k in reversed(radii[:-1]):
-        bound = block_min_table(ls, k)[_table_index(ls, x, k)]
-        lower = jnp.where(path <= (1.0 - CULL_SLACK) * k * ls.h, bound, lower)
-    return (lower <= 0.0) | (path > (1.0 - CULL_SLACK) * ls.reach)
+    return path_lower_bound(ls, x, path) <= 0.0
 
 
 def free_path(ls: LevelSet) -> jax.Array:
@@ -605,6 +616,36 @@ def closest_approach(
     phi_ref = value(ls, x + s_ref[:, None] * vhat)
     better = phi_ref < phi_min
     return jnp.where(better, phi_ref, phi_min), jnp.where(better, s_ref, s_min)
+
+
+APPROACH_BUCKETS = (8, 32)
+"""The compacted sizes ``N // b`` of :func:`closest_approach_culled`: the silhouette band's
+candidates are the particles next to the body, a few percent of the box."""
+
+
+def _approach_rows(ls, x, v):
+    phi_min, s_min = closest_approach(x, v, ls)
+    return jnp.stack((phi_min, s_min), axis=1)
+
+
+def closest_approach_culled(x, v, ls, candidate):
+    """:func:`closest_approach` (the whole search reach) on the ``candidate`` rows only:
+    ``(phi_min, s_min)``, ``(inf, 0)`` elsewhere -- row for row what it gives on them,
+    the search run on the candidates compacted (:func:`_culled`, :data:`APPROACH_BUCKETS`).
+    """
+    fill = jnp.array([jnp.inf, 0.0])
+    out = _culled(_approach_rows, fill, ls, (x, v), candidate, APPROACH_BUCKETS)
+    return out[:, 0], out[:, 1]
+
+
+def _normal_rows(ls, x):
+    return normal(ls, x)
+
+
+def normal_culled(ls, x, candidate):
+    """:func:`normal` on the ``candidate`` rows only (zero rows elsewhere)."""
+    fill = jnp.zeros(x.shape[1])
+    return _culled(_normal_rows, fill, ls, (x,), candidate, APPROACH_BUCKETS)
 
 
 # ---------------------------------------------------------------------------

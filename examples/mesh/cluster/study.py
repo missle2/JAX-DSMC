@@ -1163,6 +1163,15 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     # FD reused: c10_spec seeds 0-7, c10_diff's done seeds 0, 4, ..., 28): records ~3.3x ->
     # GPU_KIND=h200_71 ONLY='^c10h_'
     jobs |= _fitgate_blocks("c10_spec_h1000", "c10h_spec", 8, ("base",))
+    # 600 steps on the specular circle (2026-11-02): the horizon trend 300 / 600 / 1000, paired
+    # on seeds 0-7, FD reused; ~2x c10_spec's record -> GPU_KIND=rtx_48 ONLY='^c10h600_spec'
+    jobs |= _fitgate_blocks("c10_spec_h600", "c10h600_spec", 8, ("base",))
+    # pathwise_x split into its fitted-perpendicular, timing and collision parts (2026-11-02:
+    # the specular bias lives in the one variant-dependent term), Kn 0.5 and Kn 2, seeds 0-7,
+    # FD reused: GPU_KIND=rtx ONLY='^c10xs_', GPU_KIND=rtx_48 ONLY='^c10xs2_'
+    split = " --variants " + " ".join(FITGATE_CANDIDATES) + " --split-x"
+    jobs |= _fitgate_blocks("c10_spec_xsplit", "c10xs", 8, ("base",), split)
+    jobs |= _fitgate_blocks("c10_spec_kn2_xsplit", "c10xs2", 8, ("base",), split)
     # the diffuse one OOMed on the 71 GB slice (2026-11-01: ~66 GB in use, then the backward's
     # [1000, N, 2] reward columns, 3.1 GB) -> GPU_KIND=rtx_full ONLY='^c10h_diff', two seeds a
     # job (the diffuse backward is the slow one)
@@ -1269,13 +1278,17 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     # the volume gate over a longer captured horizon, the same forward, c10_diff's FD (its FD
     # covers the collisions before the capture, the prediction only those inside it):
     # GPU_KIND=h200_71 ONLY='^volh_c10_diff_h600', GPU_KIND=rtx_full ONLY='^volh_c10_diff_h1000'
-    for horizon in ("h600", "h1000"):
-        jobs |= {
-            f"volh_c10_diff_{horizon}_s{first}": (
-                f"{vol} --gate c10_diff_{horizon} --seeds {first} {first + 2} --reuse-fd"
-            )
-            for first in (0, 2)
-        }
+    # and the specular one (2026-11-02: does its 0.95 go to 1 as the diffuse 1.48 did?), FD of
+    # c10_spec: GPU_KIND=rtx_48 ONLY='^volh_c10_spec_h600', GPU_KIND=h200_71
+    # ONLY='^volh_c10_spec_h1000'
+    jobs |= {
+        f"volh_c10_{wall}_{horizon}_s{first}": (
+            f"{vol} --gate c10_{wall}_{horizon} --seeds {first} {first + 2} --reuse-fd"
+        )
+        for wall in ("diff", "spec")
+        for horizon in ("h600", "h1000")
+        for first in (0, 2)
+    }
     jobs["af_seed4_diag"] = f"python3 scratch/fitgate/seed_outlier.py 4 {out}/af_seed4_diag.npz"
     return jobs
 

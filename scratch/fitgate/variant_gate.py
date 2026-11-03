@@ -106,6 +106,15 @@ NEW_GATES = {
     # rtx_full, the 71 GB slice OOMed)
     "c10_diff_h600": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "warmup": 2500, "steps": 600},
                       "radius", [0.1, 0.05]),
+    # the specular trend 300 / 600 / 1000 (2026-11-02: h1000 took -0.016 off every along variant;
+    # how much tail is left past 1000?)
+    "c10_spec_h600": ({**CIRCLE_M10, **COMMON, "warmup": 2500, "steps": 600}, "radius",
+                      [0.1, 0.05]),
+    # pathwise_x split into its fitted-perpendicular, timing and collision parts (--split-x),
+    # the same forwards and FDs as c10_spec / c10_spec_kn2
+    "c10_spec_xsplit": ({**CIRCLE_M10, **COMMON}, "radius", [0.1, 0.05]),
+    "c10_spec_kn2_xsplit": ({**CIRCLE_M10, **COMMON, "knudsen": 2.0, "slots": 400_000,
+                             "a_max": 96}, "radius", [0.1, 0.05]),
     # collision cells half the size (2026-11-01: the user's hypothesis -- the M 10 bias lives
     # in the compressed shock layer, whose cells are too coarse for the dynamics there; the
     # horizon gave -3 %, the in-situ collision-volume gate -6 %): grid_scale 2 at the same
@@ -162,6 +171,9 @@ FD_FROM = {
     "c10_spec_h1000": "c10_spec",
     "c10_diff_h1000": "c10_diff",
     "c10_diff_h600": "c10_diff",
+    "c10_spec_h600": "c10_spec",
+    "c10_spec_xsplit": "c10_spec",
+    "c10_spec_kn2_xsplit": "c10_spec_kn2",
     "c10_spec_gz001": "c10_spec",
     "c10_spec_two": "c10_spec",
     "c10_spec_v816": "c10_spec",
@@ -181,6 +193,23 @@ def cached_forward(original, cfg, parameter, value, key, capture, *args, **kwarg
     if capture:
         _CACHE.clear()
         _CACHE[tag] = out
+    return out
+
+
+SPLIT_X = ("along_pool_plane", "cellxv_along_pool_plane")
+"""The along-flight estimators whose ``pathwise_x`` ``--split-x`` decomposes (2026-11-02: the
+specular bias sits in ``pathwise_x``, the one variant-dependent term): ``<name>_free`` keeps
+only the timing part of the identity, ``<name>_perp`` only the fitted perpendicular part, so
+``perp``, ``free - perp`` (timing) and ``name - free`` (collisions, ``L* V``) add up to it."""
+
+
+def split_x_variants():
+    """``{name: estimator}`` of the ``--split-x`` diagnostics (``shape.along_flight`` modes)."""
+    out = {}
+    for name in SPLIT_X:
+        e = shape.VARIANTS[name]
+        for mode in ("free", "perp"):
+            out[f"{name}_{mode}"] = (*e[:2], mode, *e[3:])
     return out
 
 
@@ -235,7 +264,12 @@ def main(argv=None):
         action="store_true",
         help="the plumbing only: fnum x 16, 150 + 40 steps, one FD step, *_smoke",
     )
+    ap.add_argument("--split-x", action="store_true",
+                    help="add the pathwise_x decomposition variants (SPLIT_X)")  # fmt: skip
     args = ap.parse_args(argv)
+    if args.split_x:
+        shape.VARIANTS.update(split_x_variants())
+        args.variants = [*args.variants, *split_x_variants()]
     cfg, parameter, fd_steps, seed_start, art_rows = gate_config(args.gate)
     name = args.gate
     if args.smoke:

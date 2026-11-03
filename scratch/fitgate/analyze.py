@@ -36,6 +36,7 @@ GATES = (
     ("c10_spec_g2n", "circle M10 specular, cells/2"),
     ("c10_spec_g4n", "circle M10 specular, cells/4"),
     ("c10_spec_2dt", "circle M10 specular, 2 dt"),
+    ("c10_spec_h600", "circle M10 specular, 600 captured steps"),
     ("c10_spec_h1000", "circle M10 specular, 1000 captured steps"),
     ("c10_spec_mem", "circle M10 specular (+ membership, not in total)"),
     ("c10_spec_gz001", "circle M10 specular, grazing 0.001"),

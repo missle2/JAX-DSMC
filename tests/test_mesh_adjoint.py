@@ -984,22 +984,10 @@ def test_silhouette_term_counts_the_hit_set_change(acc):
         "pool": 0,
     }
     band = 0.05
-    c, x_star = shape.silhouette_cotangent(
-        mesh.body,
-        x,
-        v,
-        alive,
-        events,
-        to_go,
-        rec,
-        jnp.zeros(n),
-        0,
-        jax.random.PRNGKey(9),
-        setup,
-        fit,
-        band,
-        reward,
+    geo = shape.silhouette_geometry(
+        mesh.body, x, v, alive, events, rec, 0, jax.random.PRNGKey(9), setup, band, reward
     )
+    c, x_star = shape.silhouette_cotangent(geo, to_go, rec, jnp.zeros(n), setup, fit, band)
     n_band = int((c != 0).sum())
     assert 60 < n_band < 140  # 4 sides x band / db = 100 expected
     # contract the cotangent with d coef / d r = -1 through phi(x*) -> d(term)/d r
@@ -1013,6 +1001,68 @@ def test_silhouette_term_counts_the_hit_set_change(acc):
         assert abs(d_dr) < 0.05 * expected
     else:
         np.testing.assert_allclose(d_dr, expected, rtol=0.15)
+
+
+def _approach_dense(x, v, ls, candidate):
+    del candidate
+    return levelset.closest_approach(x, v, ls)
+
+
+def _normal_dense(ls, x, candidate):
+    del candidate
+    return levelset.normal(ls, x)
+
+
+def _lower_none(ls, x, path):
+    del ls, path
+    return jnp.full(x.shape[0], -jnp.inf)
+
+
+@pytest.mark.parametrize("acc", [0.0, 1.0])
+def test_silhouette_cull_changes_nothing(acc, monkeypatch):
+    """The silhouette geometry's cull (2026-11-02: the closest-approach search only on this
+    step's hits and the misses whose move can come within the band) gives the band, the
+    closest approaches and the virtual outcomes of the search over every survivor --
+    random particles around and far from the circle, a step long enough for some misses'
+    closest approach to fall outside it.  The band is the same set; its values agree to
+    roundoff (the normals of the compacted rows are computed in another vectorisation)."""
+    grid = _grid2()
+    lo, m = levelset.grid_for_box(grid.lo, grid.hi, 0.125)
+    ls = levelset.from_analytic(jnp.array([5.0, 5.0]), 3.0, lo, 0.125, m, n_sample=16)
+    mesh = cut.build_mesh(ls, grid, radius=1, sub=4)
+    faces = Faces.uniform(BC.SPECULAR, 2)
+    wall = WallParams.uniform(2, T_WALL, acc=0.0, n_models=1).with_model(2, 0, temp=T_WALL, acc=acc)
+    n = 16000
+    kx, kv = jax.random.split(jax.random.PRNGKey(5))
+    r = 3.0 + jax.random.uniform(kx, (n,), minval=0.02, maxval=4.0)
+    ang = jax.random.uniform(jax.random.fold_in(kx, 1), (n,), maxval=2 * jnp.pi)
+    x = jnp.stack((5.0 + r * jnp.cos(ang), 5.0 + r * jnp.sin(ang)), axis=1)
+    x = jnp.clip(x, 0.05, 9.95)
+    v = 300.0 * jax.random.normal(kv, (n, 3))
+    dt = 1.0 / 500.0
+    alive = jnp.ones(n, bool)
+    key = jax.random.PRNGKey(3)
+    static = SimStatic(N=n, D=2, S=1, G=1, A_max=2, K_bounce=4, n_steps=1)
+    setup = shape._setup(key, grid, faces, wall, MASS, dt, mesh, 0.0, 0.0, static)["map"]
+    reward = functools.partial(_drag, mass=MASS, scale=1e-3)
+    _x1, _v1, alive1, _lp, _tal, events = shape.wall_map(
+        shape.geometry(mesh), x, v, alive, key, **setup
+    )
+    rec = _Rec(x, v, alive)
+    args = (mesh.body, x, v, alive & alive1, events, rec, 0, jax.random.PRNGKey(9), setup)
+    culled = shape.silhouette_geometry(*args, 0.1, reward)
+    monkeypatch.setattr(levelset, "closest_approach_culled", _approach_dense)
+    monkeypatch.setattr(levelset, "normal_culled", _normal_dense)
+    monkeypatch.setattr(levelset, "path_lower_bound", _lower_none)
+    dense = shape.silhouette_geometry(*args, 0.1, reward)
+    band = np.asarray(dense.in_band)
+    assert 20 < band.sum() < n // 4  # the test has a band, and a cull to do
+    np.testing.assert_array_equal(np.asarray(culled.in_band), band)
+    # the band exactly; its values to roundoff (the compacted rows' normals are one ulp off)
+    for got, want in zip(culled, dense, strict=True):
+        np.testing.assert_allclose(
+            np.asarray(got)[band], np.asarray(want)[band], rtol=1e-12, atol=1e-14
+        )
 
 
 def test_replay_mismatch_separates_discrete_divergence_from_roundoff():

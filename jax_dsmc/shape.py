@@ -589,12 +589,25 @@ def _virtual_hit(x_star, n_star, v, key, wall, mass, dim):
     return jnp.where((u <= acc)[:, None], fresh, v_spec)
 
 
-def silhouette_cotangent(
-    ls, x, v, survivors, events, to_go, rec_k, lam_k, step, key, setup, fit, band, reward
-):
+class Silhouette(NamedTuple):
+    """One step's silhouette geometry (:func:`silhouette_geometry`), shared by every
+    ``grad lambda`` estimator: the band's particles, their closest-approach points and the
+    virtual outcome's state and reward."""
+
+    in_band: jax.Array
+    hit_first: jax.Array
+    x_star: jax.Array
+    side: jax.Array
+    x_alt: jax.Array
+    v_alt: jax.Array
+    r_alt: jax.Array
+
+
+def silhouette_cotangent(geo, to_go, rec_k, lam_k, setup, fit, band):
     """The silhouette band term of one step as a cotangent ``c_i`` on ``phi`` at the
     closest-approach point ``x*_i`` of every survivor's *undeflected* flight, and the
-    points: ``(c f64[N], x_star f64[N, D])``.
+    points: ``(c f64[N], x_star f64[N, D])``; ``geo`` is the step's
+    :func:`silhouette_geometry`, ``fit`` the estimator's fit settings.
 
     A particle whose undeflected flight passes within ``band`` of the surface
     (``|phi_min| < band``; ``phi_min < 0`` = it hit on its first pass with that
@@ -616,22 +629,47 @@ def silhouette_cotangent(
     (``reward``, the objective's per-hit reward).  For a specular wall ``V_hit -> V_miss``
     at grazing incidence and the term vanishes; for a diffuse wall it is the O(1) term of
     the silhouette (a grazing hit re-emits thermally).
+
+    Only the band's particles are fitted (``value_query(active=)``, 2026-11-02: fitting
+    every survivor, once per estimator, made the diffuse shape VJP ~400x the specular one
+    on the cluster); the rest have ``c = 0`` either way.
     """
+    # the virtual state's value from the nodes that have LEFT the surface (v . n > 0):
+    # a re-emitted particle has, and a particle that grazes past the tip is from then on
+    # one that left the surface there -- the approaching population carries the value of
+    # the hit it is about to make, which is exactly what the virtual miss does not get
+    lam_alt = ensemble_device.value_query(
+        rec_k.x, rec_k.v, rec_k.alive, lam_k, setup["grid"], geo.x_alt, geo.v_alt,
+        direction=geo.side, active=geo.in_band, **fit,
+    )  # fmt: skip
+    v_actual = to_go.start
+    v_virtual = lam_alt + jnp.where(geo.hit_first, 0.0, geo.r_alt)
+    # V_hit - V_miss
+    diff = jnp.where(geo.hit_first, v_actual - v_virtual, v_virtual - v_actual)
+    c = jnp.where(geo.in_band, -diff / (2.0 * band), 0.0)
+    return c, geo.x_star
+
+
+def silhouette_geometry(ls, x, v, survivors, events, rec_k, step, key, setup, band, reward):
+    """The estimator-independent part of :func:`silhouette_cotangent` for one step: the
+    closest approach of every survivor's undeflected line, the band test (one passing per
+    trajectory) and the virtual outcome (state and reward).  :class:`Silhouette`.
+
+    Only the particles that can be in the band are searched (2026-11-02, exact): a body
+    hit of this step, or a miss whose move this step can come within ``band`` of the
+    surface -- the level set's lower bound over every cell a path of ``|v| dt`` reaches
+    (:func:`levelset.path_lower_bound`, the tracker's cull) below ``band``.  Any other
+    miss has ``phi >= band`` on its whole move, so its closest approach is either outside
+    the band or outside this step (``interior`` fails): it is never in the band."""
     dim = x.shape[1]
-    grid, wall, mass, dt = setup["grid"], setup["wall"], setup["mass"], setup["dt"]
+    wall, mass, dt = setup["wall"], setup["mass"], setup["dt"]
     n = x.shape[0]
     frozen = jax.lax.stop_gradient(ls)
-    # the closest approach of the undeflected LINE within the search reach (not just this
-    # step's segment): a hit's fragility is the depth of its whole chord
-    phi_min, s_min = levelset_mod.closest_approach(
-        jax.lax.stop_gradient(x), jax.lax.stop_gradient(v), frozen, None
-    )
+    x_c, v_c = jax.lax.stop_gradient(x), jax.lax.stop_gradient(v)
     vd = v[:, :dim]
     speed = jnp.maximum(jnp.linalg.norm(vd, axis=1), 1e-300)
     vhat = vd / speed[:, None]
     length = speed * dt
-    x_star = jax.lax.stop_gradient(x + s_min[:, None] * vhat)
-    n_star = levelset_mod.normal(frozen, x_star)
     split = as_split(events)
     hit_first = split.head.face[0] >= 2 * dim
     hit_later = (
@@ -640,6 +678,13 @@ def silhouette_cotangent(
         )
         > 0
     )
+    near = levelset_mod.path_lower_bound(frozen, x_c, jax.lax.stop_gradient(length)) < band
+    candidate = survivors & ~hit_later & (hit_first | near)
+    # the closest approach of the undeflected LINE within the search reach (not just this
+    # step's segment): a hit's fragility is the depth of its whole chord
+    phi_min, s_min = levelset_mod.closest_approach_culled(x_c, v_c, frozen, candidate)
+    phi_min = jnp.where(candidate, phi_min, jnp.inf)
+    x_star = jax.lax.stop_gradient(x + s_min[:, None] * vhat)
     # one passing per trajectory: a miss counts in the step whose move contains the
     # closest-approach point (strictly inside: a particle that starts at its closest
     # approach is one that just left the surface, and one still approaching at the end
@@ -647,6 +692,12 @@ def silhouette_cotangent(
     interior = (s_min > 1e-3 * ls.reach) & (s_min < length)
     passing = jnp.where(hit_first, s_min > 1e-3 * ls.reach, interior)
     in_band = survivors & (jnp.abs(phi_min) < band) & ~hit_later & passing
+    # the surface normal at the band's closest approaches only (a unit placeholder
+    # elsewhere: those rows are never used)
+    e0 = jnp.zeros(dim).at[0].set(1.0)
+    n_star = jnp.where(
+        in_band[:, None], levelset_mod.normal_culled(frozen, x_star, in_band), e0[None, :]
+    )
     # the virtual outcome
     t_star = s_min / speed
     v_hit = _virtual_hit(x_star, n_star, v, key, wall, mass, dim)
@@ -654,14 +705,7 @@ def silhouette_cotangent(
     x_miss = x + vd * dt
     x_alt = jnp.where(hit_first[:, None], x_miss, x_after_hit)
     v_alt = jnp.where(hit_first[:, None], v, v_hit)
-    # the virtual state's value from the nodes that have LEFT the surface (v . n > 0):
-    # a re-emitted particle has, and a particle that grazes past the tip is from then on
-    # one that left the surface there -- the approaching population carries the value of
-    # the hit it is about to make, which is exactly what the virtual miss does not get
     side = jnp.zeros((n, 3)).at[:, :dim].set(n_star)
-    lam_alt = ensemble_device.value_query(
-        rec_k.x, rec_k.v, rec_k.alive, lam_k, grid, x_alt, v_alt, direction=side, **fit
-    )
     r_alt = jnp.zeros(n)
     if reward is not None:
         head = split.head
@@ -675,11 +719,7 @@ def silhouette_cotangent(
             time=t_star[None],
         )
         r_alt = reward(virtual, None, rec_k, step)[0]
-    v_actual = to_go.start
-    v_virtual = lam_alt + jnp.where(hit_first, 0.0, r_alt)
-    diff = jnp.where(hit_first, v_actual - v_virtual, v_virtual - v_actual)  # V_hit - V_miss
-    c = jnp.where(in_band, -diff / (2.0 * band), 0.0)
-    return c, x_star
+    return Silhouette(in_band, hit_first, x_star, side, x_alt, v_alt, r_alt)
 
 
 def _phi_at(coef, ls, x_star):
@@ -869,6 +909,12 @@ def _gradient_step(  # noqa: PLR0912, PLR0915 -- one step's cotangents, kept in 
         if fit["along"]:
             # v . grad_x V = -T - L* V: the collision increment dt L* lam over dt
             t_k = lam_timing_k if coll_k is None else lam_timing_k + coll_k / setup["map"]["dt"]
+            # diagnostic modes (2026-11-02, pathwise_x split): "free" keeps only the timing
+            # part T, "perp" drops the along-flight component altogether
+            if fit["along"] == "free":
+                t_k = lam_timing_k
+            elif fit["along"] == "perp":
+                t_k = jnp.zeros_like(lam_timing_k)
             gx = along_flight(gx, rec_k.v, t_k)
         gx = jnp.where(survivors[:, None], gx, 0.0)
         gv = jnp.where(survivors[:, None], gv, 0.0)
@@ -955,23 +1001,15 @@ def _gradient_step(  # noqa: PLR0912, PLR0915 -- one step's cotangents, kept in 
         g_mem = jax.tree.map(jnp.add, g_mem, rest.pop(0))
     if silhouette_band > 0.0:
         mesh_g = with_geometry(setup["map"]["mesh"], geom)
+        # the band's geometry once per step; only the virtual outcome's value is per estimator
+        geo = silhouette_geometry(
+            mesh_g.body, x, v, survivors, events, rec_k, step, jax.random.fold_in(key, 7919),
+            setup["map"], silhouette_band, reward,
+        )  # fmt: skip
         sil = []
         for fit, g in zip(fits, g_sil, strict=True):
             c_sil, x_star = silhouette_cotangent(
-                mesh_g.body,
-                x,
-                v,
-                survivors,
-                events,
-                to_go,
-                rec_k,
-                lam_k,
-                step,
-                jax.random.fold_in(key, 7919),
-                setup["map"],
-                _fit_settings(fit),
-                silhouette_band,
-                reward,
+                geo, to_go, rec_k, lam_k, setup["map"], _fit_settings(fit), silhouette_band
             )
             _phi, vjp_phi = jax.vjp(functools.partial(_phi_at, ls=mesh_g.body, x_star=x_star), geom)
             (d_sil,) = vjp_phi(c_sil)

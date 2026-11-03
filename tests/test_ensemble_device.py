@@ -222,6 +222,34 @@ def test_field_query_columns_are_the_single_column_fits():
             )
 
 
+@pytest.mark.parametrize("fraction", [0.0, 0.1, 1.0])
+@pytest.mark.parametrize("gradients", [False, True])
+def test_cell_query_on_active_queries_matches_the_full_query(fraction, gradients):
+    """``cell_query(active=)`` (the silhouette band's compaction, 2026-11-02): the active
+    queries' fits are the full query's bit for bit, the others read zero, at any fraction
+    and over several passes (chunk 16)."""
+    key = jax.random.key(2)
+    kx, kv, kf, kq, ka, kc = jax.random.split(key, 6)
+    c, p, q = 12, 60, 300
+    tables = (
+        jax.random.uniform(kx, (c, p, 2), dtype=jnp.float64),
+        jax.random.normal(kv, (c, p, 3), dtype=jnp.float64),
+        jax.random.uniform(kf, (c, p)) < 0.8,
+        jax.random.normal(kq, (c, p), dtype=jnp.float64),
+    )
+    q_c = jax.random.randint(kc, (q,), 0, c)
+    q_x = jax.random.uniform(kx, (q, 2), dtype=jnp.float64)
+    q_v = jax.random.normal(kv, (q, 3), dtype=jnp.float64)
+    active = jax.random.uniform(ka, (q,)) < fraction
+    scale = jnp.array([0.5, 0.5, 1.0, 1.0, 1.0])
+    args = (tables, q_c, q_x, q_v, scale, 32, "cell:quad", 16, gradients)
+    full = device.cell_query(*args)
+    got = jax.jit(device.cell_query, static_argnums=(5, 6, 7, 8))(*args, active=active)
+    for g, f in zip(jax.tree.leaves(got), jax.tree.leaves(full), strict=True):
+        mask = np.asarray(active).reshape((q,) + (1,) * (np.ndim(f) - 1))
+        np.testing.assert_array_equal(np.asarray(g), np.where(mask, np.asarray(f), 0.0))
+
+
 def test_virtual_backward_value_columns_are_separate_backwards():
     """Two reward columns in one virtual sweep (collisional relaxation, staged nodes, two
     partners and substeps) give each column's own backward: the sweep decides nothing
