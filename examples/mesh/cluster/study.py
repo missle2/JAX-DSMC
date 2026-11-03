@@ -1216,11 +1216,15 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     split = " --variants " + " ".join(FITGATE_CANDIDATES) + " --split-x"
     # and its controls: Kn 10 (the collision part should vanish) and 1000 captured steps
     # (which part carries the horizon's -3 %): GPU_KIND=rtx ONLY='^c10xs10_',
-    # GPU_KIND=h200_71 ONLY='^c10xsh_'
-    for gate, prefix in (("c10_spec_xsplit", "c10xs"), ("c10_spec_kn2_xsplit", "c10xs2"),
-                         ("c10_spec_kn10_xsplit", "c10xs10"),
-                         ("c10_spec_h1000_xsplit", "c10xsh")):  # fmt: skip
-        jobs |= _fitgate_blocks(gate, prefix, 8, ("base",), split)
+    # GPU_KIND=h200_71 ONLY='^c10xsh_'.  2026-11-03: Kn 1, 32 seeds with its own FD (Kn 2's
+    # FD noise, +-2.2 %, could not tell an excess linear in the collisional part from a
+    # quadratic one; Kn 1 predicts ~5 % against ~2.5 %): GPU_KIND=rtx ONLY='^c10xs1_'
+    for gate, prefix, seeds in (("c10_spec_xsplit", "c10xs", 8),
+                                ("c10_spec_kn2_xsplit", "c10xs2", 8),
+                                ("c10_spec_kn10_xsplit", "c10xs10", 8),
+                                ("c10_spec_h1000_xsplit", "c10xsh", 8),
+                                ("c10_spec_kn1_xsplit", "c10xs1", 32)):  # fmt: skip
+        jobs |= _fitgate_blocks(gate, prefix, seeds, ("base",), split)
     # the diffuse one OOMed on the 71 GB slice (2026-11-01: ~66 GB in use, then the backward's
     # [1000, N, 2] reward columns, 3.1 GB) -> GPU_KIND=rtx_full ONLY='^c10h_diff', two seeds a
     # job (the diffuse backward is the slow one)
@@ -1299,6 +1303,16 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
             f"vol_{gate}_s{first}": f"{vol} --gate {gate} --seeds {first} {first + 4}"
             for first in range(0, seeds, 4)
         }
+    # 2026-11-03 (the specular split: the bias is in the collisional part of grad_x lambda at
+    # the wall): the c10_spec volume gate on the cells within 1 / 2 lattice layers of the cut
+    # cells (120 / 188 of 1112), 32 seeds -- the backward's collision sensitivity where the
+    # wall's L* lambda reads it.  GPU_KIND=rtx ONLY='^volw_c10_spec_'
+    jobs |= {
+        f"volw_c10_spec_s{first}": (
+            f"{vol} --gate c10_spec --seeds {first} {first + 4} --sets near1 near2"
+        )
+        for first in range(0, 32, 4)
+    }
     # the same gate's prediction under other collision-field fits, the FD reused (one backward
     # per seed; 2026-11-01: base read pred / FD 1.4 diffuse, 0.94 specular):
     # GPU_KIND=rtx ONLY='^volf_c10_spec', GPU_KIND=h200 ONLY='^volf_c10_diff_(noguard|guard8|cubic|quad)',

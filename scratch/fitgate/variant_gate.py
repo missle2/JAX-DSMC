@@ -123,6 +123,10 @@ NEW_GATES = {
                               "a_max": 32}, "radius", [0.1, 0.05]),
     "c10_spec_h1000_xsplit": ({**CIRCLE_M10, **COMMON, "warmup": 2100, "steps": 1000},
                               "radius", [0.1, 0.05]),
+    # 2026-11-03: Kn 1, its own FD (no parent gate): between Kn 0.5's +11 % and Kn 2's +1 %,
+    # the point that tells a linear excess (~0.47 of the collisional part) from a quadratic one
+    "c10_spec_kn1_xsplit": ({**CIRCLE_M10, **COMMON, "knudsen": 1.0, "slots": 400_000,
+                             "a_max": 160}, "radius", [0.1, 0.05]),
     # collision cells half the size (2026-11-01: the user's hypothesis -- the M 10 bias lives
     # in the compressed shock layer, whose cells are too coarse for the dynamics there; the
     # horizon gave -3 %, the in-situ collision-volume gate -6 %): grid_scale 2 at the same

@@ -29,6 +29,13 @@ in :data:`RATE_EDGES`, with the prediction summed per bin -- where the substeps 
 and ``ratemap_<gate>[_<field>][_v<S>x<P>]_s<seed>.npz`` (rate, g_c V_c, cell centres).  Rows to
 ``volume_<gate>[_<field>]_v<S>x<P>_s*.jsonl``.  (The sequential pull-back has no
 per-cell increments, so it cannot be gated here.)
+
+``--sets cut near2`` (2026-11-03, the specular split: the bias sits in the collisional part
+of grad_x lambda at the wall, the whole-box volume gate passes 1.01): the sets scaled, among
+``all``, ``cut`` and ``near<K>`` -- the cut cells and every collision cell within ``K`` lattice
+layers of one (max-norm over the cell centres, the cut cells' split sub-cells included): the
+collision cells whose rates the wall's L* lambda reads, a bigger signal than the cut cells
+alone.  A non-default set list tags the rows (``volume_<gate>_<sets>_s*.jsonl``).
 """
 
 from __future__ import annotations
@@ -120,11 +127,32 @@ def objective(cfg, parameter, value, key):
     return EM.objective_value(cfg, tallies, st["static"].D, scale_r)
 
 
-def masks(cfg, parameter, value):
+def masks(cfg, parameter, value, names=("all", "cut")):
+    """``{name: bool[C]}`` of the scaled sets ``names`` (module doc: ``all``, ``cut``,
+    ``near<K>``)."""
     grid, mesh, *_ = _BUILD(cfg, parameter, value, 1)
     cells = jnp.zeros(grid.volume.shape, bool)
     cells = cells.at[: mesh.cell_type.shape[0]].set(jnp.asarray(mesh.cell_type) == cut.CUT)
-    return {"all": jnp.asarray(grid.volume > 0.0), "cut": cells}
+    flow = np.asarray(grid.volume) > 0.0
+    out = {"all": jnp.asarray(flow), "cut": cells}
+    for name in names:
+        if name.startswith("near"):
+            out[name] = jnp.asarray(near_cut(grid, np.asarray(cells), int(name[4:])) & flow)
+    return {name: out[name] for name in names}
+
+
+def near_cut(grid, cut_mask, layers):
+    """``bool[C]``: the cells whose centre lies within ``layers`` lattice cells (max-norm, per
+    axis in units of the cell width) of a cut cell's centre, the cut cells included."""
+    dx = (np.asarray(grid.hi) - np.asarray(grid.lo)) / np.asarray(grid.n)
+    centres = np.asarray(grid_mod.cell_centers(grid)) / dx
+    anchors = centres[cut_mask]
+    near = np.zeros(len(centres), bool)
+    for start in range(0, len(centres), 4096):
+        block = centres[start : start + 4096]
+        gap = np.abs(block[:, None, :] - anchors[None, :, :]).max(axis=-1).min(axis=1)
+        near[start : start + 4096] = gap <= layers + 1e-6
+    return near
 
 
 def base_fds(gate):
@@ -160,6 +188,8 @@ def main(argv=None):
     ap.add_argument("--reuse-fd", action="store_true", help="read the FD from the base rows")
     ap.add_argument("--virtual", type=int, nargs=2, default=None, metavar=("S", "P"),
                     help="virtual pull-back substeps, partners (default 4 8, untagged)")  # fmt: skip
+    ap.add_argument("--sets", nargs="+", default=["all", "cut"],
+                    help="scaled sets: all, cut, near<K> (module doc)")  # fmt: skip
     args = ap.parse_args(argv)
     cfg, parameter, _steps, seed_start, _rows = V.gate_config(args.gate)
     value = float(EM.nominal(cfg, parameter))
@@ -167,6 +197,10 @@ def main(argv=None):
     virtual = (4, 8) if args.virtual is None else tuple(args.virtual)
     if args.virtual is not None:
         tag += f"_v{virtual[0]}x{virtual[1]}"
+    if args.sets != ["all", "cut"]:
+        if args.reuse_fd:
+            raise ValueError("--reuse-fd reads the base rows' all / cut FDs only")
+        tag += "_" + "-".join(args.sets)
     out = OUT_DIR / f"volume_{args.gate}{tag}_s{args.seeds[0]}-{args.seeds[1]}.jsonl"
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     done = set()
@@ -176,7 +210,9 @@ def main(argv=None):
     ensemble_backward.configure("virtual", *virtual, "staged", FIELDS[args.field])
     EM.build = build_scaled
     EM._volume_term = grab_volume_term
-    sets = masks(cfg, parameter, value)
+    sets = masks(cfg, parameter, value, tuple(args.sets))
+    print({name: int(np.sum(np.asarray(m))) for name, m in sets.items()}, "cells", flush=True)
+    flow = sets["all"] if "all" in sets else masks(cfg, parameter, value, ("all",))["all"]
     for seed in range(*args.seeds):
         if seed in done or (args.reuse_fd and seed not in reused):
             continue
@@ -188,7 +224,7 @@ def main(argv=None):
         )
         row = {"gate": args.gate, "field": args.field, "virtual": list(virtual), "seed": seed,
                "objective": info["objective"], "eps": list(EPS)}  # fmt: skip
-        row |= rate_columns(sets["all"], f"{args.gate}{tag}", seed, cfg, parameter, value)
+        row |= rate_columns(flow, f"{args.gate}{tag}", seed, cfg, parameter, value)
         for name, mask in sets.items():
             m = np.asarray(mask)
             row[f"pred_{name}"] = float(np.sum(CAPTURED["w"][m] * CAPTURED["v"][m]))
