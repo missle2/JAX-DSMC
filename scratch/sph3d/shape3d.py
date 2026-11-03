@@ -71,11 +71,18 @@ def view_basis(eye, up_hint):
 
 
 def render(phi, lo, h, centre, half, eye, up_hint, pixel=0.025, reach=4.5, light=None):
+    """The shaded image of :func:`render_surface`."""
+    return render_surface(phi, lo, h, centre, half, eye, up_hint, pixel, reach, light)[0]
+
+
+def render_surface(phi, lo, h, centre, half, eye, up_hint, pixel=0.025, reach=4.5,
+                   light=None):  # fmt: skip
     """Shaded image (``float[pixels_v, pixels_h]``, NaN off the body) of ``phi < 0``
     orthographically from ``eye`` (:func:`view_basis`): a ``2 half[0]`` x ``2 half[1]``
     window (screen right x up) on ``centre``, ``pixel`` m pixels; along each ray (depth
     ``+-reach``, samples the grid spacing apart) the first sign change, refined linearly, shaded Lambert +
-    ambient by the interpolated gradient."""
+    ambient by the interpolated gradient; with the hit points (``[V, H, 3]``) and the hit mask
+    (2026-11-03, the heat-flux colouring of scratch/dlh3d)."""
     right, up, view = view_basis(eye, up_hint)
     su = np.arange(-half[0], half[0] + 1e-9, pixel)
     sv = np.arange(-half[1], half[1] + 1e-9, pixel)[::-1]
@@ -103,7 +110,7 @@ def render(phi, lo, h, centre, half, eye, up_hint, pixel=0.025, reach=4.5, light
     n = n.reshape(*su.shape, 3)
     light = view_light(right, up, view) if light is None else light
     shade = 0.25 + 0.75 * np.clip(n @ light, 0.0, 1.0)
-    return np.where(hit, shade, np.nan)
+    return np.where(hit, shade, np.nan), surf, hit
 
 
 def view_light(right, up, view):

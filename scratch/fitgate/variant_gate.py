@@ -185,6 +185,20 @@ NEW_GATES = {
                           "heat_patch": 0.2}, "mode2", [0.1, 0.05]),
     "c10_diff_lift_m2s": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "drag_lift",
                            "lift_weight": 1.0}, "mode2s", [0.1, 0.05]),
+    # 2026-11-03 localising the cos 2 theta failure (c10_diff_m2 0.73 where the radius passes):
+    # Kn 10 drops the collisional terms (order, volume, L* in pathwise_x: <2 % of the radius
+    # gradient there, 35 / 9 / 25 % at Kn 0.5) and keeps the diffuse wall's (silhouette, score,
+    # tally); the specular circle drops the diffuse-only ones (silhouette, score, order) and
+    # keeps the collisional pathwise_x / volume; the two derivative-only knobs (paired with
+    # c10_diff_m2, its forward and FD) move the grazing floor of every hit-time quotient
+    # (pathwise_x, order, score) and the silhouette band (membership on: reported, not summed)
+    "c10_diff_kn10_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "knudsen": 10.0,
+                          "slots": 400_000, "a_max": 32}, "mode2", [0.1, 0.05]),
+    "c10_spec_m2": ({**CIRCLE_M10, **COMMON}, "mode2", [0.1, 0.05]),
+    "c10_diff_m2_gz001": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grazing": 0.001}, "mode2",
+                          [0.1, 0.05]),
+    "c10_diff_m2_sil2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "silhouette_band": 0.06,
+                          "membership_band": 0.1}, "mode2", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
@@ -202,6 +216,8 @@ FD_FROM = {
     "c10_spec_v816": "c10_spec",
     "c10_spec_mem": "c10_spec",
     "c10_diff_mem": "c10_diff",
+    "c10_diff_m2_gz001": "c10_diff_m2",
+    "c10_diff_m2_sil2": "c10_diff_m2",
 }
 _CACHE = {}
 

@@ -1157,6 +1157,25 @@ def _diffchk_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _m2chk_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``m2chk`` (2026-11-03): where the diffuse cos 2 theta failure lives (c10_diff_m2 0.73,
+    the radius passing) -- the diffuse circle at Kn 10 (no collisional terms), the specular
+    circle (no diffuse-only terms), and c10_diff_m2's forward and FD with the grazing floor
+    0.01 -> 0.001 and the silhouette band 0.03 -> 0.06; 4 seeds each, the diffchk variants.
+    ``GPU_KIND=rtx_48``."""
+    del gpus_per_node
+    chk = " --variants cell_pool_plane cell_along_pool_plane along_pool_plane"
+    jobs = {}
+    for gate, short in (
+        ("c10_diff_kn10_m2", "m2_dkn10"),
+        ("c10_spec_m2", "m2_spec"),
+        ("c10_diff_m2_gz001", "m2_gz001"),
+        ("c10_diff_m2_sil2", "m2_sil2"),
+    ):
+        jobs.update(_fitgate_blocks(gate, short, 4, ("base",), chk))
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1397,6 +1416,7 @@ NEW_GROUPS = {
     "ld3dwide": _ld3dwide_jobs,
     "dlh3d": _dlh3d_jobs,
     "diffchk": _diffchk_jobs,
+    "m2chk": _m2chk_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
