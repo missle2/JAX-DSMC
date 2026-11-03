@@ -1026,21 +1026,24 @@ def _ld3dwide_jobs(gpus_per_node: int) -> dict[str, str]:
 # value (shock layer) while a sub-lambda sharp nose approaches it, so a sharpened nose can
 # exceed the sphere's p-mean although its area is small -- the cap at 1.0 binds when that
 # happens; 0.8 would bind from the first iterate on the sphere itself.  The wall fit
-# cell_pool_plane (2026-11-03: the diffuse gates' unbiased one at Kn 0.5 / 2 / 10, 0.99-1.00;
-# the default along_pool_plane reads 0.91 at Kn 10 on diffuse walls).  The
+# cell_along_pool_plane (2026-11-03: with cell_pool_plane the diffuse radius gates' unbiased
+# pair at Kn 0.5 / 2 / 10, but cell_pool_plane reads 0.87 on the diffuse squash and +20 % on the
+# specular circle; the default along_pool_plane reads 0.91 at Kn 10 on diffuse walls; the cos 2
+# theta gates fail every fit, m2chk).  The first run (cell_pool_plane) OOMed on h200_71 at
+# iterate 23 (A_max 72 -> 132) and is to be restarted from 0, not resumed.  The
 # M 10 Kn 0.5 sphere_long of lsfilter3d (Helmholtz, no reinitialisation) with diffuse walls
 # (the heat flux needs them; the silhouette term's cost fixed 2026-11-02), plus ld3dwide's
 # thickness constraint and topology guard.  Overnight size: --fnum-scale 2 (half
 # sphere_long's particles, ~8 per free-stream cell) and 150 iterates on a cosine step decay
 # (lsfilter3d's specular M 10 runs: ~190 s an iterate at fnum-scale 1; diffuse backwards
 # are ~2x, half the particles ~0.5x).  Resubmit to resume / extend:
-#   GPU_KIND=h200_71 bash examples/mesh/cluster/submit_curc.sh dlh3d
+#   GPU_KIND=h200_full bash examples/mesh/cluster/submit_curc.sh dlh3d   (71 GB OOMed)
 DLH3D_ITERATIONS = 150
 DLH3D = (
     "--acc 1 --silhouette-band 0.03 --objective drag_lift --lift-min 0.15 --lift-rate 2 "
     "--lift-multiplier 1 --heat-patch 0.2 --heat-cap 1.0 --heat-cap-relative 1 "
     "--heat-multiplier 1 --heat-rate 2 --area-mode floor --area-floor 0.8 "
-    "--thickness 1 --thickness-rate 10 --topology-guard 1 --variant cell_pool_plane"
+    "--thickness 1 --thickness-rate 10 --topology-guard 1 --variant cell_along_pool_plane"
 )
 
 

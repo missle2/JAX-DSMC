@@ -234,6 +234,9 @@ scratch/**/*.done
 scratch/**/coef_*.npy
 scratch/**/grad_*.npy
 scratch/lsfilter/fixed_step/
+# figure scripts' derived-data caches (2026-11-03: scratch/dlh3d/cache/area_<k>.npy, the
+# heat lattice's node areas, went in by accident)
+scratch/**/cache/
 scratch/perf/profile/**/plugins/
 
 # Bulk run data: moved between machines by rsync, not git (2026-10-14).  What stays tracked
