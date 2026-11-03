@@ -102,8 +102,12 @@ def default_config():
         # "drag" (the windowed x force) or "lift_drag" (J = -L / D, the y force over the x
         # force: maximised lift-to-drag; 2026-10-25).  The ratio's gradient is one backward:
         # the per-hit momentum weighted by dJ/dF = (L / D^2, -1 / D) at the seed's forces
-        # (objective_weights), traced through the replay and the shape VJP
+        # (objective_weights), traced through the replay and the shape VJP.  "drag_lift"
+        # (2026-11-02): J = D - lift_weight * L, the drag with a lift constraint's multiplier
+        # term (optimize --lift-min sets the weight every iterate); linear in the forces, so
+        # its per-hit weights (1, -lift_weight) do not depend on the seed
         "objective": "drag",
+        "lift_weight": 0.0,
         "grid_scale": 1,
         # "hit_ahead" (stratified grad-lambda fits) is DIAGNOSTIC ONLY, biased by
         # construction: the class is the particle's future, the fit drops grad P (lam_1 -
@@ -726,7 +730,7 @@ def timing_band_setting(value):
     return float(value), 1
 
 
-OBJECTIVES = ("drag", "lift_drag", "heat")
+OBJECTIVES = ("drag", "lift_drag", "drag_lift", "heat")
 
 
 def objective_forces(cfg, tallies, dim, scale):
@@ -744,6 +748,9 @@ def objective_value(cfg, tallies, dim, scale):
     if kind == "lift_drag":
         f = objective_forces(cfg, tallies, dim, scale)
         return float(-f[1] / f[0])
+    if kind == "drag_lift":
+        f = objective_forces(cfg, tallies, dim, scale)
+        return float(f[0] - cfg["lift_weight"] * f[1])
     if kind == "heat":
         # the body's windowed heat rate, W (W / m in 2-D): the heat path's gradient gate
         first = cfg["steps"] - cfg["window"]
@@ -753,12 +760,17 @@ def objective_value(cfg, tallies, dim, scale):
 
 def objective_weights(cfg, tallies, dim, scale):
     """``dJ/dF`` (``f64[D]``) of a nonlinear objective at this seed's forces, the weights of
-    the per-hit momentum (:func:`_hit_momentum`): ``(L / D^2, -1 / D)`` for ``J = -L / D``.
-    ``None`` for the drag (the unweighted ``x`` component, bit for bit the earlier rewards)."""
-    if cfg.get("objective", "drag") in ("drag", "heat"):
+    the per-hit momentum (:func:`_hit_momentum`): ``(L / D^2, -1 / D)`` for ``J = -L / D``,
+    ``(1, -lift_weight)`` for ``J = D - lift_weight L``.  ``None`` for the drag (the unweighted
+    ``x`` component, bit for bit the earlier rewards)."""
+    kind = cfg.get("objective", "drag")
+    if kind in ("drag", "heat"):
         return None
-    f = objective_forces(cfg, tallies, dim, scale)
     w = np.zeros(dim)
+    if kind == "drag_lift":
+        w[0], w[1] = 1.0, -float(cfg["lift_weight"])
+        return jnp.asarray(w)
+    f = objective_forces(cfg, tallies, dim, scale)
     w[0], w[1] = f[1] / f[0] ** 2, -1.0 / f[0]
     return jnp.asarray(w)
 
@@ -1088,6 +1100,8 @@ def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
     alive = np.asarray(rec.alive)
     info = {
         "objective": check,
+        # the windowed mean force (N/m in 2-D): x the drag, y the lift
+        "forces": objective_forces(cfg, tallies, dim, scale_r).tolist(),
         "hits": int(diag.surface_hits.sum()),
         "stuck": int(diag.surface_stuck.sum()),
         "newborn_hit_share": newborn_share,

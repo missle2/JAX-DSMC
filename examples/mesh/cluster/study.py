@@ -1015,6 +1015,41 @@ def _ld3dwide_jobs(gpus_per_node: int) -> dict[str, str]:
     return {"sphere_wide_kn0.5_M10_ldfl_hz0th": f"{cmd} {LD3DWIDE}"}
 
 
+# dlh3d (2026-11-02): minimum drag subject to a minimum lift (L >= 0.5 D_0, D_0 the sphere's
+# drag; --objective drag_lift, its multiplier from 1 at rate 2), a peak-heating cap (the
+# heat p-mean at most 0.8 of the sphere's, as the paper's heat runs) and a volume floor (0.8
+# of the sphere's) -- better posed than max L / D, whose bodies thinned into plates.  The
+# M 10 Kn 0.5 sphere_long of lsfilter3d (Helmholtz, no reinitialisation) with diffuse walls
+# (the heat flux needs them; the silhouette term's cost fixed 2026-11-02), plus ld3dwide's
+# thickness constraint and topology guard.  Overnight size: --fnum-scale 2 (half
+# sphere_long's particles, ~8 per free-stream cell) and 150 iterates on a cosine step decay
+# (lsfilter3d's specular M 10 runs: ~190 s an iterate at fnum-scale 1; diffuse backwards
+# are ~2x, half the particles ~0.5x).  Resubmit to resume / extend:
+#   GPU_KIND=h200_71 bash examples/mesh/cluster/submit_curc.sh dlh3d
+DLH3D_ITERATIONS = 150
+DLH3D = (
+    "--acc 1 --silhouette-band 0.03 --objective drag_lift --lift-min 0.5 --lift-rate 2 "
+    "--lift-multiplier 1 --heat-patch 0.2 --heat-cap 0.8 --heat-cap-relative 1 "
+    "--heat-multiplier 1 --heat-rate 2 --area-mode floor --area-floor 0.8 "
+    "--thickness 1 --thickness-rate 10 --topology-guard 1"
+)
+
+
+def _dlh3d_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``dlh3d``: :data:`DLH3D` on lsfilter3d's M 10 sphere_long at half the particles; tag
+    ``sphere_long_kn0.5_M10_S1_ox_adam_dlh_hz0_f2_w300``."""
+    del gpus_per_node
+    cmd = (
+        f"python3 -m examples.mesh.optimize --tag sphere_long_kn0.5_M10_S1_ox_adam_dlh_hz0_f2_w300 "
+        f"{SPHERE_LONG} --knudsen 0.5 --mach 10 --dt 2.5e-5 {KNPULLBACK} --optimizer ox_adam "
+        f"--a-max 16 {CONVERGE} {FIX} {HELM} {NO_REINIT} --step-decay {DLH3D_ITERATIONS} {DLH3D}"
+    )
+    cmd = cmd.replace("--fnum-scale 1 ", "--fnum-scale 2 ", 1).replace(
+        "--iterations 400", f"--iterations {DLH3D_ITERATIONS}", 1
+    )
+    return {"sphere_long_kn0.5_M10_dlh": cmd}
+
+
 # optcm (2026-10-23): the area centroid held (every Adam-type M 10 run of optax1seed /
 # optrules1seed slid ~10 m downstream onto the outflow face), one seed per iterate, for the
 # rules that descended fastest: Adam, Adam + cosine step, Prodigy and Prodigy with a decaying
@@ -1321,6 +1356,7 @@ NEW_GROUPS = {
     "lsfilter": _lsfilter_jobs,
     "lsfilter3d": _lsfilter3d_jobs,
     "ld3dwide": _ld3dwide_jobs,
+    "dlh3d": _dlh3d_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

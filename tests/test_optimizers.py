@@ -468,6 +468,28 @@ def test_lift_drag_weights_are_the_ratio_gradient():
     np.testing.assert_array_equal(EM._hit_momentum(events, 2.0, 2, jnp.array([1.0, 0.0])), plain)
 
 
+def test_drag_lift_weights_are_the_multiplier_term():
+    """2026-11-02 (``objective drag_lift``, the minimum-lift constraint): ``J = D - nu L`` at
+    ``lift_weight = nu`` -- the value from the windowed forces, the per-hit weights
+    ``(1, -nu)`` whatever the forces, and ``nu = 0`` the drag's value."""
+    import jax.numpy as jnp  # noqa: PLC0415
+
+    from examples import ensemble_mesh as EM  # noqa: PLC0415
+
+    cfg = {"steps": 4, "window": 3, "objective": "drag_lift", "lift_weight": 0.7}
+    rng = np.random.default_rng(2)
+    mom = np.zeros((4, 6, 3))
+    mom[:, 4:, 0] = rng.uniform(1.0, 2.0, (4, 2))
+    mom[:, 4:, 1] = rng.normal(0.0, 0.3, (4, 2))
+    tallies = types.SimpleNamespace(momentum=jnp.asarray(mom))
+    f = EM.objective_forces(cfg, tallies, 2, 0.5)
+    assert abs(EM.objective_value(cfg, tallies, 2, 0.5) - (f[0] - 0.7 * f[1])) < 1e-12
+    np.testing.assert_array_equal(np.asarray(EM.objective_weights(cfg, tallies, 2, 0.5)),
+                                  [1.0, -0.7])  # fmt: skip
+    drag = EM.objective_value(dict(cfg, objective="drag"), tallies, 2, 0.5)
+    assert abs(EM.objective_value(dict(cfg, lift_weight=0.0), tallies, 2, 0.5) - drag) < 1e-12
+
+
 def test_step_decay_is_a_cosine_to_a_sixteenth_then_held():
     """2026-10-26 (``step_decay``): off it is the fixed step; on, ``step`` at iterate 0, half
     way between ``step`` and ``step / 16`` at ``n / 2``, ``step / 16`` from ``n`` on."""

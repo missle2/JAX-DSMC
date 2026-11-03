@@ -289,6 +289,14 @@ def default_config():
             # than of the free-molecular stagnation value (the transitional shock layer
             # lowers the stagnation heating below it by a condition-dependent factor)
             "heat_cap_relative": 0,
+            # minimum lift (2026-11-02; 0 = off): the constraint L >= lift_min * D_0 (D_0 the
+            # first iterate's drag: the start body may have no lift), with --objective
+            # drag_lift.  By its multiplier nu as the heat cap: the iterate minimises
+            # D + nu (L_min - L), one backward (ensemble_mesh's per-hit weights (1, -nu)), and
+            # nu <- max(0, nu + lift_rate (L_min - L) / D_0) after every iterate
+            "lift_min": 0.0,
+            "lift_rate": 2.0,
+            "lift_multiplier": 0.0,
         }
     )
     return cfg
@@ -826,6 +834,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None)
     :func:`EM.forward`'s ``restart``) instead of the empty box: the warm-up shrinks to
     ``restart_steps`` re-equilibration steps on the new body."""
     grads, objs, hits, secs, stuck, phases, sizes, heats = [], [], [], [], [], [], [], []
+    forces = []
     out = {}
     for i in seeds:
         key = jax.random.key(cfg["seed_start"] + int(i))
@@ -851,6 +860,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None)
             grad = grad + s["volume"]  # the cut-volume term (zero without collisions)
         grads.append(np.asarray(grad))
         objs.append(info["objective"])
+        forces.append(info["forces"])
         hits.append(info["hits"])
         stuck.append(info["stuck"])
         secs.append(time.time() - t0)
@@ -864,6 +874,7 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None)
         {
             "gradient": np.stack(grads),
             "objective": np.asarray(objs, dtype=float),
+            "forces": np.asarray(forces, dtype=float),
             "hits": np.asarray(hits, dtype=float),
             "stuck": np.asarray(stuck, dtype=float),
             "seconds": np.asarray(secs, dtype=float),
@@ -896,6 +907,9 @@ def _combine(parts):
         # the largest traced-replay (passes, lane) of the seeds (EM.replay_static)
         "replay_sizes": np.concatenate([p.get("replay_sizes", np.zeros((1, 2), np.int64))
                                         for p in parts]).max(axis=0).tolist(),
+        # the seeds' mean windowed force (x the drag, y the lift), else None
+        "forces": (np.concatenate([p["forces"] for p in parts]).mean(axis=0)
+                   if all("forces" in p for p in parts) else None),
         # the seeds' mean heat rate per heat-lattice node (heat_patch), else None
         "patch_heat": (np.concatenate([p["patch_heat"] for p in parts]).mean(axis=0)
                        if all("patch_heat" in p for p in parts) else None),
@@ -1337,6 +1351,15 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         mu_heat = history[-1].get("heat_multiplier_next", mu_heat)
         if (out / f"heat_{len(history) - 1}.npy").exists():
             q_prev = np.load(out / f"heat_{len(history) - 1}.npy")
+    lift_on = cfg["lift_min"] > 0.0
+    if lift_on and (cfg["objective"] != "drag_lift" or cfg["surrogate"] or cfg["workers"] > 1):
+        raise ValueError(
+            "--lift-min needs --objective drag_lift, --workers 1 and the DSMC objective"
+        )
+    nu_lift = cfg["lift_multiplier"]
+    if history:
+        nu_lift = history[-1].get("lift_multiplier_next", nu_lift)
+    lift_ref = saved.get("lift_ref") if saved else None  # D_0
     mode = cfg["area_mode"]
     if cfg["fix_centroid"] and mode != "tangent":
         raise ValueError("--fix-centroid needs --area-mode tangent")
@@ -1377,7 +1400,9 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             if heat_on and q_prev is not None and heat_ref is not None:
                 # dJ/dQ of the penalty at the previous iterate's heat (lagged, seed-averaged)
                 heat_weights = mu_heat * heat_ref * heat_terms(cfg, ls, lo, hi, q_prev)[2]
-            avg = averaged_terms(cfg, ls, iterate_seeds, out, heat_weights)
+            # the lift multiplier's weight in this iterate's objective D - nu L
+            avg = averaged_terms({**cfg, "lift_weight": nu_lift}, ls, iterate_seeds, out,
+                                 heat_weights)  # fmt: skip
         g = avg["gradient"]
         if cfg["save_gradient"]:
             np.save(out / f"grad_{k}.npy", np.asarray(g, dtype=np.float32))
@@ -1387,6 +1412,16 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             raise FloatingPointError(f"iterate {k}: non-finite objective or shape gradient")
         objective = avg["objective"]
         objectives = np.asarray(avg["objectives"], float)
+        lift_now = None
+        if lift_on:
+            drag_now, lift_now = (float(f) for f in avg["forces"][:2])
+            if lift_ref is None:
+                lift_ref = drag_now
+            lift_cap = cfg["lift_min"] * lift_ref
+            nu_lift_next = max(0.0, nu_lift + cfg["lift_rate"] * (lift_cap - lift_now) / lift_ref)
+            # the Lagrangian D + nu (L_min - L): the seeds' D - nu L plus the constant
+            objective = objective + nu_lift * lift_cap
+            objectives = objectives + nu_lift * lift_cap
         perimeter = None
         if cfg["perimeter"] > 0.0:
             perimeter, g_perimeter = perimeter_and_gradient(ls, lo, hi)
@@ -1401,7 +1436,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             thinness, g_thin = thinness_and_gradient(ls, lo, hi, thickness_min(cfg, ls))
             if thickness_ref is None:
                 lift = cfg["objective"] == "lift_drag"
-                thickness_ref = 1.0 if lift else float(avg["objective"])
+                thickness_ref = 1.0 if lift else float(lift_ref or avg["objective"])
             weight = lam * thickness_ref
             lam_next = max(0.0, lam + cfg["thickness_rate"] * (thinness - cfg["thickness_tol"]))
             objective = objective + weight * thinness
@@ -1413,7 +1448,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             np.save(out / f"heat_{k}.npy", q_heat)
             heat_g, g_heat_area, _dq = heat_terms(cfg, ls, lo, hi, q_heat)
             if heat_ref is None:
-                heat_ref = float(avg["objective"])
+                heat_ref = float(lift_ref or avg["objective"])  # D_0
             weight = mu_heat * heat_ref
             if heat_g0 is None:
                 heat_g0 = heat_g
@@ -1551,6 +1586,11 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             row.update(thinness=thinness, penalised_objective=objective, thickness_multiplier=lam,
                        thickness_multiplier_next=lam_next)  # fmt: skip
             lam = lam_next
+        if lift_now is not None:
+            row.update(drag=drag_now, lift=lift_now, lift_target=lift_cap,
+                       penalised_objective=objective, lift_multiplier=nu_lift,
+                       lift_multiplier_next=nu_lift_next)  # fmt: skip
+            nu_lift = nu_lift_next
         if heat_g is not None:
             row.update(heat_measure=heat_g, penalised_objective=objective,
                        heat_multiplier=mu_heat, heat_multiplier_next=mu_heat_next)  # fmt: skip
@@ -1581,6 +1621,7 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
                     "thickness_ref": thickness_ref,
                     "heat_ref": heat_ref,
                     "heat_g0": heat_g0,
+                    "lift_ref": lift_ref,
                     "converged": converged_objective(cfg, history),
                     "rows": history,
                     "elapsed": time.time() - t_start,
