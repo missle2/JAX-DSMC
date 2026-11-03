@@ -176,6 +176,15 @@ NEW_GATES = {
                      [0.1, 0.05]),
     "c10_spec_2dt": ({**CIRCLE_M10, **COMMON, "dt": 5e-5, "warmup": 1400,
                       "membership_band": 0.1}, "radius", [0.1, 0.05]),
+    # 2026-11-03 production check of the diffuse wall (the dlh3d objective's three pieces, per-cell
+    # fits): drag and the body's total heat rate (dlh3d's heat_patch lattice) under the cos 2
+    # theta elongation, and J = D - L (drag_lift, lift_weight 1) under its sin 2 theta inclination
+    # (dD = 0 by symmetry there, so the check is the lift's)
+    "c10_diff_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "mode2", [0.1, 0.05]),
+    "c10_diff_heat_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                          "heat_patch": 0.2}, "mode2", [0.1, 0.05]),
+    "c10_diff_lift_m2s": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "drag_lift",
+                           "lift_weight": 1.0}, "mode2s", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed

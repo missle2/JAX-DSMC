@@ -13,7 +13,8 @@ a per-hit reward (the traced replay, :func:`jax_dsmc.shape.replay`) whose pathwi
 (the specular ``v_out`` depends on the normal) enters through the tally cotangent.
 Controls: ``radius`` (analytic ``dF/dr = F/r`` for a specular cylinder in free-molecular
 flow is the reference for the value; blockage is what it is at this box), ``centre_x``,
-``mode2`` (a ``cos 2 theta`` normal displacement of the surface, level set only), ``width``
+``mode2`` (a ``cos 2 theta`` normal displacement of the surface, level set only), ``mode2s``
+(its ``sin 2 theta`` twin: an inclination of the elongation, the lift's control), ``width``
 (the half-width of the ``plate`` case's capsule) and ``squash_y`` (the ``y`` semi-axis
 factor ``s`` of the ``ellipse`` / ``spheroid`` cases, evaluated at ``--squash``; reference
 ``examples/mesh/ellipsoid_reference.py``).
@@ -61,7 +62,8 @@ from jax_dsmc.mesh.types import AnalyticBody
 from jax_dsmc.state import FlowParams, lane_capacity
 from jax_dsmc.validation import require_valid
 
-PARAMETERS = ("radius", "centre_x", "mode2", "width", "squash_y")
+PARAMETERS = ("radius", "centre_x", "mode2", "mode2s", "width", "squash_y")
+MODES = ("mode2", "mode2s")
 BODIES = ("analytic", "levelset")
 # the replay's continuous error: round-off of one arithmetic compiled twice, amplified by
 # grazing reflections on concave walls to ~1e-12 on optimised shapes; a discrete divergence
@@ -145,11 +147,14 @@ def default_config():
     }
 
 
-def _mode_shape(x, centre):
-    """``-cos(2 theta)`` about ``centre``: the level-set increment of a unit outward
-    normal displacement ``cos(2 theta)`` (``delta phi = -delta_n``)."""
+def _mode_shape(x, centre, parameter="mode2"):
+    """``-cos(2 theta)`` (``mode2``) or ``-sin(2 theta)`` (``mode2s``) about ``centre``: the
+    level-set increment of a unit outward normal displacement ``cos`` / ``sin(2 theta)``
+    (``delta phi = -delta_n``)."""
     rel = x - jnp.asarray(centre)[None, :]
     theta = jnp.arctan2(rel[:, 1], rel[:, 0])
+    if parameter == "mode2s":
+        return -jnp.sin(2.0 * theta)
     return -jnp.cos(2.0 * theta)
 
 
@@ -189,7 +194,7 @@ def levelset_coef(theta, cfg, parameter, grid):
         radius = theta
     elif parameter == "centre_x":
         centre = centre.at[0].set(theta)
-    elif parameter not in ("mode2", "width", "squash_y"):
+    elif parameter not in (*MODES, "width", "squash_y"):
         raise ValueError(f"parameter must be one of {PARAMETERS}")
     h = cfg["levelset_h"]
     lo, shape = levelset_mod.grid_for_box(grid.lo, grid.hi, h)
@@ -216,9 +221,9 @@ def levelset_coef(theta, cfg, parameter, grid):
         raise ValueError("width is the capsule's control")
     ls = levelset_mod.from_analytic(centre, radius, lo, h, shape, n_sample=cfg["levelset_samples"])
     coef = ls.coef
-    if parameter == "mode2":
-        mode = levelset_mod.interpolate(_mode_shape(levelset_mod.knots(ls), centre).reshape(shape))
-        coef = coef + theta * mode
+    if parameter in MODES:
+        mode = _mode_shape(levelset_mod.knots(ls), centre, parameter)
+        coef = coef + theta * levelset_mod.interpolate(mode.reshape(shape))
     return coef, ls
 
 
@@ -226,7 +231,7 @@ def body_of(cfg, parameter, value, grid):
     if cfg["body"] == "levelset":
         coef, ls = levelset_coef(jnp.float64(value), cfg, parameter, grid)
         return dataclasses.replace(ls, coef=coef)
-    if parameter in ("mode2", "width", "squash_y"):
+    if parameter in (*MODES, "width", "squash_y"):
         raise ValueError(f"{parameter} is a level-set control")
     c = F.CASES[cfg["case"]]
     centre = np.array(c["centre"], dtype=np.float64)

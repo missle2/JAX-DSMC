@@ -1141,6 +1141,22 @@ FITGATE_CANDIDATES = (
 cells plus the k-nearest fit that did not respond to the cell size (the control)."""
 
 
+def _diffchk_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``diffchk`` (2026-11-03): the production diffuse wall checked against central
+    differences on the dlh3d objective's three pieces (variant_gate's c10_diff_m2: drag under
+    the cos 2 theta elongation; c10_diff_heat_m2: the total heat rate under it; and
+    c10_diff_lift_m2s: J = D - L under the sin 2 theta inclination, dD = 0 by symmetry), the
+    M 10 Kn 0.5 circle, 8 seeds each, the per-cell fits beside the old default.  As c10_diff
+    (~23 GB): GPU_KIND=rtx_48 bash examples/mesh/cluster/submit_curc.sh diffchk"""
+    del gpus_per_node
+    chk = " --variants cell_pool_plane cell_along_pool_plane along_pool_plane"
+    jobs = {}
+    for gate, short in (("c10_diff_m2", "dchk_drag"), ("c10_diff_heat_m2", "dchk_heat"),
+                        ("c10_diff_lift_m2s", "dchk_lift")):  # fmt: skip
+        jobs |= _fitgate_blocks(gate, short, 8, ("base",), chk)
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1380,6 +1396,7 @@ NEW_GROUPS = {
     "lsfilter3d": _lsfilter3d_jobs,
     "ld3dwide": _ld3dwide_jobs,
     "dlh3d": _dlh3d_jobs,
+    "diffchk": _diffchk_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
