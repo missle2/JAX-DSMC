@@ -66,9 +66,9 @@ class Backward(NamedTuple):
     """``f64[N]`` adjoint at the initial state, on the initially alive slots (else 0)."""
     lam: jax.Array
     """``f64[M, N]`` adjoint at each step's post-move state (what sources and walls weight)."""
-    four_term: jax.Array
+    four_term: jax.Array | None
     """``f64[M, A, C]`` ``Lam(v_i')+Lam(v_j')-Lam(v_i)-Lam(v_j)`` per accepted attempt (0
-    elsewhere); zeros under the virtual pull-back, whose pairs are not the record's."""
+    elsewhere); ``None`` under the virtual pull-back, whose pairs are not the record's."""
     kernel: jax.Array
     """``f64[M]`` per-step ``sum 1/2 w * four_term * pair_score(v_i, v_j)`` over the virtual
     pairs -- the kernel-parameter gradient's collision term when ``pair_score`` is
@@ -1227,7 +1227,8 @@ def backward_virtual(
     (mu0, _), (lam, kern, coll) = lax.scan(
         body, (mu, key), (records, phi_step, hit_reward, normals), reverse=True
     )
-    m, a, c = records.pairs.pi.shape
     lambda0 = jnp.where(_per_slot(initial_alive, mu0), mu0, 0.0)
     per, cells = (None, None) if coll is None else coll
-    return Backward(lambda0, lam, jnp.zeros((m, a, c)), kern, per, cells)
+    # no four_term: the virtual pairs are not the record's (a zeros f64[M, A, C] here was
+    # 2 GB on the diffuse M 10 circle at A_max 700 -- the allocation its 24 GB runs died on)
+    return Backward(lambda0, lam, None, kern, per, cells)
