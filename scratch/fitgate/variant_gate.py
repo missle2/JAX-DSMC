@@ -115,6 +115,14 @@ NEW_GATES = {
     "c10_spec_xsplit": ({**CIRCLE_M10, **COMMON}, "radius", [0.1, 0.05]),
     "c10_spec_kn2_xsplit": ({**CIRCLE_M10, **COMMON, "knudsen": 2.0, "slots": 400_000,
                              "a_max": 96}, "radius", [0.1, 0.05]),
+    # 2026-11-02: at Kn 0.5 the collision part of pathwise_x is +0.120 against an excess of
+    # ~+0.057.  Kn 10 (the control: the collision part should vanish, the perpendicular and
+    # timing parts read right) and the 1000-step horizon (which part grows with the horizon?),
+    # the same forwards and FDs as c10_spec_kn10 / c10_spec
+    "c10_spec_kn10_xsplit": ({**CIRCLE_M10, **COMMON, "knudsen": 10.0, "slots": 400_000,
+                              "a_max": 32}, "radius", [0.1, 0.05]),
+    "c10_spec_h1000_xsplit": ({**CIRCLE_M10, **COMMON, "warmup": 2100, "steps": 1000},
+                              "radius", [0.1, 0.05]),
     # collision cells half the size (2026-11-01: the user's hypothesis -- the M 10 bias lives
     # in the compressed shock layer, whose cells are too coarse for the dynamics there; the
     # horizon gave -3 %, the in-situ collision-volume gate -6 %): grid_scale 2 at the same
@@ -174,6 +182,8 @@ FD_FROM = {
     "c10_spec_h600": "c10_spec",
     "c10_spec_xsplit": "c10_spec",
     "c10_spec_kn2_xsplit": "c10_spec_kn2",
+    "c10_spec_kn10_xsplit": "c10_spec_kn10",
+    "c10_spec_h1000_xsplit": "c10_spec",
     "c10_spec_gz001": "c10_spec",
     "c10_spec_two": "c10_spec",
     "c10_spec_v816": "c10_spec",

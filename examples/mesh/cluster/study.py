@@ -1170,8 +1170,13 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     # the specular bias lives in the one variant-dependent term), Kn 0.5 and Kn 2, seeds 0-7,
     # FD reused: GPU_KIND=rtx ONLY='^c10xs_', GPU_KIND=rtx_48 ONLY='^c10xs2_'
     split = " --variants " + " ".join(FITGATE_CANDIDATES) + " --split-x"
-    jobs |= _fitgate_blocks("c10_spec_xsplit", "c10xs", 8, ("base",), split)
-    jobs |= _fitgate_blocks("c10_spec_kn2_xsplit", "c10xs2", 8, ("base",), split)
+    # and its controls: Kn 10 (the collision part should vanish) and 1000 captured steps
+    # (which part carries the horizon's -3 %): GPU_KIND=rtx ONLY='^c10xs10_',
+    # GPU_KIND=h200_71 ONLY='^c10xsh_'
+    for gate, prefix in (("c10_spec_xsplit", "c10xs"), ("c10_spec_kn2_xsplit", "c10xs2"),
+                         ("c10_spec_kn10_xsplit", "c10xs10"),
+                         ("c10_spec_h1000_xsplit", "c10xsh")):  # fmt: skip
+        jobs |= _fitgate_blocks(gate, prefix, 8, ("base",), split)
     # the diffuse one OOMed on the 71 GB slice (2026-11-01: ~66 GB in use, then the backward's
     # [1000, N, 2] reward columns, 3.1 GB) -> GPU_KIND=rtx_full ONLY='^c10h_diff', two seeds a
     # job (the diffuse backward is the slow one)
