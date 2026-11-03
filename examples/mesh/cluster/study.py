@@ -1015,10 +1015,17 @@ def _ld3dwide_jobs(gpus_per_node: int) -> dict[str, str]:
     return {"sphere_wide_kn0.5_M10_ldfl_hz0th": f"{cmd} {LD3DWIDE}"}
 
 
-# dlh3d (2026-11-02): minimum drag subject to a minimum lift (L >= 0.5 D_0, D_0 the sphere's
+# dlh3d (2026-11-02): minimum drag subject to a minimum lift (L >= 0.15 D_0, D_0 the sphere's
 # drag; --objective drag_lift, its multiplier from 1 at rate 2), a peak-heating cap (the
-# heat p-mean at most 0.8 of the sphere's, as the paper's heat runs) and a volume floor (0.8
-# of the sphere's) -- better posed than max L / D, whose bodies thinned into plates.  The
+# heat p-mean no higher than the sphere's) and a volume floor (0.8 of the sphere's) -- better
+# posed than max L / D, whose bodies thinned into plates.  The lift: diffuse walls cap L / D
+# far below the specular runs' 2.4 (free-molecular flat plate at M 10: 0.13; the transitional
+# shock layer raises it to a few tenths), so L >= 0.5 D_0 would need D >~ D_0 -- no drag to
+# remove; at 0.15 the lift costs ~0.2-0.5 D_0 of drag, the slender minimum-drag body's own
+# order (friction).  The heat: the sphere's stagnation heating sits below the free-molecular
+# value (shock layer) while a sub-lambda sharp nose approaches it, so a sharpened nose can
+# exceed the sphere's p-mean although its area is small -- the cap at 1.0 binds when that
+# happens; 0.8 would bind from the first iterate on the sphere itself.  The
 # M 10 Kn 0.5 sphere_long of lsfilter3d (Helmholtz, no reinitialisation) with diffuse walls
 # (the heat flux needs them; the silhouette term's cost fixed 2026-11-02), plus ld3dwide's
 # thickness constraint and topology guard.  Overnight size: --fnum-scale 2 (half
@@ -1028,8 +1035,8 @@ def _ld3dwide_jobs(gpus_per_node: int) -> dict[str, str]:
 #   GPU_KIND=h200_71 bash examples/mesh/cluster/submit_curc.sh dlh3d
 DLH3D_ITERATIONS = 150
 DLH3D = (
-    "--acc 1 --silhouette-band 0.03 --objective drag_lift --lift-min 0.5 --lift-rate 2 "
-    "--lift-multiplier 1 --heat-patch 0.2 --heat-cap 0.8 --heat-cap-relative 1 "
+    "--acc 1 --silhouette-band 0.03 --objective drag_lift --lift-min 0.15 --lift-rate 2 "
+    "--lift-multiplier 1 --heat-patch 0.2 --heat-cap 1.0 --heat-cap-relative 1 "
     "--heat-multiplier 1 --heat-rate 2 --area-mode floor --area-floor 0.8 "
     "--thickness 1 --thickness-rate 10 --topology-guard 1"
 )
