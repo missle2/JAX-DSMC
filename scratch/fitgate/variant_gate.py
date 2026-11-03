@@ -199,6 +199,17 @@ NEW_GATES = {
                           [0.1, 0.05]),
     "c10_diff_m2_sil2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "silhouette_band": 0.06,
                           "membership_band": 0.1}, "mode2", [0.1, 0.05]),
+    # 2026-11-03 after m2chk (diffuse Kn 10 cos 2 theta 1.02-1.04, specular Kn 0.5 1.05-1.08,
+    # grazing / silhouette band / membership < 1 %): the failure needs diffuse walls AND
+    # collisions -- the diffuse-only collisional terms.  The pathwise_x split (--split-x:
+    # perp / timing / collisional L* V) of the diffuse circle under cos 2 theta and under the
+    # radius (paired with c10_diff_m2 / c10_diff: their forwards and FD), and the order term's
+    # collision-increment fit widened (shape.ORDER_FIT k 32 -> 128, own cell; "order_fit" is
+    # set on the module before the first trace)
+    "c10_diff_m2_xsplit": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "mode2", [0.1, 0.05]),
+    "c10_diff_xsplit": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "radius", [0.1, 0.05]),
+    "c10_diff_m2_ord128": ({**CIRCLE_M10, **COMMON, **DIFFUSE,
+                            "order_fit": {"k": 128, "pool": 0}}, "mode2", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
@@ -218,6 +229,9 @@ FD_FROM = {
     "c10_diff_mem": "c10_diff",
     "c10_diff_m2_gz001": "c10_diff_m2",
     "c10_diff_m2_sil2": "c10_diff_m2",
+    "c10_diff_m2_xsplit": "c10_diff_m2",
+    "c10_diff_xsplit": "c10_diff",
+    "c10_diff_m2_ord128": "c10_diff_m2",
 }
 _CACHE = {}
 
@@ -310,6 +324,8 @@ def main(argv=None):
         shape.VARIANTS.update(split_x_variants())
         args.variants = [*args.variants, *split_x_variants()]
     cfg, parameter, fd_steps, seed_start, art_rows = gate_config(args.gate)
+    if "order_fit" in cfg:  # read by shape.order_jump at trace time
+        shape.ORDER_FIT = dict(cfg["order_fit"])
     name = args.gate
     if args.smoke:
         cfg = {**cfg, "fnum_scale": 16.0 * cfg["fnum_scale"], "warmup": 150, "steps": 40,

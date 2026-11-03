@@ -1179,6 +1179,21 @@ def _m2chk_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _m2split_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``m2split`` (2026-11-03, after m2chk put the cos 2 theta failure in the diffuse wall's
+    collisional terms): the pathwise_x split of c10_diff under cos 2 theta (seeds 0-3) and the
+    radius (seeds 0, 4, 8, 12: c10_diff's), and the order term's fit at k = 128, each paired
+    with its parent's forward and FD.  ``GPU_KIND=rtx_48`` (diffuse Kn 0.5 OOMs 24 GB)."""
+    del gpus_per_node
+    run = "python3 scratch/fitgate/variant_gate.py"
+    pair = " --variants along_pool_plane cell_along_pool_plane cellxv_along_pool_plane"
+    return {
+        "m2s_xs_m2": f"{run} --gate c10_diff_m2_xsplit --seeds 0 4 --split-x{pair}",
+        "m2s_xs_r": f"{run} --gate c10_diff_xsplit --seeds 0 16 --stride 4 --split-x{pair}",
+        "m2s_ord": f"{run} --gate c10_diff_m2_ord128 --seeds 0 4{pair}",
+    }
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1420,6 +1435,7 @@ NEW_GROUPS = {
     "dlh3d": _dlh3d_jobs,
     "diffchk": _diffchk_jobs,
     "m2chk": _m2chk_jobs,
+    "m2split": _m2split_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

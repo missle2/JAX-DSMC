@@ -18,7 +18,9 @@ RESULTS = Path("examples/mesh/results/fitgate")
 SPLITS = (("Kn 0.5", "c10_spec_xsplit", "c10_spec"), ("Kn 0.5 h1000", "c10_spec_h1000_xsplit",
           "c10_spec"), ("Kn 1", "c10_spec_kn1_xsplit", "c10_spec_kn1_xsplit"),
           ("Kn 2", "c10_spec_kn2_xsplit", "c10_spec_kn2"),
-          ("Kn 10", "c10_spec_kn10_xsplit", "c10_spec_kn10"))  # fmt: skip
+          ("Kn 10", "c10_spec_kn10_xsplit", "c10_spec_kn10"),
+          ("diff radius", "c10_diff_xsplit", "c10_diff"),
+          ("diff cos2", "c10_diff_m2_xsplit", "c10_diff_m2"))  # fmt: skip
 
 
 def rows_of(gate):

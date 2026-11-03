@@ -52,7 +52,8 @@ for gate in GATES:
 
 # the derivative-only m2chk gates against c10_diff_m2 seed by seed (the same forward and FD):
 # the paired change of the total and of each term, membership (reported, not summed) if any
-PAIRS = {"c10_diff_m2_gz001": "c10_diff_m2", "c10_diff_m2_sil2": "c10_diff_m2"}
+PAIRS = {"c10_diff_m2_gz001": "c10_diff_m2", "c10_diff_m2_sil2": "c10_diff_m2",
+         "c10_diff_m2_ord128": "c10_diff_m2"}
 for gate in GATES:
     if gate not in PAIRS:
         continue
