@@ -1247,12 +1247,15 @@ SPHERE_REFS = (
 )
 
 
-def _constrained_dlh3d(tag: str, extra: str) -> str:
+def _constrained_dlh3d(tag: str, extra: str, iterations: int = 2, case: str = "") -> str:
     """:func:`_dlh3d_jobs`' command with ``tag``, two iterates, the sphere's references and
     ``extra`` (the start body and the constraint mode)."""
     cmd = _dlh3d_jobs(1)["sphere_long_kn0.5_M10_dlh"]
     cmd = cmd.replace("--tag sphere_long_kn0.5_M10_S1_ox_adam_dlh_hz0_f2_w300", f"--tag {tag}", 1)
-    cmd = cmd.replace(f"--iterations {DLH3D_ITERATIONS}", "--iterations 2", 1)
+    cmd = cmd.replace(f"--iterations {DLH3D_ITERATIONS}", f"--iterations {iterations}", 1)
+    if case:
+        cmd = cmd.replace("--case sphere_long ", f"--case {case} ", 1)
+        assert f"--case {case} " in cmd, cmd
     return f"{cmd} {SPHERE_REFS} {extra}"
 
 
@@ -1270,6 +1273,22 @@ def _ellchk_jobs(gpus_per_node: int) -> dict[str, str]:
         ),
         "sph_proj": _constrained_dlh3d("ellchk_sphere_proj", "--constraints project"),
     }
+
+
+def _ellprobe_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``ellprobe`` (2026-11-03): one iterate each in ``sphere_big`` (side faces 3 radii out)
+    -- the sphere (its drag and heat measure in the larger box: the references of the runs)
+    and the start ellipsoid at 35 / 45 / 55 degrees (where its lift peaks; the 10-20 degree
+    ellchk values fit L ~ 0.226 sin 2 alpha), projected Adam, ``GPU_KIND=h200_71``."""
+    del gpus_per_node
+    ell = "--initial ellipsoid --initial-thickness 0.5 --initial-aoa"
+    jobs = {"probe_sphere": _constrained_dlh3d("ellprobe_sphere", "--constraints project", 1,
+                                               "sphere_big")}  # fmt: skip
+    for aoa in (35, 45, 55):
+        jobs[f"probe_a{aoa}"] = _constrained_dlh3d(
+            f"ellprobe_a{aoa}", f"{ell} {aoa} --constraints project", 1, "sphere_big"
+        )
+    return jobs
 
 
 def _multichk_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1553,6 +1572,7 @@ NEW_GROUPS = {
     "silfix": _silfix_jobs,
     "bitchk": _bitchk_jobs,
     "ellchk": _ellchk_jobs,
+    "ellprobe": _ellprobe_jobs,
     "multichk": _multichk_jobs,
     "termchk": _termchk_jobs,
     "termvol": _termvol_jobs,

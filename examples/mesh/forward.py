@@ -183,6 +183,21 @@ CASES = {
         "fnum": 5.0e-4,
         "capacity": 500_000,
     },
+    "sphere_big": {
+        # sphere_long with the side faces 3 radii out in y and z (2026-11-03): room for a start
+        # ellipsoid pitched ~45 degrees (2.5 m tall: the bow shock clear of the y faces, which
+        # inject free stream) and for a lifting body to spread sideways; 2.25x the cells,
+        # ~950 k slots at --fnum-scale 1
+        "dim": 3,
+        "lo": [-5.0, -3.0, -3.0],
+        "hi": [5.0, 3.0, 3.0],
+        "n": (50, 30, 30),
+        "surf": "data.sphere",
+        "centre": [0.0, 0.0, 0.0],
+        "radius": 1.0,
+        "fnum": 5.0e-4,
+        "capacity": 562_500,
+    },
     # the paper's cases (2026-10-28, examples/paper).  Knudsen numbers follow ensemble_mesh:
     # the VHS mean free path over 2 R, R the case's "radius".  The BGK papers' Kn (Yuan & Wu
     # 2025; Li et al. 2025: (mu / p) sqrt(pi R T / 2) over the chord) is pi / (2 (5 - 2 w)
