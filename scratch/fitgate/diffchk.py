@@ -54,7 +54,12 @@ for gate in GATES:
 # the paired change of the total and of each term, membership (reported, not summed) if any
 PAIRS = {"c10_diff_m2_gz001": "c10_diff_m2", "c10_diff_m2_sil2": "c10_diff_m2",
          "c10_diff_m2_ord128": "c10_diff_m2", "c10_diff_m2_sf": "c10_diff_m2",
-         "c10_diff_lift_m2s_sf": "c10_diff_lift_m2s", "c10_diff_heat_m2_sf": "c10_diff_heat_m2"}
+         "c10_diff_lift_m2s_sf": "c10_diff_lift_m2s", "c10_diff_heat_m2_sf": "c10_diff_heat_m2",
+         # termchk (2026-11-03): against the fixed-silhouette bases
+         "c10_diff_m2_sil15": "c10_diff_m2_sf", "c10_diff_m2_sil60": "c10_diff_m2_sf",
+         "c10_diff_m2_ord128b": "c10_diff_m2_sf", "c10_diff_heat_m2_sil15": "c10_diff_heat_m2_sf2",
+         "c10_diff_heat_m2_sil60": "c10_diff_heat_m2_sf2",
+         "c10_diff_heat_m2_ord128": "c10_diff_heat_m2_sf2"}
 for gate in GATES:
     if gate not in PAIRS:
         continue

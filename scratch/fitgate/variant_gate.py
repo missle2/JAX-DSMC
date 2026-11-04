@@ -220,6 +220,32 @@ NEW_GATES = {
                               "lift_weight": 1.0}, "mode2s", [0.1, 0.05]),
     "c10_diff_heat_m2_sf": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
                              "heat_patch": 0.2}, "mode2", [0.1, 0.05]),
+    # 2026-11-03 after silfix (radius 0.99, lift 0.90-0.93, cos 2 theta drag 1.22-1.27, heat
+    # 1.7-1.9): which term misplaces its weight over the surface at Kn 0.5 -- the silhouette
+    # band (0.015 / 0.06 against 0.03), the order term's fit (k 128) on the fixed code, each
+    # paired with its gate's forward and FD; the heat base again on the current code (the
+    # timing-band fix); and the cut-volume weights of the heat objective in situ
+    # (volume_gate, 600 captured steps: the 300-step diffuse gate reads its own horizon)
+    "c10_diff_heat_m2_sf2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                              "heat_patch": 0.2}, "mode2", [0.1, 0.05]),
+    "c10_diff_m2_sil15": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "silhouette_band": 0.015},
+                          "mode2", [0.1, 0.05]),
+    "c10_diff_m2_sil60": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "silhouette_band": 0.06},
+                          "mode2", [0.1, 0.05]),
+    "c10_diff_heat_m2_sil15": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                                "heat_patch": 0.2, "silhouette_band": 0.015}, "mode2",
+                               [0.1, 0.05]),
+    "c10_diff_heat_m2_sil60": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                                "heat_patch": 0.2, "silhouette_band": 0.06}, "mode2",
+                               [0.1, 0.05]),
+    "c10_diff_m2_ord128b": ({**CIRCLE_M10, **COMMON, **DIFFUSE,
+                             "order_fit": {"k": 128, "pool": 0}}, "mode2", [0.1, 0.05]),
+    "c10_diff_heat_m2_ord128": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                                 "heat_patch": 0.2, "order_fit": {"k": 128, "pool": 0}},
+                                "mode2", [0.1, 0.05]),
+    "c10_diff_heat_h600": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                            "heat_patch": 0.2, "warmup": 2500, "steps": 600}, "mode2",
+                           [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
@@ -246,6 +272,13 @@ FD_FROM = {
     "c10_diff_m2_sf": "c10_diff_m2",
     "c10_diff_lift_m2s_sf": "c10_diff_lift_m2s",
     "c10_diff_heat_m2_sf": "c10_diff_heat_m2",
+    "c10_diff_heat_m2_sf2": "c10_diff_heat_m2",
+    "c10_diff_m2_sil15": "c10_diff_m2",
+    "c10_diff_m2_sil60": "c10_diff_m2",
+    "c10_diff_heat_m2_sil15": "c10_diff_heat_m2",
+    "c10_diff_heat_m2_sil60": "c10_diff_heat_m2",
+    "c10_diff_m2_ord128b": "c10_diff_m2",
+    "c10_diff_heat_m2_ord128": "c10_diff_heat_m2",
 }
 _CACHE = {}
 

@@ -1279,6 +1279,35 @@ def _multichk_jobs(gpus_per_node: int) -> dict[str, str]:
     return {"multichk_s0": "python3 scratch/multiobj/check_multi.py --seed 0"}
 
 
+def _termchk_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``termchk`` (2026-11-03): which Kn 0.5 diffuse term misplaces its surface weight under
+    cos 2 theta (drag 1.22-1.27, heat 1.7-1.9 after silfix) -- the heat base on the current
+    code, the silhouette band at 0.015 / 0.06 and the order fit at k 128 for drag and heat,
+    seeds 0-3, FD reused (``GPU_KIND=rtx``)."""
+    del gpus_per_node
+    run = "python3 scratch/fitgate/variant_gate.py"
+    var = " --variants cell_along_pool_plane cell_pool_plane"
+    gates = {
+        "tc_heat_base": "c10_diff_heat_m2_sf2",
+        "tc_drag_sil15": "c10_diff_m2_sil15",
+        "tc_drag_sil60": "c10_diff_m2_sil60",
+        "tc_heat_sil15": "c10_diff_heat_m2_sil15",
+        "tc_heat_sil60": "c10_diff_heat_m2_sil60",
+        "tc_drag_ord": "c10_diff_m2_ord128b",
+        "tc_heat_ord": "c10_diff_heat_m2_ord128",
+    }
+    return {name: f"{run} --gate {gate} --seeds 0 4{var}" for name, gate in gates.items()}
+
+
+def _termvol_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``termvol``: the heat objective's cut-volume weights in situ (volume_gate on the
+    600-step heat gate, the cut cells and one layer about them), 2 seeds a job, own FD
+    (``GPU_KIND=rtx_48``)."""
+    del gpus_per_node
+    run = "python3 scratch/fitgate/volume_gate.py --gate c10_diff_heat_h600 --sets cut near1"
+    return {f"tv_heat_s{a}": f"{run} --seeds {a} {a + 2}" for a in (0, 2)}
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1525,6 +1554,8 @@ NEW_GROUPS = {
     "bitchk": _bitchk_jobs,
     "ellchk": _ellchk_jobs,
     "multichk": _multichk_jobs,
+    "termchk": _termchk_jobs,
+    "termvol": _termvol_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
