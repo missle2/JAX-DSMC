@@ -1061,16 +1061,19 @@ def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
             cfg, key, tuple(objectives), heat_weights, variants, timing_band, neighbors, seed,
             s, first, steps, scale_r,
         )  # fmt: skip
+    band_setting = timing_band  # whole steps (>= 1) or a step fraction: timing_band_setting
     reward, jump, timing_band, weight = _drag_setup(
-        cfg, float(mass), dim, first, scale_r, timing_band, tallies
+        cfg, float(mass), dim, first, scale_r, band_setting, tallies
     )
     heat = cfg.get("heat_patch", 0.0) > 0.0
     if cfg.get("objective") == "heat" and not heat:
         raise ValueError("objective heat needs heat_patch > 0")
     patch = None
     if heat:
+        # the setting, not the converted band (2026-11-03: the band, 1.0 for a 10-step
+        # setting, read as 1 step -- every heat-lattice run had a 1-step timing band)
         reward, jump, patch, weight = _heat_setup(
-            cfg, grid, float(mass), dim, first, scale_r, timing_band, weight, heat_weights
+            cfg, grid, float(mass), dim, first, scale_r, band_setting, weight, heat_weights
         )
     t0 = time.time()
     # the replay and the shape VJP at the record's tracker sizes (replay_static)

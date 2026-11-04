@@ -1235,7 +1235,8 @@ def _bitchk_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
-# ellchk (2026-11-03): one iterate of the dlh3d setup under the constraint modes, from the
+# ellchk (2026-11-03): two iterates of the dlh3d setup under the constraint modes (the second
+# has the heat functional's own DSMC gradient: dG/dQ lags one iterate), from the
 # start ellipsoid (optimize --initial ellipsoid: semi-axes 1.6 x 0.8 x 0.8, the sphere's
 # volume) at 10 / 15 / 20 degrees and from the sphere (lift violated: the projection's
 # active rows and restoration step), the constraints in the sphere's units -- its iterate-0
@@ -1247,16 +1248,16 @@ SPHERE_REFS = (
 
 
 def _constrained_dlh3d(tag: str, extra: str) -> str:
-    """:func:`_dlh3d_jobs`' command with ``tag``, one iterate, the sphere's references and
+    """:func:`_dlh3d_jobs`' command with ``tag``, two iterates, the sphere's references and
     ``extra`` (the start body and the constraint mode)."""
     cmd = _dlh3d_jobs(1)["sphere_long_kn0.5_M10_dlh"]
     cmd = cmd.replace("--tag sphere_long_kn0.5_M10_S1_ox_adam_dlh_hz0_f2_w300", f"--tag {tag}", 1)
-    cmd = cmd.replace(f"--iterations {DLH3D_ITERATIONS}", "--iterations 1", 1)
+    cmd = cmd.replace(f"--iterations {DLH3D_ITERATIONS}", "--iterations 2", 1)
     return f"{cmd} {SPHERE_REFS} {extra}"
 
 
 def _ellchk_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``ellchk``: four one-iterate jobs (``GPU_KIND=h200_71``; the compact pair record keeps
+    """``ellchk``: four two-iterate jobs (``GPU_KIND=h200_71``; the compact pair record keeps
     the 3-D seed well under 71 GB): projected Adam from the ellipsoid at 10 and 15 degrees,
     MMA at 20 degrees, projected Adam from the sphere."""
     del gpus_per_node
