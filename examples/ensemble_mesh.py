@@ -841,15 +841,51 @@ def _backwards(
     return tuple(_column(dev, r) for r in range(2))
 
 
-def _column(dev, r):
-    """Value column ``r`` of a two-column :class:`ensemble_device.Backward` (``four_term``
-    has no column axis: zeros under the virtual pull-back)."""
+def _column(dev, r, n_coll=1):
+    """Value column ``r`` of a multi-column :class:`ensemble_device.Backward` (``four_term``
+    is ``None`` under the virtual pull-back).  The collision increments are column 0's
+    (``n_coll = 1``: no column axis), or with ``n_coll > 1`` the first ``n_coll`` columns'
+    along a trailing axis (:func:`_objective_backwards`)."""
+    if n_coll == 1:
+        coll = (dev.collision, dev.cell_collision) if r == 0 else (None, None)
+    elif r < n_coll and dev.collision is not None:
+        coll = (dev.collision[..., r], dev.cell_collision[..., r])
+    else:
+        coll = (None, None)
     return dev._replace(
         lambda0=dev.lambda0[..., r],
         lam=dev.lam[r],
         kernel=dev.kernel[..., r],
-        collision=dev.collision if r == 0 else None,
-        cell_collision=dev.cell_collision if r == 0 else None,
+        collision=coll[0],
+        cell_collision=coll[1],
+    )
+
+
+def _objective_backwards(
+    rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hits, timings, sided=None
+):
+    """:func:`_backwards` of several objectives at once (2026-11-03): ``R`` objectives'
+    hit rewards ``hits`` and timing totals ``timings`` as ``2 R`` value columns of ONE
+    virtual sweep -- the fits are factorised once for every right-hand side, so the extra
+    objectives cost little (``scratch/multiobj/column_cost.py``: 6 columns 1.1x the 2).
+    Returns ``(hit_devs, timing_devs)``, each a list of ``R`` single-column
+    :class:`ensemble_device.Backward`; the hit columns carry their own collision
+    increments (the along-flight, cut-volume and order terms of each objective)."""
+    if ensemble_backward.VIRTUAL is None:
+        raise ValueError("several objectives in one backward need the virtual pull-back")
+    n, r = rec.x.shape[1], len(hits)
+    head = (rec, state0, final)
+    tail = (1.0, grid, v_scale, sp, jax.random.fold_in(key, 12345), neighbors)
+    options = {"npc_max": npc_max, "return_device": True, "host_adjoint": False}
+    if sided is not None:
+        options["normals"] = shape.local_normals(rec, grid, *sided).astype(jnp.float32)
+    options["collision_out"] = r if r > 1 else True
+    options["columns_out"] = True
+    columns = jnp.stack([h.totals()[:, None] for h in hits] + list(timings), axis=-1)
+    _, dev = device_backward(*head, jnp.zeros((n, 2 * r)), *tail, hit_reward=columns, **options)
+    return (
+        [_column(dev, i, r) for i in range(r)],
+        [_column(dev, r + i, r) for i in range(r)],
     )
 
 
@@ -989,12 +1025,18 @@ def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
     frames_every=0,
     restart=None,
     heat_weights=None,
+    objectives=None,
 ):
     """One seed: forward, traced replay (hit rewards), value-form backward, shape terms
     on the geometry (all four ``grad_x lambda`` variants, or the ``variants`` named).
     Returns ``(all_terms, info, setup)``; ``info`` carries the objective, the hit count and
     the timings; ``setup["frames"]`` the field movie of the forward (``frames_every``),
-    ``setup["final"]`` its final gas (the next warm start: ``restart``, :func:`forward`)."""
+    ``setup["final"]`` its final gas (the next warm start: ``restart``, :func:`forward`).
+
+    ``objectives`` (2026-11-03; names of :data:`SEPARATE_OBJECTIVES`) returns each
+    objective's own terms from the one forward and ONE multi-column backward
+    (:func:`_objective_shape_terms`): ``all_terms`` and ``setup["volume"]`` become dicts
+    by objective name, ``info["objective_values"]`` their windowed values."""
     value0 = nominal(cfg, parameter)
     state0, final, diag, rec, tallies, s = forward(
         cfg, parameter, value0, key, True, body, frames_every, restart
@@ -1013,6 +1055,12 @@ def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
     scale_r = float(params.fnum[0]) / (w * float(dt))
     first = cfg["warmup"] + m - w
     steps = cfg["warmup"] + jnp.arange(m, dtype=jnp.int32)
+    if objectives:
+        seed = {"state0": state0, "final": final, "diag": diag, "rec": rec, "tallies": tallies}
+        return _objective_shape_terms(
+            cfg, key, tuple(objectives), heat_weights, variants, timing_band, neighbors, seed,
+            s, first, steps, scale_r,
+        )  # fmt: skip
     reward, jump, timing_band, weight = _drag_setup(
         cfg, float(mass), dim, first, scale_r, timing_band, tallies
     )
@@ -1129,6 +1177,136 @@ def shape_terms(  # noqa: PLR0915 -- one seed's pipeline, kept whole
         "seconds_backward": t_backward,
         "seconds_shape": t_shape,
         # the traced replay's (bounce passes, lane) -- a change between iterates recompiles
+        "replay_sizes": [int(traced.K_bounce), int(traced.lane_size)],
+        "seconds_replay": t_replay,
+        **{f"seconds_{k}": v for k, v in s["seconds"].items()},
+    }
+    return all_terms, info, s
+
+
+SEPARATE_OBJECTIVES = ("drag", "lift", "heat")
+"""The objectives :func:`shape_terms` can return separately (``objectives=``): the windowed
+drag and lift (the x and y force) and the heat functional of the node weights
+``heat_weights`` (``heat_patch > 0``; ``None``: the total heat rate)."""
+
+
+def _objective_setup(name, cfg, grid, mass, dim, first, scale_r, timing_band, heat_weights):
+    """``(reward, jump, band, weight, patch)`` of one objective of a multi-objective seed:
+    the drag's or the lift's momentum weight (``x`` / ``y``), or the node weights of the
+    heat functional, in the heat lattice's reward form when ``heat_patch > 0`` (else the
+    drag's, which has no heat)."""
+    if name not in SEPARATE_OBJECTIVES:
+        raise ValueError(f"objective {name}: one of {SEPARATE_OBJECTIVES}")
+    axis = {"drag": 0, "lift": 1}.get(name)
+    if cfg.get("heat_patch", 0.0) > 0.0:
+        reward, jump, patch, _ = _heat_setup(
+            {**cfg, "objective": "drag"}, grid, mass, dim, first, scale_r, timing_band, None, None
+        )
+        n_nodes = int(np.prod(heat_lattice(cfg, grid.lo, grid.hi)[2]))
+        momentum, nodes = jnp.zeros(dim), jnp.zeros(n_nodes)
+        if axis is not None:
+            momentum = momentum.at[axis].set(1.0)
+        elif heat_weights is None:
+            nodes = jnp.ones(n_nodes)
+        else:
+            nodes = jnp.asarray(heat_weights, dtype=jnp.float64)
+        band = timing_band_setting(timing_band)[0]
+        return reward, jump, band, {"momentum": momentum, "patch": nodes}, patch
+    if axis is None:
+        raise ValueError("objective heat needs heat_patch > 0")
+    reward, jump, band, _ = _drag_setup(
+        {**cfg, "objective": "drag"}, mass, dim, first, scale_r, timing_band, None
+    )
+    return reward, jump, band, jnp.zeros(dim).at[axis].set(1.0), None
+
+
+def _objective_shape_terms(
+    cfg, key, objectives, heat_weights, variants, timing_band, neighbors, seed, s, first, steps,
+    scale_r,
+):  # fmt: skip
+    """:func:`shape_terms` with ``objectives``: one replay per objective (its hit and timing
+    rewards), one backward with ``2 R`` value columns (:func:`_objective_backwards`) and one
+    shape VJP per objective -- each objective's terms as :func:`shape_terms` gives them for
+    it alone (to the backward's rounding)."""
+    state0, final, diag, rec, tallies = (
+        seed[k] for k in ("state0", "final", "diag", "rec", "tallies")
+    )
+    static, grid, mesh, wall, sp, params = (
+        s["static"], s["grid"], s["mesh"], s["wall"], s["sp"], s["params"],
+    )  # fmt: skip
+    dim, mass, dt = static.D, sp.mass[0], params.dt
+    t0 = time.time()
+    hits, timings, setups, values, patch_heat, traced = [], [], [], {}, None, None
+    for name in objectives:
+        reward, jump, band, weight, patch = _objective_setup(
+            name, cfg, grid, float(mass), dim, first, scale_r, timing_band, heat_weights
+        )
+        rep, traced = _checked_replay(
+            rec, steps, state0, key, grid, s["faces"], wall, mass, dt, mesh, static, reward,
+            jump, band, weight, patch,
+        )  # fmt: skip
+        hits.append(rep.hit_reward)
+        timings.append(rep.timing_total[:, None])
+        values[name] = float(jnp.sum(rep.hit_total))
+        if patch_heat is None and rep.patch is not None:
+            patch_heat = np.asarray(rep.patch)
+        tally = None
+        if patch is None:
+            tally = _drag_tally_cotangent(tallies, dim, mesh, scale_r, weight)
+        setups.append((name, reward, jump, band, weight, tally))
+        del rep
+    t_replay = time.time() - t0
+    dx = (np.asarray(grid.hi) - np.asarray(grid.lo)) / np.asarray(grid.n)
+    v_scale = float(np.sqrt(K_BOLTZ * F.TEMP / float(mass)))
+    fit_scale = jnp.concatenate((jnp.asarray(dx), jnp.full(3, v_scale)))
+    npc_max = int(ensemble_backward.max_occupancy(rec, grid)) + 8
+    npc_max = -(-npc_max // NPC_BUCKET) * NPC_BUCKET
+    sided = (mesh, s["faces"]) if cfg.get("backward_normals", False) else None
+    t0 = time.time()
+    hit_devs, timing_devs = _objective_backwards(
+        rec, state0, final, grid, v_scale, sp, key, neighbors, npc_max, hits, timings, sided
+    )
+    del timings
+    t_backward = time.time() - t0
+    t0 = time.time()
+    all_terms, volumes = {}, {}
+    m, w = cfg["steps"], cfg["window"]
+    for (name, reward, jump, band, weight, tally), dev, dev_t, hit_reward in zip(
+        setups, hit_devs, timing_devs, hits, strict=True
+    ):
+        all_terms[name] = shape.gradient_variants(
+            dev_t.lam,
+            names=shape.REVIEW_VARIANTS if variants is None else variants,
+            collision=dev.collision, records=rec, lam=dev.lam, steps=steps, state0=state0,
+            base_key=key, grid=grid, faces=s["faces"], wall=wall, mass=mass, dt=dt, mesh=mesh,
+            epsilon=0.0, acc_delta=0.0, static=traced, scale=fit_scale, npc_max=npc_max,
+            hit_reward=hit_reward, tally_cotangent=tally,
+            tally_weight=(steps >= first).astype(jnp.float64), timing_jump=jump,
+            timing_band=band, silhouette_band=float(cfg["silhouette_band"]),
+            reward=reward if cfg["silhouette_band"] > 0.0 else None,
+            membership_band=float(cfg.get("membership_band", 0.0)),
+            value_class=cfg.get("value_class", "none"), hit_fits=True,
+            batch=int(cfg.get("shape_batch", 1)), reward_weight=weight,
+        )  # fmt: skip
+        volumes[name] = _volume_term(dev, rec, grid, mesh)
+        for t in all_terms[name].values():
+            if float(t.replay_error) > REPLAY_TOL:
+                raise RuntimeError(f"replay error {float(t.replay_error):g}")
+    s["volume"] = volumes
+    t_shape = time.time() - t0
+    del m, w
+    info = {
+        "objective": values[objectives[0]],
+        "objective_values": values,
+        "forces": objective_forces(cfg, tallies, dim, scale_r).tolist(),
+        "hits": int(diag.surface_hits.sum()),
+        "stuck": int(diag.surface_stuck.sum()),
+        "newborn_hit_share": float("nan"),
+        "patch_heat": patch_heat,
+        "alive_final": int(final.alive.sum()),
+        "lambda_absmax": float(np.abs(np.asarray(hit_devs[0].lam)).max(initial=0.0)),
+        "seconds_backward": t_backward,
+        "seconds_shape": t_shape,
         "replay_sizes": [int(traced.K_bounce), int(traced.lane_size)],
         "seconds_replay": t_replay,
         **{f"seconds_{k}": v for k, v in s["seconds"].items()},

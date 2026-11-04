@@ -1235,6 +1235,49 @@ def _bitchk_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# ellchk (2026-11-03): one iterate of the dlh3d setup under the constraint modes, from the
+# start ellipsoid (optimize --initial ellipsoid: semi-axes 1.6 x 0.8 x 0.8, the sphere's
+# volume) at 10 / 15 / 20 degrees and from the sphere (lift violated: the projection's
+# active rows and restoration step), the constraints in the sphere's units -- its iterate-0
+# drag and heat measure from the first dlh3d run (forward quantities: the silhouette fix
+# does not move them) and its body volume
+SPHERE_REFS = (
+    "--lift-ref 2.443238526935362 --heat-g-ref 0.6120237258384549 --area-ref 4.214628770157608"
+)
+
+
+def _constrained_dlh3d(tag: str, extra: str) -> str:
+    """:func:`_dlh3d_jobs`' command with ``tag``, one iterate, the sphere's references and
+    ``extra`` (the start body and the constraint mode)."""
+    cmd = _dlh3d_jobs(1)["sphere_long_kn0.5_M10_dlh"]
+    cmd = cmd.replace("--tag sphere_long_kn0.5_M10_S1_ox_adam_dlh_hz0_f2_w300", f"--tag {tag}", 1)
+    cmd = cmd.replace(f"--iterations {DLH3D_ITERATIONS}", "--iterations 1", 1)
+    return f"{cmd} {SPHERE_REFS} {extra}"
+
+
+def _ellchk_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``ellchk``: four one-iterate jobs (``GPU_KIND=h200_71``; the compact pair record keeps
+    the 3-D seed well under 71 GB): projected Adam from the ellipsoid at 10 and 15 degrees,
+    MMA at 20 degrees, projected Adam from the sphere."""
+    del gpus_per_node
+    ell = "--initial ellipsoid --initial-thickness 0.5 --initial-aoa"
+    return {
+        "ell_a10_proj": _constrained_dlh3d("ellchk_a10_proj", f"{ell} 10 --constraints project"),
+        "ell_a15_proj": _constrained_dlh3d("ellchk_a15_proj", f"{ell} 15 --constraints project"),
+        "ell_a20_mma": _constrained_dlh3d(
+            "ellchk_a20_mma", f"{ell} 20 --constraints mma --optimizer mma_s"
+        ),
+        "sph_proj": _constrained_dlh3d("ellchk_sphere_proj", "--constraints project"),
+    }
+
+
+def _multichk_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``multichk``: drag, lift and heat from one 6-column backward against the three
+    single-objective backwards, the diffuse M 10 circle, seed 0 (``GPU_KIND=rtx_48``)."""
+    del gpus_per_node
+    return {"multichk_s0": "python3 scratch/multiobj/check_multi.py --seed 0"}
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1479,6 +1522,8 @@ NEW_GROUPS = {
     "m2split": _m2split_jobs,
     "silfix": _silfix_jobs,
     "bitchk": _bitchk_jobs,
+    "ellchk": _ellchk_jobs,
+    "multichk": _multichk_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

@@ -260,16 +260,17 @@ def mma_asymptotes(state, x, move, k):
     return low, upp
 
 
-def mma_step(x, g0, area, g_area, area0, low, upp, move):
+def mma_step(x, g0, area, g_area, area0, low, upp, move, extra=()):
     """One MMA subproblem on the variables ``x`` (1-D arrays: the band's coefficients):
-    objective gradient ``g0``, the constraint ``(area0 - area) / area0 <= 0``.  Returns the
-    new ``x`` and the multiplier (``f64[1]``)."""
+    objective gradient ``g0``, the constraint ``(area0 - area) / area0 <= 0`` and the
+    ``extra`` ones ``(value c, gradient)`` with ``c <= 0`` feasible (2026-11-03: the lift
+    and heat constraints).  Returns the new ``x`` and the multipliers (``f64[1 + E]``)."""
     span = 2.0 * move
     alpha = np.maximum.reduce([x - move, low + 0.1 * (x - low), x - 0.5 * span])
     beta = np.minimum.reduce([x + move, upp - 0.1 * (upp - x), x + 0.5 * span])
     p0, q0 = _mma_terms(g0, x, low, upp, span)
-    grads = (-g_area / area0,)
-    values = ((area0 - area) / area0,)
+    grads = (-g_area / area0, *(np.asarray(g) for _c, g in extra))
+    values = ((area0 - area) / area0, *(float(c) for c, _g in extra))
     pq = [_mma_terms(gi, x, low, upp, span) for gi in grads]
     b = np.array([np.sum(p / (upp - x) + q / (x - low)) - f
                   for (p, q), f in zip(pq, values, strict=True)])  # fmt: skip

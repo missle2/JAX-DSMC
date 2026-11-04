@@ -1147,12 +1147,16 @@ def _step_pullback_virtual(
     mu_prev, lam = _move_pullback(lam, rec_k, r_k)
     coll = None
     if collision_out:
-        # the first value column only (the objective's; the others are auxiliary values):
-        # per slot in float32 (it feeds the along-flight identity's parallel component, a
-        # memory peak in f64 at the production occupancy), per collision cell in f64
+        # the first value column (the objective's; the others are auxiliary values), or the
+        # first ``collision_out`` columns when it is an int > 1 (several objectives in one
+        # sweep, 2026-11-03: a trailing column axis): per slot in float32 (it feeds the
+        # along-flight identity's parallel component, a memory peak in f64 at the production
+        # occupancy), per collision cell in f64
         per = jnp.sum(delta, axis=0)
-        per = per[..., 0] if per.ndim > 1 else per
-        cells = jnp.zeros(count.shape[0] + 1).at[cell].add(0.5 * per)[:-1]
+        n_coll = int(collision_out)
+        if per.ndim > 1:
+            per = per[..., 0] if n_coll == 1 else per[..., :n_coll]
+        cells = jnp.zeros((count.shape[0] + 1, *per.shape[1:])).at[cell].add(0.5 * per)[:-1]
         coll = (per.astype(jnp.float32), cells)
     if columns_out:
         # one stacked output per value column: the [M, N, R] array is never formed
@@ -1217,7 +1221,8 @@ def backward_virtual(
     the split fit everywhere).
     ``collision_out=True`` also returns each slot's per-step collision increment of the
     first value column and its cell sums (:attr:`Backward.collision`, ``f32[M, N]``;
-    :attr:`Backward.cell_collision`, ``f64[M, C]``).  ``columns_out=True`` (value columns
+    :attr:`Backward.cell_collision`, ``f64[M, C]``); an int ``k > 1`` those of the first
+    ``k`` columns (a trailing axis ``k``: several objectives' hit columns in one sweep).  ``columns_out=True`` (value columns
     only) returns ``lam`` as a tuple of the ``R`` columns ``f64[M, N]`` -- the stacked
     ``f64[M, N, R]`` and the copies its slicing makes are never formed (the shape seed's
     memory peak at the production occupancy).

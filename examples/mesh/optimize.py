@@ -255,6 +255,9 @@ def default_config():
             # `initial_chord`, 0 = 8/3 of the case's radius, thickness `initial_thickness` x
             # chord) -- at `initial_aoa` degrees (leading edge up: lift along +y); the corners
             # are the B-spline's (rounded at the knot spacing)
+            # 3-D (2026-11-03): "ellipsoid" -- semi-axes chord / 2 along x and
+            # initial_thickness x chord / 2 along y and z (chord 0: the case sphere's volume),
+            # pitched nose-up by `initial_aoa` degrees in the x-y plane
             "initial": "circle",
             "initial_chord": 0.0,
             "initial_thickness": 0.3,
@@ -297,6 +300,22 @@ def default_config():
             "lift_min": 0.0,
             "lift_rate": 2.0,
             "lift_multiplier": 0.0,
+            # fixed constraint references (2026-11-03; 0 = the first iterate's / the start
+            # body's own): the drag D_0 of lift_min (and the penalties' scale), the heat
+            # measure G_0 of a relative heat_cap, the volume of area_floor -- the sphere's
+            # values keep one constraint set across starting shapes
+            "lift_ref": 0.0,
+            "heat_g_ref": 0.0,
+            "area_ref": 0.0,
+            # how the lift / heat constraints are enforced (2026-11-03): "penalty" (the
+            # multipliers' dual ascent above), "mma" (--optimizer mma / mma_s: MMA's own
+            # inequality constraints) or "project" (an ox_* rule: the step projected tangent to
+            # the active constraints, a Gauss-Newton restoration of the violated ones capped at
+            # restore_step x step).  Both read each objective's own gradient from one
+            # multi-column backward (ensemble_mesh.shape_terms(objectives=))
+            "constraints": "penalty",
+            "constraint_band": 0.02,
+            "restore_step": 0.5,
         }
     )
     return cfg
@@ -433,13 +452,15 @@ def perimeter_and_gradient(ls, lo, hi):
     return float(p), np.asarray(g)
 
 
-def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
+def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi, constraints=()):
     """:func:`rule_step` for ``mma`` / ``mma_s``: the subproblem on the band's coefficients
     (the full gradient ``g_full`` against the area constraint, :mod:`optimizers`); ``mma_s``
     averages the gradient first and smooths the step.  With the Helmholtz filter
     (``smooth.mask`` set) the variables are the design field ``s`` of every coefficient in
     the box (``state["mma_design"]``, accumulated from zero), the objective's and the area's
-    gradients ``F^T`` of theirs, and the step ``F ds`` (both rules)."""
+    gradients ``F^T`` of theirs, and the step ``F ds`` (both rules).  ``constraints``
+    (:func:`constraint_set`, ``--constraints mma``): further inequalities ``c <= 0`` with
+    their gradients, MMA's beside the area."""
     step, band = cfg["step"], cfg["band"] + ls.h
     coef = np.asarray(ls.coef)
     helm = smooth.mask is not None
@@ -461,8 +482,9 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
         g_area = g_area[0]
     if helm:
         g_area = smooth.into(g_area)
+    extra_cons = [(c, (smooth.into(grad) if helm else grad)[mask]) for _n, c, grad in constraints]
     xs, lam = OZ.mma_step(x[mask], g0[mask], area, g_area[mask], float(state["area0"]),
-                          low[mask], upp[mask], step)  # fmt: skip
+                          low[mask], upp[mask], step, extra_cons)  # fmt: skip
     delta = np.zeros_like(coef)
     delta[mask] = xs - x[mask]
     if helm:
@@ -478,6 +500,78 @@ def _mma_rule(cfg, ls, g, g_full, g_area, smooth, state, k, lo, hi):
     return ls, delta, float(np.sum(g * delta)), state, extra
 
 
+def check_constraints(cfg, lift_on, heat_on):
+    """Reject a ``--constraints`` setting the run cannot honour."""
+    mode = cfg["constraints"]
+    if mode == "penalty":
+        return
+    if mode not in ("mma", "project"):
+        raise ValueError(f"--constraints {mode}: penalty, mma or project")
+    if not (lift_on or heat_on):
+        raise ValueError(f"--constraints {mode} needs --lift-min and / or --heat-cap")
+    if cfg["workers"] > 1 or cfg["surrogate"]:
+        raise ValueError(f"--constraints {mode} needs --workers 1 and the DSMC objective")
+    if mode == "mma" and cfg["optimizer"] not in ("mma", "mma_s"):
+        raise ValueError("--constraints mma needs --optimizer mma or mma_s")
+    if mode == "project" and not (cfg["optimizer"].startswith("ox_") and
+                                  cfg["filter"] == "helmholtz"):  # fmt: skip
+        raise ValueError("--constraints project needs an ox_* rule and --filter helmholtz")
+
+
+def constraint_set(cfg, gradients, lift, heat):
+    """``[(name, c, dc/dcoef)]`` of the lift and heat constraints, ``c <= 0`` feasible, in
+    relative units: ``(L_min - L) / D_0`` (``lift = (L, L_min, D_0)``, the lift's own
+    gradient ``gradients["lift"]``) and ``(G - cap) / cap`` (``heat = (G, cap, dG/dA
+    through the node areas)``, plus the heat functional's DSMC gradient ``gradients["heat"]``
+    when the iterate had one -- the first has no lagged heat and takes the area part only)."""
+    cons = []
+    if lift is not None:
+        value, floor, d0 = lift
+        cons.append(("lift", (floor - value) / d0, -np.asarray(gradients["lift"]) / d0))
+    if heat is not None:
+        value, cap, g_area = heat
+        grad = np.asarray(g_area) + np.asarray(gradients.get("heat", 0.0))
+        cons.append(("heat", (value - cap) / cap, grad / cap))
+    del cfg
+    return cons
+
+
+def with_active_rows(rows, cons, g, band):
+    """``rows`` (:func:`constraint_rows`; ``None``: none) with the active constraints of
+    ``cons`` appended, and their names: a constraint is active when violated, or within
+    ``band`` of its bound with the descent step (``-g``) moving toward it."""
+    names, extra = [], []
+    for name, c, grad in cons:
+        toward = float(np.sum(g * grad)) < 0.0
+        if c > 0.0 or (c > -band and toward):
+            names.append(name)
+            extra.append(grad)
+    if not extra:
+        return rows, names
+    extra = np.stack(extra)
+    return (extra if rows is None else np.concatenate((rows, extra))), names
+
+
+def restoration_step(cfg, ls, lo, hi, cons, step):
+    """The coefficient step back toward the violated constraints of ``cons`` (``c > 0``):
+    the Gauss-Newton step of the filtered design, ``F ds`` with ``ds = A^T (A A^T)^-1 (-c)``
+    and ``A`` the rows ``F^T dc/dcoef`` -- first order, each violation removed -- capped at
+    ``restore_step x step`` (zeros when nothing is violated)."""
+    violated = [(c, grad) for _n, c, grad in cons if c > 0.0]
+    if not violated:
+        return np.zeros(np.asarray(ls.coef).shape)
+    f = HZ.filter_for(ls, lo, hi, filter_radius(cfg, ls))
+    a = np.stack([np.asarray(f.adjoint(grad)).ravel() for _c, grad in violated])
+    c = np.array([c for c, _grad in violated])
+    gram = a @ a.T
+    gram += 1e-12 * np.trace(gram) * np.eye(len(c))
+    ds = (np.linalg.solve(gram, -c) @ a).reshape(np.asarray(ls.coef).shape)
+    delta = np.asarray(f.forward(ds))
+    cap = cfg["restore_step"] * step
+    largest = float(np.abs(delta).max())
+    return delta * (cap / largest) if largest > cap else delta
+
+
 STEP_DECAY_FLOOR = 1.0 / 16.0
 
 
@@ -490,7 +584,7 @@ def decayed_step(cfg, k):
     return cfg["step"] * (STEP_DECAY_FLOOR + (1.0 - STEP_DECAY_FLOOR) * c)
 
 
-def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
+def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi, constraints=()):
     """One step of an :mod:`optimizers` rule (``tr``, ``lbfgs``, ``mma``, ``lbfgs_fs``,
     ``mma_s``) from the iterate
     just evaluated (level set ``ls``, area-tangent gradient ``g``, the full one ``g_full``,
@@ -504,7 +598,8 @@ def rule_step(cfg, ls, g, g_full, g_area, objectives, state, k, lo, hi):
     coef = np.asarray(ls.coef)
     extra = {}
     if rule in ("mma", "mma_s"):
-        return _mma_rule(cfg, ls, g, g_full, g_area, smoothing(cfg, ls, lo, hi), state, k, lo, hi)
+        return _mma_rule(cfg, ls, g, g_full, g_area, smoothing(cfg, ls, lo, hi), state, k, lo, hi,
+                         constraints)  # fmt: skip
     smooth = functools.partial(smoothed_direction, ls=ls, sigma=cfg["smooth"], band=band)
     lbfgs = rule in ("lbfgs", "lbfgs_fs")
     verdict = OZ.fixed_verdict(step) if rule == "lbfgs_fs" else OZ.judge(state, objectives, step)
@@ -597,9 +692,35 @@ def polygon_distance(vertices, x):
     return np.where(MPath(vertices).contains_points(x), -dist, dist)
 
 
+def ellipsoid_distance(cfg, x):
+    """Approximate signed distance of the points ``x`` (``f64[N, 3]``) to the start
+    ellipsoid of ``cfg`` (negative inside): semi-axes ``a = chord / 2`` (x) and
+    ``initial_thickness x a`` (y, z), ``chord`` 0 = the case sphere's volume, about the
+    case's centre, pitched nose-up (the ``-x`` end toward ``+y``) by ``initial_aoa`` degrees
+    -- ``k0 (k0 - 1) / k1`` with ``k0 = |p / r|``, ``k1 = |p / r^2|``: exact on the surface
+    (zero, unit gradient), a smooth distance-like field near it."""
+    c = F.CASES[cfg["case"]]
+    radius, centre = float(c["radius"]), np.asarray(c["centre"], float)
+    ratio = cfg["initial_thickness"]
+    a = 0.5 * cfg["initial_chord"] if cfg["initial_chord"] else radius / ratio ** (2.0 / 3.0)
+    r = np.array([a, ratio * a, ratio * a])
+    t = -np.radians(cfg["initial_aoa"])  # as polygon_vertices: the -x end turned up
+    rot = np.array([[np.cos(t), -np.sin(t), 0.0], [np.sin(t), np.cos(t), 0.0], [0.0, 0.0, 1.0]])
+    p = (np.asarray(x, float) - centre) @ rot  # body coordinates
+    k0 = np.linalg.norm(p / r, axis=1)
+    k1 = np.maximum(np.linalg.norm(p / r**2, axis=1), 1e-300)
+    return k0 * (k0 - 1.0) / k1
+
+
 def initial_levelset(cfg):
     grid, *_ = F.build(cfg["case"], "analytic", cfg["tracker"], "Ar", 0.0, cfg["radius_cells"])
     _coef, ls = EM.levelset_coef(jnp.float64(EM.nominal(cfg, "radius")), cfg, "radius", grid)
+    if cfg.get("initial", "circle") == "ellipsoid":
+        if ls.coef.ndim != 3:
+            raise ValueError("--initial ellipsoid is 3-D")
+        x = np.asarray(L.knots(ls))
+        values = ellipsoid_distance(cfg, x).reshape(ls.coef.shape)
+        return grid, dataclasses.replace(ls, coef=L.interpolate(jnp.asarray(values)))
     if cfg.get("initial", "circle") != "circle":
         if ls.coef.ndim != 2:
             raise ValueError("--initial polygons are 2-D")
@@ -825,15 +946,19 @@ def load_warm(path):
 (``phase_seconds``, summed over the seeds)."""
 
 
-def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None):
+def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None,
+               objectives=None):  # fmt: skip
     """Per-seed coefficient gradient (pathwise + score), objective, hits and seconds of the
     seeds ``seeds`` (indices; key ``seed_start + i``), stacked.  The seed ``frames_for``
     (if in ``seeds``) also records the field movie of its forward (``cfg["frames_every"]``;
     keys ``frame_<name>``).  With ``cfg["restart_steps"] > 0`` and a run directory ``run_dir``,
     each seed starts from its own final gas of the previous iterate (``<run_dir>/warm/``,
     :func:`EM.forward`'s ``restart``) instead of the empty box: the warm-up shrinks to
-    ``restart_steps`` re-equilibration steps on the new body."""
+    ``restart_steps`` re-equilibration steps on the new body.  ``objectives`` (names of
+    ``EM.SEPARATE_OBJECTIVES``): each one's own gradient from one multi-column backward, in
+    ``out["gradients"][name]`` (``out["gradient"]`` the first one's)."""
     grads, objs, hits, secs, stuck, phases, sizes, heats = [], [], [], [], [], [], [], []
+    separate = {name: [] for name in objectives or ()}
     forces = []
     out = {}
     for i in seeds:
@@ -844,21 +969,21 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None)
         restart = load_warm(_warm_path(run_dir, i)) if warm else None
         all_terms, info, s = EM.shape_terms(
             cfg, key, ls, "radius", cfg["neighbors"], cfg["timing_band"], (cfg["variant"],), every,
-            restart, heat_weights,
+            restart, heat_weights, objectives,
         )  # fmt: skip
         if info.get("patch_heat") is not None:
             heats.append(info["patch_heat"])
         if warm:
             save_warm(_warm_path(run_dir, i), s["final"])
         info["warm"] = restart is not None
-        terms = all_terms[cfg["variant"]]
-        # the window-edge timing term is part of the windowed objective's derivative
-        grad = terms.pathwise + terms.score + terms.silhouette + terms.timing
-        if terms.order is not None:
-            grad = grad + terms.order  # the collision-order term (zero without collisions)
-        if s["volume"] is not None:
-            grad = grad + s["volume"]  # the cut-volume term (zero without collisions)
-        grads.append(np.asarray(grad))
+        if objectives:
+            for name in objectives:
+                separate[name].append(
+                    np.asarray(seed_gradient(all_terms[name][cfg["variant"]], s["volume"][name]))
+                )
+            grads.append(separate[objectives[0]][-1])
+        else:
+            grads.append(np.asarray(seed_gradient(all_terms[cfg["variant"]], s["volume"])))
         objs.append(info["objective"])
         forces.append(info["forces"])
         hits.append(info["hits"])
@@ -870,6 +995,8 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None)
             out.update({f"frame_{name}": s["frames"][name] for name in FRAME_KEYS})
     if heats:
         out["patch_heat"] = np.stack(heats)
+    if objectives:
+        out["gradients"] = {name: np.stack(g) for name, g in separate.items()}
     out.update(
         {
             "gradient": np.stack(grads),
@@ -883,6 +1010,18 @@ def seed_terms(cfg, ls, seeds, frames_for=None, run_dir=None, heat_weights=None)
         }
     )
     return out
+
+
+def seed_gradient(terms, volume):
+    """One seed's coefficient gradient of one objective: pathwise + score + silhouette +
+    the window-edge timing term (part of the windowed objective's derivative) + the
+    collision-order term + the cut-volume term (both zero without collisions)."""
+    grad = terms.pathwise + terms.score + terms.silhouette + terms.timing
+    if terms.order is not None:
+        grad = grad + terms.order
+    if volume is not None:
+        grad = grad + volume
+    return grad
 
 
 def _combine(parts):
@@ -913,13 +1052,17 @@ def _combine(parts):
         # the seeds' mean heat rate per heat-lattice node (heat_patch), else None
         "patch_heat": (np.concatenate([p["patch_heat"] for p in parts]).mean(axis=0)
                        if all("patch_heat" in p for p in parts) else None),
+        # each separate objective's seed-mean gradient (seed_terms(objectives=)), else None
+        "gradients": ({name: np.concatenate([p["gradients"][name] for p in parts]).mean(axis=0)
+                       for name in parts[0]["gradients"]}
+                      if all("gradients" in p for p in parts) else None),
     }  # fmt: skip
 
 
-def averaged_terms(cfg, ls, seeds, out=None, heat_weights=None):
+def averaged_terms(cfg, ls, seeds, out=None, heat_weights=None, objectives=None):
     """Mean over the seeds of the coefficient gradient and the objective, in this process;
     the field movie of the first seed (``out``: the run directory of the warm starts)."""
-    return _combine([seed_terms(cfg, ls, seeds, seeds[0], out, heat_weights)])
+    return _combine([seed_terms(cfg, ls, seeds, seeds[0], out, heat_weights, objectives)])
 
 
 HEAT_AREA_MIN = 1e-3
@@ -1306,6 +1449,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         ls, _ = hold_regions(ls, design, solid)  # the start body in its regions too
         np.save(out / "coef_0.npy", np.asarray(ls.coef))
     area0 = saved["area_target"] if saved else float(L.body_volume(ls, lo, hi, 4))
+    if not saved and cfg["area_ref"] > 0.0:
+        area0 = float(cfg["area_ref"])  # a fixed reference volume (the sphere's)
     if not saved and cfg["area_mode"] == "floor":
         area0 *= cfg["area_floor"]
     # the initial body's (coef_0), also for a run resumed with the constraint newly on
@@ -1346,6 +1491,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     mu_heat = cfg["heat_multiplier"]
     heat_ref = saved.get("heat_ref") if saved else None
     heat_g0 = saved.get("heat_g0") if saved else None
+    if heat_g0 is None and cfg["heat_g_ref"] > 0.0:
+        heat_g0 = float(cfg["heat_g_ref"])  # a fixed G_0 (the sphere's)
     q_prev = None  # the previous iterate's seed-mean node heat rates (heat_<k>.npy)
     if history and heat_on:
         mu_heat = history[-1].get("heat_multiplier_next", mu_heat)
@@ -1360,6 +1507,14 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
     if history:
         nu_lift = history[-1].get("lift_multiplier_next", nu_lift)
     lift_ref = saved.get("lift_ref") if saved else None  # D_0
+    if lift_ref is None and cfg["lift_ref"] > 0.0:
+        lift_ref = float(cfg["lift_ref"])  # a fixed D_0 (the sphere's)
+    if heat_ref is None and lift_ref is not None:
+        heat_ref = lift_ref
+    constrained = cfg["constraints"] != "penalty"
+    check_constraints(cfg, lift_on, heat_on)
+    if constrained:  # the constraints are the optimiser's: no multiplier terms
+        nu_lift = mu_heat = 0.0
     mode = cfg["area_mode"]
     if cfg["fix_centroid"] and mode != "tangent":
         raise ValueError("--fix-centroid needs --area-mode tangent")
@@ -1397,12 +1552,23 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             avg = parallel_terms(cfg, ls, iterate_seeds, out, k, argv)
         else:
             heat_weights = None
-            if heat_on and q_prev is not None and heat_ref is not None:
-                # dJ/dQ of the penalty at the previous iterate's heat (lagged, seed-averaged)
-                heat_weights = mu_heat * heat_ref * heat_terms(cfg, ls, lo, hi, q_prev)[2]
-            # the lift multiplier's weight in this iterate's objective D - nu L
-            avg = averaged_terms({**cfg, "lift_weight": nu_lift}, ls, iterate_seeds, out,
-                                 heat_weights)  # fmt: skip
+            if constrained:
+                # the drag, the lift and the heat measure G each with its own gradient, one
+                # backward; G's node weights dG/dQ at the previous iterate's heat (lagged; the
+                # first iterate has none: its heat constraint is taken without a gradient)
+                separate = ("drag",) + (("lift",) if lift_on else ())
+                if heat_on and q_prev is not None:
+                    separate += ("heat",)
+                    heat_weights = heat_terms(cfg, ls, lo, hi, q_prev)[2]
+                avg = averaged_terms({**cfg, "lift_weight": 0.0}, ls, iterate_seeds, out,
+                                     heat_weights, separate)  # fmt: skip
+            else:
+                if heat_on and q_prev is not None and heat_ref is not None:
+                    # dJ/dQ of the penalty at the previous iterate's heat (lagged, seed-averaged)
+                    heat_weights = mu_heat * heat_ref * heat_terms(cfg, ls, lo, hi, q_prev)[2]
+                # the lift multiplier's weight in this iterate's objective D - nu L
+                avg = averaged_terms({**cfg, "lift_weight": nu_lift}, ls, iterate_seeds, out,
+                                     heat_weights)  # fmt: skip
         g = avg["gradient"]
         if cfg["save_gradient"]:
             np.save(out / f"grad_{k}.npy", np.asarray(g, dtype=np.float32))
@@ -1419,6 +1585,8 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
                 lift_ref = drag_now
             lift_cap = cfg["lift_min"] * lift_ref
             nu_lift_next = max(0.0, nu_lift + cfg["lift_rate"] * (lift_cap - lift_now) / lift_ref)
+            if constrained:
+                nu_lift_next = 0.0
             # the Lagrangian D + nu (L_min - L): the seeds' D - nu L plus the constant
             objective = objective + nu_lift * lift_cap
             objectives = objectives + nu_lift * lift_cap
@@ -1453,11 +1621,20 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             if heat_g0 is None:
                 heat_g0 = heat_g
             cap = cfg["heat_cap"] * (heat_g0 if cfg["heat_cap_relative"] else 1.0)
-            mu_heat_next = max(0.0, mu_heat + cfg["heat_rate"] * (heat_g - cap))
+            mu_heat_next = (
+                0.0 if constrained else max(0.0, mu_heat + cfg["heat_rate"] * (heat_g - cap))
+            )
             objective = objective + weight * heat_g
             objectives = objectives + weight * heat_g
             g = g + weight * g_heat_area
             q_prev = q_heat
+        cons = []
+        if constrained:
+            cons = constraint_set(
+                cfg, avg["gradients"],
+                None if lift_now is None else (lift_now, lift_cap, lift_ref),
+                None if heat_g is None else (heat_g, cap, g_heat_area),
+            )  # fmt: skip
         g_full = g
         area_err = 0.0
         if mode in ("lagrangian", "penalty"):
@@ -1481,26 +1658,35 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
         kcfg = dict(cfg, step=decayed_step(cfg, k))  # the iterate's step
         if rule:
             from_ls, delta, predicted, rule_state, extra = rule_step(
-                kcfg, ls, g, g_full, g_area, objectives, rule_state, k, lo, hi
+                kcfg, ls, g, g_full, g_area, objectives, rule_state, k, lo, hi, cons
             )
             OZ.save_state(state_path, rule_state)
             scale, eta = float(np.abs(delta).max()), 1.0
             stepped = dataclasses.replace(from_ls, coef=from_ls.coef + jnp.asarray(delta))
             direction = None
         elif ox:
+            active, restore = [], None
             if cfg["filter"] == "helmholtz":
                 # the constraints projected in the design space (smoothing's rows), none after
                 rows = constraint_rows(g_area, ls.coef.ndim)
+                if cons:  # --constraints project: the active lift / heat rows beside
+                    rows, active = with_active_rows(rows, cons, g, cfg["constraint_band"])
                 sm, g_tangent = smoothing(cfg, ls, lo, hi, rows), None
             else:
                 sm, g_tangent = smoothing(cfg, ls, lo, hi), g_area
             delta, ox_state = OX.step(ox_tx, ox_state, ox_ctx, g, ls, g_tangent, kcfg, sm)
             OX.save_state(ox_path, ox_state)
+            if cons:
+                restore = restoration_step(cfg, ls, lo, hi, cons, kcfg["step"])
+                delta = delta + restore
             scale, eta = float(np.abs(delta).max()), 1.0
             stepped = dataclasses.replace(ls, coef=ls.coef + jnp.asarray(delta))
             direction = None
             predicted = float(np.sum(g * delta))
             extra = {"step_max": scale}
+            if cons:
+                extra.update(active_constraints=active,
+                             restore_max=float(np.abs(restore).max()))  # fmt: skip
         else:
             direction = smoothed_direction(g, ls, cfg["smooth"], cfg["band"] + ls.h)
         if cfg["optimizer"] == "adam":
@@ -1595,6 +1781,9 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             row.update(heat_measure=heat_g, penalised_objective=objective,
                        heat_multiplier=mu_heat, heat_multiplier_next=mu_heat_next)  # fmt: skip
             mu_heat = mu_heat_next
+        if cons:
+            row.update(constraint_values={name: c for name, c, _ in cons},
+                       constraints=cfg["constraints"])  # fmt: skip
         row.update(pieces=T.pieces(knot_values(new)), **topology)
         if mode in ("tangent", "floor"):
             row.update(area_multiplier=nu, area_error=area_err)
