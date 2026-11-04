@@ -1210,6 +1210,31 @@ def _silfix_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+# bitchk (2026-11-03): the compact pair record's bitwise check on one optimiser iterate -- the
+# lsfilter specular M 10 Kn 0.5 drag run's command (its iterate 0 ran on an RTX 1g.24gb slice,
+# 10-27), one iterate, the lean record compact against dense; grad_0 / coef_1 / the history's
+# objective must agree bit for bit (the stored 10-27 grad_0 is a looser reference: code has moved)
+BITCHK = (
+    "python3 -m examples.mesh.optimize --seeds-per-iterate 1 --workers 1 --fnum-scale 1 "
+    "--grid-scale 1 --levelset-h 0.0625 --levelset-samples 16 --grazing 0.05 --case circle_long "
+    "--fnum-scale 2 --warmup 2800 --step 0.05 --smooth 8 --band 1.0 --keepout 1.0 "
+    "--area-mode tangent --boundary free --optimizer ox_adam --area-mode tangent --initial diamond "
+    "--initial-thickness 0.3 --recentre 1 --reinit-every 0 --filter helmholtz --save-gradient 1 "
+    "--converge-patience 100 --backward-normals true --grazing 0.01 --knudsen 0.5 --mach 10 "
+    "--dt 2.5e-5 --a-max 256 --substeps 4 --partners 8 --iterations 1 --restart-steps 500"
+)
+
+
+def _bitchk_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``bitchk``: :data:`BITCHK` with ``--record lean`` (compact pairs) and ``lean_dense``,
+    tags ``bitchk_dmhz0_{compact,dense}``.  ``GPU_KIND=rtx`` (the original's slice kind)."""
+    del gpus_per_node
+    return {
+        f"bitchk_{name}": f"{BITCHK} --tag bitchk_dmhz0_{name} --record {record}"
+        for name, record in (("compact", "lean"), ("dense", "lean_dense"))
+    }
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1453,6 +1478,7 @@ NEW_GROUPS = {
     "m2chk": _m2chk_jobs,
     "m2split": _m2split_jobs,
     "silfix": _silfix_jobs,
+    "bitchk": _bitchk_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
