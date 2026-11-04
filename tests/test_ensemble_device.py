@@ -269,3 +269,55 @@ def test_virtual_backward_value_columns_are_separate_backwards():
         scale = float(jnp.sqrt(jnp.mean(one.lam**2)))
         np.testing.assert_allclose(both.lam[..., r], one.lam, rtol=0, atol=1e-10 * scale)
         np.testing.assert_allclose(both.lambda0[:, r], one.lambda0, rtol=0, atol=1e-10 * scale)
+
+
+@pytest.mark.parametrize("basis", ["quadratic_full", host.CELL_BASIS])
+def test_compact_pair_record_gives_the_dense_virtual_backward_bitwise(basis):
+    """The lean record's compact pairs (``ntc.compact_pairs``: attempts per cell and the
+    accepted attempts, 2026-11-03) against the dense lean pairs on a dense relaxation where
+    particles collide several times a step: the rebuilt post-collision state, the attempts
+    per cell, the staged slot-boundary velocities and the virtual pull-back's outputs
+    (values, collision increments, kernel term) are all bit for bit the dense record's;
+    the realized-pair accessor refuses the compact record."""
+    from jax_dsmc import simulate  # noqa: PLC0415
+    from jax_dsmc.collide import ntc  # noqa: PLC0415
+
+    n = 300
+    t = dict(CONTROLS)
+    state0, out, _diag, rec, grid = relaxation_run(
+        t, jax.random.key(4), n, 3, 1024, 0.4, "certified", capture=True
+    )
+    dense = simulate.lean_record(rec, "dense")
+    compact = simulate.lean_record(rec)
+    assert isinstance(compact.pairs, ntc.CompactPairs)
+    assert int(jnp.sum(compact.pairs.lost)) == 0
+    assert compact.pairs.pi.shape[-1] < dense.pairs.pi[0].size  # smaller than A_max x C
+    np.testing.assert_array_equal(
+        np.asarray(simulate.post_collision_v(compact)), np.asarray(rec.v_post)
+    )
+    for k in range(rec.x.shape[0]):
+        pc = jax.tree.map(lambda a, k=k: a[k], compact.pairs)
+        pd = jax.tree.map(lambda a, k=k: a[k], dense.pairs)
+        np.testing.assert_array_equal(
+            np.asarray(ntc.attempts_per_cell(pc, n)), np.asarray(ntc.attempts_per_cell(pd, n))
+        )
+        _ids, _valid, cell, _rank, _count = device.cell_nodes(rec.x[k], rec.alive[k], grid, 512)
+        args = (rec.v[k], rec.v_post[k], cell, 4)
+        want = np.asarray(device.staged_velocities(pd, *args))
+        np.testing.assert_array_equal(np.asarray(device.staged_velocities(pc, *args)), want)
+    acc = np.asarray(rec.pairs.accept[0]) & (np.asarray(rec.pairs.pi[0]) < n)
+    pi, pj = np.asarray(rec.pairs.pi[0])[acc], np.asarray(rec.pairs.pj[0])[acc]
+    assert np.bincount(np.concatenate([pi, pj])).max() >= 2  # slot order matters here
+    reward = jnp.sum(out.v**2, axis=1) / n + out.v[:, 0] * out.v[:, 1] / n
+    kw = {"nodes": "staged", "collision_out": True, "pair_score": er._pair_score("diameter")}
+    run = (state0.alive, out, reward, grid, jnp.ones(4), species(t), jax.random.key(0), 512, 32)
+    got = device.backward_virtual(compact, *run, basis, 256, 2, 4, **kw)
+    ref = device.backward_virtual(dense, *run, basis, 256, 2, 4, **kw)
+    assert got.four_term is None and ref.four_term is None
+    for name in ("lambda0", "lam", "kernel", "collision", "cell_collision"):
+        np.testing.assert_array_equal(
+            np.asarray(getattr(got, name)), np.asarray(getattr(ref, name))
+        )
+    assert float(jnp.max(jnp.abs(ref.collision))) > 0.0  # collisions entered the backward
+    with pytest.raises(ValueError, match="every attempt"):
+        ntc.step_pairs(jax.tree.map(lambda a: a[0], compact))

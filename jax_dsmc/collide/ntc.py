@@ -33,6 +33,7 @@ from jax_dsmc.collide.vss import (
     scatter,
     vr2_clamp,
 )
+from jax_dsmc.compaction import prefix_count
 from jax_dsmc.constants import EPS, K_BOLTZ
 from jax_dsmc.fusion import materialise
 from jax_dsmc.grid import cell_volume
@@ -297,6 +298,79 @@ class PairRecord(NamedTuple):
     vj_post: jax.Array
 
 
+class CompactPairs(NamedTuple):
+    """A step's :class:`PairRecord` reduced to what the virtual pull-back reads (2026-11-03,
+    the lean record's default, :func:`compact_pairs`): the attempts made per cell and the
+    ACCEPTED attempts in the slot scan's slot-major order -- a few thousand entries a step
+    where the dense record pads every cell to ``A_max`` (the diffuse M 10 circle: 300 steps
+    x 1 200 cells x ~700 slots, ~14 GB).  The rejected attempts enter the virtual pull-back
+    only through ``n_att`` (its expected-attempts weight and the staged slot fractions); the
+    realized-pair pull-backs need them one by one and a dense record (``record="lean_dense"``
+    or ``"full"``).
+
+    ``n_att`` ``i32[C]`` (``sum_a pi[a, c] < N``); ``slot`` / ``cell`` ``i32[P]`` the attempt's
+    position (``-1`` on unused entries); ``pi`` / ``pj`` ``i32[P]`` (``N``, the scratch slot,
+    on unused entries); ``vi_post`` / ``vj_post`` ``f64[P, 3]``; ``lost`` ``i32`` accepted
+    attempts that did not fit ``P`` (must be zero: ``Diagnostics.pair_overflow``)."""
+
+    n_att: jax.Array
+    slot: jax.Array
+    cell: jax.Array
+    pi: jax.Array
+    pj: jax.Array
+    vi_post: jax.Array
+    vj_post: jax.Array
+    lost: jax.Array
+
+
+def pair_capacity(n_part: int) -> int:
+    """Default room of a :class:`CompactPairs` step: ``N / 4`` accepted attempts (a mean
+    collision probability of 0.5 per particle per step; the diffuse M 10 circle's is ~0.01)."""
+    return max(256, int(n_part) // 4)
+
+
+def _put_entries(values, target, capacity, fill, dtype):
+    """``values`` (``A, C, ...``) flattened slot-major and written to entries ``target``
+    (``capacity`` = dropped); unused entries hold ``fill``."""
+    a, c = values.shape[:2]
+    flat = values.reshape((a * c, *values.shape[2:]))
+    empty = jnp.full((capacity, *values.shape[2:]), fill, dtype)
+    return empty.at[target].set(flat.astype(dtype), mode="drop")
+
+
+def compact_pairs(pairs: PairRecord, n_part: int, capacity: int) -> CompactPairs:
+    """One step's dense :class:`PairRecord` (``(A_max, C)``) as :class:`CompactPairs` with
+    room for ``capacity`` accepted attempts, kept in slot-major order (a particle's writes
+    all come from its own cell's column, so their order is the scan's)."""
+    a_max, c = pairs.pi.shape
+    active = pairs.pi < n_part
+    take = (pairs.accept & active).reshape(-1)
+    pos = prefix_count(take) - 1
+    fits = take & (pos < capacity)
+    target = jnp.where(fits, pos, capacity)
+    slot = jnp.broadcast_to(jnp.arange(a_max, dtype=jnp.int32)[:, None], (a_max, c))
+    cell = jnp.broadcast_to(jnp.arange(c, dtype=jnp.int32)[None, :], (a_max, c))
+    put = functools.partial(_put_entries, target=target, capacity=capacity)
+    return CompactPairs(
+        n_att=jnp.sum(active, axis=0, dtype=jnp.int32),
+        slot=put(slot, fill=-1, dtype=jnp.int32),
+        cell=put(cell, fill=-1, dtype=jnp.int32),
+        pi=put(pairs.pi, fill=n_part, dtype=jnp.int32),
+        pj=put(pairs.pj, fill=n_part, dtype=jnp.int32),
+        vi_post=put(pairs.vi_post, fill=0.0, dtype=jnp.float64),
+        vj_post=put(pairs.vj_post, fill=0.0, dtype=jnp.float64),
+        lost=jnp.sum(take, dtype=jnp.int32) - jnp.sum(fits, dtype=jnp.int32),
+    )
+
+
+def attempts_per_cell(pairs, n_part):
+    """``i32[C]`` attempts made per cell in one step: a compact record's ``n_att`` or the
+    dense record's active slots (the same integers)."""
+    if isinstance(pairs, CompactPairs):
+        return pairs.n_att
+    return jnp.sum(pairs.pi < n_part, axis=0, dtype=jnp.int32)
+
+
 def _gather_rows(v, idx):
     """``v[idx]`` with the scratch slot ``idx == N`` reading zeros (section 8.4.1).  The
     scratch slot used to be a physical zero row appended to ``v``; reading it as an
@@ -326,12 +400,15 @@ def post_collision_velocities(v, pairs: PairRecord):
     one scatter-max of the writes' order over the particles, not by replaying the
     ``A_max`` slots one after another (each a few kernels: ~1 750 launches a step at
     ``A_max = 256``, 2026-10-22).  A particle's writes all come from its own cell's
-    column, so the slot-major position orders them as the scan does."""
+    column, so the slot-major position orders them as the scan does.  A
+    :class:`CompactPairs` record holds the accepted attempts in that order: the same writes,
+    the same last one, bitwise."""
     n = v.shape[0]
     order = 2 * jnp.arange(pairs.pi.size, dtype=jnp.int32).reshape(pairs.pi.shape)
+    accept = pairs.slot >= 0 if isinstance(pairs, CompactPairs) else pairs.accept
     last = jnp.full(n, -1, jnp.int32)
-    last = last.at[pairs.pi].max(jnp.where(pairs.accept, order, -1), mode="drop")
-    last = last.at[pairs.pj].max(jnp.where(pairs.accept, order + 1, -1), mode="drop")
+    last = last.at[pairs.pi].max(jnp.where(accept, order, -1), mode="drop")
+    last = last.at[pairs.pj].max(jnp.where(accept, order + 1, -1), mode="drop")
     flat = jnp.maximum(last, 0) // 2
     vel = jnp.where(
         (last % 2 == 0)[:, None],
@@ -353,8 +430,14 @@ def pair_velocities(v, pairs: PairRecord):
 
 def step_pairs(rec_k):
     """One captured step's :class:`PairRecord` with ``vi`` / ``vj`` present (rebuilt by
-    :func:`pair_velocities` for a lean record)."""
+    :func:`pair_velocities` for a lean record).  The realized-pair pull-backs' accessor: a
+    :class:`CompactPairs` record has no rejected attempts and raises."""
     p = rec_k.pairs
+    if isinstance(p, CompactPairs):
+        raise ValueError(
+            "the realized-pair pull-back needs every attempt: capture with "
+            'record="lean_dense" or "full" (the compact lean record keeps the accepted ones)'
+        )
     if p.vi is not None:
         return p
     vi, vj = pair_velocities(rec_k.v, p)

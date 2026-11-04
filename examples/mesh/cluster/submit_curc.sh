@@ -150,7 +150,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     sphere) HOURS=8 ;;
     mode2) HOURS=4 ;;
     opt|optc) HOURS=24 ;;
-    squash|squashkn|squashkn2|optckn|optc2|optab|optm|optrules|optrules2|optrules1seed|optax1seed|optcm|optct|optrules3|adjfix|optrc|ldopt|sph3d|lsfilter|lsfilter3d|ld3dwide|dlh3d|fitgate|diffchk|m2chk|m2split) HOURS=24 ;;
+    squash|squashkn|squashkn2|optckn|optc2|optab|optm|optrules|optrules2|optrules1seed|optax1seed|optcm|optct|optrules3|adjfix|optrc|ldopt|sph3d|lsfilter|lsfilter3d|ld3dwide|dlh3d|fitgate|diffchk|m2chk|m2split|silfix) HOURS=24 ;;
     biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|speedprof|boxcheck|opt3dcheck|adjbias|adjm10|stepfd) HOURS=12 ;;
     # the paper's groups (2026-10-28): STUDY_MODULE=examples.paper.cluster.study
     paper_fd) HOURS=12 ;;
@@ -177,7 +177,8 @@ for group in "${GROUPS_TO_RUN[@]}"; do
       && [ "${group}" != "optrules1seed" ] && [ "${group}" != "optax1seed" ] \
       && [ "${group}" != "optcm" ] && [ "${group}" != "optct" ] \
       && [ "${group}" != "optrules3" ] && [ "${group}" != "fitgate" ] && [ "${group}" != "diffchk" ] \
-      && [ "${group}" != "m2chk" ] && [[ "${group}" != paper_* ]]; then
+      && [ "${group}" != "m2chk" ] && [ "${group}" != "m2split" ] \
+      && [ "${group}" != "silfix" ] && [[ "${group}" != paper_* ]]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi

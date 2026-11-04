@@ -1194,6 +1194,22 @@ def _m2split_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+def _silfix_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``silfix`` (2026-11-03): the diffuse M 10 Kn 0.5 checks after the silhouette search
+    fix (levelset._culled bucket order) -- the radius (c10_diff's seeds 0, 4, 8, 12) and the
+    cos 2 theta drag / sin 2 theta lift / cos 2 theta heat (seeds 0-3), FD reused from the
+    original gates.  ``GPU_KIND=rtx`` (24 GB with the compact pair record)."""
+    del gpus_per_node
+    run = "python3 scratch/fitgate/variant_gate.py"
+    var = " --variants cell_along_pool_plane cell_pool_plane along_pool_plane"
+    return {
+        "sf_radius": f"{run} --gate c10_diff_sf --seeds 0 16 --stride 4{var}",
+        "sf_drag": f"{run} --gate c10_diff_m2_sf --seeds 0 4{var}",
+        "sf_lift": f"{run} --gate c10_diff_lift_m2s_sf --seeds 0 4{var}",
+        "sf_heat": f"{run} --gate c10_diff_heat_m2_sf --seeds 0 4{var}",
+    }
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1436,6 +1452,7 @@ NEW_GROUPS = {
     "diffchk": _diffchk_jobs,
     "m2chk": _m2chk_jobs,
     "m2split": _m2split_jobs,
+    "silfix": _silfix_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

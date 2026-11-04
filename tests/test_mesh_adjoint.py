@@ -577,7 +577,8 @@ def test_lean_record_gives_the_full_records_chain_bitwise(tracker):
     full = _replay_chain(tracker, value_class="hit_ahead")
     lean = _replay_chain(tracker, "lean", value_class="hit_ahead")
     rec_f, rec_l = full[4], lean[4]
-    assert rec_l.v_post is None and rec_l.born_v is None and rec_l.pairs.vi is None
+    assert rec_l.v_post is None and rec_l.born_v is None
+    assert rec_l.pairs is None or hasattr(rec_l.pairs, "n_att")  # compact pairs
     assert rec_l.born_face.dtype == jnp.int8
     np.testing.assert_array_equal(
         np.asarray(shape.hit_ahead(rec_l, None)), np.asarray(shape.hit_ahead(rec_f, None))

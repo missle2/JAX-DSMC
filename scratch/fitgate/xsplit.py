@@ -25,10 +25,11 @@ SPLITS = (("Kn 0.5", "c10_spec_xsplit", "c10_spec"), ("Kn 0.5 h1000", "c10_spec_
 
 def rows_of(gate):
     by = {}
-    for path in sorted(RESULTS.glob(f"{gate}_base_s*.jsonl")):
+    for path in sorted(RESULTS.glob(f"{gate}_base*_s*.jsonl")):
         for line in path.read_text().splitlines():
             r = json.loads(line)
-            by[r["seed"]] = r
+            if r["gate"] == gate and r.get("basis", "base") == "base":
+                by[r["seed"]] = r
     return [by[s] for s in sorted(by)]
 
 
@@ -49,6 +50,8 @@ for label, gate, parent in SPLITS:
     n = len(rows)
     ex = []
     for v in ("along_pool_plane", "cellxv_along_pool_plane", "cell_pool_plane"):
+        if v not in rows[0]["terms"]:
+            v = "cell_along_pool_plane"  # noqa: PLW2901 -- the diffuse splits carry it instead
         a = np.array([tot(r, v) for r in rows])
         se = np.hypot(a.std(ddof=1) / n**0.5, fd_se)
         ex.append(f"{(a.mean() - fd) / fd:+.3f}+-{2 * se / fd:.3f}")

@@ -210,6 +210,16 @@ NEW_GATES = {
     "c10_diff_xsplit": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "radius", [0.1, 0.05]),
     "c10_diff_m2_ord128": ({**CIRCLE_M10, **COMMON, **DIFFUSE,
                             "order_fit": {"k": 128, "pool": 0}}, "mode2", [0.1, 0.05]),
+    # 2026-11-03 the silhouette band's culled search fixed (levelset._culled took
+    # APPROACH_BUCKETS = (8, 32) largest first: with N/32 < candidates <= N/8 only the first
+    # N/32 were searched -- the radius rerun's silhouette read 0.13 where the pre-11-02 slow
+    # path read 0.41).  The diffuse production checks again, FD reused from the originals
+    "c10_diff_sf": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "radius", [0.1, 0.05]),
+    "c10_diff_m2_sf": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "mode2", [0.1, 0.05]),
+    "c10_diff_lift_m2s_sf": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "drag_lift",
+                              "lift_weight": 1.0}, "mode2s", [0.1, 0.05]),
+    "c10_diff_heat_m2_sf": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                             "heat_patch": 0.2}, "mode2", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
@@ -232,6 +242,10 @@ FD_FROM = {
     "c10_diff_m2_xsplit": "c10_diff_m2",
     "c10_diff_xsplit": "c10_diff",
     "c10_diff_m2_ord128": "c10_diff_m2",
+    "c10_diff_sf": "c10_diff",
+    "c10_diff_m2_sf": "c10_diff_m2",
+    "c10_diff_lift_m2s_sf": "c10_diff_lift_m2s",
+    "c10_diff_heat_m2_sf": "c10_diff_heat_m2",
 }
 _CACHE = {}
 

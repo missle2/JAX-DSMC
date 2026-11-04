@@ -201,13 +201,19 @@ def test_lean_record_rebuilds_v_post_bitwise():
         dict(CONTROLS), jax.random.key(3), 400, 3, 512, 0.2, "certified", capture=True
     )
     for rec in (shock, dense):
-        lean = simulate.lean_record(rec)
-        rebuilt = np.asarray(simulate.post_collision_v(lean))
-        np.testing.assert_array_equal(rebuilt, np.asarray(rec.v_post))
+        # the compact pairs (record "lean") and the dense ones ("lean_dense") alike
+        for lean in (simulate.lean_record(rec), simulate.lean_record(rec, "dense")):
+            rebuilt = np.asarray(simulate.post_collision_v(lean))
+            np.testing.assert_array_equal(rebuilt, np.asarray(rec.v_post))
+        lean = simulate.lean_record(rec, "dense")
         for k in range(rec.x.shape[0]):  # the per-step accessors the device code uses
             step = jax.tree.map(lambda a, k=k: a[k], lean)
             got = np.asarray(simulate.step_v_post(step))
             np.testing.assert_array_equal(got, np.asarray(rec.v_post[k]))
+            compact = jax.tree.map(lambda a, k=k: a[k], simulate.lean_record(rec))
+            np.testing.assert_array_equal(
+                np.asarray(simulate.step_v_post(compact)), np.asarray(rec.v_post[k])
+            )
             pairs = step_pairs(step)  # the sequential pull-back's partner ghosts
             np.testing.assert_array_equal(np.asarray(pairs.vi), np.asarray(rec.pairs.vi[k]))
             np.testing.assert_array_equal(np.asarray(pairs.vj), np.asarray(rec.pairs.vj[k]))

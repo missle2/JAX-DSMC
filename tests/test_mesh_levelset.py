@@ -771,3 +771,37 @@ def test_refinement_matches_the_bisection_reference(dim):
     g_ref = jax.jit(jax.grad(_t_sum_bisection))(ls.coef, ls, x, v, remaining)
     scale = float(np.abs(np.asarray(g_ref)).max())
     np.testing.assert_allclose(np.asarray(g_new), np.asarray(g_ref), rtol=0, atol=1e-10 * scale)
+
+
+@pytest.mark.parametrize("buckets", [(32, 8), (8, 32)])
+@pytest.mark.parametrize("count", [0, 100, 300, 1000])
+def test_culled_search_matches_every_row_in_every_bucket(monkeypatch, buckets, count):
+    """``closest_approach_culled`` / ``normal_culled`` against the search on every row, with
+    the candidate count in each branch of :func:`levelset._culled` (none, the small bucket
+    ``N / 32``, the large ``N / 8``, every row) and the buckets in either order -- 2026-11-03:
+    ``(8, 32)`` evaluated only the first ``N / 32`` candidates when ``N / 32 < count <= N / 8``
+    (the diffuse M 10 circle's silhouette band lost ~2/3 of its rows).  Only the candidate
+    rows are compared: the every-row branch evaluates all rows and the caller
+    (``shape.silhouette_geometry``) masks the rest itself."""
+    monkeypatch.setattr(L, "APPROACH_BUCKETS", buckets)
+    lo, m = L.grid_for_box(jnp.zeros(2), jnp.full(2, 10.0), 0.125)
+    ls = L.from_analytic(jnp.array([5.0, 5.0]), 3.0, lo, 0.125, m, n_sample=16)
+    n = 4096
+    kx, kv, kc = jax.random.split(jax.random.PRNGKey(2), 3)
+    ang = jax.random.uniform(kx, (n,), maxval=2 * jnp.pi)
+    r = 3.05 + 0.5 * jax.random.uniform(jax.random.fold_in(kx, 1), (n,))
+    x = jnp.stack((5.0 + r * jnp.cos(ang), 5.0 + r * jnp.sin(ang)), axis=1)
+    v = jax.random.normal(kv, (n, 2))
+    candidate = jnp.zeros(n, bool).at[jax.random.permutation(kc, n)[:count]].set(True)
+    phi, s = L.closest_approach_culled(x, v, ls, candidate)
+    phi_all, s_all = L.closest_approach(x, v, ls)
+    sel = np.asarray(candidate)
+    assert np.isfinite(np.asarray(phi)[sel]).all()
+    np.testing.assert_allclose(
+        np.asarray(phi)[sel], np.asarray(phi_all)[sel], rtol=1e-12, atol=1e-14
+    )
+    np.testing.assert_allclose(np.asarray(s)[sel], np.asarray(s_all)[sel], rtol=1e-12, atol=1e-14)
+    normals = np.asarray(L.normal_culled(ls, x, candidate))
+    np.testing.assert_allclose(
+        normals[sel], np.asarray(L.normal(ls, x))[sel], rtol=1e-12, atol=1e-14
+    )

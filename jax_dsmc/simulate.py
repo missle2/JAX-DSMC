@@ -42,7 +42,9 @@ from jax_dsmc import boundary, inflow, sample, sort
 from jax_dsmc.boundary import BC
 from jax_dsmc.collide.ntc import (
     collide,
+    compact_pairs,
     decision_weights,
+    pair_capacity,
     post_collision_velocities,
     step_v_post,
 )
@@ -113,13 +115,19 @@ def _lean_faces(face, dim):
     return jnp.minimum(face, 2 * dim).astype(jnp.int8)
 
 
-def lean_record(record):
+def lean_record(record, pairs="compact", capacity=0):
     """``record`` (one step's or a stack's :class:`EventRecord`) reduced to what the device
     backward and the shape VJP read: no ``v_post`` (:func:`post_collision_v`), ``born_v``,
     pair ``vi`` / ``vj`` (:func:`jax_dsmc.collide.ntc.step_pairs`) or wall ``v_out`` /
     ``diffuse``; ``born_face`` (a box face, ``< 2D``) and the wall surface ids as ``i8``
-    (:func:`_lean_faces` -- ``>= 0`` and ``>= 2D`` keep their meaning).  The forward is
-    untouched: this only selects what the captured run keeps."""
+    (:func:`_lean_faces` -- ``>= 0`` and ``>= 2D`` keep their meaning).  ``pairs="compact"``
+    (``SimStatic.record = "lean"``) keeps of the pair record only the attempts per cell and
+    the accepted attempts (:func:`jax_dsmc.collide.ntc.compact_pairs`, room for ``capacity``
+    a step, ``0``: :func:`jax_dsmc.collide.ntc.pair_capacity`); ``"dense"``
+    (``"lean_dense"``) the ``(A_max, C)`` slots the realized-pair pull-backs read.  The
+    forward is untouched: this only selects what the captured run keeps."""
+    if pairs not in ("compact", "dense"):
+        raise ValueError("pairs must be compact or dense")
     dim = record.x.shape[-1]
     walls = record.walls
     if isinstance(walls, RecordEvents):
@@ -131,15 +139,22 @@ def lean_record(record):
         )
     elif isinstance(walls, WallEvents):
         walls = WallEvents(_lean_faces(walls.face, dim), None, None)
-    pairs = record.pairs
-    if pairs is not None:
-        pairs = pairs._replace(vi=None, vj=None)
+    pair_record = record.pairs
+    if pair_record is not None and pairs == "dense":
+        pair_record = pair_record._replace(vi=None, vj=None)
+    elif pair_record is not None:
+        n_part = record.x.shape[-2]
+        squeeze = functools.partial(
+            compact_pairs, n_part=n_part, capacity=int(capacity) or pair_capacity(n_part)
+        )
+        stacked = pair_record.pi.ndim == 3
+        pair_record = (jax.vmap(squeeze) if stacked else squeeze)(pair_record)
     return dataclasses.replace(
         record,
         born_face=record.born_face.astype(jnp.int8),
         born_v=None,
         v_post=None,
-        pairs=pairs,
+        pairs=pair_record,
         walls=walls,
     )
 
@@ -242,8 +257,9 @@ def _event_record(moved, source, wall_events, captured, state, static, diffuse, 
         # store the later passes as a list of the recorded events, not K - 1 lane rows
         walls, overflow = compact_record(walls, _record_capacity(static))
         record = dataclasses.replace(record, walls=walls)
-    if static.record == "lean":
-        record = lean_record(record)
+    if static.record in ("lean", "lean_dense"):
+        layout = "compact" if static.record == "lean" else "dense"
+        record = lean_record(record, layout, static.pair_capacity)
     return record, (lost, overflow)
 
 
@@ -458,6 +474,8 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
         diag = dataclasses.replace(
             diag, count_support_boundary=diag.count_support_boundary + source_support
         )
+    if record is not None and hasattr(record.pairs, "lost"):
+        diag = dataclasses.replace(diag, pair_overflow=record.pairs.lost)
     diag = dataclasses.replace(
         diag,
         decision_checksum=diag.decision_checksum + bc_chk,

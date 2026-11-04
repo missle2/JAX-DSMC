@@ -115,8 +115,13 @@ def collision_rate(x, alive, pairs, grid):
     """Accepted collisions per particle per step of every collision cell over the captured
     steps: ``2 sum_k accepted_kc / sum_k occupancy_kc`` (0 in empty cells)."""
     count = jnp.sum(jax.lax.map(functools.partial(step_occupancy, grid=grid), (x, alive)), axis=0)
-    real = pairs.accept & (pairs.pi < x.shape[1])  # attempt slots on the scratch slot: none
-    accepted = jnp.sum(real, axis=(0, 1)).astype(jnp.float64)
+    if hasattr(pairs, "n_att"):  # the compact lean record (2026-11-03): accepted entries
+        n_cells = count.shape[0]
+        cell = jnp.where(pairs.slot >= 0, pairs.cell, n_cells).reshape(-1)
+        accepted = jnp.zeros(n_cells + 1).at[cell].add(1.0)[:n_cells]
+    else:
+        real = pairs.accept & (pairs.pi < x.shape[1])  # attempt slots on the scratch slot: none
+        accepted = jnp.sum(real, axis=(0, 1)).astype(jnp.float64)
     return jnp.where(count > 0, 2.0 * accepted / jnp.maximum(count, 1.0), 0.0)
 
 

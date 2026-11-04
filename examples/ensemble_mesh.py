@@ -345,9 +345,7 @@ def build(cfg, parameter, value, steps, body=None):
         count = F.NRHO * volume / (F.CASES[cfg["case"]]["fnum"] * cfg["fnum_scale"])
         n = max(n, int(1.3 * count * k_grid**static.D))
     a_max = int(cfg.get("a_max", 0)) or static.A_max
-    static = dataclasses.replace(
-        static, N=n, A_max=a_max, n_steps=steps, record=cfg.get("record", "lean")
-    )
+    static = dataclasses.replace(static, N=n, A_max=a_max, n_steps=steps, record=record_mode(cfg))
     capacity = int(capacity / cfg["fnum_scale"]) + 64
     if cfg.get("mach", 0.0) > 0.0 or cfg.get("dt", 0.0) > 0.0:
         # the inflow's per-step budget follows the stream speed and the step (F.build's rule)
@@ -780,6 +778,16 @@ def objective_weights(cfg, tallies, dim, scale):
     return jnp.asarray(w)
 
 
+def record_mode(cfg):
+    """``SimStatic.record`` of a run: the cfg's (``"lean"``: compact pairs), with a realized-
+    pair pull-back (``ensemble_backward.configure("sequential" / "linearised")``) the dense
+    lean record it needs instead."""
+    record = cfg.get("record", "lean")
+    if record == "lean" and ensemble_backward.VIRTUAL is None:
+        return "lean_dense"
+    return record
+
+
 def _check(diag):
     require_valid(diag)
     for name in (
@@ -789,6 +797,7 @@ def _check(diag):
         "walk_exhausted",
         "lane_overflow",
         "record_overflow",
+        "pair_overflow",
     ):
         if int(getattr(diag, name).sum()):
             raise RuntimeError(f"{name} fired")

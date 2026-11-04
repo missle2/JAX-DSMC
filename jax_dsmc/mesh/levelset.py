@@ -280,7 +280,12 @@ def _culled(fn, fill, ls, rows, candidate, buckets=None):
     if n < CULL_MIN:
         args = (ls, rows, jnp.zeros(0, jnp.int32))
         return jax.lax.cond(step_axis.any_(candidate), dense, none, args)
-    sizes = tuple(n // b for b in (CULL_BUCKETS if buckets is None else buckets))
+    # smallest first, whatever order the caller gives: the slots are compacted into the
+    # largest size and the branch is the first size that holds the count (2026-11-03:
+    # APPROACH_BUCKETS = (8, 32), largest first, evaluated only the first N / 32 candidates
+    # whenever N / 32 < count <= N / 8 -- the dense diffuse layer's silhouette band lost ~2/3
+    # of its rows; the 16 k-particle test never landed in that window)
+    sizes = tuple(sorted(n // b for b in (CULL_BUCKETS if buckets is None else buckets)))
     slot, count = _near_slots(candidate, sizes[-1])
     branch = jnp.where(count == 0, 0, 1 + sum((count > s).astype(jnp.int32) for s in sizes))
     compact = [functools.partial(_rows_compact, fn=fn, fill=fill, size=s) for s in sizes]
@@ -618,9 +623,10 @@ def closest_approach(
     return jnp.where(better, phi_ref, phi_min), jnp.where(better, s_ref, s_min)
 
 
-APPROACH_BUCKETS = (8, 32)
-"""The compacted sizes ``N // b`` of :func:`closest_approach_culled`: the silhouette band's
-candidates are the particles next to the body, a few percent of the box."""
+APPROACH_BUCKETS = (32, 8)
+"""The compacted sizes ``N // b`` of :func:`closest_approach_culled`, smallest first (as
+:data:`CULL_BUCKETS`; :func:`_culled` sorts them): the silhouette band's candidates are the
+particles next to the body, a few percent of the box."""
 
 
 def _approach_rows(ls, x, v):

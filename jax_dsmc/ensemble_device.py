@@ -40,7 +40,7 @@ import jax.numpy as jnp
 from jax import lax
 
 from jax_dsmc import cell_fit, sort, step_axis
-from jax_dsmc.collide.ntc import step_pairs, step_v_post
+from jax_dsmc.collide.ntc import CompactPairs, attempts_per_cell, step_pairs, step_v_post
 from jax_dsmc.collide.vss import collision_rate, scatter
 from jax_dsmc.grid import cell_neighbourhood as grid_neighbourhood
 from jax_dsmc.grid import collision_cell, spacing
@@ -748,8 +748,11 @@ def _halfspace_length(halfspace, grid):
 def staged_velocities(pairs_k, v_pre, v_post, cell, substeps):
     """Velocities at the ``substeps + 1`` slot boundaries of a step (host
     ``_staged_velocities``): ``v_pre`` overwritten by the post-collision velocity of each
-    particle's last accepted slot before the boundary.  ``f64[substeps + 1, N, 3]``."""
+    particle's last accepted slot before the boundary.  ``f64[substeps + 1, N, 3]``.  A
+    :class:`CompactPairs` record gives the same stages bitwise (:func:`_staged_compact`)."""
     n = v_pre.shape[0]
+    if isinstance(pairs_k, CompactPairs):
+        return _staged_compact(pairs_k, v_pre, v_post, substeps)
     pi, pj = pairs_k.pi, pairs_k.pj
     active = pi < n
     accept = pairs_k.accept & active
@@ -767,6 +770,32 @@ def staged_velocities(pairs_k, v_pre, v_post, cell, substeps):
         la = jnp.maximum(last, 0)
         was_i = pi[la, c] == own
         vel = jnp.where(was_i[:, None], pairs_k.vi_post[la, c], pairs_k.vj_post[la, c])
+        stages.append(jnp.where((last >= 0)[:, None], vel, v_pre))
+    stages.append(v_post)
+    return jnp.stack(stages)
+
+
+def _staged_compact(pairs_k, v_pre, v_post, substeps):
+    """:func:`staged_velocities` from a :class:`CompactPairs` record: the accepted attempts
+    in slot-major order, each at its slot fraction ``slot / n_att`` of its cell -- a
+    particle's accepted attempts are all in its own cell, so the latest entry before a
+    boundary is the dense record's latest slot."""
+    n = v_pre.shape[0]
+    pi, pj = pairs_k.pi, pairs_k.pj
+    used = pairs_k.slot >= 0
+    n_att = pairs_k.n_att[jnp.maximum(pairs_k.cell, 0)]
+    frac = pairs_k.slot / jnp.maximum(n_att, 1)
+    entry = jnp.arange(pi.shape[0], dtype=jnp.int32)
+    own = jnp.arange(n, dtype=jnp.int32)
+    stages = [v_pre]
+    for b in range(1, substeps):
+        key = jnp.where(used & (frac < b / substeps), entry, -1)
+        last_i = jax.ops.segment_max(key, pi, num_segments=n + 1)
+        last_j = jax.ops.segment_max(key, pj, num_segments=n + 1)
+        last = jnp.maximum(last_i, last_j)[:n]
+        le = jnp.maximum(last, 0)
+        was_i = pi[le] == own
+        vel = jnp.where(was_i[:, None], pairs_k.vi_post[le], pairs_k.vj_post[le])
         stages.append(jnp.where((last >= 0)[:, None], vel, v_pre))
     stages.append(v_post)
     return jnp.stack(stages)
@@ -1080,7 +1109,7 @@ def _step_pullback_virtual(
     n = rec_k.x.shape[0]
     ids, valid, cell, rank, count = cell_nodes(rec_k.x, rec_k.alive, grid, npc_max)
     c = jnp.minimum(cell, count.shape[0] - 1)
-    n_att = jnp.sum(rec_k.pairs.pi < n, axis=0)
+    n_att = attempts_per_cell(rec_k.pairs, n)
     per_particle = jnp.where(count > 0, 2.0 * n_att / jnp.maximum(count, 1), 0.0)
     weight = per_particle[c] / rec_k.sigma[c] / (partners * substeps)
     weight = jnp.where(rec_k.alive & (count[c] >= 2), weight, 0.0)

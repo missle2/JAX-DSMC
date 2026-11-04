@@ -53,7 +53,8 @@ for gate in GATES:
 # the derivative-only m2chk gates against c10_diff_m2 seed by seed (the same forward and FD):
 # the paired change of the total and of each term, membership (reported, not summed) if any
 PAIRS = {"c10_diff_m2_gz001": "c10_diff_m2", "c10_diff_m2_sil2": "c10_diff_m2",
-         "c10_diff_m2_ord128": "c10_diff_m2"}
+         "c10_diff_m2_ord128": "c10_diff_m2", "c10_diff_m2_sf": "c10_diff_m2",
+         "c10_diff_lift_m2s_sf": "c10_diff_lift_m2s", "c10_diff_heat_m2_sf": "c10_diff_heat_m2"}
 for gate in GATES:
     if gate not in PAIRS:
         continue
@@ -65,6 +66,8 @@ for gate in GATES:
     fd = np.mean([base[s]["fd"][0] for s in seeds])
     print(f"\n{gate} - {PAIRS[gate]}, paired over seeds {seeds}:")
     for v in mine[seeds[0]]["terms"]:
+        if v not in base[seeds[0]]["terms"]:
+            continue
         d = np.array([sum(mine[s]["terms"][v][k] - base[s]["terms"][v][k] for k in TERMS)
                       + mine[s]["volume"] - base[s]["volume"] for s in seeds])  # fmt: skip
         dt = {k: np.mean([mine[s]["terms"][v][k] - base[s]["terms"][v][k] for s in seeds])

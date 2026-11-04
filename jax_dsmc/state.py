@@ -284,6 +284,10 @@ class Diagnostics:
     record_overflow: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
     """``i32`` later-pass events a lane-tracked step's record had no room for (the record's
     list, ``simulate._record_capacity``).  Must be zero: the record would lose them."""
+    pair_overflow: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
+    """``i32`` accepted collision attempts a lean record's compact pair list had no room for
+    (:func:`jax_dsmc.collide.ntc.compact_pairs`, ``SimStatic.pair_capacity``).  Must be zero:
+    the record would lose them."""
     surface_stuck: jax.Array = dataclasses.field(default_factory=lambda: jnp.int32(0))
     """``i32`` particles the stencil or lane tracker deleted because a hit was still
     unresolved after ``K_bounce`` passes -- SPARTA's stuck particle (``MAXSTUCK``, deleted and
@@ -447,6 +451,12 @@ class SimParams:
     epsilon: jax.Array
 
 
+def _require_nonnegative_int(name, value):
+    """Raise unless ``value`` is a nonnegative Python int (a static size)."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{name} must be a nonnegative integer; got {value!r}")
+
+
 @dataclass(frozen=True)
 class SimStatic:
     """The **static** half of section 3.1's ``SimConfig``.
@@ -511,12 +521,21 @@ class SimStatic:
     the full sort."""
     record: str = "full"
     """What a captured run stores per step (:class:`jax_dsmc.simulate.EventRecord`):
-    ``"full"``, or ``"lean"`` (:func:`jax_dsmc.simulate.lean_record`) -- no ``v_post``
+    ``"full"``, ``"lean_dense"`` or ``"lean"`` (:func:`jax_dsmc.simulate.lean_record`; the
+    lean record's pairs compact since 2026-11-03 -- the attempts per cell and the accepted
+    attempts, :class:`jax_dsmc.collide.ntc.CompactPairs`, what the virtual pull-back reads;
+    ``"lean_dense"`` keeps the dense ``(A_max, C)`` pairs the realized-pair pull-backs
+    need) -- no ``v_post``
     (rebuilt bitwise from ``v`` and the pair record by
     :func:`jax_dsmc.simulate.post_collision_v`), no ``born_v``, pair ``vi`` / ``vj`` or wall
     ``v_out`` / ``diffuse``, face ids as ``i8``: ~43 of the lane record's ~122 bytes per
     slot and step remain.  What the device backward and the shape VJP read; the host
     adjoint needs ``"full"``."""
+    pair_capacity: int = 0
+    """Accepted collision attempts a ``record="lean"`` step can hold
+    (:func:`jax_dsmc.collide.ntc.compact_pairs`); ``0``: ``N / 4``
+    (:func:`jax_dsmc.collide.ntc.pair_capacity`).  Overflow is counted in
+    ``Diagnostics.pair_overflow`` (an error)."""
 
     def __post_init__(self) -> None:
         """Reject values that would produce a wrong shape rather than an error."""
@@ -526,8 +545,9 @@ class SimStatic:
             raise ValueError("tracker must be stencil, lane or walk")
         if self.sort not in ("full", "partition"):
             raise ValueError("sort must be full or partition")
-        if self.record not in ("full", "lean"):
-            raise ValueError("record must be full or lean")
+        if self.record not in ("full", "lean", "lean_dense"):
+            raise ValueError("record must be full, lean or lean_dense")
+        _require_nonnegative_int("pair_capacity", self.pair_capacity)
         if not isinstance(self.lane_size, int) or self.lane_size < 0:
             raise ValueError(f"lane_size must be a nonnegative Python int; got {self.lane_size!r}")
         if not isinstance(self.K_walk, int) or isinstance(self.K_walk, bool) or self.K_walk < 1:
