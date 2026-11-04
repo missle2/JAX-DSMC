@@ -62,8 +62,18 @@ from jax_dsmc.mesh.types import AnalyticBody
 from jax_dsmc.state import FlowParams, lane_capacity
 from jax_dsmc.validation import require_valid
 
-PARAMETERS = ("radius", "centre_x", "mode2", "mode2s", "width", "squash_y")
-MODES = ("mode2", "mode2s")
+PARAMETERS = ("radius", "centre_x", "mode2", "mode2s", "bump_nose", "bump_side", "bump_base",
+              "width", "squash_y")  # fmt: skip
+MODES = ("mode2", "mode2s", "bump_nose", "bump_side", "bump_base")
+BUMP_CENTRES = {
+    "bump_nose": (np.pi,),
+    "bump_side": (0.5 * np.pi, -0.5 * np.pi),
+    "bump_base": (0.0,),
+}
+"""The localised controls (2026-11-03, the bump gate: where on the body the Kn 0.5 diffuse
+excess sits): outward normal displacements ``sum max(0, cos(theta - theta_0))^4`` about these
+angles (``theta`` from +x, the stream's direction: the nose at pi), each ~90 degrees wide
+with peak 1; the two side bumps together (symmetric: no lift)."""
 BODIES = ("analytic", "levelset")
 # the replay's continuous error: round-off of one arithmetic compiled twice, amplified by
 # grazing reflections on concave walls to ~1e-12 on optimised shapes; a discrete divergence
@@ -148,11 +158,14 @@ def default_config():
 
 
 def _mode_shape(x, centre, parameter="mode2"):
-    """``-cos(2 theta)`` (``mode2``) or ``-sin(2 theta)`` (``mode2s``) about ``centre``: the
-    level-set increment of a unit outward normal displacement ``cos`` / ``sin(2 theta)``
-    (``delta phi = -delta_n``)."""
+    """``-cos(2 theta)`` (``mode2``), ``-sin(2 theta)`` (``mode2s``) or a localised bump
+    (:data:`BUMP_CENTRES`) about ``centre``: the level-set increment of that unit outward
+    normal displacement (``delta phi = -delta_n``)."""
     rel = x - jnp.asarray(centre)[None, :]
     theta = jnp.arctan2(rel[:, 1], rel[:, 0])
+    if parameter in BUMP_CENTRES:
+        bump = sum(jnp.maximum(0.0, jnp.cos(theta - t0)) ** 4 for t0 in BUMP_CENTRES[parameter])
+        return -bump
     if parameter == "mode2s":
         return -jnp.sin(2.0 * theta)
     return -jnp.cos(2.0 * theta)

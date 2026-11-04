@@ -1327,6 +1327,25 @@ def _termvol_jobs(gpus_per_node: int) -> dict[str, str]:
     return {f"tv_heat_s{a}": f"{run} --seeds {a} {a + 2}" for a in (0, 2)}
 
 
+def _bumpchk_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``bumpchk`` (2026-11-03): where the Kn 0.5 diffuse excess sits -- the bump gate (nose /
+    side / base controls, every term projected on each from one backward, own FD at step
+    0.1; 8 seeds for drag and heat in blocks of 4) and the heat objective's pathwise_x split
+    (paired, FD reused).  ``GPU_KIND=rtx``."""
+    del gpus_per_node
+    bump = "python3 scratch/fitgate/bump_gate.py"
+    jobs = {
+        f"bump_{obj}_s{a}": f"{bump} --objective {obj} --seeds {a} {a + 4}"
+        for obj in ("drag", "heat")
+        for a in (0, 4)
+    }
+    jobs["xsplit_heat"] = (
+        "python3 scratch/fitgate/variant_gate.py --gate c10_diff_heat_m2_xsplit --seeds 0 4 "
+        "--split-x --variants along_pool_plane cell_along_pool_plane cellxv_along_pool_plane"
+    )
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1576,6 +1595,7 @@ NEW_GROUPS = {
     "multichk": _multichk_jobs,
     "termchk": _termchk_jobs,
     "termvol": _termvol_jobs,
+    "bumpchk": _bumpchk_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,

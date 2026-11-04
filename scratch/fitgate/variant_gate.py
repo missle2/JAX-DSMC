@@ -246,6 +246,10 @@ NEW_GATES = {
     "c10_diff_heat_h600": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
                             "heat_patch": 0.2, "warmup": 2500, "steps": 600}, "mode2",
                            [0.1, 0.05]),
+    # the heat objective's pathwise_x split (--split-x, paired: c10_diff_heat_m2's forward and
+    # FD; the drag's, c10_diff_m2_xsplit, put its collisional L* V at +0.4 % of FD)
+    "c10_diff_heat_m2_xsplit": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "objective": "heat",
+                                 "heat_patch": 0.2}, "mode2", [0.1, 0.05]),
 }  # fmt: skip
 # gates whose forward is another gate's (the same objective, seeds and run): FD reused from
 # that gate's rows in OUT_DIR when it has the seed, else computed
@@ -279,6 +283,7 @@ FD_FROM = {
     "c10_diff_heat_m2_sil60": "c10_diff_heat_m2",
     "c10_diff_m2_ord128b": "c10_diff_m2",
     "c10_diff_heat_m2_ord128": "c10_diff_heat_m2",
+    "c10_diff_heat_m2_xsplit": "c10_diff_heat_m2",
 }
 _CACHE = {}
 
