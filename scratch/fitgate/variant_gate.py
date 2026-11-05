@@ -78,8 +78,10 @@ NEW_GATES = {
     # stream: 0.4 of M 10's, a 50 ms warm-up) and M 0.32 (dt 4x, a 0.3 s warm-up: ~1 box transit
     # at 100 m/s), and the M 10 diffuse wall hot (1000 K: re-emission 1.9x faster) -- the
     # near-wall fit's velocity and length scales must not be tuned to M 10 / T_w = T_inf
+    # slots: M 25's cold diffuse layer (T_stag / T_w ~6x M 10's) outgrew the free-stream sized
+    # 195 k slots -- inflow_shortfall 320 676 (2026-11-05); 3x
     "c25_diff_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "mach": 25.0, "dt": 1e-5,
-                     "warmup": 5000}, "mode2", [0.1]),
+                     "warmup": 5000, "slots": 600_000}, "mode2", [0.1]),
     "c25_spec_m2": ({**CIRCLE_M10, **COMMON, "mach": 25.0, "dt": 1e-5, "warmup": 5000},
                     "mode2", [0.1]),
     "c03_diff_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "mach": 0.32, "dt": 1e-4,
