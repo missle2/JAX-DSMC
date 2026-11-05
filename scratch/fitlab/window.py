@@ -46,7 +46,7 @@ def group_ids(c, sector, dv):
     ``dv = 0`` production's speed / angle bins, ``dv < 0`` speed-relative boxes of -dv), int64."""
     span = 2 * np.pi * lab.RADIUS
     i_s = np.floor((c[:, 1] + 0.5 * span) / sector).astype(np.int64)
-    if dv <= 0:
+    if dv == 0:
         # production's velocity bins (lab.SETTINGS): speed x v_n / |v_nt| cosine x sign v_t,
         # wider at speed -- the specular wall's fast re-emissions stay populated
         speed = np.sqrt(np.sum(c[:, 2:5] ** 2, axis=1))
