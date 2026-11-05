@@ -237,6 +237,9 @@ scratch/lsfilter/fixed_step/
 # figure scripts' derived-data caches (2026-11-03: scratch/dlh3d/cache/area_<k>.npy, the
 # heat lattice's node areas, went in by accident)
 scratch/**/cache/
+# the fit lab's closure / reference outputs (2026-11-05: scratch/fitlab/out/*.json went in
+# by accident; regenerable from the dumps by scratch/fitlab/lab.py)
+scratch/fitlab/out/
 scratch/perf/profile/**/plugins/
 
 # Bulk run data: moved between machines by rsync, not git (2026-10-14).  What stays tracked

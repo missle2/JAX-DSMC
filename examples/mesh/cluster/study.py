@@ -1398,6 +1398,16 @@ def _fitlab_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _shiftfd_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``shiftfd`` (2026-11-05): the fit-free truth of pathwise_x (scratch/fitlab/shiftfd.py:
+    the body hits' post-move positions shifted by eps w (v_out - v_in) / |v_in . n|, one
+    warm-up per seed, a forward difference per control / mode / eps from the same state and
+    keys; drag and heat from the same runs) on the fit lab's diffuse seeds 0-7, against which
+    every fit's sum grad_x lambda . shift is scored.  ``GPU_KIND=rtx``."""
+    del gpus_per_node
+    return {f"shift_s{a}": f"python3 scratch/fitlab/shiftfd.py --seeds {a} {a + 4}" for a in (0, 4)}
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1650,6 +1660,7 @@ NEW_GROUPS = {
     "termvol": _termvol_jobs,
     "bumpchk": _bumpchk_jobs,
     "fitlab": _fitlab_jobs,
+    "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
