@@ -12,7 +12,7 @@
 #
 # The warm starts (<run>/warm/seed<i>.npz, ~0.2 GB per seed, rewritten every iterate) only
 # resume a run on the cluster; they are skipped unless WARM=1.  scratch/<probe>/cluster/ (the
-# probes' job outputs) and scratch/fitlab/cache/ (the fit lab's dumps, ~0.1 GB a seed) are
+# probes' job outputs) and scratch/fitlab/cache_slim/ (the fit lab's slimmed dumps) are
 # pulled with the default paths or by naming "scratch".
 #
 # Password + Duo authentication, no keys: one ssh connection is opened (you authenticate once)
@@ -45,8 +45,12 @@ RSYNC=(rsync -aP --update --relative --info=stats1,progress2 --exclude .git/
 # scratch: only the probes' cluster outputs (the scripts come by git)
 # and the fit lab's dumps (scratch/fitlab/dump.py writes scratch/fitlab/cache/, 2026-11-04;
 # the other scratch/*/cache/ dirs are local figure caches and stay out)
+# (2026-11-05: the transfer cases' full dumps are ~70 GB -- their slimmed copies,
+# scratch/fitlab/slim.py run on the cluster, come instead; the full cache only with
+# FITLAB_FULL=1)
 SCRATCH_ONLY=(--include '/scratch/' --include '/scratch/*/' --include '/scratch/*/cluster/***'
-              --include '/scratch/fitlab/cache/***' --exclude '*' --prune-empty-dirs)
+              --include '/scratch/fitlab/cache_slim/***' --exclude '*' --prune-empty-dirs)
+[ -n "${FITLAB_FULL:-}" ] && SCRATCH_ONLY=(--include '/scratch/fitlab/cache/***' "${SCRATCH_ONLY[@]}")
 
 failed=()
 for p in "${PATHS[@]}"; do

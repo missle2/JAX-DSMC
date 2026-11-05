@@ -36,12 +36,21 @@ SCALES = np.array([1.0, 0.03, 0.1, 0.5, 0.5, 0.5])  # 1, d, s, v_n, v_t, |v_z|: 
 NF = 6
 RIDGE = 1e-8
 MIN_NODES = 12
+BLOCK = 0  # time block of the groups, steps (0: pooled over the whole captured window)
 SPEED_FLOOR = 0.05  # V_REF: the speed-relative boxes' lowest edge
 FALLBACK = "cell_pool_plane"
 IU = np.triu_indices(NF)
 
 
 def group_ids(c, sector, dv):
+    """:func:`_group_ids` with the time block (``BLOCK`` steps, 0: the whole window)."""
+    gid = _group_ids(c, sector, dv)
+    if BLOCK > 0:
+        gid = gid * 1000 + (c[:, 5] // BLOCK).astype(np.int64)
+    return gid
+
+
+def _group_ids(c, sector, dv):
     """Group of each row of ``coordinates`` (sector x velocity box: ``dv > 0`` boxes of dv V_REF,
     ``dv = 0`` production's speed / angle bins, ``dv < 0`` speed-relative boxes of -dv), int64."""
     span = 2 * np.pi * lab.RADIUS

@@ -29,6 +29,7 @@ import numpy as np
 from scipy.interpolate import BSpline
 
 CACHE = Path("scratch/fitlab/cache")
+SLIM = Path("scratch/fitlab/cache_slim")
 OUT = Path("scratch/fitlab/out")
 FITGATE = Path("examples/mesh/results/fitgate")
 CENTRE = np.array([5.0, 5.0])
@@ -144,12 +145,14 @@ def n_features(settings):
 
 
 def seed_files(gate):
-    out = []
-    for p in sorted(CACHE.glob(f"{gate}_s*.npz")):
-        if "_smoke" in p.name:
-            continue
-        out.append((int(p.stem.split("_s")[-1]), p))
-    return sorted(out)
+    """``[(seed, npz path)]`` of a gate's dumps: the full cache, else the slimmed one
+    (scratch/fitlab/slim.py, the transfer cases' pull)."""
+    out = {}
+    for cache in (SLIM, CACHE):  # the full dump wins
+        for p in sorted(cache.glob(f"{gate}_s*.npz")):
+            if "_smoke" not in p.name:
+                out[int(p.stem.split("_s")[-1])] = p
+    return sorted(out.items())
 
 
 def load(path, keys):
