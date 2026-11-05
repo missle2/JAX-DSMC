@@ -1291,6 +1291,39 @@ def _ellprobe_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+# dlhe (2026-11-04, after ellprobe): the constrained dlh3d runs from the 45-degree ellipsoid in
+# sphere_big (lift peaks there: L 0.238 = 0.096 D_s; 35 / 55 degrees 0.220 / 0.227), the lift
+# floor halved to 0.075 D_s = 0.185 (the start 29 % above it; 0.15 D_s is beyond this body's
+# reach) and the references re-measured in the big box (the sphere's drag +1.1 %, heat +0.6 %
+# over sphere_long's; the 45-degree start's heat 0.600 = 0.974 of the cap)
+SPHERE_BIG_REFS = (
+    "--lift-ref 2.470640398729704 --heat-g-ref 0.6157509902191032 --area-ref 4.2146287701575575"
+)
+DLHE_START = "--initial ellipsoid --initial-thickness 0.5 --initial-aoa 45"
+DLHE_LIFT_MIN = 0.075
+
+
+def _dlhe_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``dlhe``: :data:`DLH3D` from :data:`DLHE_START` in ``sphere_big`` with the lift floor
+    :data:`DLHE_LIFT_MIN` -- the penalty (multiplier) form, MMA and projected Adam, the full
+    :data:`DLH3D_ITERATIONS` (``GPU_KIND=h200_71``; resubmit to resume)."""
+    del gpus_per_node
+    modes = {
+        "pen": "--constraints penalty",
+        "mma": "--constraints mma --optimizer mma_s",
+        "proj": "--constraints project",
+    }
+    jobs = {}
+    for name, mode in modes.items():
+        cmd = _constrained_dlh3d(f"dlhe_a45_{name}", "", DLH3D_ITERATIONS, "sphere_big")
+        cmd = cmd.replace(SPHERE_REFS, SPHERE_BIG_REFS, 1).replace(
+            "--lift-min 0.15 ", f"--lift-min {DLHE_LIFT_MIN} ", 1
+        )
+        assert SPHERE_BIG_REFS in cmd and f"--lift-min {DLHE_LIFT_MIN} " in cmd, cmd
+        jobs[f"dlhe_{name}"] = f"{cmd.rstrip()} {DLHE_START} {mode}"
+    return jobs
+
+
 def _multichk_jobs(gpus_per_node: int) -> dict[str, str]:
     """``multichk``: drag, lift and heat from one 6-column backward against the three
     single-objective backwards, the diffuse M 10 circle, seed 0 (``GPU_KIND=rtx_48``)."""
@@ -1343,6 +1376,25 @@ def _bumpchk_jobs(gpus_per_node: int) -> dict[str, str]:
         "python3 scratch/fitgate/variant_gate.py --gate c10_diff_heat_m2_xsplit --seeds 0 4 "
         "--split-x --variants along_pool_plane cell_along_pool_plane cellxv_along_pool_plane"
     )
+    return jobs
+
+
+def _fitlab_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``fitlab`` (2026-11-04, stage 1): the fit lab's data (scratch/fitlab/dump.py: every
+    captured step's near-wall particles and body hits, with the hits' d x_post / d theta for
+    radius / cos 2 / sin 2 / the three bumps and the production fits at the queries) on the
+    seeds whose FDs exist -- the failing diffuse M 10 Kn 0.5 circle (drag: the bump gate's
+    seeds 0-7; heat 0-7), the specular one (+8-20 %, 32-seed radius FD; seeds 0-7) and the
+    passing diffuse Kn 10 control (cos 2 theta 1.02-1.04; seeds 0-3).  ``GPU_KIND=rtx``."""
+    del gpus_per_node
+    dump = "python3 scratch/fitlab/dump.py"
+    jobs = {
+        f"lab_{name}_s{a}": f"{dump} --gate {gate} --seeds {a} {a + 4}"
+        for name, gate in (("drag", "c10_diff_m2"), ("heat", "c10_diff_heat_m2"),
+                           ("spec", "c10_spec"))
+        for a in (0, 4)
+    }  # fmt: skip
+    jobs["lab_kn10_s0"] = f"{dump} --gate c10_diff_kn10_m2 --seeds 0 4"
     return jobs
 
 
@@ -1592,10 +1644,12 @@ NEW_GROUPS = {
     "bitchk": _bitchk_jobs,
     "ellchk": _ellchk_jobs,
     "ellprobe": _ellprobe_jobs,
+    "dlhe": _dlhe_jobs,
     "multichk": _multichk_jobs,
     "termchk": _termchk_jobs,
     "termvol": _termvol_jobs,
     "bumpchk": _bumpchk_jobs,
+    "fitlab": _fitlab_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
     "optrules1seed": _optrules1seed_jobs,
