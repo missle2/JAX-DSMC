@@ -23,6 +23,7 @@ Saved per seed (``scratch/fitlab/cache/<gate>_s<seed>.npz`` + ``.json``):
   gx . dx + gv . dv against pathwise_x + pathwise_v.
 
     PYTHONPATH=. python3 scratch/fitlab/dump.py --gate c10_diff_m2 --seeds 0 4 [--smoke]
+        [--fd radius mode2]   # and the controls' FDs on the same seeds (json "fd")
 """
 
 import argparse
@@ -122,8 +123,8 @@ def near_wall_cells(ls, grid, width):
     return (phi < width * dx) & (phi > -dx)
 
 
-def dump_seed(gate, seed, smoke, width):
-    cfg, _par, _steps, seed_start, _rows = V.gate_config(gate)
+def dump_seed(gate, seed, smoke, width, fd=()):
+    cfg, _par, fd_steps, seed_start, _rows = V.gate_config(gate)
     tag = ""
     if smoke:
         cfg = {**cfg, "fnum_scale": 16.0 * cfg["fnum_scale"], "warmup": 150, "steps": 40,
@@ -233,6 +234,11 @@ def dump_seed(gate, seed, smoke, width):
         "rows": {"nodes": int(arrays["node_step"].size), "hits": int(arrays["hit_step"].size)},
         "seconds_gate": t_gate, "seconds": time.time() - t0,
     }  # fmt: skip
+    # the controls' own central differences on this seed's key (--fd: the transfer cases have
+    # no FD artifact), the gate's first step
+    t_fd = time.time()
+    meta["fd"] = {par: EM.finite_differences(cfg, par, key, fd_steps[:1])[0] for par in fd}
+    meta["fd_step"], meta["seconds_fd"] = fd_steps[0], time.time() - t_fd
     Path(f"{stem}.json").write_text(json.dumps(meta, indent=1, default=str))
     worst = max(
         abs(a - b) / max(abs(b), 1e-12)
@@ -254,9 +260,19 @@ def main():
     ap.add_argument("--seeds", type=int, nargs=2, required=True)
     ap.add_argument("--width", type=float, default=2.5, help="near-wall band, cells")
     ap.add_argument("--smoke", action="store_true", help="fnum x 16, 150 + 40 steps, *_smoke")
+    ap.add_argument(
+        "--fd",
+        nargs="*",
+        default=[],
+        choices=CONTROLS,
+        help="also these controls' central differences (step: the gate's first)",
+    )
     args = ap.parse_args()
     for seed in range(*args.seeds):
-        dump_seed(args.gate, seed, args.smoke, args.width)
+        stem = OUT / f"{args.gate}{'_smoke' if args.smoke else ''}_s{seed}"
+        if Path(f"{stem}.json").exists():  # done (the json is written last)
+            continue
+        dump_seed(args.gate, seed, args.smoke, args.width, tuple(args.fd))
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ Folders: ``performance`` (speed and profiles), ``<case>_forward`` (a forward cas
 fill, surface loads, mesh -- ``circle_forward``, ``sphere_forward``, ...), ``meshing`` (cut-cell
 and level-set checks), ``optc`` (shape optimisation runs and their convergence), ``squash``
 (the aspect-ratio optimisation), ``movie`` (optimiser movies and their frames), ``gates``
-(adjoint gates and estimator studies).  ``optc`` and ``movie`` have one level of sub-folders:
+(adjoint gates and estimator studies), ``fitlab`` (the near-wall grad-lambda fit lab).  ``optc`` and ``movie`` have one level of sub-folders:
 ``optc/{optab,optax,optm,optrules,gates}`` and ``movie/{coarse,optab,squash,runs_kn0.5,
 runs_kn0.5_M10,optax,optrules}`` (see :func:`movie_folder`); ``tracker_lane.png`` stays at
 the top level (folder ``""``).

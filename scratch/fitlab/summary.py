@@ -1,5 +1,5 @@
-"""One line per fit: the adjoint / FD ratio (excess / 2 se in brackets) of every control with an
-FD, from the lab's closure files (scratch/fitlab/out/{ref,self,cand}_<case><tag>.json).
+"""One line per fit: the adjoint / FD ratio (excess / 1 se in brackets: the adjoint's and the
+FD's seed-mean s.e. in quadrature) of every control with an FD, from the lab's closure files (scratch/fitlab/out/{ref,self,cand}_<case><tag>.json).
 
     PYTHONPATH=. python3 scratch/fitlab/summary.py out/self_drag_*.json [--fits ref cell_pool_plane]
 """

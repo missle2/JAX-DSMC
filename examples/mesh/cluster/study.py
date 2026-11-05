@@ -1398,6 +1398,21 @@ def _fitlab_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _fitlab2_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``fitlab2`` (2026-11-05, the transfer cases): the near-wall fit's settings must not be
+    tuned to M 10 with T_w = T_inf -- the same circle and box at M 25 and M 0.32 (diffuse and
+    specular) and the M 10 diffuse wall at 1000 K, each dump with its own radius / cos 2 theta
+    central differences on the same seeds (``dump.py --fd``), 8 seeds in blocks of 4.
+    ``GPU_KIND=rtx``."""
+    del gpus_per_node
+    dump = "python3 scratch/fitlab/dump.py"
+    return {
+        f"lab_{gate}_s{a}": f"{dump} --gate {gate} --seeds {a} {a + 4} --fd radius mode2"
+        for gate in ("c25_diff_m2", "c25_spec_m2", "c03_diff_m2", "c03_spec_m2", "c10_hot_m2")
+        for a in (0, 4)
+    }
+
+
 def _shiftfd_jobs(gpus_per_node: int) -> dict[str, str]:
     """``shiftfd`` (2026-11-05): the fit-free truth of pathwise_x (scratch/fitlab/shiftfd.py:
     the body hits' post-move positions shifted by eps w (v_out - v_in) / |v_in . n|, one
@@ -1660,6 +1675,7 @@ NEW_GROUPS = {
     "termvol": _termvol_jobs,
     "bumpchk": _bumpchk_jobs,
     "fitlab": _fitlab_jobs,
+    "fitlab2": _fitlab2_jobs,
     "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,

@@ -56,6 +56,8 @@ def reference_gradients(case, tag, h, fallback):
 def load_shifts():
     rows = {}
     for p in sorted(SHIFTS.glob("shift_s*.jsonl")):
+        if "_smoke" in p.name:  # shift_smoke_* matches the glob too
+            continue
         for line in p.read_text().splitlines():
             r = json.loads(line)
             rows[r["seed"]] = r

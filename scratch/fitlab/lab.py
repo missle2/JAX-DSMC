@@ -39,6 +39,12 @@ CASES = {
     "heat": "c10_diff_heat_m2",
     "spec": "c10_spec",
     "kn10": "c10_diff_kn10_m2",
+    # the transfer cases (2026-11-05, study group fitlab2): FDs in the dumps' json ("fd")
+    "m25_diff": "c25_diff_m2",
+    "m25_spec": "c25_spec_m2",
+    "m03_diff": "c03_diff_m2",
+    "m03_spec": "c03_spec_m2",
+    "hot": "c10_hot_m2",
 }
 BASE_VARIANT = "cell_along_pool_plane"
 # circle_long's cells (60 x 20 of 0.5 m from (-10, 0)): the angle of each centre about the body
@@ -293,9 +299,16 @@ def finite_differences(case):
     elif case == "spec":
         out = {"radius": _gate_fd("c10_spec"), "mode2": _gate_fd("c10_spec_m2"),
                "mode2s": {"symmetry": 0.0}}  # fmt: skip
-    else:
+    elif case == "kn10":
         out = {"radius": _gate_fd("c10_diff_kn10"), "mode2": _gate_fd("c10_diff_kn10_m2"),
                "mode2s": {"symmetry": 0.0}}  # fmt: skip
+    else:
+        # the transfer cases: each seed's dump carries its own central differences
+        out = {"mode2s": {"symmetry": 0.0}}
+        for seed, path in seed_files(CASES[case]):
+            meta = json.loads(path.with_suffix(".json").read_text())
+            for par, value in meta.get("fd", {}).items():
+                out.setdefault(par, {})[seed] = value
     return out
 
 

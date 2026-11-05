@@ -73,6 +73,20 @@ NEW_GATES = {
     # the L / D showcase's box: the R = 3 circle at M 10, Kn 0.5
     "c10_spec": ({**CIRCLE_M10, **COMMON}, "radius", [0.1, 0.05]),
     "c10_diff": ({**CIRCLE_M10, **COMMON, **DIFFUSE}, "radius", [0.1, 0.05]),
+    # 2026-11-05 the fit lab's transfer cases (scratch/fitlab/dump.py --fd: the dump and its
+    # radius / cos 2 theta FDs from one job): the same circle and box at M 25 (dt scaled with the
+    # stream: 0.4 of M 10's, a 50 ms warm-up) and M 0.32 (dt 4x, a 0.3 s warm-up: ~1 box transit
+    # at 100 m/s), and the M 10 diffuse wall hot (1000 K: re-emission 1.9x faster) -- the
+    # near-wall fit's velocity and length scales must not be tuned to M 10 / T_w = T_inf
+    "c25_diff_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "mach": 25.0, "dt": 1e-5,
+                     "warmup": 5000}, "mode2", [0.1]),
+    "c25_spec_m2": ({**CIRCLE_M10, **COMMON, "mach": 25.0, "dt": 1e-5, "warmup": 5000},
+                    "mode2", [0.1]),
+    "c03_diff_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "mach": 0.32, "dt": 1e-4,
+                     "warmup": 3000, "a_max": 64}, "mode2", [0.1]),
+    "c03_spec_m2": ({**CIRCLE_M10, **COMMON, "mach": 0.32, "dt": 1e-4, "warmup": 3000,
+                     "a_max": 64}, "mode2", [0.1]),
+    "c10_hot_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "t_wall": 1000.0}, "mode2", [0.1]),
     # the diffuse M 10 circle with dt halved (the along-flight identity's O(nu dt) error; the
     # same physical warm-up) and with half the particles (the fits' kernel width)
     "c10_diff_dt2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "dt": 1.25e-5, "warmup": 5600},
