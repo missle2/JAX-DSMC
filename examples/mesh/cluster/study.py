@@ -1328,22 +1328,26 @@ def _dlhp_jobs(gpus_per_node: int) -> dict[str, str]:
     """``dlhp`` (2026-11-05, a presentation run due in ~22 h): :data:`DLH3D` with the
     penalty (multiplier) constraints and Adam -- the path dlh3d descended on for 22 iterates
     -- from the 20 degree ellipsoid in ``sphere_long`` (ellchk's tested start: sphere_big's
-    45 degree start costs ~1200 s per iterate) with the lift floor :data:`DLHE_LIFT_MIN`, at
-    ``--fnum-scale 4``: half dlh3d's particles, ~1.5-2x faster, and NTC attempts per cell
-    halved -- dlh3d at f2 grew A_max to 132 and ran out of memory on the 71 GB slice at
-    iterate 23.  120 iterates (``GPU_KIND=h200_71``; resubmit to resume).  The production
-    grad-lambda fit (cell_along_pool_plane): the fit lab's near-wall fits are not in
-    production."""
+    45 degree start costs ~1200 s per iterate) with the lift floor :data:`DLHE_LIFT_MIN`, 120
+    iterates, at two particle counts: ``dlhp_f2`` (dlh3d's; ellchk at f2 after the lean
+    collision record peaked at 34.85 GiB on the 71 GB slice, ~470 s per iterate: ~14 h) and
+    ``dlhp_f4`` (half: ~1.5-2x faster, a ~20 GB peak -- the safety net, or a 35 GB slice).
+    ``GPU_KIND=h200_71`` (``ONLY=f4 GPU_KIND=h200`` for the small slice); resubmit to resume.
+    The production grad-lambda fit (cell_along_pool_plane): the fit lab's near-wall fits are
+    not in production."""
     del gpus_per_node
-    cmd = _constrained_dlh3d(
-        "dlhp_a20_pen_f4", "--initial ellipsoid --initial-thickness 0.5 --initial-aoa 20 "
-        "--constraints penalty", 120,
-    )  # fmt: skip
-    cmd = cmd.replace("--fnum-scale 2 ", "--fnum-scale 4 ", 1).replace(
-        "--lift-min 0.15 ", f"--lift-min {DLHE_LIFT_MIN} ", 1
-    )
-    assert "--fnum-scale 4 " in cmd and f"--lift-min {DLHE_LIFT_MIN} " in cmd, cmd
-    return {"dlhp_pen": cmd}
+    jobs = {}
+    for fnum in (2, 4):
+        cmd = _constrained_dlh3d(
+            f"dlhp_a20_pen_f{fnum}", "--initial ellipsoid --initial-thickness 0.5 "
+            "--initial-aoa 20 --constraints penalty", 120,
+        )  # fmt: skip
+        cmd = cmd.replace("--fnum-scale 2 ", f"--fnum-scale {fnum} ", 1).replace(
+            "--lift-min 0.15 ", f"--lift-min {DLHE_LIFT_MIN} ", 1
+        )
+        assert f"--fnum-scale {fnum} " in cmd and f"--lift-min {DLHE_LIFT_MIN} " in cmd, cmd
+        jobs[f"dlhp_f{fnum}"] = cmd
+    return jobs
 
 
 def _multichk_jobs(gpus_per_node: int) -> dict[str, str]:
