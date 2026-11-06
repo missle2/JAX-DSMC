@@ -278,6 +278,9 @@ examples/mesh/results/*/
 examples/mesh/cluster/logs/
 examples/mesh/cluster/bad_nodes.txt
 scratch/*/cluster/
+
+scratch/fitlab/cache_slim/*
+
 # optimiser warm starts (per-seed gas, ~0.2 GB each) and rule state, wherever they land
 **/warm/seed*.npz
 **/opt_state.npz

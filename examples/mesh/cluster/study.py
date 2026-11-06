@@ -1347,6 +1347,19 @@ def _dlhp_jobs(gpus_per_node: int) -> dict[str, str]:
         )
         assert f"--fnum-scale {fnum} " in cmd and f"--lift-min {DLHE_LIFT_MIN} " in cmd, cmd
         jobs[f"dlhp_f{fnum}"] = cmd
+    # MMA (2026-11-05): the constraints inside each step (its own subproblem on the lift /
+    # heat / volume gradients from one multi-column backward) -- the Adam runs spent ~45
+    # iterates winding the lift multiplier up and the rest unwinding its overshoot.  f2: the
+    # f2 Adam run was the cleaner (less noise).  Started FEASIBLE: the 35 degree ellipsoid
+    # (ellprobe: L 0.220 against the floor 0.075 x 2.443 = 0.183; y extent ~1.13 m, ~0.9 m
+    # from sphere_long's side faces) -- the 20 degree start (L 0.145) would spend MMA's first
+    # iterates restoring feasibility through its artificial variables
+    mma = _constrained_dlh3d(
+        "dlhp_a35_mma_f2", "--initial ellipsoid --initial-thickness 0.5 --initial-aoa 35 "
+        "--constraints mma --optimizer mma_s", 120,
+    ).replace("--lift-min 0.15 ", f"--lift-min {DLHE_LIFT_MIN} ", 1)  # fmt: skip
+    assert "--fnum-scale 2 " in mma and f"--lift-min {DLHE_LIFT_MIN} " in mma, mma
+    jobs["dlhp_mma_f2"] = mma
     return jobs
 
 
