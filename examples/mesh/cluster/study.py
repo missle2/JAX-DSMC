@@ -1462,6 +1462,25 @@ def _shiftfd_jobs(gpus_per_node: int) -> dict[str, str]:
     return {f"shift_s{a}": f"python3 scratch/fitlab/shiftfd.py --seeds {a} {a + 4}" for a in (0, 4)}
 
 
+def _fitlab3_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``fitlab3`` (2026-11-05, the refinement gate): the M 10 Kn 0.5 diffuse circle's dumps and
+    own radius / cos 2 theta FDs at grid_scale 2 and 4 (the same particles per cell: 4x / 16x
+    the particles) -- does the production grad-lambda bias fall as the near-wall cells approach
+    the local mean free path (~7-9 cells per mfp at k = 1)?  8 seeds in blocks of 4 (k = 4 in
+    blocks of 2).  ``GPU_KIND=h200_71``; slim on the cluster before the pull."""
+    del gpus_per_node
+    dump = "python3 scratch/fitlab/dump.py"
+    jobs = {}
+    for gate, block in (("c10_diff_m2_g2", 4), ("c10_diff_heat_m2_g2", 4), ("c10_diff_m2_g4", 2)):
+        for a in range(0, 8, block):
+            # the dump's near-wall band in cells: ~0.6 m at every k (the lab's d < 0.6 m)
+            width = 2.5 if gate.endswith("_g2") else 5.0
+            jobs[f"lab_{gate}_s{a}"] = (
+                f"{dump} --gate {gate} --seeds {a} {a + block} --fd radius mode2 --width {width}"
+            )
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1716,6 +1735,7 @@ NEW_GROUPS = {
     "bumpchk": _bumpchk_jobs,
     "fitlab": _fitlab_jobs,
     "fitlab2": _fitlab2_jobs,
+    "fitlab3": _fitlab3_jobs,
     "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,

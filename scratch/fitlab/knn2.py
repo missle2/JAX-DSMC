@@ -224,7 +224,15 @@ def main():
     ap.add_argument("--floors", type=float, nargs="+", default=[0.0])
     ap.add_argument("--kernels", nargs="+", default=["box", "tri"])
     ap.add_argument("--tag", default="")
+    ap.add_argument("--unique", type=int, nargs="+", default=None)
+    ap.add_argument(
+        "--regs", nargs="+", default=None, help="ridge:guard pairs, e.g. 1e-4:1e3 (default: REGS)"
+    )
     args = ap.parse_args()
+    global UNIQUE, REGS  # noqa: PLW0603 -- the scratch sweep's selection
+    UNIQUE = tuple(args.unique) if args.unique else UNIQUE
+    if args.regs:
+        REGS = tuple((float(a), float(b)) for a, b in (r.split(":") for r in args.regs))
     rows = []
     for seed, path in lab.seed_files(lab.CASES[args.case]):
         if args.seeds[0] <= seed < args.seeds[1]:

@@ -89,6 +89,14 @@ NEW_GATES = {
     "c03_spec_m2": ({**CIRCLE_M10, **COMMON, "mach": 0.32, "dt": 1e-4, "warmup": 3000,
                      "a_max": 64}, "mode2", [0.1]),
     "c10_hot_m2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "t_wall": 1000.0}, "mode2", [0.1]),
+    # 2026-11-05 the refinement gate: the M 10 Kn 0.5 diffuse wall's cells are ~7-9 local mean
+    # free paths (n / n_inf ~50 at the nose) and the production bias tracks cell / mfp across
+    # the lab's cases (hot wall 2.5: ~10 %; < 1: none) -- does it fall as the cells shrink at
+    # the SAME particles per cell (grid_scale k: fnum / k^D, k^D the particles)?
+    "c10_diff_m2_g2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grid_scale": 2}, "mode2", [0.1]),
+    "c10_diff_m2_g4": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grid_scale": 4}, "mode2", [0.1]),
+    "c10_diff_heat_m2_g2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "grid_scale": 2,
+                             "objective": "heat", "heat_patch": 0.2}, "mode2", [0.1]),
     # the diffuse M 10 circle with dt halved (the along-flight identity's O(nu dt) error; the
     # same physical warm-up) and with half the particles (the fits' kernel width)
     "c10_diff_dt2": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "dt": 1.25e-5, "warmup": 5600},

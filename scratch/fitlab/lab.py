@@ -46,6 +46,10 @@ CASES = {
     "m03_diff": "c03_diff_m2",
     "m03_spec": "c03_spec_m2",
     "hot": "c10_hot_m2",
+    # the refinement gate (fitlab3): the same physics, grid_scale 2 / 4 at the same ppc
+    "drag_g2": "c10_diff_m2_g2",
+    "heat_g2": "c10_diff_heat_m2_g2",
+    "drag_g4": "c10_diff_m2_g4",
 }
 BASE_VARIANT = "cell_along_pool_plane"
 # circle_long's cells (60 x 20 of 0.5 m from (-10, 0)): the angle of each centre about the body

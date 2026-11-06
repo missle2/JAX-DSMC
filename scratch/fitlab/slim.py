@@ -21,7 +21,16 @@ SLIM = Path("scratch/fitlab/cache_slim")
 CENTRE = np.array([5.0, 5.0])
 RADIUS = 3.0
 NODE_KEEP = ("node_step", "node_slot", "node_x", "node_v", "node_lam")
-GATES = ("c25_diff_m2", "c25_spec_m2", "c03_diff_m2", "c03_spec_m2", "c10_hot_m2")
+GATES = (
+    "c25_diff_m2",
+    "c25_spec_m2",
+    "c03_diff_m2",
+    "c03_spec_m2",
+    "c10_hot_m2",
+    "c10_diff_m2_g2",
+    "c10_diff_heat_m2_g2",
+    "c10_diff_m2_g4",
+)
 
 
 def slim(path, d_max):
