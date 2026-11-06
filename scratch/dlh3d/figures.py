@@ -113,6 +113,12 @@ class Run:
                            "heat_multiplier", "thickness_multiplier", "grad_norm",
                            "thinness", "penalised_objective")}  # fmt: skip
         self.col = col
+        # MMA (2026-11-06): the constraints live in MMA's own subproblem -- its multipliers
+        # (volume, lift, heat) replace the dual-ascent ones (logged as zero there)
+        self.mma = self.cfg.get("constraints") == "mma"
+        if self.mma:
+            lam = np.array([r.get("mma_multipliers", [np.nan] * 3) for r in rows], float)
+            col["mma_volume"], col["mma_lift"], col["mma_heat"] = lam.T
         self.d0 = float(hist["lift_ref"])
         self.g0 = float(hist["heat_g0"])
         self.lift_min = float(self.cfg["lift_min"])
@@ -276,10 +282,17 @@ def history_panels(run, axes, upto=None):
     ax.set_ylim(0.7, 1.02)
     ax.set_title("volume V / V0", loc="left", fontsize=10, color=INK)
     ax = axes[4]
-    draw(ax, c["lift_multiplier"], ORANGE, "lift nu")
-    draw(ax, c["heat_multiplier"], GREEN, "heat mu")
-    draw(ax, c["thickness_multiplier"], VIOLET, "thickness lambda")
-    ax.set_title("multipliers (dual ascent)", loc="left", fontsize=10, color=INK)
+    if run.mma:
+        draw(ax, c["mma_lift"], ORANGE, "lift")
+        draw(ax, c["mma_heat"], GREEN, "heat")
+        draw(ax, c["mma_volume"], PINK, "volume")
+        draw(ax, c["thickness_multiplier"], VIOLET, "thickness lambda")
+        ax.set_title("MMA subproblem multipliers", loc="left", fontsize=10, color=INK)
+    else:
+        draw(ax, c["lift_multiplier"], ORANGE, "lift nu")
+        draw(ax, c["heat_multiplier"], GREEN, "heat mu")
+        draw(ax, c["thickness_multiplier"], VIOLET, "thickness lambda")
+        ax.set_title("multipliers (dual ascent)", loc="left", fontsize=10, color=INK)
     ax.legend(fontsize=8, frameon=False, loc="upper left")
     for ax in axes:
         _spines(ax)
@@ -403,9 +416,8 @@ def convergence(run, phis):
     if "ld" in run.refs:
         j = np.array([-r["objective"] for r in run.refs["ld"]])
         ax.plot(j, color=OLD, lw=1.2, ls="--", label="max L/D, V >= 0.5 V0")
-    ax.plot(it, c["lift"] / c["drag"], color=ORANGE, lw=2.2, label="this run")
+    ax.plot(it, c["lift"] / c["drag"], color=ORANGE, lw=2.2)
     ax.set_title("L / D", loc="left", fontsize=10, color=INK)
-    ax.legend(fontsize=8, frameon=False, loc="upper left")
     ax.set_xlim(0, len(it) + 5)
     ax = axes[1, 2]
     ks = sorted(phis)
@@ -415,14 +427,15 @@ def convergence(run, phis):
     ax = axes[1, 3]
     ax.plot(it, c["grad_norm"], color=BLUE, lw=2.2)
     ax.set_ylim(0.0, None)
-    ax.set_title("shape-gradient norm |g| (Lagrangian)", loc="left", fontsize=10, color=INK)
+    ax.set_title("shape-gradient norm |g| " + ("(drag)" if run.mma else "(Lagrangian)"),
+                 loc="left", fontsize=10, color=INK)  # fmt: skip
     for ax in axes[1, 1:]:
         _spines(ax)
         ax.set_xlabel("iterate", fontsize=9, color=MUTED)
     fig.suptitle(
         f"{NAME} (M 10, Kn 0.5, diffuse, {run.cfg.get('variant', '')} fit, fnum x "
-        f"{run.cfg.get('fnum_scale', '')}): {len(run.rows)} iterates; D0 = the sphere's drag; "
-        "dashed: lsfilter3d references (other problems)",
+        f"{run.cfg.get('fnum_scale', '')}, {run.cfg.get('optimizer', '')}, constraints "
+        f"{run.cfg.get('constraints', '')}): {len(run.rows)} iterates; D0 = the sphere's drag",
         fontsize=12, color=INK, x=0.01, ha="left",
     )  # fmt: skip
     fig.tight_layout()

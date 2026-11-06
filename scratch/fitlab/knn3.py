@@ -31,8 +31,16 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 sys.path.insert(0, "scratch/fitlab")
+sys.path.insert(0, "scratch/fitgate")
 import knn  # noqa: E402
 import lab  # noqa: E402
+import variant_gate as V  # noqa: E402
+
+from examples import ensemble_mesh as EM  # noqa: E402
+
+OMEGA = 0.81  # argon's VHS viscosity exponent: lambda ~ T^(omega - 1/2) / n
+MFP_BAND = 0.02  # m: the wall layer whose density and temperature set lambda_wall
+MFP_SECTORS = 36
 
 D_MAX = 0.6
 K = 64
@@ -45,8 +53,61 @@ METRICS = ("d0.03_s0.1_v0.5", "P3_0.033_0.3", "P10_0.033_0.3", "P30_0.033_0.3",
            "P3_0.033_1", "P10_0.033_1", "P30_0.033_1")  # fmt: skip
 
 
-def scales(metric, d_hit, sigma_v):
-    """``f64[5]``: the metric's scales of (d, s, v_n, v_t, |v_z|)."""
+def wall_mfp(case, feat_n, steps, hth):
+    """The hit-weighted local mean free path at the wall (2026-11-06): per 10 degree sector,
+    lambda_inf (n_inf / n_wall) (T_wall / T_inf)^(omega - 1/2) from the outgoing nodes within
+    ``MFP_BAND`` of the wall (their count x 2 for both directions; T from their thermal rms in
+    V_REF = sqrt(k T_inf / m) units), weighted by the sector's hits.  Independent of dt."""
+    cfg = V.gate_config(lab.CASES[case])[0]
+    k = int(cfg.get("grid_scale", 1))
+    n_inf = EM.F.NRHO / (EM.F.CASES[cfg["case"]]["fnum"] * cfg["fnum_scale"]) * k**2
+    lam_inf = EM.mean_free_path(EM.F.NRHO * EM.knudsen_density(cfg))
+    sec_n = np.floor((feat_n[:, 1] / lab.RADIUS + np.pi) / (2 * np.pi) * MFP_SECTORS).astype(int)
+    sec_n %= MFP_SECTORS
+    sec_h = np.floor((np.angle(np.exp(1j * (hth - np.pi))) + np.pi) / (2 * np.pi)
+                     * MFP_SECTORS).astype(int) % MFP_SECTORS  # fmt: skip
+    band = feat_n[:, 0] < MFP_BAND
+    lam = np.full(MFP_SECTORS, np.nan)
+    for j in range(MFP_SECTORS):
+        sel = band & (sec_n == j)
+        if sel.sum() < 50:
+            continue
+        area = 2 * np.pi / MFP_SECTORS * (lab.RADIUS + MFP_BAND / 2) * MFP_BAND
+        n_wall = 2 * sel.sum() / steps / area
+        t_wall = float(np.mean(np.var(feat_n[sel, 2:5], axis=0)))
+        lam[j] = lam_inf * (n_inf / n_wall) * max(t_wall, 1e-3) ** (OMEGA - 0.5)
+    w = np.bincount(sec_h, minlength=MFP_SECTORS).astype(float)
+    ok = np.isfinite(lam) & (w > 0)
+    # the hit-weighted median sector value
+    order = np.argsort(lam[ok])
+    cum = np.cumsum(w[ok][order]) / w[ok].sum()
+    cell = (
+        float(
+            np.min(
+                (
+                    np.asarray(EM.F.CASES[cfg["case"]]["hi"])
+                    - np.asarray(EM.F.CASES[cfg["case"]]["lo"])
+                )
+                / np.asarray(EM.F.CASES[cfg["case"]]["n"])
+            )
+        )
+        / k
+    )
+    return float(lam[ok][order][np.searchsorted(cum, 0.5)]), cell
+
+
+def scales(metric, d_hit, sigma_v, mfp=None, cell=None):
+    """``f64[5]``: the metric's scales of (d, s, v_n, v_t, |v_z|).  ``M<c>_<cs>_<cv>``: wall
+    distance over ``c`` x the local wall mean free path, the rest as ``P``."""
+    if metric.startswith("C"):
+        # min(c x the wall mfp, c_cell x the cell): the Knudsen layer where it is thinner than
+        # the grid, never smoother than a fraction of a cell where the gas is rarefied
+        cm, cc, cs, cv = (float(x) for x in metric[1:].split("_"))
+        d_sc = min(cm * mfp, cc * cell)
+        return np.array([d_sc, cs * lab.RADIUS, cv * sigma_v, cv * sigma_v, cv * sigma_v])
+    if metric.startswith("M"):
+        cm, cs, cv = (float(x) for x in metric[1:].split("_"))
+        return np.array([cm * mfp, cs * lab.RADIUS, cv * sigma_v, cv * sigma_v, cv * sigma_v])
     if metric.startswith("P"):
         cd, cs, cv = (float(x) for x in metric[1:].split("_"))
         return np.array([cd * d_hit, cs * lab.RADIUS, cv * sigma_v, cv * sigma_v, cv * sigma_v])
@@ -108,12 +169,17 @@ def run_seed(case, seed, path, metrics, owns, taus):
     d_hit = float(np.median(hc[:, 0]))
     near = feat_n[:, 0] < 3 * d_hit
     sigma_v = float(np.sqrt(np.mean(np.var(feat_n[near, 2:5], axis=0))))
+    mfp, cell = (
+        wall_mfp(case, feat_n, len(np.unique(h["hit_step"])), hth)
+        if any(m.startswith(("M", "C")) for m in metrics)
+        else (None, None)
+    )
     fits = {name: h["hit_gx"][j] for j, name in enumerate(meta["variants"])}
     gp = fits[PROD]
     gp_nt = np.stack((np.sum(gp * n_hat, axis=1), np.sum(gp * t_hat, axis=1)), axis=1)
-    diag = {"d_hit_median_m": d_hit, "sigma_v_vref": sigma_v}
+    diag = {"d_hit_median_m": d_hit, "sigma_v_vref": sigma_v, "wall_mfp_m": mfp, "cell_m": cell}
     for metric in metrics:
-        sc = scales(metric, d_hit, sigma_v)
+        sc = scales(metric, d_hit, sigma_v, mfp, cell)
         _d, idx = cKDTree(feat_n / sc).query(feat_q / sc, k=K + 64, workers=-1)
         for own in owns:
             drop = nslot[idx] == h["hit_slot"][:, None] if own else nkey[idx] == hkey[:, None]
@@ -166,7 +232,15 @@ def main():
     ap.add_argument("--owns", type=int, nargs="+", default=[0, 1])
     ap.add_argument("--taus", type=float, nargs="+", default=[1.0, 4.0])
     ap.add_argument("--tag", default="")
+    ap.add_argument(
+        "--d-max",
+        type=float,
+        default=0.6,
+        help="node band, m (0.15 for the refined grids' 4-16x particles)",
+    )
     args = ap.parse_args()
+    global D_MAX  # noqa: PLW0603 -- the scratch run's node band
+    D_MAX = args.d_max
     rows = []
     for seed, path in lab.seed_files(lab.CASES[args.case]):
         if args.seeds[0] <= seed < args.seeds[1]:

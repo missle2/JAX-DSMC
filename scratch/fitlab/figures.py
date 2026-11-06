@@ -10,6 +10,8 @@ nose, the scale mismatch with the per-cell fit, and the closure of every fit tri
   running-sum windows, kNN) and the slope the nose closure needs.  Specular too (its post-hit
   shift is 2 delta n: pathwise_x is purely this slope).
 * ``closure.png``: adjoint / FD (+- 2 s.e.) per fit family for the nose bump and cos 2 theta.
+* ``steady.png``: the captured window's near-wall statistics per 25-step block, every case
+  (scratch/fitlab/steady.py; ``--steady`` renders only it).
 
     PYTHONPATH=. python3 scratch/fitlab/figures.py [--recompute]
 
@@ -319,6 +321,12 @@ def _closure_rows():
                          ("k256_d0.03_s0.3_v1", "k 256, d 3 cm, s 0.3, v 1"),
                          ("k64_d0.003_s0.1_v0.5", "k 64, d 3 mm")):  # fmt: skip
         rows.append(("kNN (single seed)", lab_, f"knn_{metric}", "knn_{case}"))
+    for name, lab_ in (("k3_C1_0.25_0.033_0.3_o0", "d / min(mfp, cell/4) (chosen)"),
+                       ("k3_P10_0.033_0.3_o0", "d / 10x post-hit distance"),
+                       ("k3_P10_0.033_0.3_o0_rsh1", "+ regional shrinkage"),
+                       ("k3_d0.03_s0.1_v0.5_o0", "M10 metric, ridge + guard")):  # fmt: skip
+        rows.append(("kNN, ridge + guard", lab_, name,
+                     "knn3_{case}_C" if name.startswith("k3_C") else "knn3_{case}"))  # fmt: skip
     return rows
 
 
@@ -359,7 +367,7 @@ def _closure():
     fig, axes = plt.subplots(1, 6, figsize=(18, 7.4), sharey=True, facecolor=SURF)
     colours = {"production": ORANGE, "pooled spline in d": BLUE, "linear slab in d": AQUA,
                "narrow v-cell slope": VIOLET, "single-seed fit": GREEN,
-               "kNN (single seed)": MAGENTA}  # fmt: skip
+               "kNN (single seed)": MAGENTA, "kNN, ridge + guard": RED}  # fmt: skip
     ypos = []
     y, last = 0, None
     for fam, *_ in rows:
@@ -405,11 +413,169 @@ def _closure():
     plt.close(fig)
 
 
+TRANSFER_FITS = (
+    ("cell_along_pool_plane", "production cell_along", ORANGE),
+    ("k3_d0.03_s0.1_v0.5_o0", "kNN, M10 metric (3 cm, 0.5 V_REF)", VIOLET),
+    ("k3_P10_0.033_0.3_o0", "kNN, d / 10x post-hit distance (tracks dt)", YELLOW),
+    ("k3_C1_0.25_0.033_0.3_o0", "kNN, d / min(wall mfp, cell / 4) (chosen)", BLUE),
+)
+TRANSFER_PANELS = (
+    ("drag", "radius", "M10 drag"), ("drag", "mode2", "M10 drag"),
+    ("heat", "mode2", "M10 heat"), ("spec", "radius", "M10 spec"),
+    ("spec", "mode2", "M10 spec"), ("kn10", "mode2", "Kn10 drag"),
+    ("hot", "radius", "M10 hot"), ("hot", "mode2", "M10 hot"),
+    ("m25_diff", "radius", "M25 diff"), ("m25_diff", "mode2", "M25 diff"),
+    ("m25_spec", "radius", "M25 spec"), ("m25_spec", "mode2", "M25 spec"),
+    ("m03_diff", "radius", "M0.32 diff"), ("m03_diff", "mode2", "M0.32 diff"),
+    ("m03_spec", "radius", "M0.32 spec"), ("m03_spec", "mode2", "M0.32 spec"),
+    ("drag_g2", "radius", "M10 g2"), ("drag_g2", "mode2", "M10 g2"),
+)  # fmt: skip
+
+
+def _transfer():
+    """Every case's closure under production and the kNN metrics: a dot plot per control."""
+    fig, ax = plt.subplots(figsize=(16, 6.2), facecolor=SURF)
+    _style(ax)
+    ax.axhline(1.0, color=INK, lw=1.0)
+    ax.axhspan(0.9, 1.1, color=GREEN, alpha=0.07, lw=0)
+    labels = []
+    width = 0.8 / len(TRANSFER_FITS)
+    for i, (case, control, title) in enumerate(TRANSFER_PANELS):
+        labels.append(f"{title}\n{control.replace('mode2', 'cos 2θ')}")
+        # the fits live in the sweeps' files (knn3_<case>[_M|_C].json; same seeds and dumps)
+        sets = [json.loads(p.read_text())["rows"] for p in
+                (lab.OUT / f"knn3_{case}{t}.json" for t in ("", "_M", "_C")) if p.exists()]  # fmt: skip
+        fds = lab.finite_differences(case)
+        if not sets or control not in fds or len(sets[0]) < 2:
+            continue
+        for j, (name, _lab, colour) in enumerate(TRANSFER_FITS):
+            rows = next((r for r in sets if name in r[0]["pathwise_x"][control]), None)
+            if rows is None:
+                continue
+            ratio, t = summary.closure(rows, fds, control, name)
+            err = 2 * abs(ratio - 1.0) / abs(t) if t else 0.0
+            x = i + (j - (len(TRANSFER_FITS) - 1) / 2) * width
+            shown = min(max(ratio, 0.2), 1.8)
+            ax.errorbar(x, shown, yerr=err if shown == ratio else None, fmt="o", color=colour,
+                        ms=6, capsize=2, lw=1.2, mec=SURF, mew=0.8)  # fmt: skip
+            if shown != ratio:
+                ax.annotate(f"{ratio:.2f}", (x, shown), xytext=(3, -10 if ratio < 0.2 else 4),
+                            textcoords="offset points", fontsize=7, color=INK2)  # fmt: skip
+    for j, (_n, lab_, colour) in enumerate(TRANSFER_FITS):
+        ax.plot([], [], "o", color=colour, label=lab_)
+    ax.set_xticks(range(len(TRANSFER_PANELS)), labels, fontsize=8.5, color=INK)
+    ax.set_xlim(-0.6, len(TRANSFER_PANELS) - 0.4)
+    ax.set_ylim(0.15, 1.85)
+    ax.set_ylabel("adjoint / FD  (±2 s.e.)", color=INK)
+    ax.legend(frameon=False, fontsize=8.5, ncol=4, loc="upper left", labelcolor=INK)
+    fig.suptitle("Transfer: production and kNN wall gradients across walls, Mach numbers and "
+                 "grids (green band ±10%; M0.32 FDs are ±8-26%)", color=INK, fontsize=11,
+                 x=0.01, ha="left")  # fmt: skip
+    fig.tight_layout()
+    fig.savefig(FIG / "transfer.png", dpi=150, facecolor=SURF)
+    plt.close(fig)
+
+
+STEADY_GROUPS = (
+    ("M10 diffuse (drag, heat, hot wall, Kn 10, g2)", ("drag", "heat", "hot", "kn10", "drag_g2"),
+     BLUE),
+    ("M25 / M0.32 diffuse", ("m25_diff", "m03_diff"), AQUA),
+    ("specular (M10, M25, M0.32)", ("spec", "m25_spec", "m03_spec"), ORANGE),
+)  # fmt: skip
+STEADY_PANELS = (
+    ("hits", "wall hits per step"),
+    ("impulse", "wall-normal impulse per step (pressure, drag)"),
+    ("layer", "outgoing particles within 5 cm of the wall"),
+    ("slope", r"near-wall costate slope $\partial\lambda/\partial d$ (d < 10 cm)"),
+)
+
+
+def _trend(series):
+    """The seeds' mean least-squares change over the window (last - first fitted block) and
+    its standard error across the seeds."""
+    t = np.linspace(-0.5, 0.5, series.shape[1])
+    ch = np.array([np.polyfit(t, s, 1)[0] for s in series])
+    return ch.mean(), ch.std(ddof=1) / np.sqrt(len(ch)) if len(ch) > 1 else np.nan
+
+
+def _steady():
+    """``steady.png``: the captured window's near-wall statistics per 25-step block (each over
+    its whole-window value; scratch/fitlab/steady.py) for every case: the forward's are flat,
+    the costate's slope falls in the last block (the reward-to-go's terminal decay)."""
+    path = lab.OUT / "steady_b25.json"
+    if not path.exists():
+        return
+    res = json.loads(path.read_text())
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8.2), sharex=True)
+    fig.patch.set_facecolor(SURF)
+    print("steadiness: change over the window (last - first, fitted), mean +- s.e. of seeds")
+    for ax, (key, title) in zip(axes.flat, STEADY_PANELS, strict=True):
+        _style(ax)
+        everything = []
+        for g_label, cases, colour in STEADY_GROUPS:
+            first = True
+            for case in cases:
+                rows = res.get(case)
+                if not rows:
+                    continue
+                s = np.array([r[key] for r in rows], float)
+                block = rows[0]["block"]
+                x = block * (np.arange(s.shape[1]) + 0.5)
+                everything.append(s)
+                if key == "slope":
+                    continue  # per group below: one case's ring-wide slope is noisy
+                ax.plot(x, np.nanmean(s, axis=0), color=colour, lw=1.4, alpha=0.85,
+                        label=g_label if first else None)  # fmt: skip
+                first = False
+                m, e = _trend(s)
+                print(f"  {key:8s} {case:9s} {100 * m:+.2f} +- {100 * e:.2f} %")
+            if key == "slope":
+                grp = [np.array([r[key] for r in res[c]], float) for c in cases if res.get(c)]
+                ax.plot(x, np.nanmedian(np.concatenate(grp), axis=0), color=colour, lw=1.4,
+                        alpha=0.85, label=g_label + " (median)")  # fmt: skip
+        ax.axvspan(0, 100, color=YELLOW, alpha=0.08, lw=0, zorder=0)
+        ax.axvline(100, color=YELLOW, lw=1.2)
+        if key == "slope":
+            allr = np.concatenate(everything)
+            m = np.nanmean(allr, axis=0)
+            e = np.nanstd(allr, axis=0, ddof=1) / np.sqrt(np.sum(np.isfinite(allr), axis=0))
+            ax.fill_between(x, m - 2 * e, m + 2 * e, color=INK2, alpha=0.18, lw=0)
+            ax.plot(x, m, color=INK, lw=2.4, label="all cases and seeds (+- 2 s.e.)")
+            ax.set_ylim(-0.4, 2.6)
+            ax.text(103, -0.3, "objective tallied from step 100 ->", color=INK2, fontsize=8.5)
+            m_head, e_head = _trend(allr[:, :-1])
+            print(f"  slope, all cases, without the last block: {100 * m_head:+.1f} +- "
+                  f"{100 * e_head:.1f} %; last block {m[-1]:.2f}")  # fmt: skip
+        else:
+            ax.set_ylim(0.95, 1.05)
+            ax.axhspan(0.99, 1.01, color=GRID, alpha=0.6, lw=0, zorder=0)
+        ax.axhline(1.0, color=INK2, lw=0.8, ls="--")
+        ax.set_title(title, loc="left", fontsize=11, color=INK)
+        ax.set_ylabel("block / whole window", color=INK2, fontsize=9)
+    for ax in axes[1]:
+        ax.set_xlabel("captured step", color=INK2, fontsize=9)
+        ax.set_xlim(0, 300)
+    axes[0, 0].legend(fontsize=8.5, frameon=False, loc="lower left")
+    axes[1, 1].legend(fontsize=8.5, frameon=False, loc="upper left")
+    fig.suptitle("Is the captured window steady?  25-step blocks, 4 seeds per case "
+                 "(grey band: +-1 %; shaded: before the objective's tally)\n"
+                 "The forward is steady; the costate is not, by construction "
+                 "(the reward-to-go of a 200-step tally)", x=0.01, ha="left", fontsize=12,
+                 color=INK)  # fmt: skip
+    fig.tight_layout()
+    fig.savefig(FIG / "steady.png", dpi=150, facecolor=SURF)
+    plt.close(fig)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--recompute", action="store_true")
+    ap.add_argument("--steady", action="store_true", help="only steady.png")
     args = ap.parse_args()
     FIG.mkdir(parents=True, exist_ok=True)
+    if args.steady:
+        _steady()
+        return
     zs = {}
     for case in ("drag", "heat", "spec"):
         path = lab.CACHE / f"fig_{case}.npz"
@@ -419,6 +585,8 @@ def main():
         _profile(case, zs[case])
     _slopes(zs)
     _closure()
+    _transfer()
+    _steady()
     print(f"wrote {FIG}")
 
 

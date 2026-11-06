@@ -102,14 +102,14 @@ def _block_search(b, tables, z_n, key_n, zq_s, keyq_s, k, block_q, block_n, offs
     n_arr = jnp.asarray(n, jnp.int32)
     strides = jnp.asarray(np.cumprod((1, *tuple(n[:0:-1])))[::-1].astype(np.int32))
     coord = (tile // strides) % n_arr
-    best_d = jnp.full((block_q, k), _INF)
+    best_d = jnp.full((block_q, k), _INF, zq.dtype)
     best_i = jnp.full((block_q, k), -1, jnp.int32)
     for off in offsets:  # static: the 3^n_pos neighbouring tiles
         nc = coord + jnp.asarray(off, jnp.int32)
         inside = jnp.all((nc >= 0) & (nc < n_arr))
         nt = jnp.sum(jnp.clip(nc, 0, n_arr - 1) * strides)
         start = n_start[nt]
-        count = jnp.where(inside, n_count[nt], 0)
+        count = jnp.where(inside & (blk_len[b] > 0), n_count[nt], 0)  # empty blocks: no scan
         trips = (count + block_n - 1) // block_n
         body = functools.partial(_chunk_body, zq=zq, keyq=keyq, qmask=qmask, z_n=z_n,
                                  key_n=key_n, start=start, count=count, block_n=block_n,
@@ -118,14 +118,21 @@ def _block_search(b, tables, z_n, key_n, zq_s, keyq_s, k, block_q, block_n, offs
     return best_d, best_i
 
 
-@functools.partial(jax.jit, static_argnames=("n", "tile", "k", "block_q", "block_n", "n_pos"))
-def knn(z_n, key_n, z_q, key_q, q_valid, lo, n, tile, k, block_q=128, block_n=2048, n_pos=2):
+@functools.partial(
+    jax.jit, static_argnames=("n", "tile", "k", "block_q", "block_n", "n_pos", "low_precision")
+)
+def knn(z_n, key_n, z_q, key_q, q_valid, lo, n, tile, k, block_q=512, block_n=4096, n_pos=2,
+        low_precision=True):  # fmt: skip
     """Exact (within one tile) k nearest nodes of every valid query: ``(i32[Q, k] node
-    indices (-1: none), f64[Q, k] squared metric distances)``, in the queries' order."""
+    indices (-1: none), f64[Q, k] squared metric distances)``, in the queries' order.
+    ``low_precision``: rank in float32 (the chosen neighbours' fit stays in the caller's
+    precision; ties at float32 resolution may swap equidistant neighbours)."""
     n_tiles = int(np.prod(n))
     tn, _ = tile_of(z_n[:, :n_pos], lo, n, tile)
     order_n = jnp.argsort(tn)
-    z_ns, key_ns, tn_s = z_n[order_n], key_n[order_n], tn[order_n]
+    # the search ranks distances only: float32 (fp64 runs at 1/64 rate on consumer cards)
+    ztype = jnp.float32 if low_precision else z_n.dtype
+    z_ns, key_ns, tn_s = z_n[order_n].astype(ztype), key_n[order_n], tn[order_n]
     n_start, n_count = _tile_ranges(tn_s, n_tiles)
     tq, _ = tile_of(z_q[:, :n_pos], lo, n, tile)
     tq = jnp.where(q_valid, tq, n_tiles)  # invalid queries sort last, in no block
@@ -144,7 +151,7 @@ def knn(z_n, key_n, z_q, key_q, q_valid, lo, n, tile, k, block_q=128, block_n=20
     offsets = tuple(itertools.product((-1, 0, 1), repeat=n_pos))
     tables = (blk_tile, blk_start, blk_len, n_start, n_count)
     search = functools.partial(_block_search, tables=tables, z_n=z_ns, key_n=key_ns,
-                               zq_s=z_q[order_q], keyq_s=key_q[order_q], k=k, block_q=block_q,
+                               zq_s=z_q[order_q].astype(ztype), keyq_s=key_q[order_q], k=k, block_q=block_q,
                                block_n=block_n, offsets=offsets, n=n)  # fmt: skip
     d_blk, i_blk = lax.map(search, b)
     # back to the sorted-query order, then to the caller's
@@ -152,7 +159,11 @@ def knn(z_n, key_n, z_q, key_q, q_valid, lo, n, tile, k, block_q=128, block_n=20
     live = jnp.arange(block_q)[None, :] < blk_len[:, None]
     qpos = jnp.where(live, qpos, z_q.shape[0])
     q = z_q.shape[0]
-    d_sorted = jnp.full((q, k), _INF).at[qpos.ravel()].set(d_blk.reshape(-1, k), mode="drop")
+    d_sorted = (
+        jnp.full((q, k), _INF)
+        .at[qpos.ravel()]
+        .set(d_blk.reshape(-1, k).astype(jnp.float64), mode="drop")
+    )
     i_sorted = jnp.full((q, k), -1, jnp.int32).at[qpos.ravel()].set(i_blk.reshape(-1, k),
                                                                    mode="drop")  # fmt: skip
     inv = jnp.zeros(q, jnp.int32).at[order_q].set(jnp.arange(q, dtype=jnp.int32))
@@ -172,32 +183,118 @@ def _solve_one(ata, aty, n_red, guard):
     return jnp.where(bad, beta_red, beta), bad
 
 
+def _fit_chunk(ii, fq, jq, feat_n, lam_n, n_pos, ridge, guard):
+    """One chunk of :func:`local_gradients` (``ii [C, k]``, ``fq [C, F]``, ``jq [C, F, D]``)."""
+    nf = feat_n.shape[1]
+    live = ii >= 0
+    jj = jnp.clip(ii, 0, None)
+    rel = feat_n[jj] - fq[:, None, :]
+    scale = jnp.maximum(jnp.max(jnp.abs(rel) * live[..., None], axis=1, keepdims=True), 1e-30)
+    x = jnp.concatenate((jnp.ones((*rel.shape[:2], 1)), rel / scale), axis=2)
+    x = x * live[..., None]
+    y = jnp.where(live, lam_n[jj], 0.0)
+    ata = jnp.einsum("qki,qkj->qij", x, x)
+    diag = jnp.trace(ata, axis1=1, axis2=2) / (nf + 1)
+    ata = ata + ridge * diag[:, None, None] * jnp.eye(nf + 1)[None]
+    aty = jnp.einsum("qki,qk->qi", x, y)
+    solve = functools.partial(_solve_one, n_red=1 + n_pos, guard=guard)
+    beta, bad = jax.vmap(solve)(ata, aty)
+    slopes = beta[:, 1:] / scale[:, 0, :]  # d lambda / d feature
+    return jnp.einsum("qf,qfd->qd", slopes, jq), bad
+
+
+def _fit_mapped(args, feat_n, lam_n, n_pos, ridge, guard):
+    return _fit_chunk(*args, feat_n, lam_n, n_pos, ridge, guard)
+
+
 @functools.partial(jax.jit, static_argnames=("n_pos", "chunk"))
 def local_gradients(idx, feat_n, lam_n, feat_q, jac_q, n_pos, ridge=1e-4, guard=1e3, chunk=4096):
     """``(f64[Q, D] grad_x lambda, bool[Q] guarded)`` from each query's neighbours ``idx``:
     lambda linear in the features about the query, box weights, each feature scaled by its
-    range among the neighbours, ridge relative to the mean diagonal, the condition guard."""
+    range among the neighbours, ridge relative to the mean diagonal, the condition guard.
+    The queries go through in ``chunk``-sized pieces under ``lax.map`` (one compiled chunk,
+    whatever the query count)."""
     q = idx.shape[0]
-    nf = feat_n.shape[1]
-    out_g = []
-    out_b = []
-    for a in range(0, q, chunk):  # static chunks: (chunk, k, F) at a time
-        ii = idx[a : a + chunk]
-        live = ii >= 0
-        jj = jnp.clip(ii, 0, None)
-        rel = feat_n[jj] - feat_q[a : a + chunk, None, :]
-        scale = jnp.maximum(jnp.max(jnp.abs(rel) * live[..., None], axis=1, keepdims=True),
-                            1e-30)  # fmt: skip
-        x = jnp.concatenate((jnp.ones((*rel.shape[:2], 1)), rel / scale), axis=2)
-        x = x * live[..., None]
-        y = jnp.where(live, lam_n[jj], 0.0)
-        ata = jnp.einsum("qki,qkj->qij", x, x)
-        diag = jnp.trace(ata, axis1=1, axis2=2) / (nf + 1)
-        ata = ata + ridge * diag[:, None, None] * jnp.eye(nf + 1)[None]
-        aty = jnp.einsum("qki,qk->qi", x, y)
-        solve = functools.partial(_solve_one, n_red=1 + n_pos, guard=guard)
-        beta, bad = jax.vmap(solve)(ata, aty)
-        slopes = beta[:, 1:] / scale[:, 0, :]  # d lambda / d feature
-        out_g.append(jnp.einsum("qf,qfd->qd", slopes, jac_q[a : a + chunk]))
-        out_b.append(bad)
-    return jnp.concatenate(out_g), jnp.concatenate(out_b)
+    pad = (-q) % chunk
+    ii = jnp.pad(idx, ((0, pad), (0, 0)), constant_values=-1)
+    fq = jnp.pad(feat_q, ((0, pad), (0, 0)))
+    jq = jnp.pad(jac_q, ((0, pad), (0, 0), (0, 0)))
+    n_chunks = (q + pad) // chunk
+    xs = (ii.reshape(n_chunks, chunk, -1), fq.reshape(n_chunks, chunk, -1),
+          jq.reshape(n_chunks, chunk, *jac_q.shape[1:]))  # fmt: skip
+    body = functools.partial(_fit_mapped, feat_n=feat_n, lam_n=lam_n, n_pos=n_pos, ridge=ridge,
+                             guard=guard)  # fmt: skip
+    g, bad = lax.map(body, xs)
+    return g.reshape(-1, jac_q.shape[2])[:q], bad.reshape(-1)[:q]
+
+
+def wall_mean_free_path(n_wall, t_ratio, lam_inf, n_inf, omega=0.81):
+    """The VHS mean free path in the wall layer: ``lam_inf (n_inf / n_wall) (T_wall /
+    T_inf)^(omega - 1/2)`` (``t_ratio`` = T_wall / T_inf; argon omega = 0.81)."""
+    return lam_inf * (n_inf / n_wall) * jnp.maximum(t_ratio, 1e-3) ** (omega - 0.5)
+
+
+def wall_distance_scale(lam_wall, cell, c_mfp=1.0, c_cell=0.25):
+    """The metric's wall-distance scale (the fit lab's ``C1_0.25``, 2026-11-06): ``min(c_mfp x
+    the wall mean free path, c_cell x the cell)`` -- the Knudsen layer where it is thinner than
+    the grid (the cold dense M 10 / M 25 diffuse walls: 2.5-6 cm), never smoother than a
+    quarter cell where the gas is rarefied (M 0.32: a 2 m mean free path).  Physical, and
+    independent of the time step (the post-hit distance scale it replaces tracked dt)."""
+    return jnp.minimum(c_mfp * lam_wall, c_cell * cell)
+
+
+def velocity_scale(d_n, vel_n, d_q, c_v=0.3, near=3.0):
+    """``c_v`` x the thermal rms of the outgoing nodes within ``near`` median query distances
+    of the wall (the rms of their velocity components about their mean)."""
+    d_med = jnp.median(d_q)
+    close = d_n < near * d_med
+    w = close.astype(vel_n.dtype)[:, None]
+    count = jnp.maximum(jnp.sum(w), 1.0)
+    mean = jnp.sum(vel_n * w, axis=0) / count
+    var = jnp.sum((vel_n - mean) ** 2 * w, axis=0) / count
+    return c_v * jnp.sqrt(jnp.mean(var))
+
+
+def population_scales(d_n, vel_n, d_q, c_d=10.0, c_v=0.3, near=3.0):
+    """The population-relative metric's scales (the fit lab's ``P10_0.033_0.3``, 2026-11-05):
+    ``(wall-distance scale, velocity scale)`` = ``c_d`` x the queries' median wall distance
+    and ``c_v`` x the thermal rms of the nodes within ``near`` median distances of the wall
+    (the rms of their velocity components about their mean).  No case-specific constants:
+    the scales follow the flight of the post-hit particles and the near-wall gas."""
+    d_med = jnp.median(d_q)
+    close = d_n < near * d_med
+    w = close.astype(vel_n.dtype)[:, None]
+    count = jnp.maximum(jnp.sum(w), 1.0)
+    mean = jnp.sum(vel_n * w, axis=0) / count
+    var = jnp.sum((vel_n - mean) ** 2 * w, axis=0) / count
+    return c_d * d_med, c_v * jnp.sqrt(jnp.mean(var))
+
+
+def knn_exact(z_n, key_n, z_q, key_q, tile=2.0, k=64, block_q=512, block_n=4096, n_pos=2,
+              max_doublings=4, low_precision=True):  # fmt: skip
+    """:func:`knn` made exact: queries whose k-th neighbour lies farther than the tile (where
+    the 3^n_pos tile scan may miss a nearer node) are searched again with the tile doubled.
+    Host-level driver (each tile size compiles once).  Returns ``(idx, d2, final tile per
+    query)``."""
+    z_n = jnp.asarray(z_n)
+    z_q = jnp.asarray(z_q)
+    zp = np.asarray(z_n[:, :n_pos])
+    q_valid = jnp.ones(z_q.shape[0], bool)
+    idx = d2 = None
+    tile_q = np.full(z_q.shape[0], tile)
+    for _ in range(max_doublings + 1):
+        lo, n = tile_grid(zp.min(0), zp.max(0), tile)
+        i_t, d_t = knn(z_n, key_n, z_q, key_q, q_valid, jnp.asarray(lo), n, tile, k, block_q,
+                       block_n, n_pos, low_precision)  # fmt: skip
+        if idx is None:
+            idx, d2 = i_t, d_t
+        else:
+            idx = jnp.where(q_valid[:, None], i_t, idx)
+            d2 = jnp.where(q_valid[:, None], d_t, d2)
+        miss = np.asarray(q_valid & (d2[:, -1] > tile**2))
+        tile_q[np.asarray(q_valid)] = tile
+        if not miss.any():
+            break
+        q_valid = jnp.asarray(miss)
+        tile *= 2.0
+    return idx, d2, tile_q

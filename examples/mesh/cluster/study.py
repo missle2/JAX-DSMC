@@ -1481,6 +1481,31 @@ def _fitlab3_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _fitlab4_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``fitlab4`` (2026-11-06): the seeds ``fitlab2`` / ``fitlab3`` lost to OOM, ONE seed per
+    job (a fresh process each):
+
+    * ``c25_diff_m2`` seeds 1-3, 5-7: on a 2g.48gb slice each job's first seed dumped and its
+      second OOMed in the production backward (6.6 GB more) -- ``GPU_KIND=rtx_48``
+      (``ONLY='c25'``);
+    * ``c10_diff_m2_g4`` seeds 0-7: the forward compiles to 72.75 GiB, over a 3g.71gb slice --
+      ``GPU_KIND=h200_full`` or ``rtx_full`` (``ONLY='g4'``); slim with ``--d-max 0.2``.
+
+    ``dump.py`` skips a seed whose json exists."""
+    del gpus_per_node
+    dump = "python3 scratch/fitlab/dump.py"
+    jobs = {}
+    for s in (1, 2, 3, 5, 6, 7):
+        jobs[f"lab_c25_diff_m2_s{s}"] = (
+            f"{dump} --gate c25_diff_m2 --seeds {s} {s + 1} --fd radius mode2"
+        )
+    for s in range(8):
+        jobs[f"lab_c10_diff_m2_g4_s{s}"] = (
+            f"{dump} --gate c10_diff_m2_g4 --seeds {s} {s + 1} --fd radius mode2 --width 5.0"
+        )
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1736,6 +1761,7 @@ NEW_GROUPS = {
     "fitlab": _fitlab_jobs,
     "fitlab2": _fitlab2_jobs,
     "fitlab3": _fitlab3_jobs,
+    "fitlab4": _fitlab4_jobs,
     "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,

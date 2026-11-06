@@ -154,7 +154,8 @@ def seed_files(gate):
     out = {}
     for cache in (SLIM, CACHE):  # the full dump wins
         for p in sorted(cache.glob(f"{gate}_s*.npz")):
-            if "_smoke" not in p.name:
+            # a dump without its json is still arriving (the pull) or failed: skip it
+            if "_smoke" not in p.name and p.with_suffix(".json").exists():
                 out[int(p.stem.split("_s")[-1])] = p
     return sorted(out.items())
 
