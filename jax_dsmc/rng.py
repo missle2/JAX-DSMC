@@ -93,8 +93,10 @@ STAGE_SCATTER = 6
 """VSS deflection angle and azimuth (section 7.4)."""
 STAGE_INFLOW = 7
 """Inflow flux sampling (M5+)."""
+STAGE_LEARNED = 8
+"""A replacement collision operator's noise (``simulate.run(collide_fn=)``)."""
 
-N_STAGES = 8
+N_STAGES = 9
 """Number of declared stages.  Used by the contract tests to sweep all of them."""
 
 

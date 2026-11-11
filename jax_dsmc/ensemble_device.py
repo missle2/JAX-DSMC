@@ -92,9 +92,7 @@ def cell_nodes(x, alive, grid, npc_max):
     table = sort.build_table(
         ParticleState(x, jnp.zeros((n, 3)), jnp.zeros(n, jnp.int32), alive, jnp.zeros(n)), grid
     )
-    rank = jnp.arange(npc_max)[None, :]
-    ids = table.order[jnp.minimum(table.starts[:, None] + rank, n - 1)]
-    valid = rank < table.counts[:, None]
+    ids, valid, _overflow = sort.padded_cells(table, npc_max)
     position = jnp.zeros(n, jnp.int32).at[table.order].set(jnp.arange(n, dtype=jnp.int32))
     c = jnp.minimum(table.cell, table.starts.shape[0] - 1)
     particle_rank = position - table.starts[c]

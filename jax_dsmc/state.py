@@ -457,6 +457,17 @@ def _require_nonnegative_int(name, value):
         raise ValueError(f"{name} must be a nonnegative integer; got {value!r}")
 
 
+_STATIC_CHOICES = {
+    "tracker": ("stencil", "lane", "walk"),
+    "sort": ("full", "partition"),
+    "record": ("full", "lean", "lean_dense"),
+    "pairing": ("uniform", "adjacent"),
+    "count_scheme": ("stochastic", "remainder"),
+    "majorant_mode": ("thermal", "certified"),
+}
+"""The allowed values of :class:`SimStatic`'s string options."""
+
+
 @dataclass(frozen=True)
 class SimStatic:
     """The **static** half of section 3.1's ``SimConfig``.
@@ -536,26 +547,26 @@ class SimStatic:
     (:func:`jax_dsmc.collide.ntc.compact_pairs`); ``0``: ``N / 4``
     (:func:`jax_dsmc.collide.ntc.pair_capacity`).  Overflow is counted in
     ``Diagnostics.pair_overflow`` (an error)."""
+    pairing: str = "uniform"
+    """NTC partner selection: ``"uniform"`` -- ``j`` uniform on the cell's other members
+    (SPARTA / [DF]); or ``"adjacent"`` -- the cell's members ordered by ``x[:, 0]``
+    (:func:`jax_dsmc.sort.x_sorted_order`), a slot pairs ranks ``(k, k + 1 mod N_c)`` with
+    ``k`` uniform: 1-D nearest-neighbour selection (Bird's sub-cell idea), the partner
+    separation ~``dx / N_c`` instead of ~``dx / 3``.  Every particle still takes part in
+    ``2 / N_c`` of the slots.  The ensemble backward's virtual pairs assume ``"uniform"``."""
 
     def __post_init__(self) -> None:
         """Reject values that would produce a wrong shape rather than an error."""
         if not isinstance(self.checkpoint_block_size, int) or self.checkpoint_block_size < 0:
             raise ValueError("checkpoint_block_size must be a nonnegative integer")
-        if self.tracker not in ("stencil", "lane", "walk"):
-            raise ValueError("tracker must be stencil, lane or walk")
-        if self.sort not in ("full", "partition"):
-            raise ValueError("sort must be full or partition")
-        if self.record not in ("full", "lean", "lean_dense"):
-            raise ValueError("record must be full, lean or lean_dense")
+        for name, choices in _STATIC_CHOICES.items():
+            if getattr(self, name) not in choices:
+                raise ValueError(f"{name} must be {', '.join(choices[:-1])} or {choices[-1]}")
         _require_nonnegative_int("pair_capacity", self.pair_capacity)
         if not isinstance(self.lane_size, int) or self.lane_size < 0:
             raise ValueError(f"lane_size must be a nonnegative Python int; got {self.lane_size!r}")
         if not isinstance(self.K_walk, int) or isinstance(self.K_walk, bool) or self.K_walk < 1:
             raise ValueError(f"K_walk must be a positive Python int; got {self.K_walk!r}")
-        if self.count_scheme not in ("stochastic", "remainder"):
-            raise ValueError("count_scheme must be stochastic or remainder")
-        if self.majorant_mode not in ("thermal", "certified"):
-            raise ValueError("majorant_mode must be thermal or certified")
         if self.D not in (1, 2, 3):
             raise ValueError(f"D must be 1, 2 or 3 (section 0.2); got {self.D}")
         if self.G > self.S:

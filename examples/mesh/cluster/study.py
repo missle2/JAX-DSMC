@@ -1696,6 +1696,73 @@ def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+# -- learned collision, round 1 (branch neural-collision; plan 2026-11-11) -----------------
+# Run from a checkout of the neural-collision branch.  Every job fits one MIG slice; the
+# coarse and training jobs are tiny (<= ~15 k particles per window), the fine references
+# 0.4-2 M particles forward-only:
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh lcref        (or GPU_KIND=h200)
+#   GPU_KIND=rtx_48 ONLY=fine bash examples/mesh/cluster/submit_curc.sh lccirc
+#   GPU_KIND=rtx ONLY=coarse bash examples/mesh/cluster/submit_curc.sh lccirc
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh lcbase     (after lcref)
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh lcsnr      (after lcref)
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh lctrain    (after lcbase, lcsnr)
+#   GPU_KIND=rtx bash examples/mesh/cluster/submit_curc.sh lceval     (after lctrain)
+LC = "python3 -m examples.learned_collision"
+LC_REFS = ("shear_a0.1_L32", "shear_a0.1_L128", "shear_a0.5_L32", "shear_a0.5_L128",
+           "shock_M1.5", "shock_M3", "shock_M6", "shock_M10")  # fmt: skip
+LC_BASE_BLOCKS = {"shear": "S1 S2 S3 S4", "shockA": "K1 K2 K3 K4", "shockB": "K5 K6 K7 K8"}
+LC_TEST = "S1 S4 K2 K3 K4 K5 K6 K7"
+LC_MODELS = ("scalar", "linear", "mlp")
+LC_CIRCLE_BASE = ("ntc", "esfp_recon", "esbgk_recon")
+
+
+def _lcref_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcref``: the eight fine 2-D references (examples.learned_collision.refdata)."""
+    del gpus_per_node
+    return {f"lcref_{ref}": f"{LC}.refdata --ref {ref} --tag v1" for ref in LC_REFS}
+
+
+def _lccirc_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lccirc``: the M 10 Kn 0.042 circle, fine NTC (``ONLY=fine``, ``GPU_KIND=rtx_48``) and
+    the coarse baselines (``ONLY=coarse``, ``GPU_KIND=rtx``)."""
+    del gpus_per_node
+    jobs = {"lccirc_fine_ntc": f"{LC}.circle --scale 8 --operator ntc --tag v1"}
+    for op in LC_CIRCLE_BASE:
+        jobs[f"lccirc_coarse_{op}"] = f"{LC}.circle --scale 1 --operator {op} --tag v1"
+    return jobs
+
+
+def _lcbase_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcbase``: the 12 cases x 8 baseline operators, forward (three case blocks)."""
+    del gpus_per_node
+    return {f"lcbase_{name}": f"{LC}.evaluate --cases {cases} --tag base_{name}"
+            for name, cases in LC_BASE_BLOCKS.items()}  # fmt: skip
+
+
+def _lcsnr_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcsnr``: both window-gradient estimators' SNR against window length (S2, K1)."""
+    del gpus_per_node
+    return {"lcsnr": f"{LC}.grad_snr2d --cases S2 K1 --blocks-list 2 5 10 --tag v1"}
+
+
+def _lctrain_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lctrain``: scalar, linear and MLP corrections on the four training cases."""
+    del gpus_per_node
+    return {f"lctrain_{m}": f"{LC}.train --model {m} --tag v1" for m in LC_MODELS}
+
+
+def _lceval_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lceval``: each trained model on the eight held-out cases and the coarse circle."""
+    del gpus_per_node
+    jobs = {}
+    for m in LC_MODELS:
+        theta = f"train_{m}_v1.json"
+        jobs[f"lceval_{m}"] = (f"{LC}.evaluate --cases {LC_TEST} --operators --theta {theta} "
+                               f"--tag test_{m}")  # fmt: skip
+        jobs[f"lceval_circle_{m}"] = f"{LC}.circle --scale 1 --theta {theta} --tag v1"
+    return jobs
+
+
 NEW_GROUPS = {
     "optab": _optab_jobs,
     "optm": _optm_jobs,
@@ -1746,6 +1813,12 @@ NEW_GROUPS = {
     "squashkn2": _squashkn2_jobs,
     "optckn": functools.partial(_keepout_jobs, collisional=True),
     "optc2": functools.partial(_keepout_jobs, collisional=False),
+    "lcref": _lcref_jobs,
+    "lccirc": _lccirc_jobs,
+    "lcbase": _lcbase_jobs,
+    "lcsnr": _lcsnr_jobs,
+    "lctrain": _lctrain_jobs,
+    "lceval": _lceval_jobs,
 }
 
 

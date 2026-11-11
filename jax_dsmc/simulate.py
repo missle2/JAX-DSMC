@@ -302,6 +302,8 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
     capture=False,
     mesh=None,
     emit_surface=False,
+    collide_fn=None,
+    collision_params=None,
 ):
     """One timestep.  Module-level and bound with ``partial`` (decision 14).
 
@@ -422,20 +424,28 @@ def _step(  # noqa: PLR0912, PLR0915 -- one timestep, kept whole so the event or
     # returned state (and costs nothing when `emit_moments == "none"`).
     temp = sample.cell_temperature(state, table, grid, sp)
     moved = state  # post-move, post-injection, pre-collision: what the collisions were drawn from
-    state, cstate, diag, *captured = collide(
-        state,
-        table,
-        cstate,
-        grid,
-        sp,
-        params,
-        static,
-        temp,
-        k,
-        base_key,
-        score_mode=score_mode,
-        capture=capture,
-    )
+    if collide_fn is None:
+        state, cstate, diag, *captured = collide(
+            state,
+            table,
+            cstate,
+            grid,
+            sp,
+            params,
+            static,
+            temp,
+            k,
+            base_key,
+            score_mode=score_mode,
+            capture=capture,
+        )
+    else:
+        # a replacement collision operator (`run(collide_fn=)`): NTC's signature plus its
+        # own traced parameters; no pair record (`run` refuses `capture` with it)
+        state, cstate, diag = collide_fn(
+            state, table, cstate, grid, sp, params, static, temp, k, base_key, collision_params
+        )
+        captured = []
     record = None
     if capture:
         record, (born_lost, record_overflow) = _event_record(
@@ -570,6 +580,8 @@ def run(
     capture: bool = False,
     mesh=None,
     emit_surface: bool = False,
+    collide_fn=None,
+    collision_params=None,
 ):
     """Run ``static.n_steps`` timesteps.
 
@@ -613,7 +625,18 @@ def run(
     then the elements; extensive momentum / energy / heat of the resident particles'
     hits -- entrants' birth-step hits are not tallied) as the last element of the
     per-step output.
+
+    ``collide_fn`` replaces the NTC collision step (``None``: :func:`collide.ntc.collide`,
+    bitwise unchanged).  It is called as ``collide_fn(state, table, cstate, grid, sp,
+    params, static, cell_temp, step, base_key, collision_params)`` and returns ``(state,
+    cstate, Diagnostics)``; it must be hashable (a module-level function or a
+    ``functools.partial`` of one, decision 14) when ``run`` is jitted with it static.
+    ``collision_params`` is its traced parameter pytree (e.g. network weights): the
+    gradient of an objective with respect to it flows through the run like any traced
+    input.  A replacement records no collision pairs, so ``capture`` is refused with it.
     """
+    if collide_fn is not None and capture:
+        raise ValueError("capture records NTC pair decisions; it cannot run with collide_fn")
     if res is not None and (faces is None or collide_only or capacity < 1):
         raise ValueError("Sources require faces, transport, and positive candidate capacity")
     if mesh is not None and (faces is None or collide_only):
@@ -647,6 +670,8 @@ def run(
         capacity=capacity,
         mesh=mesh,
         emit_surface=emit_surface,
+        collide_fn=collide_fn,
+        collision_params=collision_params,
     )
     policy = getattr(jax.checkpoint_policies, static.remat_policy, None)
     body = jax.checkpoint(body, policy=policy, static_argnums=())

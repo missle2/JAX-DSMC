@@ -287,3 +287,6 @@ scratch/fitlab/cache_slim/*
 # profiler traces
 *.trace/
 perfetto_trace.json.gz
+
+# learned-collision study outputs (rsync, not git)
+examples/learned_collision/results/

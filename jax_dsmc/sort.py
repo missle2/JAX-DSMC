@@ -85,6 +85,28 @@ def build_table(state: ParticleState, grid: GridSpec) -> CellTable:
     return CellTable(order=order, starts=bounds[:C], counts=bounds[1:] - bounds[:C], cell=c)
 
 
+def x_sorted_order(state: ParticleState, table: CellTable) -> jax.Array:
+    """``table.order`` with each cell's members ranked by ``x[:, 0]`` (ties by slot): the
+    same cells, starts and counts.  An ``O(N log N)`` sort; frozen (int), like ``order``."""
+    x0 = jax.lax.stop_gradient(state.x[:, 0])
+    return jnp.lexsort((x0, table.cell)).astype(jnp.int32)
+
+
+def padded_cells(table: CellTable, npc_max: int):
+    """The cells' particles as a padded table: ``ids i32[C, P]`` (the slot of the cell's
+    ``p``-th particle, ``P = npc_max`` STATIC), ``valid bool[C, P]`` (``p < count``) and
+    ``overflow`` (``i32``, particles past ``P`` in their cell, left out of the table).
+
+    The layout a per-cell operator reads (``v[ids]`` is ``f64[C, P, 3]``); padded rows point
+    at a real slot (clamped), so a gather through them is safe and ``valid`` masks it out."""
+    n = table.order.shape[0]
+    rank = jnp.arange(npc_max)[None, :]
+    ids = table.order[jnp.minimum(table.starts[:, None] + rank, n - 1)]
+    valid = rank < table.counts[:, None]
+    overflow = jnp.sum(jnp.maximum(table.counts - npc_max, 0)).astype(jnp.int32)
+    return ids, valid, overflow
+
+
 def partition_active(static) -> bool:
     """Does this run use the carried partition sort?  ``SimStatic.sort = "partition"`` on
     XLA:CPU only: on GPU the full sort of every slot is one fast kernel, where the

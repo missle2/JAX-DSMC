@@ -17,6 +17,7 @@ measurement rather than by reading a reference code:
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 from typing import NamedTuple
 
@@ -47,6 +48,7 @@ from jax_dsmc.rng import (
     key_for,
 )
 from jax_dsmc.safe import safe_log, safe_pow
+from jax_dsmc.sort import x_sorted_order
 from jax_dsmc.state import CollideState, Diagnostics, ParticleState
 
 jax.config.update("jax_enable_x64", True)  # section 0.3: f64 throughout
@@ -453,7 +455,9 @@ def step_v_post(rec_k):
     return post_collision_velocities(rec_k.v, rec_k.pairs)
 
 
-def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
+def _slot(
+    carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper", adjacent=False
+):
     """One attempt slot, vectorised across all cells.  Body of the section-8.4 scan.
 
     **Draws nothing.**  Every random number it needs arrives through ``xs``, drawn
@@ -472,7 +476,10 @@ def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
     a, u_i, u_r, u_acc, u_chi, u_eps = xs
     active = (a < n) & (table.counts >= 2)  # bool[C]
 
-    i, j = pair_from_draws(u_i, u_r, table.counts)
+    if adjacent:  # ranks (k, k + 1 mod N_c) of the x-sorted order (`SimStatic.pairing`)
+        i, j = u_i, (u_i + 1) % jnp.maximum(table.counts, 2)
+    else:
+        i, j = pair_from_draws(u_i, u_r, table.counts)
     # inactive cells address the SCRATCH SLOT n_part (zero reads, dropped writes), never
     # a neighbour's particles.  Both `where`s are essential: see 8.4.1.
     pi = jnp.where(active, table.order[table.starts + i], n_part)
@@ -532,6 +539,26 @@ def _slot(carry, xs, n, table, sigma, isp, jsp, sp, n_part, score_mode="paper"):
         lax.stop_gradient(vj_n),
     )
     return (v, logh, qmax, nviol, margin, lax.stop_gradient(chk)), record
+
+
+def replacement_diagnostics(state: ParticleState, table) -> Diagnostics:
+    """The :class:`Diagnostics` of a step whose collisions a replacement operator did
+    (``simulate.run(collide_fn=)``): NTC's counters zero (no attempts, no majorant), the
+    decision checksum the cell membership alone -- the frozen decision a flip-free finite
+    difference must keep (:func:`decision_weights`, as in :func:`collide`)."""
+    n_part = state.x.shape[0]
+    chk = jnp.sum(decision_weights(n_part) * jnp.where(state.alive, table.cell, -1))
+    zero = jnp.array(0, jnp.int32)
+    return Diagnostics(
+        attempts_clipped=zero,
+        max_attempts=zero,
+        majorant_violations=zero,
+        min_majorant_margin=jnp.array(jnp.inf, jnp.float64),
+        decision_checksum=lax.stop_gradient(chk.astype(jnp.float64)),
+        wall_recrossed=zero,
+        inflow_injected=zero,
+        inflow_shortfall=jnp.array(0.0, jnp.float64),
+    )
 
 
 def collide(  # noqa: PLR0915 -- collision stages stay together for deterministic replay
@@ -612,6 +639,9 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
     u_chi = indexed_uniform(k_chi, A, (C,))
     u_eps = indexed_uniform(k_eps, A, (C,))
 
+    if static.pairing == "adjacent":
+        table = dataclasses.replace(table, order=x_sorted_order(state, table))
+
     # Slot N is the SCRATCH slot of v and logh (8.4.1): reads of it are zero and writes
     # to it are dropped (`_gather_rows`, `mode="drop"`).
     v0 = state.v
@@ -629,6 +659,7 @@ def collide(  # noqa: PLR0915 -- collision stages stay together for deterministi
         sp=sp,
         n_part=n_part,
         score_mode=score_mode,
+        adjacent=static.pairing == "adjacent",
     )
     init = (v0, logh0, sigma, jnp.int32(0), jnp.float64(jnp.inf), jnp.float64(0.0))
     xs = (jnp.arange(A), u_i, u_r, u_acc, u_chi, u_eps)
