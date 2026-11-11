@@ -187,7 +187,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
       && [ "${group}" != "termchk" ] && [ "${group}" != "termvol" ] \
       && [ "${group}" != "bumpchk" ] && [ "${group}" != "fitlab" ] \
       && [ "${group}" != "shiftfd" ] && [ "${group}" != "fitlab2" ] \
-      && [[ "${group}" != paper_* ]]; then
+      && [[ "${group}" != paper_* ]] && [[ "${group}" != lc* ]]; then
     echo "skip ${group}: the finer circle needs > 24 GB, more than an rtx MIG slice (use optc or a100/h200)"
     continue
   fi
