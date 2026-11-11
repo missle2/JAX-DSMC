@@ -1,0 +1,2 @@
+#!/bin/bash
+echo "artxpro6000 128 1000000 gpu:rtx_pro_6000_1g.24gb:16(S:0-1)"

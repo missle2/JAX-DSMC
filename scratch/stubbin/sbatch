@@ -1,0 +1,2 @@
+#!/bin/bash
+for a in "$@"; do case "$a" in --export=*) echo "$a";; esac; done

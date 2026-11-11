@@ -141,7 +141,10 @@ if [ -n "${PREFLIGHT_GROUPS+x}" ]; then
 fi
 # nodes a preflight found unusable, plus anything the caller names
 BAD_FILE=examples/mesh/cluster/bad_nodes.txt
-EXCLUDE="$(cat "${BAD_FILE}" 2>/dev/null | sort -u | paste -sd, -)"
+# (a fresh clone has no such file: under pipefail a failing `cat` would end the script
+# silently before any submission, 2026-11-11)
+EXCLUDE=""
+if [ -f "${BAD_FILE}" ]; then EXCLUDE="$(sort -u "${BAD_FILE}" | paste -sd, -)"; fi
 if [ -n "${EXCLUDE_NODES:-}" ]; then EXCLUDE="${EXCLUDE:+${EXCLUDE},}${EXCLUDE_NODES}"; fi
 EXCLUDE_ARG=()
 if [ -n "${EXCLUDE}" ]; then EXCLUDE_ARG=(--exclude="${EXCLUDE}"); echo "excluding ${EXCLUDE}"; fi
