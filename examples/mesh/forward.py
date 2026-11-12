@@ -98,6 +98,20 @@ CASES = {
         "fnum": 1.0e-3,
         "capacity": 360_000,
     },
+    "circle_xlong_h1": {
+        # circle_xlong on 1 m cells (2026-11-11, branch neural-collision): the learned-collision
+        # circle test's 16x-coarser run (examples/learned_collision/circle.py, dx = 4 lambda at
+        # Kn_D 0.042); its slots are set by that driver
+        "dim": 2,
+        "lo": [-25.0, 0.0],
+        "hi": [20.0, 10.0],
+        "n": (45, 10),
+        "surf": "data.circle",
+        "centre": [5.0, 5.0],
+        "radius": 3.0,
+        "fnum": 1.0e-3,
+        "capacity": 90_000,
+    },
     "ellipse": {
         # the aspect-ratio test: the circle box with a smaller circle (blockage ~3 % at s = 1,
         # free_molecular_circle.json) squashed in y to semi-axes (R, s R); a level-set body

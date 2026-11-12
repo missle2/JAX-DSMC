@@ -1722,13 +1722,28 @@ def _lcref_jobs(gpus_per_node: int) -> dict[str, str]:
     return {f"lcref_{ref}": f"{LC}.refdata --ref {ref} --tag v1" for ref in LC_REFS}
 
 
+LC_CIRCLE_CELLS = ("c8", "c16")
+LC_WALLS = ("specular", "diffuse")
+
+
+def _circle_chain(cells, wall, runs):
+    """One job running several coarse circles in turn (``runs``: ``--operator x`` /
+    ``--theta y.json`` flags)."""
+    return " && ".join(f"{LC}.circle --cells {cells} --wall {wall} {r} --tag v2" for r in runs)
+
+
 def _lccirc_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lccirc``: the M 10 Kn 0.042 circle, fine NTC (``ONLY=fine``, ``GPU_KIND=rtx_48``) and
-    the coarse baselines (``ONLY=coarse``, ``GPU_KIND=rtx``)."""
+    """``lccirc`` (v2, 2026-11-11): the M 10 Kn 0.042 circle on both walls -- fine NTC
+    (``ONLY=fine``, ``GPU_KIND=rtx_48`` or ``h200_71``) and the coarse baselines at 8x and 16x
+    (``ONLY=coarse``, ``GPU_KIND=rtx``; one job per cell size and wall, the three operators in
+    turn)."""
     del gpus_per_node
-    jobs = {"lccirc_fine_ntc": f"{LC}.circle --scale 8 --operator ntc --tag v1"}
-    for op in LC_CIRCLE_BASE:
-        jobs[f"lccirc_coarse_{op}"] = f"{LC}.circle --scale 1 --operator {op} --tag v1"
+    jobs = {f"lccirc_fine_{w}": f"{LC}.circle --cells fine --wall {w} --operator ntc --tag v2"
+            for w in LC_WALLS}  # fmt: skip
+    base = [f"--operator {op}" for op in LC_CIRCLE_BASE]
+    for cells in LC_CIRCLE_CELLS:
+        for w in LC_WALLS:
+            jobs[f"lccirc_coarse_{cells}_{w}"] = _circle_chain(cells, w, base)
     return jobs
 
 
@@ -1759,7 +1774,9 @@ def _lceval_jobs(gpus_per_node: int) -> dict[str, str]:
         theta = f"train_{m}_v1.json"
         jobs[f"lceval_{m}"] = (f"{LC}.evaluate --cases {LC_TEST} --operators --theta {theta} "
                                f"--tag test_{m}")  # fmt: skip
-        jobs[f"lceval_circle_{m}"] = f"{LC}.circle --scale 1 --theta {theta} --tag v1"
+        jobs[f"lceval_circle_{m}"] = " && ".join(
+            _circle_chain(c, w, [f"--theta {theta}"]) for c in LC_CIRCLE_CELLS for w in LC_WALLS
+        )
     return jobs
 
 
