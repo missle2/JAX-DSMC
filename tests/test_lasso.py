@@ -29,9 +29,17 @@ def test_correlated_design_matches_a_brute_force_minimum():
         assert f(a) <= f(a + 1e-3 * rng.normal(size=3)) + 1e-12
 
 
-def test_upper_bounds_hold_and_bind():
-    a = lasso.lasso_cd(np.eye(2), np.array([2.0, 2.0]), 0.5, upper=np.array([0.0, np.inf]))
-    np.testing.assert_allclose(a, [0.0, 1.5])
+def test_bounds_hold_and_bind():
+    box = np.array([[-np.inf, -np.inf, 0.0], [0.0, np.inf, np.inf]])
+    a = lasso.lasso_cd(np.eye(3), np.array([2.0, 2.0, -2.0]), 0.5, bounds=box)
+    np.testing.assert_allclose(a, [0.0, 1.5, 0.0])
+
+
+def test_sign_bounds_hold_the_stress_rate_row_nonnegative():
+    lower, upper = lasso._bounds(True).reshape(2, 2, -1)
+    for name in lasso.POSITIVE_RATE:
+        assert lower[0, lasso.relax.FEATURES.index(name)] == 0.0
+    assert np.all(np.isinf(lower[1])) and np.all(np.isinf(upper))
 
 
 def test_one_standard_error_rule_takes_the_sparsest_fit_in_range():

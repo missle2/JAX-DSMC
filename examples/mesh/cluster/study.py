@@ -1796,11 +1796,13 @@ def _lctime_jobs(gpus_per_node: int) -> dict[str, str]:
     train_linear_lctime.json), and the largest sweep network's iteration time.  2026-11-12:
     40 iterations at the fan-in-normalised default lr with features_v2 (after lcfeat) -- also
     the check that the loss now falls (v1's 6 steps of plain Adam at 0.02 overshot to mu
-    0.5x)."""
+    0.5x).  Tags lctime3 (2026-11-12, after lcfeat v3): the rate-basis correction ``(dlog r_s,
+    dlog r_q)`` with the ES-FP ``bound`` feature (features_v3) -- does the shock heat flux
+    still fall when the model can put the stress fix in the bound-limited cells alone?"""
     del gpus_per_node
     common = "--iters 40 --tag"
-    return {"lctime_linear": f"{LC}.train --model linear --validate-train {common} lctime",
-            "lctime_mlp": f"{LC}.train --model mlp --depth 3 --width 128 {common} lctime_mlp"}  # fmt: skip
+    return {"lctime_linear": f"{LC}.train --model linear --validate-train {common} lctime3",
+            "lctime_mlp": f"{LC}.train --model mlp --depth 3 --width 128 {common} lctime3_mlp"}  # fmt: skip
 
 
 def _lcburn_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1823,12 +1825,25 @@ def _lcsteadyfd_jobs(gpus_per_node: int) -> dict[str, str]:
     return {"lcsteadyfd": f"{LC}.steady_fd --tag v1"}
 
 
-def _lcfeat_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lcfeat``: the features' training spread and correlations (features_v2.json, the five
-    training cases; the training, the sweep and the Lasso standardise by it -- run before
-    them)."""
+def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
+    Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
+    relaxation in the coarse ES-FP+recon steady shocks -- the active fraction per cell, its
+    ``|tau_xx|``-weighted share and the mean slowdown, all eight shocks (examples
+    .learned_collision.evaluate --bound).  Does it track the operator's Mach-growing int txx
+    excess (1.05 at M1.5 to 1.17 at M10)?"""
     del gpus_per_node
-    return {"lcfeat": f"{LC}.features --tag v2"}
+    common = f"{LC}.evaluate --operators esfp_recon --bound --starts 32"
+    return {"lcbound_lo": f"{common} --cases K1 K2 K3 K4 --tag bound_lo",
+            "lcbound_hi": f"{common} --cases K5 K6 K7 K8 --tag bound_hi"}
+
+
+def _lcfeat_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcfeat``: the features' training spread and correlations (features_v3.json, the five
+    training cases; the training, the sweep and the Lasso standardise by it -- run before
+    them).  v3 (2026-11-12): the tenth feature ``bound`` (and each case's ``bound_frac``)."""
+    del gpus_per_node
+    return {"lcfeat": f"{LC}.features --tag v3"}
 
 
 def _lclasso_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1928,6 +1943,7 @@ NEW_GROUPS = {
     "lcfeat": _lcfeat_jobs,
     "lcburn": _lcburn_jobs,
     "lcsteadyfd": _lcsteadyfd_jobs,
+    "lcbound": _lcbound_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

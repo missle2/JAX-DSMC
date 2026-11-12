@@ -20,8 +20,14 @@ not usable here: its stress factor ``a^2 + (1 - a^2) nu`` tends to ``nu = -5/4``
 ``dt`` -- a growing oscillation for ``dt / tau > ln 3`` (2026-10-21, ``tests/test_relax.py``).
 
 ``Sigma`` must be positive definite: where a strongly anisotropic cell would break it, the
-stress factor is raised toward ``a^2`` just enough (:func:`stress_factor_bound`, a guard
-without gradient).  The cell's momentum and kinetic energy are then restored exactly --
+stress factor is raised toward ``a^2`` just enough (:func:`stress_factor_bound`).  This is the
+paper's own limiter (Mathiaud & Mieussens 2016, eq. 35: ``nu = max(-5/4, -RT / (lambda_max -
+RT))``, so the diffusion tensor stays positive definite) in exactly integrated form: with
+``nu`` clamped the frozen-coefficient step's stress factor is ``a^2 + (1 - a^2) nu = a^2 -
+(1 - a^2) theta / pd_max``, the bound here up to :data:`SIGMA_FLOOR`.  It leaves the heat-flux
+rate alone and slows the stress relaxation; at ``Pr = 2/3`` it acts once ``pd_max > 0.8
+theta`` (:data:`BOUND_ONSET`, the small-``dt`` limit) -- strong shock cores.  The cell's
+momentum and kinetic energy are then restored exactly --
 ``c'`` minus its cell mean, scaled by ``alpha^2 = sum |c|^2 / sum |c'|^2``.
 
 ``theta`` (the run's ``collision_params``) holds the traced coefficients: ``log_tau`` (a log
@@ -47,6 +53,12 @@ from jax_dsmc.rng import STAGE_LEARNED, indexed_normal, indexed_uniform, key_for
 
 PRANDTL = 2.0 / 3.0
 """The monatomic Prandtl number: the heat-flux to stress relaxation-rate ratio."""
+
+BOUND_ONSET = 1.0 / (3.0 / (2.0 * PRANDTL) - 1.0)
+"""``pd_max / theta`` (``pd_max`` the largest eigenvalue of ``Pi_dev``) above which the
+positive-definiteness bound (:func:`stress_factor_bound`) acts at the base ``Pr = 2/3`` and
+small ``dt``: ES-FP's ``nu = 1 - 3 / (2 Pr) = -5/4`` needs ``pd_max < theta / |nu| = 0.8
+theta`` (Mathiaud & Mieussens 2016, eqs. 7, 35)."""
 
 SIGMA_FLOOR = 1e-3
 """Smallest eigenvalue of ``Sigma / (theta (1 - a^2))`` the stress-factor guard keeps."""
@@ -145,30 +157,60 @@ def stress_time(n, theta_c, grid, sp, params):
     return vss_viscosity(temp, sp) / jnp.maximum(pressure, 1e-300)
 
 
-def step_coefficients(n, pi, theta_c, grid, sp, params, theta, splitting, delta=None):
-    """The step's drift factor ``a`` (``f64[C]``) and noise factor ``chol(Sigma)``
-    (``f64[C, 3, 3]``; the identity in cells with fewer than two particles).  ``delta``: an
-    optional per-cell ``(dlog_tau, dlog_pr)`` (``f64[C]`` each) added to ``theta``'s -- a
-    learned correction (:func:`correction`)."""
-    live, n, pi, theta_c = safe_cells(n, pi, theta_c)
+def rates(n, theta_c, grid, sp, params, theta, splitting, delta=None):
+    """``(r_s, r_q)`` (``f64[C]``): each cell's stress and heat-flux relaxation rates --
+    ``r_s = exp(-log_tau) / tau_s``, ``r_q = Pr r_s`` -- times ``exp(delta[0])`` and
+    ``exp(delta[1])`` with a learned per-cell correction ``delta`` (:func:`correction`; the
+    *rate basis*, 2026-11-12: one row per transport coefficient, so a correction of the heat
+    flux reads as one).  ``n``, ``theta_c``: safe cells (:func:`safe_cells`)."""
     tau_s = stress_time(n, theta_c, grid, sp, params)
     if splitting:
         tau_s = jnp.maximum(tau_s - 0.5 * params.dt, 1e-3 * tau_s)
-    log_tau, log_pr = theta["log_tau"], theta["log_pr"]
+    r_s = jnp.exp(-theta["log_tau"]) / tau_s
+    r_q = jnp.exp(theta["log_pr"]) * r_s
     if delta is not None:
-        log_tau, log_pr = log_tau + delta[0], log_pr + delta[1]
-    r_s = jnp.exp(-log_tau) / tau_s
-    r_q = jnp.exp(log_pr) * r_s
+        r_s, r_q = r_s * jnp.exp(delta[0]), r_q * jnp.exp(delta[1])
+    return r_s, r_q
+
+
+def stress_factors(n, pi, theta_c, grid, sp, params, theta, splitting, delta=None):
+    """``(live, theta_c, pi_dev, a, e_s, e_bound)`` of the step: the drift factor ``a``, the
+    stress factor ``exp(-r_s dt)`` and the same after :func:`stress_factor_bound` (equal where
+    the bound is inactive), on safe cells."""
+    live, n, pi, theta_c = safe_cells(n, pi, theta_c)
+    r_s, r_q = rates(n, theta_c, grid, sp, params, theta, splitting, delta)
     a = jnp.exp(-r_q * params.dt / 3.0)
+    pi_dev = pi - theta_c[:, None, None] * jnp.eye(3)
+    e_s = jnp.exp(-r_s * params.dt)
+    pd_max = largest_deviatoric(pi_dev, theta_c, n)
+    return live, theta_c, pi_dev, a, e_s, stress_factor_bound(e_s, a**2, theta_c, pd_max)
+
+
+def step_coefficients(n, pi, theta_c, grid, sp, params, theta, splitting, delta=None):
+    """The step's drift factor ``a`` (``f64[C]``) and noise factor ``chol(Sigma)``
+    (``f64[C, 3, 3]``; the identity in cells with fewer than two particles).  ``delta``: an
+    optional per-cell ``(dlog r_s, dlog r_q)`` (``f64[C]`` each, :func:`rates`) -- a learned
+    correction (:func:`correction`)."""
+    live, theta_c, pi_dev, a, _, e_s = stress_factors(n, pi, theta_c, grid, sp, params, theta,
+                                                      splitting, delta)  # fmt: skip
     a2 = a**2
     eye = jnp.eye(3)
-    pi_dev = pi - theta_c[:, None, None] * eye
-    e_s = jnp.exp(-r_s * params.dt)
-    e_s = stress_factor_bound(e_s, a2, theta_c, largest_deviatoric(pi_dev, theta_c, n))
     cov = (theta_c * (1.0 - a2))[:, None, None] * eye + (e_s - a2)[:, None, None] * pi_dev
     cov = cov + 1e-12 * theta_c[:, None, None] * eye
     cov = jnp.where(live[:, None, None], cov, eye)
     return a, jnp.linalg.cholesky(cov)
+
+
+def bound_activity(n, pi, theta_c, grid, sp, params, theta, splitting=False):
+    """Per cell ``(pd_ratio, slowdown)``: ``pd_max / theta`` and ``log(e_bound / e_s)`` (> 0
+    where :func:`stress_factor_bound` acts: the stress relaxes slower than ``r_s`` by that
+    much per step), at ``theta`` without a correction -- the ``lcbound`` diagnostic."""
+    live, theta_c, pi_dev, _, e_s, e_b = stress_factors(n, pi, theta_c, grid, sp, params, theta,
+                                                        splitting)  # fmt: skip
+    n_s = jnp.where(live, n, 2.0)
+    ratio = largest_deviatoric(pi_dev, theta_c, n_s) / theta_c
+    slow = jnp.log(jnp.maximum(e_b, 1e-300)) - jnp.log(jnp.maximum(e_s, 1e-300))
+    return jnp.where(live, ratio, 0.0), jnp.where(live, slow, 0.0)
 
 
 def conserve(c, c_new, alive, seg, row, n, n_cells):
@@ -250,7 +292,7 @@ def conserve_about(c, c_new, u_loc, v, alive, seg, row, n, n_cells):
     return jnp.where(ok, alpha, 1.0)[row][:, None] * c_new, ok
 
 
-FEATURES = ("dx2", "dx4", "dt2", "dt1", "inv_n", "dx2_inv_n", "kn_u2", "kn_t2", "dx2_kn2")
+FEATURES = ("dx2", "dx4", "dt2", "dt1", "inv_n", "dx2_inv_n", "kn_u2", "kn_t2", "dx2_kn2", "bound")
 """The theory basis of the learned corrections (:func:`cell_features`), with ``r = h /
 lambda`` the cell size in local mean free paths:
 
@@ -262,14 +304,19 @@ lambda`` the cell size in local mean free paths:
 - ``Kn_u^2 = (lambda |S| / v)^2``, ``Kn_T^2 = (lambda |grad ln T|)^2``: Burnett-order
   (Chapman-Enskog O(Kn^2)) corrections to the stress and heat-flux closures;
 - ``r^2 (Kn_u^2 + Kn_T^2)``: the cell-size error growing with the local gradients (the
-  reconstruction is only linear)."""
+  reconstruction is only linear);
+- ``max(0, pd_max / theta - 0.8)``: how far the cell's anisotropy is past ES-FP's
+  positive-definiteness limit (:data:`BOUND_ONSET`), where the base step's stress relaxation
+  is slowed (:func:`stress_factor_bound`) -- a defect of the Gaussian model at ``Pr = 2/3``,
+  not of the coarse cell (2026-11-12: the bound couples the stress rate to the heat-flux rate
+  there, which ``log_pr``-only corrections traded heat flux for)."""
 
-FEATURE_SCALE = np.array([4.0, 16.0, 0.01, 0.1, 0.1, 0.4, 0.01, 0.01, 0.04])
+FEATURE_SCALE = np.array([4.0, 16.0, 0.01, 0.1, 0.1, 0.4, 0.01, 0.01, 0.04, 0.2])
 """Nominal size of each feature at the training conditions (``r = 2``, ``dt / tau = 0.1``,
-``N_c = 10``, ``Kn ~ 0.1``): the features are divided by it so the coefficients are O(1)."""
+``N_c = 10``, ``Kn ~ 0.1``, a shock core ``pd_max ~ theta``): the features are divided by it so the coefficients are O(1)."""
 
 CORRECTION_BOUND = 2.0
-"""Bound on each correction (``|dlog| < 2``, a factor e^2 on ``tau`` or ``Pr``): the raw
+"""Bound on each correction (``|dlog| < 2``, a factor e^2 on ``r_s`` or ``r_q``): the raw
 linear or MLP output is squashed by ``B tanh(x / B)``, so an input far outside the training
 range (the circle's cold wall layer, ``r ~ 30``) cannot drive ``tau`` to 0 or infinity."""
 
@@ -282,11 +329,11 @@ def lambda_factor(omega):
     return 4.0 * (5.0 - 2.0 * omega) * (7.0 - 2.0 * omega) / (30.0 * math.sqrt(2.0 * math.pi))
 
 
-def cell_features(n, n_safe, u, theta_c, grid, sp, params, periodic):
-    """``f64[C, 9]``: the :data:`FEATURES` of each cell, divided by :data:`FEATURE_SCALE`.
-    ``n`` the particle counts (empty neighbours drop out of the gradients), ``n_safe`` and
-    ``theta_c`` the safe ones (:func:`safe_cells`); ``u`` the cell means (the gradients come
-    from neighbouring cells, so a coarse cell sees its own resolved shear)."""
+def cell_features(n, n_safe, u, pi, theta_c, grid, sp, params, periodic):
+    """``f64[C, 10]``: the :data:`FEATURES` of each cell, divided by :data:`FEATURE_SCALE`.
+    ``n`` the particle counts (empty neighbours drop out of the gradients), ``n_safe``,
+    ``pi`` and ``theta_c`` the safe ones (:func:`safe_cells`); ``u`` the cell means (the
+    gradients come from neighbouring cells, so a coarse cell sees its own resolved shear)."""
     tau = stress_time(n_safe, theta_c, grid, sp, params)
     lam = lambda_factor(sp.omega[0, 0]) * tau * jnp.sqrt(theta_c)
     dx = (grid.hi - grid.lo) / jnp.asarray(grid.n)
@@ -301,8 +348,10 @@ def cell_features(n, n_safe, u, theta_c, grid, sp, params, periodic):
     kn_t2 = lam**2 * jnp.sum(g_t**2, axis=1)
     dt_tau = params.dt / tau
     inv_n = 1.0 / n_safe
+    pi_dev = pi - theta_c[:, None, None] * jnp.eye(3)
+    over = jax.nn.relu(largest_deviatoric(pi_dev, theta_c, n_safe) / theta_c - BOUND_ONSET)
     phi = jnp.stack([r2, r2**2, dt_tau**2, dt_tau, inv_n, r2 * inv_n, kn_u2, kn_t2,
-                     r2 * (kn_u2 + kn_t2)], axis=1)  # fmt: skip
+                     r2 * (kn_u2 + kn_t2), over], axis=1)  # fmt: skip
     # a cell with no volume (inside a body) has tau = 0: its features are infinite, and a
     # zero coefficient times infinity would be NaN -- cap them (the bounded correction
     # saturates there anyway, and the cell holds no particle)
@@ -321,7 +370,7 @@ def _standardised(theta, phi):
 
 
 def correction_linear(theta, phi):
-    """``f64[2, C]``: the raw linear correction ``A phi`` (``theta["A"]``: ``f64[2, 9]``)."""
+    """``f64[2, C]``: the raw linear correction ``A phi`` (``theta["A"]``: ``f64[2, F]``)."""
     return theta["A"] @ _standardised(theta, phi).T
 
 
@@ -347,7 +396,7 @@ def correction_mlp(theta, phi):
 
 
 def correction(theta, phi, kind):
-    """The bounded per-cell ``(dlog_tau, dlog_pr)`` of correction ``kind``."""
+    """The bounded per-cell ``(dlog r_s, dlog r_q)`` of correction ``kind`` (:func:`rates`)."""
     raw = correction_linear(theta, phi) if kind == "linear" else correction_mlp(theta, phi)
     return CORRECTION_BOUND * jnp.tanh(raw / CORRECTION_BOUND)
 
@@ -356,7 +405,7 @@ def init_correction(kind, key=None, width=64, depth=2, phi_scale=None):
     """The trainable parameters of correction ``kind`` added to :data:`BASELINE`, zero output
     at initialisation (so the corrected operator starts as the base, bitwise).  ``mlp``:
     ``depth`` hidden tanh layers of ``width`` (``1 / sqrt(fan-in)`` weights, a zero last
-    layer).  ``phi_scale`` (``f64[9]``): the features' training spread (:func:`_standardised`)."""
+    layer).  ``phi_scale`` (``f64[F]``): the features' training spread (:func:`_standardised`)."""
     theta = {k: jnp.float64(v) for k, v in BASELINE.items()}
     k = len(FEATURES)
     if kind == "linear":
@@ -432,7 +481,7 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
       stop relaxing every particle toward one velocity (the O((dx / lambda)^2) excess
       viscosity of uniform in-cell collisions).  ``None``: the cell-mean target.
     - ``corrected`` (``"linear"`` / ``"mlp"``, needs ``periodic``): a learned per-cell
-      ``(dlog_tau, dlog_pr)`` from the theory features (:func:`cell_features`,
+      ``(dlog r_s, dlog r_q)`` from the theory features (:func:`cell_features`,
       :func:`correction`; parameters from :func:`init_correction`).
     """
     del static, cell_temp
@@ -442,8 +491,8 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
     if corrected is not None:
         if periodic is None:
             raise ValueError("a corrected operator needs periodic= (its features use gradients)")
-        _, n_s, _, theta_s = safe_cells(n, pi, theta_c)
-        phi = cell_features(n, n_s, u, theta_s, grid, sp, params, periodic)
+        _, n_s, pi_s, theta_s = safe_cells(n, pi, theta_c)
+        phi = cell_features(n, n_s, u, pi_s, theta_s, grid, sp, params, periodic)
         delta = correction(theta, phi, corrected)
     a, chol = step_coefficients(n, pi, theta_c, grid, sp, params, theta, splitting, delta)
     xi = indexed_normal(key_for(base_key, step, STAGE_LEARNED), v.shape[0], (3,))

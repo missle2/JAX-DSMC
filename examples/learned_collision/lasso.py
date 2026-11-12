@@ -2,16 +2,16 @@
 path, its cross-validation and the stability of every term, instead of one training run per
 penalty.
 
-Around the current coefficients ``A0`` (``f64[2, 9]``: ``(dlog_tau, dlog_pr)`` x the
+Around the current coefficients ``A0`` (``f64[2, 10]``: ``(dlog r_s, dlog r_q)`` x the
 standardised features, :mod:`.features`) each window's projected flux deviation is linear to
-first order, ``d(A) ~ d(A0) + J (A - A0)`` with ``J = dd/dA`` by forward-mode AD (18 tangents
+first order, ``d(A) ~ d(A0) + J (A - A0)`` with ``J = dd/dA`` by forward-mode AD (20 tangents
 through the window).  Averaged over windows per case (a wave's deviations in units of its own
 decaying flux, one row per mode; a shock's per window time and coarse cell), the squared bias
 is a quadratic in ``A``, and
 
     min_A  1/2 sum_cases mean_rows w (dbar + Jbar (A - A0))^2 + alpha |A|_1
 
-is a Lasso (coordinate descent on the 18 x 18 Gram matrix; the path over ``alpha`` warm
+is a Lasso (coordinate descent on the 20 x 20 Gram matrix; the path over ``alpha`` warm
 started).  ``--outer`` Gauss-Newton iterations re-linearise at the chosen fit.
 
 **Cross-validation** of ``alpha`` (the predicted squared bias of the held-out part):
@@ -20,8 +20,8 @@ reference seeds against the other half: the noise the fit absorbs).  The chosen 
 the largest within one standard error of the minimum.  **Stability selection**: the fit at the
 chosen ``alpha`` on ``--boot`` bootstrap resamples of the windows -- the fraction of
 resamples keeping each term.  ``--signs``: the cell-size and time-step terms of the
-``dlog_tau`` row held at ``<= 0`` (both errors raise the transport) -- a bound that binds is a
-finding, not a fit.
+``dlog r_s`` row held at ``>= 0`` (both errors raise the transport, so the stress must relax
+faster) -- a bound that binds is a finding, not a fit.
 
     PYTHONPATH=. python3 -m examples.learned_collision.lasso [--windows 96] [--outer 3]
 
@@ -46,8 +46,8 @@ from examples.learned_collision.shear_wave import BLOCK, RESULTS
 from examples.learned_collision.train import TRAIN_CASES, CaseRunner, model_options, parser
 from jax_dsmc.collide import relax
 
-NEGATIVE_TAU = ("dx2", "dx4", "dt2", "dt1", "dx2_inv_n")
-"""Terms whose ``dlog_tau`` coefficient ``--signs`` holds at ``<= 0``."""
+POSITIVE_RATE = ("dx2", "dx4", "dt2", "dt1", "dx2_inv_n")
+"""Terms whose ``dlog r_s`` coefficient ``--signs`` holds at ``>= 0``."""
 
 
 def _deviation(a, theta, states, cstates, keys, target, case, collide_fn, blocks, step0):
@@ -71,7 +71,7 @@ def _dev_and_jac(a, theta, states, cstates, keys, target, case, collide_fn, bloc
 
 class Linearised:
     """One case's windows at ``A0``: per window the deviation and its Jacobian, reduced to
-    regression rows (``[n_windows, rows, F]`` and ``[n_windows, rows, F, 18]``)."""
+    regression rows (``[n_windows, rows, F]`` and ``[n_windows, rows, F, 20]``)."""
 
     def __init__(self, runner, theta, n_windows, rng, batch=8):
         case = runner.case
@@ -87,7 +87,7 @@ class Linearised:
                 states, cstates = runner.burn_fn(theta, states, cstates, keys)
             y, x = both(theta["A"], theta, states, cstates, keys, targets)
             y = np.asarray(y)  # [m, T, K, F]
-            x = np.asarray(x).reshape(*y.shape, -1)  # [m, T, K, F, 18]
+            x = np.asarray(x).reshape(*y.shape, -1)  # [m, T, K, F, 20]
             for i in range(m):
                 yi, xi = y[i], x[i]
                 if runner.scale is not None:  # a wave: in units of its flux, time-averaged
@@ -109,7 +109,7 @@ class Linearised:
         e0`` over windows ``idx`` (default all)."""
         idx = slice(None) if idx is None else idx
         y = self.y[idx].mean(axis=0)  # [rows, F]
-        x = self.x[idx].mean(axis=0)  # [rows, F, 18]
+        x = self.x[idx].mean(axis=0)  # [rows, F, 20]
         w = self.weights[None, :]
         n = y.shape[0]
         t = y - np.einsum("rfp,p->rf", x, self.a0)  # residual at a = 0 (linearised)
@@ -119,12 +119,12 @@ class Linearised:
         return g, c, e0
 
 
-def lasso_cd(g, c, alpha, a=None, upper=None, sweeps=500, tol=1e-10):
-    """Coordinate descent on ``1/2 a G a - c a + alpha |a|_1`` (``upper``: per-coefficient
-    upper bounds, ``inf`` for none)."""
+def lasso_cd(g, c, alpha, a=None, bounds=None, sweeps=500, tol=1e-10):
+    """Coordinate descent on ``1/2 a G a - c a + alpha |a|_1`` (``bounds``: ``[2, p]``
+    per-coefficient lower and upper bounds, ``-inf`` / ``inf`` for none)."""
     p = len(c)
     a = np.zeros(p) if a is None else a.copy()
-    upper = np.full(p, np.inf) if upper is None else upper
+    lower, upper = (np.full(p, -np.inf), np.full(p, np.inf)) if bounds is None else bounds
     for _ in range(sweeps):
         change = 0.0
         for j in range(p):
@@ -132,7 +132,7 @@ def lasso_cd(g, c, alpha, a=None, upper=None, sweeps=500, tol=1e-10):
                 continue
             rho = c[j] - g[j] @ a + g[j, j] * a[j]
             new = np.sign(rho) * max(abs(rho) - alpha, 0.0) / g[j, j]
-            new = min(new, upper[j])
+            new = min(max(new, lower[j]), upper[j])
             change = max(change, abs(new - a[j]))
             a[j] = new
         if change < tol:
@@ -151,25 +151,25 @@ def _objective(a, g, c, e0):
     return float(0.5 * a @ g @ a - c @ a + e0)
 
 
-def path(g, c, alphas, upper):
+def path(g, c, alphas, bounds):
     out, a = [], None
     for alpha in alphas:
-        a = lasso_cd(g, c, alpha, a, upper)
+        a = lasso_cd(g, c, alpha, a, bounds)
         out.append(a.copy())
     return np.array(out)
 
 
-def _cv(train_parts, test_parts, alphas, upper):
+def _cv(train_parts, test_parts, alphas, bounds):
     """Held-out predicted squared bias along the path fitted on ``train_parts``."""
     g, c, _ = _combine(train_parts)
-    coefs = path(g, c, alphas, upper)
+    coefs = path(g, c, alphas, bounds)
     gt, ct, et = _combine(test_parts)
     return np.array([_objective(a, gt, ct, et) for a in coefs])
 
 
-def cross_validate(cases, alphas, upper):
+def cross_validate(cases, alphas, bounds):
     """``{"loco": [folds, alphas], "seed": [2, alphas]}`` held-out errors."""
-    loco = [_cv([c.quadratic() for c in cases if c is not h], [h.quadratic()], alphas, upper)
+    loco = [_cv([c.quadratic() for c in cases if c is not h], [h.quadratic()], alphas, bounds)
             for h in cases]  # fmt: skip
     seed = []
     for half in (0, 1):
@@ -179,7 +179,7 @@ def cross_validate(cases, alphas, upper):
             continue  # a case with every window on one side of the split
         tr = [c.quadratic(i) for c, i in zip(cases, tr_idx, strict=True)]
         te = [c.quadratic(i) for c, i in zip(cases, te_idx, strict=True)]
-        seed.append(_cv(tr, te, alphas, upper))
+        seed.append(_cv(tr, te, alphas, bounds))
     return {"loco": np.array(loco), "seed": np.array(seed).reshape(-1, len(alphas))}
 
 
@@ -194,22 +194,23 @@ def one_se(errors, alphas):
     return float(alphas[ok.min()]), float(alphas[best])  # alphas descending: min index = largest
 
 
-def stability(cases, alpha, upper, n_boot, rng):
+def stability(cases, alpha, bounds, n_boot, rng):
     """Fraction of window-bootstrap refits keeping each coefficient at ``alpha``."""
     kept = np.zeros(len(cases[0].a0))
     for _ in range(n_boot):
         parts = [c.quadratic(rng.integers(0, len(c.y), len(c.y))) for c in cases]
         g, c, _ = _combine(parts)
-        kept += np.abs(lasso_cd(g, c, alpha, upper=upper)) > 1e-12
+        kept += np.abs(lasso_cd(g, c, alpha, bounds=bounds)) > 1e-12
     return kept / n_boot
 
 
-def _upper(signs):
-    upper = np.full((2, len(relax.FEATURES)), np.inf)
+def _bounds(signs):
+    """``[2, p]``: lower and upper bounds of the flattened ``A`` (``--signs``)."""
+    lower = np.full((2, len(relax.FEATURES)), -np.inf)
     if signs:
-        for name in NEGATIVE_TAU:
-            upper[0, relax.FEATURES.index(name)] = 0.0
-    return upper.ravel()
+        for name in POSITIVE_RATE:
+            lower[0, relax.FEATURES.index(name)] = 0.0
+    return np.stack([lower.ravel(), np.full(lower.size, np.inf)])
 
 
 def main(argv=None):
@@ -227,27 +228,27 @@ def main(argv=None):
     _, theta, _ = operators.operator("linear", "shear", **model_options(args))
     runners = [CaseRunner(name, "linear", args) for name in args.cases]
     rng = np.random.default_rng(args.seed)
-    upper = _upper(args.signs)
+    bounds = _bounds(args.signs)
     record, t0 = [], time.time()
     for it in range(args.outer):
         cases = [Linearised(r, theta, args.windows, rng, args.jac_batch) for r in runners]
         g, c, e0 = _combine([k.quadratic() for k in cases])
         alpha_max = float(np.max(np.abs(c))) * 1.01
         alphas = alpha_max * np.logspace(0, -4, args.alphas)
-        coefs = path(g, c, alphas, upper)
-        cv = cross_validate(cases, alphas, upper)
+        coefs = path(g, c, alphas, bounds)
+        cv = cross_validate(cases, alphas, bounds)
         alpha, alpha_min = one_se(cv[args.cv], alphas)
-        a = lasso_cd(g, c, alpha, upper=upper)
-        stab = stability(cases, alpha, upper, args.boot, rng)
+        a = lasso_cd(g, c, alpha, bounds=bounds)
+        stab = stability(cases, alpha, bounds, args.boot, rng)
         record.append({
             "outer": it, "a0": cases[0].a0.tolist(), "alphas": alphas.tolist(),
             "path": coefs.tolist(), "cv_loco": cv["loco"].tolist(), "cv_seed": cv["seed"].tolist(),
             "alpha": alpha, "alpha_min": alpha_min, "coef": a.tolist(), "stability": stab.tolist(),
             "bias2_at_a0": e0, "bias2_fit": _objective(a, g, c, e0),
-            "upper_binding": (np.isfinite(upper) & (np.abs(a - upper) < 1e-12)).tolist(),
+            "bound_binding": (np.isfinite(bounds) & (np.abs(a - bounds) < 1e-12)).any(0).tolist(),
             "seconds": time.time() - t0,
         })  # fmt: skip
-        names = [f"{row}:{f}" for row in ("tau", "pr") for f in relax.FEATURES]
+        names = [f"{row}:{f}" for row in ("rs", "rq") for f in relax.FEATURES]
         kept = [f"{n} {v:+.3f} ({s:.2f})" for n, v, s in zip(names, a, stab, strict=True)
                 if abs(v) > 1e-12]  # fmt: skip
         print(f"outer {it}: bias2 {e0:.4e} -> {record[-1]['bias2_fit']:.4e}, alpha {alpha:.3e} "

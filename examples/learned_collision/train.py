@@ -56,6 +56,7 @@ from examples.learned_collision import flows, operators
 from examples.learned_collision import windows2d as w2
 from examples.learned_collision.evaluate import load_ref
 from examples.learned_collision.shear_wave import BLOCK, RESULTS
+from jax_dsmc.collide import relax
 
 TRAIN_CASES = tuple(name for name, (_, _, role) in flows.CASES.items() if role == "train")
 
@@ -228,12 +229,16 @@ def model_options(args):
     if args.model == "mlp":
         opts.update(width=args.width, depth=args.depth)
     if args.model != "scalar" and args.features:
-        opts["phi_scale"] = json.loads((RESULTS / args.features).read_text())["phi_scale"]
+        stats = json.loads((RESULTS / args.features).read_text())
+        if stats["features"] != list(relax.FEATURES):
+            raise SystemExit(f"{args.features} has features {stats['features']}, the operator "
+                             f"{list(relax.FEATURES)}: rerun features.py (lcfeat)")
+        opts["phi_scale"] = stats["phi_scale"]
     return opts
 
 
 def _fan_in(theta):
-    """Each leaf's step divisor: a weight matrix's fan-in (``A``: ``[2, 9]``, ``W{i}``:
+    """Each leaf's step divisor: a weight matrix's fan-in (``A``: ``[2, F]``, ``W{i}``:
     ``[fan_in, fan_out]``), 1 for the rest."""
     out = {}
     for k, v in theta.items():
@@ -428,7 +433,7 @@ def parser():
     ap.add_argument("--train-intercept", action="store_true")
     ap.add_argument(
         "--features",
-        default="features_v2.json",
+        default="features_v3.json",
         help="feature statistics (features.py; '' = nominal scales)",
     )
     ap.add_argument(

@@ -89,10 +89,10 @@ def _replicas(case, px, pv, pa):
     return states, cstates, jnp.stack([jax.random.PRNGKey(31), jax.random.PRNGKey(32)])
 
 
-def _check(case, px, pv, pa, target, model, leaf, estimator):
+def _check(case, px, pv, pa, target, model, leaf, estimator, fill=0.03):
     fn, theta, _ = operators.operator(model, case.kind)
     if model == "linear":
-        theta = dict(theta, A=jnp.full_like(theta["A"], 0.03))
+        theta = dict(theta, A=jnp.full_like(theta["A"], fill))
     states, cstates, keys = _replicas(case, px, pv, pa)
     weights = jnp.ones(len(w2.LOSS_FIELDS[case.kind]))
     k = 2 if case.kind == "shear" else case.n_coarse
@@ -124,7 +124,10 @@ def test_shock_window_gradients_match_finite_differences():
 def test_shear_window_gradients_match_finite_differences():
     case, px, pv, pa, target = _shear()
     _check(case, px, pv, pa, target, "scalar", "log_tau", "pair")
-    _check(case, px, pv, pa, target, "linear", "A", "bias")
+    # rate basis (2026-11-12): -0.03 slows both rates, the old basis' +0.03 direction (AD = FD
+    # to 5e-4 with the bound feature).  +0.03 speeds both up and AD drifts from FD by ~4e-3
+    # relative there (scratch/fd_bound_check.py; with or without the bound feature)
+    _check(case, px, pv, pa, target, "linear", "A", "bias", fill=-0.03)
 
 
 def test_a_batch_of_windows_gives_each_window_its_own_gradient():

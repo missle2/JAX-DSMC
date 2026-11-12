@@ -12,6 +12,13 @@
   normalised L2 errors of ``n``, ``T``, ``tau_xx``, ``q_x``, the shift-invariant integrals
   ``int tau_xx dx`` and ``int q_x dx`` against the reference's, and the shock drift.
   Standard errors over the batch of independent starts.
+* ``--bound`` (ES-FP operators, shocks; the ``lcbound`` diagnostic, 2026-11-12): at every
+  sampled block, each cell's ``pd_max / theta`` and whether ES-FP's positive-definiteness
+  bound slows its stress relaxation (:func:`jax_dsmc.collide.relax.bound_activity`, at the
+  base coefficients -- a trained correction's own shift of the bound is not included): the
+  profiles of the active fraction, the mean slowdown ``log(e_bound / e_s)`` and the mean
+  ratio, the cell-averaged active fraction and the fraction weighted by the reference
+  ``|tau_xx|`` (how much of the stress profile sits in bound-limited cells).
 
     PYTHONPATH=. python3 -m examples.learned_collision.evaluate --cases S1 K3 \
         --operators ntc esfp_recon [--theta train_linear_v1.json] [--refs-tag v1]
@@ -37,6 +44,8 @@ from examples.learned_collision import flows, moments, operators, refdata
 from examples.learned_collision import windows2d as w2
 from examples.learned_collision.shear_wave import BLOCK, RESULTS, amplitude, fit_decay
 from examples.learned_collision.windows import wave_basis
+from jax_dsmc import sort
+from jax_dsmc.collide import relax as relax_op
 
 
 def load_ref(name, tag):
@@ -135,9 +144,19 @@ def _starts(ref, case, n_starts, rng):
     return states, cstates, np.array([ref["snap_xs"][s, t] for s, t, _ in picks])
 
 
+def _bound_cells(state, theta, case, periodic, splitting):
+    """``(active, slowdown, ratio)`` per cell of one coarse state (``--bound``)."""
+    table = sort.build_table(state, case.grid)
+    _, _, n, _, _, pi, theta_c = relax_op.local_state(state, table, case.grid, periodic)
+    ratio, slow = relax_op.bound_activity(n, pi, theta_c, case.grid, case.sp, case.params,
+                                          theta, splitting)  # fmt: skip
+    return (slow > 0.0).astype(jnp.float64), slow, ratio
+
+
 def eval_shock(case_name, op_name, theta, ref, meta, starts, relax, sample, seed=0,
-               ppc=flows.PPC_COARSE):  # fmt: skip
-    """Profile errors (module docstring) of one operator on shock case ``case_name``."""
+               ppc=flows.PPC_COARSE, bound=False):  # fmt: skip
+    """Profile errors (module docstring) of one operator on shock case ``case_name``;
+    ``bound``: also the ES-FP bound's activity (``--bound``)."""
     case = w2.make_case(case_name, meta, ppc)
     fn, theta0, pairing = operators.operator(op_name, "shock")
     theta = theta0 if theta is None else theta
@@ -156,6 +175,12 @@ def eval_shock(case_name, op_name, theta, ref, meta, starts, relax, sample, seed
     x_c = (np.arange(case.n_coarse) + 0.5) * case.dx_c
     acc = np.zeros((starts, case.n_coarse, 16))
     pos, clipped, short = [], 0, 0.0
+    bound = bound and fn is not None and fn.func is relax_op.collide
+    if bound:
+        cells = jax.jit(jax.vmap(functools.partial(
+            _bound_cells, case=case, periodic=fn.keywords["periodic"],
+            splitting=fn.keywords.get("splitting", False)), in_axes=(0, None)))  # fmt: skip
+        b_acc = np.zeros((3, case.n_coarse))
     for b in range(n_relax + n_sample):
         states, cstates, clip, sh = flows.advance(
             states, cstates, keys, case.grid, case.sp, case.params, b * BLOCK, theta, res, wall,
@@ -167,11 +192,23 @@ def eval_shock(case_name, op_name, theta, ref, meta, starts, relax, sample, seed
             s = np.asarray(sums(states))
             acc += s
             pos.append(flows.shock_position(s[:, :, 0], x_c, st["ratio"], case.ppc_up))
+            if bound:
+                # row-major cells: x is the slow index (jax_dsmc.grid.cell_of)
+                b_acc += np.stack([np.asarray(a).reshape(starts, case.n_coarse, -1)
+                                   .mean(axis=(0, 2)) for a in cells(states, theta)])  # fmt: skip
     acc /= n_sample
     pos = np.stack(pos)  # [samples, starts]
-    return _shock_metrics(acc, pos, xs0, ref, meta, case) | {
+    out = _shock_metrics(acc, pos, xs0, ref, meta, case) | {
         "starts": starts, "attempts_clipped": clipped, "inflow_shortfall": short,
         "relax_blocks": n_relax, "sample_blocks": n_sample}  # fmt: skip
+    if bound:
+        frac, slow, ratio = b_acc / n_sample
+        w = np.abs(np.array(out["reference"])[:, 2])
+        out["bound"] = {"active_profile": frac.tolist(), "slowdown_profile": slow.tolist(),
+                        "ratio_profile": ratio.tolist(), "active_frac": float(frac.mean()),
+                        "active_frac_txx": float((frac * w).sum() / w.sum()),
+                        "ratio_max": float(ratio.max())}  # fmt: skip
+    return out
 
 
 def _shock_metrics(acc, pos, xs0, ref, meta, case):
@@ -212,6 +249,7 @@ def main(argv=None):
     ap.add_argument("--relax", type=float, default=0.5, help="shock relaxation, flow-throughs")
     ap.add_argument("--sample", type=float, default=1.0, help="shock sampling, flow-throughs")
     ap.add_argument("--ppc", type=int, default=flows.PPC_COARSE, help="coarse particles/cell")
+    ap.add_argument("--bound", action="store_true", help="ES-FP bound activity (shocks)")
     ap.add_argument("--tag", default="v1")
     args = ap.parse_args(argv)
     runs = [(name, None, name) for name in args.operators]
@@ -232,10 +270,16 @@ def main(argv=None):
                 summary = f"mu/mu_ref {res['mu_ratio']:.4f} +- {res['mu_ratio_se']:.4f}"
             else:
                 res = eval_shock(case_name, op_name, theta, ref, meta, args.starts, args.relax,
-                                 args.sample, ppc=args.ppc)  # fmt: skip
+                                 args.sample, ppc=args.ppc, bound=args.bound)  # fmt: skip
                 summary = (f"L2 n {res['l2_n']:.3f} T {res['l2_T']:.3f} txx {res['l2_txx']:.3f}"
                            f" qx {res['l2_qx']:.3f}  int txx {res['int_txx_ratio']:.3f} qx "
                            f"{res['int_qx_ratio']:.3f}  drift {res['drift']:+.2f}")  # fmt: skip
+                if "bound" in res:
+                    bd = res["bound"]
+                    summary += (
+                        f"  bound active {bd['active_frac']:.3f} (txx-weighted "
+                        f"{bd['active_frac_txx']:.3f}) max pd/theta {bd['ratio_max']:.2f}"
+                    )
             rows.append({"case": case_name, "role": role, "reference": ref_name, "dx_c": dx_c,
                          "operator": label, "seconds": time.time() - t1, **res})  # fmt: skip
             print(f"{case_name} ({role}) {label:14s} {summary}  clipped "

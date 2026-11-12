@@ -137,10 +137,10 @@ def pack(costs, jobs):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--timing", default="train_linear_lctime.json")
+    ap.add_argument("--timing", default="train_linear_lctime3.json")
     ap.add_argument(
         "--timing-mlp",
-        default="train_mlp_lctime_mlp.json",
+        default="train_mlp_lctime3_mlp.json",
         help="the largest network's timing run ('' = cost as the linear model)",
     )
     ap.add_argument("--hours", type=float, default=60.0)
