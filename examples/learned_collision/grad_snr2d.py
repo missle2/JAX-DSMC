@@ -4,7 +4,8 @@ estimators (:mod:`.windows2d`) on the round-1 cases, against window length.
 Per case and window length: ``--bias-windows`` windows fill a running-bias table (forward
 only), then ``--windows`` fresh windows each give both estimators' gradients *on the same
 window* (same pools, stripes, thinning and noise) -- the two-replica ``pair`` and the
-running-bias ``bias`` (the table from the first, independent set: no lag, no reuse bias).
+running-bias ``bias`` (the table from the first, independent set, then frozen: no lag, no
+reuse bias).
 Reported per parameter: the mean gradient, its standard error and ``|mean| / se``, at the
 base operator (``theta`` from the model's zero initialisation).
 
@@ -40,13 +41,11 @@ def study(name, blocks, args):
     for _ in range(args.bias_windows):
         _, d_mean, rows, _ = runner.window(theta, rng, "pair")
         runner.update_bias(rows, d_mean)
-    table = runner.bias.copy()
     grads = {"pair": [], "bias": []}
     pairs = []
     for i in range(args.windows):
         for est in ("pair", "bias"):
-            pair, _, _, g = runner.window(theta, np.random.default_rng((args.seed, 7, i)), est,
-                                          table)  # fmt: skip
+            pair, _, _, g = runner.window(theta, np.random.default_rng((args.seed, 7, i)), est)
             grads[est].append(_flat(g))
         pairs.append(pair)
     out = {"case": name, "blocks": blocks, "pair_loss": float(np.mean(pairs)),

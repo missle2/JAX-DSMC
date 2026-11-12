@@ -1750,8 +1750,12 @@ def _lccirc_jobs(gpus_per_node: int) -> dict[str, str]:
 def _lcbase_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbase``: the 12 cases x 8 baseline operators, forward (three case blocks)."""
     del gpus_per_node
-    return {f"lcbase_{name}": f"{LC}.evaluate --cases {cases} --tag base_{name}"
+    jobs = {f"lcbase_{name}": f"{LC}.evaluate --cases {cases} --tag base_{name}"
             for name, cases in LC_BASE_BLOCKS.items()}  # fmt: skip
+    # (2026-11-11) S1 / S2 at 64 seeds gave +-0.13-0.32 / +-0.05 on mu: the low-amplitude
+    # waves' decay is noisy; 512 seeds (S1 ~5 s, S2 ~100 s per operator at 64)
+    jobs["lcbase_shear_hi"] = f"{LC}.evaluate --cases S1 S2 --seeds 512 --tag base_shear_hi"
+    return jobs
 
 
 def _lcsnr_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1773,7 +1777,7 @@ def _lceval_jobs(gpus_per_node: int) -> dict[str, str]:
     for m in LC_MODELS:
         theta = f"train_{m}_v1.json"
         jobs[f"lceval_{m}"] = (f"{LC}.evaluate --cases {LC_TEST} --operators --theta {theta} "
-                               f"--tag test_{m}")  # fmt: skip
+                               f"--seeds 512 --tag test_{m}")  # fmt: skip
         jobs[f"lceval_circle_{m}"] = " && ".join(
             _circle_chain(c, w, [f"--theta {theta}"]) for c in LC_CIRCLE_CELLS for w in LC_WALLS
         )

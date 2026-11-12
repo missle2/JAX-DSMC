@@ -73,14 +73,28 @@ class CaseRunner:
         if self.case.kind == "shear":
             mean = self.ref[f"mean_dx{self.case.dx_c:g}"]
             self.weights = w2.field_weights(mean, self.case)
-            self.bias = np.zeros((mean.shape[0], 2, n_fields))
+            # the wave's bias in units of its own decaying flux: one coefficient per mode and
+            # field (a viscosity-type error scales the flux by a constant factor and phase).
+            # Keyed by absolute time instead, the 800 rows of a long wave were visited < 1x
+            # each by the gate's 64 windows -- one window's noise per row, a zero-mean
+            # gradient (lcsnr S2, 2026-11-11)
+            proj = np.asarray(w2.project(w2.flux(jnp.asarray(mean), "shear"), self.case))
+            self.scale = np.sqrt(np.mean(proj**2, axis=1, keepdims=True))  # [T, 1, F]
+            self.bias = np.zeros((1, 2, n_fields))
         else:
             target = w2.shock_target(self.ref["prof_raw"], self.meta["x_shock"], self.case,
                                      self.meta, 1)  # fmt: skip
             self.weights = w2.field_weights(target, self.case)
+            self.scale = None
             self.bias = np.zeros((args.blocks, self.case.n_coarse, n_fields))
         self.bias_n = np.zeros(self.bias.shape[0])
         self.decay = args.bias_decay
+
+    def bias_at(self, rows):
+        """``[T, K, F]``: the running bias at a window's rows."""
+        if self.scale is None:
+            return self.bias[rows]
+        return self.bias[0][None] * self.scale[rows]
 
     def draw(self, rng):
         """A window: ``(states, cstates, keys, target, rows)``, ``rows`` the bias-table rows."""
@@ -112,30 +126,36 @@ class CaseRunner:
         keys = jnp.stack([jax.random.fold_in(k_run, r) for r in range(2)])
         return states, cstates, keys, jnp.asarray(target), rows
 
-    def window(self, theta, rng, estimator, bias=None):
-        """``(pair, d_mean, rows, grad)`` of one window (``bias`` overrides the table)."""
+    def window(self, theta, rng, estimator):
+        """``(pair, d_mean, rows, grad)`` of one window."""
         states, cstates, keys, target, rows = self.draw(rng)
         if self.burn:
             states, cstates = self.burn_fn(theta, states, cstates, keys)
-        b = self.bias[rows] if bias is None else bias[rows]
         (_, (pair, d_mean)), grad = self.grad_fn[estimator](
-            theta, states, cstates, keys, target, jnp.asarray(self.weights), jnp.asarray(b),
-            step0=self.burn * BLOCK,
+            theta, states, cstates, keys, target, jnp.asarray(self.weights),
+            jnp.asarray(self.bias_at(rows)), step0=self.burn * BLOCK,
         )  # fmt: skip
         return float(pair), np.asarray(d_mean), rows, grad
 
     def update_bias(self, rows, d_mean):
-        """Fold one window's mean deviation into the running-bias table."""
+        """Fold one window's mean deviation into the running bias (a running mean for the
+        first ``1 / decay`` updates of an entry, then an exponential average)."""
+        if self.scale is not None:  # one entry: the window's deviation over the flux scale
+            rows, d_mean = np.zeros(1, int), np.mean(d_mean / self.scale[rows], axis=0)[None]
         self.bias_n[rows] += 1.0
         beta = np.maximum(self.decay, 1.0 / self.bias_n[rows])[:, None, None]
         self.bias[rows] = (1.0 - beta) * self.bias[rows] + beta * d_mean
 
     def bias_norm(self):
-        """``mean(w b^2)`` over the visited rows: the squared bias the model is fitting."""
-        seen = self.bias_n > 0
-        if not seen.any():
+        """``mean(w b^2)``: the squared bias the model is fitting (over the visited rows of a
+        shock, over the whole reference series of a wave)."""
+        if not (self.bias_n > 0).any():
             return float("nan")
-        return float(np.mean(np.sum(self.weights * self.bias[seen] ** 2, axis=-1)))
+        if self.scale is not None:
+            b = self.bias_at(np.arange(self.scale.shape[0]))
+        else:
+            b = self.bias[self.bias_n > 0]
+        return float(np.mean(np.sum(self.weights * b**2, axis=-1)))
 
 
 def _scaled(scale, g):
@@ -164,14 +184,17 @@ def train(args):
         pairs = {}
         for r in runners:
             vals = []
-            for _ in range(args.batch):
+            batch = args.shear_batch if r.case.kind == "shear" else args.batch
+            for _ in range(batch):
                 pair, d_mean, rows, g = r.window(theta, rng, args.estimator)
                 r.update_bias(rows, d_mean)
-                grads = jax.tree.map(jnp.add, grads, g)
+                # each case's mean gradient, equally weighted across cases
+                grads = jax.tree.map(
+                    jnp.add, grads, jax.tree.map(functools.partial(_scaled, 1.0 / batch), g)
+                )
                 vals.append(pair)
             pairs[r.name] = float(np.mean(vals))
-        grads = jax.tree.map(functools.partial(_scaled, 1.0 / (args.batch * len(runners))),
-                             grads)  # fmt: skip
+        grads = jax.tree.map(functools.partial(_scaled, 1.0 / len(runners)), grads)
         updates, state = opt.update(grads, state, theta)
         theta = optax.apply_updates(theta, updates)
         row = {"iter": it, "pair": pairs, "bias2": {r.name: r.bias_norm() for r in runners},
@@ -195,7 +218,10 @@ def parser():
     ap.add_argument("--cases", nargs="+", default=list(TRAIN_CASES))
     ap.add_argument("--estimator", default="bias", choices=("bias", "pair"))
     ap.add_argument("--iters", type=int, default=200)
-    ap.add_argument("--batch", type=int, default=4, help="windows per case per iteration")
+    ap.add_argument("--batch", type=int, default=4, help="shock windows per case per iteration")
+    ap.add_argument("--shear-batch", type=int, default=16,
+                    help="shear-wave windows per case per iteration (~6x cheaper than a shock's, "
+                         "and a low-amplitude wave's flux signal is weak)")  # fmt: skip
     ap.add_argument("--blocks", type=int, default=5)
     ap.add_argument("--burn", type=int, default=2)
     ap.add_argument("--lr", type=float, default=0.02)
