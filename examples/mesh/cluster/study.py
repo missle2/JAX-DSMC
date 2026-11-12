@@ -1803,6 +1803,18 @@ def _lctime_jobs(gpus_per_node: int) -> dict[str, str]:
             "lctime_mlp": f"{LC}.train --model mlp --depth 3 --width 128 {common} lctime_mlp"}  # fmt: skip
 
 
+def _lcburn_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcburn`` (2026-11-12): does the window objective agree with the steady shocks' heat
+    flux?  lctime (burn 2 blocks, ~2 mean free times before a 5-block window) lowered the shock
+    stress errors but raised the heat-flux ones on all three shocks (int qx 0.97 -> 0.87 on
+    K4, 0.94 -> 0.82 on K8): short windows from fine snapshots see the coarse operator acting
+    on a fine profile, not on its own.  The same 40 iterations with 10 and 30 blocks of
+    forward-only burn-in (the window then starts from the coarse model's own relaxed state)."""
+    del gpus_per_node
+    return {f"lcburn_{b}": f"{LC}.train --model linear --validate-train --iters 40 --burn {b} "
+            f"--tag lcburn{b}" for b in (10, 30)}  # fmt: skip
+
+
 def _lcfeat_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcfeat``: the features' training spread and correlations (features_v2.json, the five
     training cases; the training, the sweep and the Lasso standardise by it -- run before
@@ -1906,6 +1918,7 @@ NEW_GROUPS = {
     "lceval": _lceval_jobs,
     "lctime": _lctime_jobs,
     "lcfeat": _lcfeat_jobs,
+    "lcburn": _lcburn_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

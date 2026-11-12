@@ -113,9 +113,15 @@ def timing_of(path, mlp_path=None):
     if mlp_path is not None:
         mlp = _per_iter(json.loads(mlp_path.read_text())["log"])
         ratio = sum(mlp.values()) / sum(per_iter[c] for c in mlp)
-    return {"iter": per_iter, "fill": {c: per_window[c] * log["args"]["bias_init"]
-                                       for c in per_iter},
-            "validate": validate, "startup": 120.0, "mlp_ratio": ratio}  # fmt: skip
+    fill = {c: per_window[c] * log["args"]["bias_init"] for c in per_iter}
+    # the fixed cost a run pays besides its steady iterations, fill windows and validation:
+    # the compiles (the fill's forward, the first iteration's gradient) and loading the
+    # references -- measured as the time to the end of iteration 0 beyond one steady
+    # iteration and the fill, plus the import / reference load before the clock starts
+    # (lctime 2026-11-12: ~340 s a run, which the first sizing's fixed 120 s left out)
+    startup = log["log"][0]["seconds"] - sum(per_iter.values()) - sum(fill.values()) + 40.0
+    return {"iter": per_iter, "fill": fill, "validate": validate,
+            "startup": max(startup, 120.0), "mlp_ratio": ratio}  # fmt: skip
 
 
 def pack(costs, jobs):
