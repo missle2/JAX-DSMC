@@ -1815,6 +1815,14 @@ def _lcburn_jobs(gpus_per_node: int) -> dict[str, str]:
             f"--tag lcburn{b}" for b in (10, 30)}  # fmt: skip
 
 
+def _lcsteadyfd_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcsteadyfd`` (2026-11-12): central differences of the steady shock errors in
+    ``log_tau`` / ``log_pr`` at the base operator (examples.learned_collision.steady_fd) --
+    the steady side of the window objective's heat-flux disagreement (lcburn)."""
+    del gpus_per_node
+    return {"lcsteadyfd": f"{LC}.steady_fd --tag v1"}
+
+
 def _lcfeat_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcfeat``: the features' training spread and correlations (features_v2.json, the five
     training cases; the training, the sweep and the Lasso standardise by it -- run before
@@ -1919,6 +1927,7 @@ NEW_GROUPS = {
     "lctime": _lctime_jobs,
     "lcfeat": _lcfeat_jobs,
     "lcburn": _lcburn_jobs,
+    "lcsteadyfd": _lcsteadyfd_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }
