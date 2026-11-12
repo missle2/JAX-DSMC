@@ -148,6 +148,12 @@ def main(argv=None):
     ap.add_argument("--min-iters", type=int, default=40)
     ap.add_argument("--max-iters", type=int, default=400)
     ap.add_argument("--tag", default="v2")
+    ap.add_argument(
+        "--train-args",
+        default="",
+        help="extra train.py options of every run (the loss chosen by lcloss, e.g. "
+        "'--shock-modes 3')",
+    )
     args = ap.parse_args(argv)
     timing = timing_of(RESULTS / args.timing,
                        RESULTS / args.timing_mlp if args.timing_mlp else None)  # fmt: skip
@@ -167,7 +173,7 @@ def main(argv=None):
            "timing": timing, "design": design(),
            "runs": [{"tag": t, "cases": c, "validate": v, "seed": s, **p}
                     for t, c, v, s, p in plan],
-           "jobs": bins}  # fmt: skip
+           "jobs": bins, "train_args": args.train_args}  # fmt: skip
     (RESULTS / f"sweep_plan_{args.tag}.json").write_text(json.dumps(out, indent=1))
     print(
         f"{len(plan)} runs x {iters} iterations = {out['hours']:.1f} GPU-h over {args.jobs} "

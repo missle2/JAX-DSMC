@@ -1796,9 +1796,9 @@ def _lctime_jobs(gpus_per_node: int) -> dict[str, str]:
     train_linear_lctime.json), and the largest sweep network's iteration time.  2026-11-12:
     40 iterations at the fan-in-normalised default lr with features_v2 (after lcfeat) -- also
     the check that the loss now falls (v1's 6 steps of plain Adam at 0.02 overshot to mu
-    0.5x).  Tags lctime3 (2026-11-12, after lcfeat v3): the rate-basis correction ``(dlog r_s,
-    dlog r_q)`` with the ES-FP ``bound`` feature (features_v3) -- does the shock heat flux
-    still fall when the model can put the stress fix in the bound-limited cells alone?"""
+    0.5x).  Tags lctime3 (2026-11-12): the rate-basis correction ``(dlog r_s, dlog r_q)``; ran
+    with a tenth ``bound`` feature (features_v3) since dropped -- its timings size the sweep
+    (one input more or less is immaterial), its training result is not the 9-feature model's."""
     del gpus_per_node
     common = "--iters 40 --tag"
     return {"lctime_linear": f"{LC}.train --model linear --validate-train {common} lctime3",
@@ -1825,6 +1825,34 @@ def _lcsteadyfd_jobs(gpus_per_node: int) -> dict[str, str]:
     return {"lcsteadyfd": f"{LC}.steady_fd --tag v1"}
 
 
+LC_LOSSES = {
+    "ctl": "",
+    "q3": "--qx-weight 3",
+    "q10": "--qx-weight 10",
+    "m1": "--shock-modes 1",
+    "m2": "--shock-modes 2",
+    "m4": "--shock-modes 4",
+    "m2q3": "--shock-modes 2 --qx-weight 3",
+}
+"""``lcloss`` variants of the shock loss (train.py ``--shock-modes`` / ``--qx-weight``)."""
+
+
+def _lcloss_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcloss`` (2026-11-12): which shock loss stops training from trading heat flux for
+    stress?  lctime3's per-cell loss lowered int tau_xx (K8 1.17 -> 1.07) but also int q_x
+    (0.95 -> 0.87, the heat-flux rate sped up), while the steady integrals' 2x2 Jacobian in
+    (log r_s, log r_q) (lcsteadyfd, condition 1.1-3.5) asks for a faster stress rate and a
+    *slower* heat-flux rate.  Two hypotheses, seven linear runs of lctime's size (40
+    iterations, forward validation on the five training cases): profile shape errors the
+    rates cannot fix drive the loss (``m*``: the low cosine modes, ``m1`` the integrals
+    alone), or qx is under-weighted (``q*``); ``ctl`` the per-cell loss on the 9-feature
+    rate-basis model.  Pass: int tau_xx and int q_x both closer to 1 on K4 and K8, K1 and
+    S3/S4 mu no worse than the base."""
+    del gpus_per_node
+    return {f"lcloss_{k}": f"{LC}.train --model linear --validate-train --iters 40 {v} "
+            f"--tag lcloss_{k}".replace("  ", " ") for k, v in LC_LOSSES.items()}  # fmt: skip
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -1839,11 +1867,11 @@ def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
 
 
 def _lcfeat_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lcfeat``: the features' training spread and correlations (features_v3.json, the five
+    """``lcfeat``: the features' training spread and correlations (features_v2.json, the five
     training cases; the training, the sweep and the Lasso standardise by it -- run before
-    them).  v3 (2026-11-12): the tenth feature ``bound`` (and each case's ``bound_frac``)."""
+    them).  (v3, 2026-11-12, added a tenth ``bound`` feature, dropped after lcbound.)"""
     del gpus_per_node
-    return {"lcfeat": f"{LC}.features --tag v3"}
+    return {"lcfeat": f"{LC}.features --tag v2"}
 
 
 def _lclasso_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1877,7 +1905,7 @@ def _lccv_jobs(gpus_per_node: int) -> dict[str, str]:
                 f"{LC}.train --model mlp --depth {r['depth']} --width {r['width']} "
                 f"--weight-decay {r['weight_decay']} --lr {r['lr']} --iters {plan['iters']} "
                 f"--cases {' '.join(r['cases'])} {val}--validate-train --seed {r['seed']} "
-                f"--tag {r['tag']}"
+                f"--tag {r['tag']} {plan.get('train_args', '')}".rstrip()
             )
         jobs[f"lccv_{j}"] = " ; ".join(cmds)
     return jobs
@@ -1944,6 +1972,7 @@ NEW_GROUPS = {
     "lcburn": _lcburn_jobs,
     "lcsteadyfd": _lcsteadyfd_jobs,
     "lcbound": _lcbound_jobs,
+    "lcloss": _lcloss_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

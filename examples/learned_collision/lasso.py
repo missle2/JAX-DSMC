@@ -2,16 +2,16 @@
 path, its cross-validation and the stability of every term, instead of one training run per
 penalty.
 
-Around the current coefficients ``A0`` (``f64[2, 10]``: ``(dlog r_s, dlog r_q)`` x the
+Around the current coefficients ``A0`` (``f64[2, 9]``: ``(dlog r_s, dlog r_q)`` x the
 standardised features, :mod:`.features`) each window's projected flux deviation is linear to
-first order, ``d(A) ~ d(A0) + J (A - A0)`` with ``J = dd/dA`` by forward-mode AD (20 tangents
+first order, ``d(A) ~ d(A0) + J (A - A0)`` with ``J = dd/dA`` by forward-mode AD (18 tangents
 through the window).  Averaged over windows per case (a wave's deviations in units of its own
 decaying flux, one row per mode; a shock's per window time and coarse cell), the squared bias
 is a quadratic in ``A``, and
 
     min_A  1/2 sum_cases mean_rows w (dbar + Jbar (A - A0))^2 + alpha |A|_1
 
-is a Lasso (coordinate descent on the 20 x 20 Gram matrix; the path over ``alpha`` warm
+is a Lasso (coordinate descent on the 18 x 18 Gram matrix; the path over ``alpha`` warm
 started).  ``--outer`` Gauss-Newton iterations re-linearise at the chosen fit.
 
 **Cross-validation** of ``alpha`` (the predicted squared bias of the held-out part):
@@ -71,7 +71,7 @@ def _dev_and_jac(a, theta, states, cstates, keys, target, case, collide_fn, bloc
 
 class Linearised:
     """One case's windows at ``A0``: per window the deviation and its Jacobian, reduced to
-    regression rows (``[n_windows, rows, F]`` and ``[n_windows, rows, F, 20]``)."""
+    regression rows (``[n_windows, rows, F]`` and ``[n_windows, rows, F, 18]``)."""
 
     def __init__(self, runner, theta, n_windows, rng, batch=8):
         case = runner.case
@@ -87,7 +87,7 @@ class Linearised:
                 states, cstates = runner.burn_fn(theta, states, cstates, keys)
             y, x = both(theta["A"], theta, states, cstates, keys, targets)
             y = np.asarray(y)  # [m, T, K, F]
-            x = np.asarray(x).reshape(*y.shape, -1)  # [m, T, K, F, 20]
+            x = np.asarray(x).reshape(*y.shape, -1)  # [m, T, K, F, 18]
             for i in range(m):
                 yi, xi = y[i], x[i]
                 if runner.scale is not None:  # a wave: in units of its flux, time-averaged
@@ -109,7 +109,7 @@ class Linearised:
         e0`` over windows ``idx`` (default all)."""
         idx = slice(None) if idx is None else idx
         y = self.y[idx].mean(axis=0)  # [rows, F]
-        x = self.x[idx].mean(axis=0)  # [rows, F, 20]
+        x = self.x[idx].mean(axis=0)  # [rows, F, 18]
         w = self.weights[None, :]
         n = y.shape[0]
         t = y - np.einsum("rfp,p->rf", x, self.a0)  # residual at a = 0 (linearised)

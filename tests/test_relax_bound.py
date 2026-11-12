@@ -1,5 +1,5 @@
 """ES-FP's positive-definiteness bound against the paper's limiter, the rate basis of the
-learned correction, and the ``bound`` feature (jax_dsmc/collide/relax.py, 2026-11-12)."""
+learned correction, and the bound diagnostic (jax_dsmc/collide/relax.py, 2026-11-12)."""
 
 from __future__ import annotations
 
@@ -52,20 +52,16 @@ def test_rate_basis_corrects_each_rate_alone():
     np.testing.assert_allclose(r0[1] / r0[0], relax.PRANDTL, rtol=1e-12)
 
 
-def test_bound_feature_and_activity_mark_strongly_anisotropic_cells():
-    """An isotropic cell gives ``bound = 0`` and no slowdown; a cell stretched past
-    ``pd_max = 0.8 theta`` gives the excess and a positive slowdown."""
-    n, u, pi, theta_c, grid, sp, params = _shear_cells()
+def test_bound_activity_marks_strongly_anisotropic_cells():
+    """An isotropic cell has no slowdown; a cell stretched past ``pd_max = 0.8 theta`` has
+    ``pd_ratio`` 1.2 and a positive slowdown (the ``evaluate --bound`` diagnostic)."""
+    n, _, pi, theta_c, grid, sp, params = _shear_cells()
     theta = jnp.mean(theta_c)
     iso = jnp.broadcast_to(theta * jnp.eye(3), pi.shape)
     stretch = jnp.diag(jnp.array([2.2, 0.4, 0.4])) * theta  # Pi_dev eigen 1.2 theta
     pis = jnp.where((jnp.arange(n.shape[0]) % 2 == 0)[:, None, None], iso, stretch)
     tc = jnp.full(n.shape, theta)
     nn = jnp.full(n.shape, 50.0)
-    phi = np.asarray(relax.cell_features(nn, nn, u, pis, tc, grid, sp, params, (True,)))
-    col = phi[:, relax.FEATURES.index("bound")] * relax.FEATURE_SCALE[-1]
-    np.testing.assert_allclose(col[0::2], 0.0)
-    np.testing.assert_allclose(col[1::2], 1.2 - 0.8, rtol=1e-10)
     base = {k: jnp.float64(v) for k, v in relax.BASELINE.items()}
     ratio, slow = relax.bound_activity(nn, pis, tc, grid, sp, params, base)
     np.testing.assert_allclose(ratio[1::2], 1.2, rtol=1e-10)

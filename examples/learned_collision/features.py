@@ -8,9 +8,7 @@ round-1 cases, as the operator sees them: thinned reference snapshots on the coa
   features -- the Gram matrix a Lasso on them sees): near-collinear terms are the ones whose
   selection order an L1 path cannot be trusted on.
 * per case (training and test): quantiles of each feature -- the coverage the test and
-  circle cells are measured against -- and ``bound_frac``, the fraction of cells past ES-FP's
-  positive-definiteness limit (the ``bound`` feature > 0) in the fine state at coarse
-  resolution (the coarse run's own fraction: ``evaluate --bound``).
+  circle cells are measured against.
 
     PYTHONPATH=. python3 -m examples.learned_collision.features [--windows 32]
 
@@ -39,9 +37,8 @@ QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
 def _cell_features(state, case, periodic):
     table = sort.build_table(state, case.grid)
     _, _, n, u, _, pi, theta_c = relax.local_state(state, table, case.grid, periodic)
-    _, n_s, pi_s, theta_s = relax.safe_cells(n, pi, theta_c)
-    phi = relax.cell_features(n, n_s, u, pi_s, theta_s, case.grid, case.sp, case.params,
-                              periodic)  # fmt: skip
+    _, n_s, _, theta_s = relax.safe_cells(n, pi, theta_c)
+    phi = relax.cell_features(n, n_s, u, theta_s, case.grid, case.sp, case.params, periodic)
     return phi, n
 
 
@@ -70,7 +67,7 @@ def main(argv=None):
     ap.add_argument("--windows", type=int, default=32, help="snapshots per case")
     ap.add_argument("--refs-tag", default="v1")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--tag", default="v3")
+    ap.add_argument("--tag", default="v2")
     args = ap.parse_args(argv)
     rng = np.random.default_rng(args.seed)
     refs, per_case, train = {}, {}, []
@@ -80,8 +77,7 @@ def main(argv=None):
         phi = case_features(name, *refs[ref_name], args.windows, rng)
         per_case[name] = {"role": role, "cells": int(phi.shape[0]),
                           "quantiles": np.quantile(phi, QUANTILES, axis=0).tolist(),
-                          "rms": np.sqrt(np.mean(phi**2, axis=0)).tolist(),
-                          "bound_frac": float(np.mean(phi[:, relax.FEATURES.index("bound")] > 0))}  # fmt: skip
+                          "rms": np.sqrt(np.mean(phi**2, axis=0)).tolist()}  # fmt: skip
         if role == "train":
             # equal weight per case whatever its cell count
             train.append(phi[rng.choice(len(phi), size=min(len(phi), 20_000), replace=False)])

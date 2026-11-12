@@ -11,7 +11,13 @@ sample times; a shock's the reference's shock-frame profile placed at the snapsh
 position and summed into the coarse cells (:func:`shock_target`), the same at every time.
 
 **Loss fields.**  Shear: ``pxy``, projected on the box's first Fourier pair.  Shock: the
-normal stress ``tau_xx = pxx - tr(p) / 3`` and heat flux ``qx`` per coarse cell.
+normal stress ``tau_xx = pxx - tr(p) / 3`` and heat flux ``qx`` per coarse cell, or with
+``Case.modes = K > 0`` projected on the first ``K`` cosine modes of the domain
+(:func:`shock_basis`; ``K = 1``: the integrals ``int tau_xx dx`` and ``int q_x dx`` alone,
+``K = C``: the per-cell loss again, by Parseval).  2026-11-12: the per-cell loss traded heat
+flux for stress (lctime3: int qx 0.95 -> 0.87 at M10) while the steady integrals are jointly
+fixable by the two rates -- profile *shape* errors the rates cannot fix pull the heat-flux
+rate the wrong way; the low modes keep the magnitudes and drop the shape (``lcloss``).
 
 **Gradient estimators** (:func:`window_objective`):
 
@@ -68,6 +74,7 @@ class Case(NamedTuple):
     dx_c: float
     ppc_up: float
     cstate0: object
+    modes: int = 0
 
 
 def make_case(name, meta, ppc_c=flows.PPC_COARSE, a_max=0, pairing="uniform"):
@@ -146,10 +153,30 @@ def flux(m, kind):
     return jnp.stack([txx, m[..., 10]], axis=-1)
 
 
+def shock_basis(n_coarse, modes):
+    """``f64[K, C]``: the first ``modes`` orthonormal cosine (DCT-II) rows over the coarse
+    cells -- row 0 the integral (the cell sum over ``sqrt(C)``), row ``k`` ``k`` half-waves."""
+    c = np.arange(n_coarse) + 0.5
+    rows = [np.full(n_coarse, 1.0 / math.sqrt(n_coarse))]
+    rows += [math.sqrt(2.0 / n_coarse) * np.cos(np.pi * k * c / n_coarse)
+             for k in range(1, modes)]  # fmt: skip
+    return jnp.asarray(np.stack(rows))
+
+
+def loss_rows(case):
+    """``K``: the rows of a case's projected deviation (:func:`project`)."""
+    if case.kind == "shear":
+        return 2
+    return case.modes if case.modes > 0 else case.n_coarse
+
+
 def project(d, case):
-    """``[T, K, F]``: ``d[T, C, F]`` projected on the wave modes (shear) or as is (shock)."""
+    """``[T, K, F]``: ``d[T, C, F]`` projected on the wave modes (shear), on the first
+    ``case.modes`` cosine modes (shock, ``modes > 0``) or as is (shock)."""
     if case.kind == "shear":
         return jnp.einsum("kc,tcf->tkf", wave_basis(case.n_coarse), d)
+    if case.modes > 0:
+        return jnp.einsum("kc,tcf->tkf", shock_basis(case.n_coarse, case.modes), d)
     return d
 
 

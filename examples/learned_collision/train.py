@@ -81,7 +81,8 @@ class CaseRunner:
         if args.pool_seeds:
             self.seeds = np.array([k for k in args.pool_seeds if k < self.ref["pool_x"].shape[0]])
         self.case = self.case._replace(
-            static=dataclasses.replace(self.case.static, pairing=pairing)
+            static=dataclasses.replace(self.case.static, pairing=pairing),
+            modes=min(args.shock_modes, self.case.n_coarse),
         )
         self.blocks, self.burn = args.blocks, args.burn
         self.window_batch = args.window_batch
@@ -116,8 +117,9 @@ class CaseRunner:
             target = w2.shock_target(self.ref["prof_raw"], self.meta["x_shock"], self.case,
                                      self.meta, 1)  # fmt: skip
             self.weights = w2.field_weights(target, self.case)
+            self.weights[w2.LOSS_FIELDS["shock"].index("qx")] *= args.qx_weight
             self.scale = None
-            self.bias = np.zeros((args.blocks, self.case.n_coarse, n_fields))
+            self.bias = np.zeros((args.blocks, w2.loss_rows(self.case), n_fields))
         self.bias_n = np.zeros(self.bias.shape[0])
         self.decay = args.bias_decay
 
@@ -231,8 +233,10 @@ def model_options(args):
     if args.model != "scalar" and args.features:
         stats = json.loads((RESULTS / args.features).read_text())
         if stats["features"] != list(relax.FEATURES):
-            raise SystemExit(f"{args.features} has features {stats['features']}, the operator "
-                             f"{list(relax.FEATURES)}: rerun features.py (lcfeat)")
+            raise SystemExit(
+                f"{args.features} has features {stats['features']}, the operator "
+                f"{list(relax.FEATURES)}: rerun features.py (lcfeat)"
+            )
         opts["phi_scale"] = stats["phi_scale"]
     return opts
 
@@ -401,6 +405,13 @@ def parser():
     ap.add_argument("--blocks", type=int, default=5)
     ap.add_argument("--burn", type=int, default=2)
     ap.add_argument(
+        "--shock-modes",
+        type=int,
+        default=0,
+        help="shock loss on the first K cosine modes (1 = the integrals; 0 = per cell)",
+    )
+    ap.add_argument("--qx-weight", type=float, default=1.0, help="shock heat-flux weight factor")
+    ap.add_argument(
         "--lr",
         type=float,
         default=3e-3,
@@ -433,7 +444,7 @@ def parser():
     ap.add_argument("--train-intercept", action="store_true")
     ap.add_argument(
         "--features",
-        default="features_v3.json",
+        default="features_v2.json",
         help="feature statistics (features.py; '' = nominal scales)",
     )
     ap.add_argument(

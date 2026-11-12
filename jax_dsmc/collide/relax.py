@@ -292,7 +292,7 @@ def conserve_about(c, c_new, u_loc, v, alive, seg, row, n, n_cells):
     return jnp.where(ok, alpha, 1.0)[row][:, None] * c_new, ok
 
 
-FEATURES = ("dx2", "dx4", "dt2", "dt1", "inv_n", "dx2_inv_n", "kn_u2", "kn_t2", "dx2_kn2", "bound")
+FEATURES = ("dx2", "dx4", "dt2", "dt1", "inv_n", "dx2_inv_n", "kn_u2", "kn_t2", "dx2_kn2")
 """The theory basis of the learned corrections (:func:`cell_features`), with ``r = h /
 lambda`` the cell size in local mean free paths:
 
@@ -304,16 +304,17 @@ lambda`` the cell size in local mean free paths:
 - ``Kn_u^2 = (lambda |S| / v)^2``, ``Kn_T^2 = (lambda |grad ln T|)^2``: Burnett-order
   (Chapman-Enskog O(Kn^2)) corrections to the stress and heat-flux closures;
 - ``r^2 (Kn_u^2 + Kn_T^2)``: the cell-size error growing with the local gradients (the
-  reconstruction is only linear);
-- ``max(0, pd_max / theta - 0.8)``: how far the cell's anisotropy is past ES-FP's
-  positive-definiteness limit (:data:`BOUND_ONSET`), where the base step's stress relaxation
-  is slowed (:func:`stress_factor_bound`) -- a defect of the Gaussian model at ``Pr = 2/3``,
-  not of the coarse cell (2026-11-12: the bound couples the stress rate to the heat-flux rate
-  there, which ``log_pr``-only corrections traded heat flux for)."""
+  reconstruction is only linear).
 
-FEATURE_SCALE = np.array([4.0, 16.0, 0.01, 0.1, 0.1, 0.4, 0.01, 0.01, 0.04, 0.2])
+No positive-definiteness term: a ``max(0, pd_max / theta - 0.8)`` feature was tried and
+dropped (2026-11-12, lcbound): in the coarse steady shocks the bound slows the stress
+relaxation by ~2 % in the M10 core (not the operator's +17 % ``int tau_xx``), and the
+feature is mostly sampling noise (8 % of shear-wave cells) and large only in the thinned
+fine snapshots the windows start from (q95 2.7 at M10, against a steady maximum of 0.3)."""
+
+FEATURE_SCALE = np.array([4.0, 16.0, 0.01, 0.1, 0.1, 0.4, 0.01, 0.01, 0.04])
 """Nominal size of each feature at the training conditions (``r = 2``, ``dt / tau = 0.1``,
-``N_c = 10``, ``Kn ~ 0.1``, a shock core ``pd_max ~ theta``): the features are divided by it so the coefficients are O(1)."""
+``N_c = 10``, ``Kn ~ 0.1``): the features are divided by it so the coefficients are O(1)."""
 
 CORRECTION_BOUND = 2.0
 """Bound on each correction (``|dlog| < 2``, a factor e^2 on ``r_s`` or ``r_q``): the raw
@@ -329,11 +330,11 @@ def lambda_factor(omega):
     return 4.0 * (5.0 - 2.0 * omega) * (7.0 - 2.0 * omega) / (30.0 * math.sqrt(2.0 * math.pi))
 
 
-def cell_features(n, n_safe, u, pi, theta_c, grid, sp, params, periodic):
-    """``f64[C, 10]``: the :data:`FEATURES` of each cell, divided by :data:`FEATURE_SCALE`.
-    ``n`` the particle counts (empty neighbours drop out of the gradients), ``n_safe``,
-    ``pi`` and ``theta_c`` the safe ones (:func:`safe_cells`); ``u`` the cell means (the
-    gradients come from neighbouring cells, so a coarse cell sees its own resolved shear)."""
+def cell_features(n, n_safe, u, theta_c, grid, sp, params, periodic):
+    """``f64[C, 9]``: the :data:`FEATURES` of each cell, divided by :data:`FEATURE_SCALE`.
+    ``n`` the particle counts (empty neighbours drop out of the gradients), ``n_safe`` and
+    ``theta_c`` the safe ones (:func:`safe_cells`); ``u`` the cell means (the gradients come
+    from neighbouring cells, so a coarse cell sees its own resolved shear)."""
     tau = stress_time(n_safe, theta_c, grid, sp, params)
     lam = lambda_factor(sp.omega[0, 0]) * tau * jnp.sqrt(theta_c)
     dx = (grid.hi - grid.lo) / jnp.asarray(grid.n)
@@ -348,10 +349,8 @@ def cell_features(n, n_safe, u, pi, theta_c, grid, sp, params, periodic):
     kn_t2 = lam**2 * jnp.sum(g_t**2, axis=1)
     dt_tau = params.dt / tau
     inv_n = 1.0 / n_safe
-    pi_dev = pi - theta_c[:, None, None] * jnp.eye(3)
-    over = jax.nn.relu(largest_deviatoric(pi_dev, theta_c, n_safe) / theta_c - BOUND_ONSET)
     phi = jnp.stack([r2, r2**2, dt_tau**2, dt_tau, inv_n, r2 * inv_n, kn_u2, kn_t2,
-                     r2 * (kn_u2 + kn_t2), over], axis=1)  # fmt: skip
+                     r2 * (kn_u2 + kn_t2)], axis=1)  # fmt: skip
     # a cell with no volume (inside a body) has tau = 0: its features are infinite, and a
     # zero coefficient times infinity would be NaN -- cap them (the bounded correction
     # saturates there anyway, and the cell holds no particle)
@@ -491,8 +490,8 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
     if corrected is not None:
         if periodic is None:
             raise ValueError("a corrected operator needs periodic= (its features use gradients)")
-        _, n_s, pi_s, theta_s = safe_cells(n, pi, theta_c)
-        phi = cell_features(n, n_s, u, pi_s, theta_s, grid, sp, params, periodic)
+        _, n_s, _, theta_s = safe_cells(n, pi, theta_c)
+        phi = cell_features(n, n_s, u, theta_s, grid, sp, params, periodic)
         delta = correction(theta, phi, corrected)
     a, chol = step_coefficients(n, pi, theta_c, grid, sp, params, theta, splitting, delta)
     xi = indexed_normal(key_for(base_key, step, STAGE_LEARNED), v.shape[0], (3,))
