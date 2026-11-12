@@ -1869,6 +1869,31 @@ def _lctransient_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lcwarm_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcwarm`` (2026-11-12): the warm pools of the training shocks' persistent chains
+    (examples.learned_collision.warm_pool: 128 coarse runs per case from the training
+    starts, relaxed 160 blocks at the base operator -- lctransient's plateau).  Minutes; run
+    before lcchain / lccv."""
+    del gpus_per_node
+    return {"lcwarm": f"{LC}.warm_pool --blocks 160 --tag v1"}
+
+
+def _lcchain_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcchain`` (2026-11-12, after lcwarm): lcloss again with the shock windows on
+    persistent chains at the model's own steady state (train.py --warm-pool).  The test is
+    ``q10``: at x10 the steady sensitivities ask for a slower heat-flux rate on every shock
+    from the first step, which the snapshot windows trained the other way.  ``ctl_long``: the
+    per-cell loss 3x as many iterations at lr 0.01 (~10x the movement) -- past the K8 path's
+    heat-flux flip (~0.04 of movement), does int q_x recover?  Pass as lcloss: int tau_xx
+    and int q_x closer to 1 on K4 and K8, K1 and S3/S4 mu no worse than the base."""
+    del gpus_per_node
+    chain = "--warm-pool v1 --model linear --validate-train"
+    jobs = {f"lcchain_{k}": f"{LC}.train {chain} --iters 40 {LC_LOSSES.get(k, '')} "
+            f"--tag lcchain_{k}".replace("  ", " ") for k in ("ctl", "q3", "q10", "m1", "m2q3")}  # fmt: skip
+    jobs["lcchain_ctl_long"] = f"{LC}.train {chain} --iters 120 --lr 0.01 --tag lcchain_ctl_long"
+    return jobs
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -1992,6 +2017,8 @@ NEW_GROUPS = {
     "lcbound": _lcbound_jobs,
     "lcloss": _lcloss_jobs,
     "lctransient": _lctransient_jobs,
+    "lcwarm": _lcwarm_jobs,
+    "lcchain": _lcchain_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

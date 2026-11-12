@@ -454,6 +454,16 @@ def _iteration(theta, runners, rng, args):
     return grads, pairs, seconds
 
 
+def _chain_log(runners):
+    """The shock chains' positions and replacements so far (``{}`` without chains)."""
+    chained = [r for r in runners if r.chains is not None]
+    if not chained:
+        return {}
+    return {"chains": {r.name: {"x_median": float(np.median(r.positions(r.chains[0]))),
+                                "x_home": r.x_home, "refreshed": r.refreshed}
+                       for r in chained}}  # fmt: skip
+
+
 def train(args):
     """The training loop (module docstring); returns the log dict."""
     _, theta, _ = operators.operator(args.model, "shear", jax.random.PRNGKey(args.seed),
@@ -486,11 +496,7 @@ def train(args):
                "seconds": time.time() - t0}  # fmt: skip
         if "A" in theta:
             row["A"] = np.asarray(theta["A"]).tolist()
-        chained = [r for r in runners if r.chains is not None]
-        if chained:  # the chains' shock positions and replacements so far
-            row["chains"] = {r.name: {"x_median": float(np.median(r.positions(r.chains[0]))),
-                                      "x_home": r.x_home, "refreshed": r.refreshed}
-                             for r in chained}  # fmt: skip
+        row.update(_chain_log(runners))
         log.append(row)
         print(f"it {it:4d}  bias2 {sum(row['bias2'].values()): .4e}  pair "
               f"{sum(pairs.values()): .4e}  |g| {row['grad_norm']:.3e}  log_tau "

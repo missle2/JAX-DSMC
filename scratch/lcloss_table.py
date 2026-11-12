@@ -2,6 +2,7 @@
 with the pass rule fixed before the runs (study.py _lcloss_jobs)."""
 
 import json
+import sys
 from pathlib import Path
 
 RES = Path(__file__).resolve().parents[1] / "examples/learned_collision/results"
@@ -9,11 +10,11 @@ BASE = {"S3": 1.065, "S4": 1.131,  # mu ratio, lcbase_shear_hi / lctime validati
         "K1": (1.047, 0.868), "K4": (1.104, 0.971), "K8": (1.170, 0.948)}  # eval_bound_*
 
 
-def main():
-    for k in ("ctl", "q3", "q10", "m1", "m2", "m4", "m2q3"):
-        path = RES / f"train_linear_lcloss_{k}.json"
+def main(prefix="lcloss"):
+    """``python scratch/lcloss_table.py [lcloss|lcchain]``."""
+    for k in ("ctl", "q3", "q10", "m1", "m2", "m4", "m2q3", "ctl_long"):
+        path = RES / f"train_linear_{prefix}_{k}.json"
         if not path.exists():
-            print(f"{k:5s} missing")
             continue
         v = json.loads(path.read_text())["validation"]
         cells, ok = [], True
@@ -30,8 +31,10 @@ def main():
             else:  # both closer to 1
                 ok &= abs(t - 1) < abs(bt - 1) and abs(q - 1) < abs(bq - 1)
             cells.append(f"{c} txx {t:.3f} qx {q:.3f} L2 {v[c]['l2_txx']:.3f}/{v[c]['l2_qx']:.3f}")
-        print(f"{k:5s} {'PASS' if ok else 'fail'} | " + " | ".join(cells))
+        a = json.loads(path.read_text())["theta"].get("A")
+        rows = "" if a is None else " | A rows " + " ".join(f"{sum(r) / len(r):+.4f}" for r in a)
+        print(f"{k:8s} {'PASS' if ok else 'fail'} | " + " | ".join(cells) + rows)
 
 
 if __name__ == "__main__":
-    main()
+    main(*sys.argv[1:])

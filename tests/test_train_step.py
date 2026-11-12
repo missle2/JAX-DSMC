@@ -61,3 +61,15 @@ def test_tail_average():
     for t in thetas[2:]:
         avg = jax.tree.map(functools.partial(train._accumulate, w=0.5), avg, t)
     np.testing.assert_allclose(avg["A"], 2.5)
+
+
+def test_chain_windows_and_write_back_keep_replica_order():
+    """Windows take consecutive chain pairs ``(2w, 2w + 1)``; their ``[m, 2]`` end states go
+    back to the same chains (train.py ``--warm-pool``)."""
+    chains = jnp.arange(8.0)[:, None] * jnp.ones((8, 3))
+    win = np.array([3, 1])
+    idx = jnp.asarray(np.stack([2 * win, 2 * win + 1], axis=1).ravel())
+    w = train._windows_of(chains, idx)
+    np.testing.assert_array_equal(w[:, :, 0], [[6.0, 7.0], [2.0, 3.0]])
+    back = train._put(chains, train._pairs(w + 100.0), idx)
+    np.testing.assert_array_equal(back[:, 0], [0, 1, 102, 103, 4, 5, 106, 107])
