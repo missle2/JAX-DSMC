@@ -23,7 +23,7 @@ set -euo pipefail
 
 REMOTE_USER=${REMOTE_USER:-aaja8389}
 HOST=${HOST:-login.rc.colorado.edu}
-REMOTE_DIR=${REMOTE_DIR:-/projects/aaja8389/JAX-DSMC}
+REMOTE_DIR=${REMOTE_DIR:-/projects/aaja8389/JAX-DSMC-neural}
 LOCAL_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 
 if [ $# -gt 0 ]; then

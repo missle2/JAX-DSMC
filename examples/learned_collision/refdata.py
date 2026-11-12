@@ -92,7 +92,7 @@ class _Recorder:
         self.prof = np.zeros((self.nx, 16))
         self.prof_n = np.zeros(self.nx)
         self.unaligned = np.zeros((self.nx, 16))
-        self.shock_xs, self.pools, self.overflow = [], [], 0
+        self.shock_xs, self.batch_xs, self.pools, self.overflow = [], [], [], 0
 
     def record(self, k, states):
         """Add sample block ``k``; returns the per-seed shock positions (zeros for a wave)."""
@@ -105,7 +105,7 @@ class _Recorder:
             return np.zeros(sums.shape[0])
         xs = flows.shock_position(sums[:, :, 0], self.x_centres, self.c["ratio"],
                                   self.c["ppc_up"])  # fmt: skip
-        self.shock_xs.append(xs)
+        self.batch_xs.append(xs)
         self.unaligned += sums.sum(axis=0)
         src = np.arange(self.nx)
         for i, x_s in enumerate(xs):
@@ -114,6 +114,14 @@ class _Recorder:
             self.prof[dst[ok]] += sums[i, src[ok]]
             self.prof_n[dst[ok]] += 1.0
         return xs
+
+    def end_batch(self):
+        """Close a seed batch: its per-block shock positions ``[blocks + 1, batch]`` (seed
+        batches differ in size when the particle budget splits the seeds unevenly -- the
+        M 1.5 reference's 3 + 1, 2026-11-11)."""
+        if self.batch_xs:
+            self.shock_xs.append(np.stack(self.batch_xs))
+        self.batch_xs = []
 
     def snapshot(self, states, n_snap, key, xs):
         """The pools of the first ``n_snap`` seeds (host, float32) and their shock positions."""
@@ -138,7 +146,7 @@ class _Recorder:
             out["prof_raw"] = self.prof / np.maximum(self.prof_n, 1.0)[:, None]
             out["prof_samples"] = self.prof_n
             out["unaligned_raw"] = self.unaligned / samples
-            out["shock_xs"] = np.stack(self.shock_xs)
+            out["shock_xs"] = np.concatenate(self.shock_xs, axis=1)  # [blocks + 1, seeds]
         return out
 
 
@@ -197,6 +205,7 @@ def run(name, seeds, snap_seeds=8, snap_every=10, warm=3.0, sample=4.0, decays=2
                 snaps.append(rec.snapshot(states, n_snap, key, xs))
         if snaps:
             rec.pools.append(snaps)
+        rec.end_batch()
         print(f"  {name} seeds {ids[0]}-{ids[-1]} done, {time.time() - t0:.0f} s, clipped "
               f"{clipped}, shortfall {short:g}, pool overflow {rec.overflow}",
               flush=True)  # fmt: skip
