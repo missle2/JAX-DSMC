@@ -9,11 +9,20 @@ three-level factors once, so each factor's main effect is estimated balanced ove
 |---|---|
 | hidden layers | 1, 2, 3 |
 | width | 8, 32, 128 |
-| weight decay | 0, 1e-4, 1e-2 |
-| learning rate | 0.003, 0.01, 0.03 |
+| weight decay (per-iteration shrink) | 0, 1e-3, 1e-2 |
+| learning rate (per-iteration output change) | 0.001, 0.003, 0.01 |
 
-**Runs per design point**: four leave-one-case-out folds (train on three of S3 S4 K1 K8,
-validate forward on the fourth and on the three) and two all-case runs with different seeds
+The learning rate is :mod:`.train`'s fan-in-normalised step (2026-11-12): the correction moves
+~``0.5 lr`` per iteration against the ~0.1 it needs (``mu / mu_ref`` 1.06-1.12), so the levels
+reach it in ~200 / ~60 / ~20 iterations -- the lowest is the insurance point, the highest the
+fastest that keeps the step-to-step jitter ~1 %.  (The first levels, 0.003-0.03 of plain Adam,
+moved ``dlog_tau`` ~0.03-0.3 per step: lctime's 6 steps at 0.02 overshot to ``mu`` 0.5x.)
+Weight decay is decoupled and independent of the learning rate: 1e-2 shrinks untrained
+weights ~20x over 300 iterations (the network pulled towards its linear small-signal limit);
+the first levels (AdamW's ``lr x wd``) shrank them < 3 %, no effect to measure.
+
+**Runs per design point**: five leave-one-case-out folds (train on four of S3 S4 K1 K4 K8,
+validate forward on the fifth and on the four) and two all-case runs with different seeds
 (training-seed variance; their test-case error comes from ``lceval`` later).  Every run's
 forward validation (:func:`.train.validate`) is written with it.
 
@@ -23,7 +32,7 @@ the iteration count; one iteration count for all runs fills ``--hours`` of GPU t
 the runs are packed into ``--jobs`` chains by longest-processing-time first.  No JAX import:
 this runs on a login node.
 
-    python3 -m examples.learned_collision.sweep --timing train_linear_lctime.json
+    python3 -m examples.learned_collision.sweep [--hours 60] [--jobs 8]
 
 Writes ``examples/learned_collision/results/sweep_plan_<tag>.json`` (read by
 ``examples/mesh/cluster/study.py --group lccv``).
@@ -37,15 +46,15 @@ import math
 from pathlib import Path
 
 RESULTS = Path(__file__).resolve().parent / "results"
-TRAIN = ("S3", "S4", "K1", "K8")
+TRAIN = ("S3", "S4", "K1", "K4", "K8")
 L9 = ((0, 0, 0, 0), (0, 1, 1, 1), (0, 2, 2, 2), (1, 0, 1, 2), (1, 1, 2, 0), (1, 2, 0, 1),
       (2, 0, 2, 1), (2, 1, 0, 2), (2, 2, 1, 0))  # fmt: skip
 """The standard L9(3^4) array (rows = runs, columns = factors, entries = level indices)."""
 FACTORS = {
     "depth": (1, 2, 3),
     "width": (8, 32, 128),
-    "weight_decay": (0.0, 1e-4, 1e-2),
-    "lr": (0.003, 0.01, 0.03),
+    "weight_decay": (0.0, 1e-3, 1e-2),
+    "lr": (0.001, 0.003, 0.01),
 }
 
 
@@ -67,35 +76,51 @@ def runs(points, seeds_all=(0, 1)):
     return out
 
 
-def run_cost(cases, validate, iters, timing):
+def run_cost(cases, validate, iters, timing, point=None):
     """Seconds of one run: the bias fill, ``iters`` iterations and the forward validation
-    (on ``validate`` and the training cases)."""
-    it = sum(timing["iter"][c] for c in cases)
-    fill = sum(timing["fill"][c] for c in cases)
+    (on ``validate`` and the training cases).  An MLP ``point``'s windows cost more than the
+    linear model's, interpolated in ``depth x width`` up to the largest network's measured
+    ratio (``timing["mlp_ratio"]``)."""
+    factor = 1.0
+    if point is not None:
+        top = max(FACTORS["depth"]) * max(FACTORS["width"])
+        factor += (timing["mlp_ratio"] - 1.0) * point["depth"] * point["width"] / top
+    it = factor * sum(timing["iter"][c] for c in cases)
+    fill = factor * sum(timing["fill"][c] for c in cases)
     val = sum(timing["validate"][c] for c in list(validate) + list(cases))
     return timing["startup"] + fill + iters * it + val
 
 
-def timing_of(path):
+def _per_iter(rows):
+    """Per-case median iteration seconds (the first, compiling, iteration dropped)."""
+    rows = rows[1:] or rows
+    return {c: sorted(r["case_seconds"][c] for r in rows)[len(rows) // 2]
+            for c in rows[0]["case_seconds"]}  # fmt: skip
+
+
+def timing_of(path, mlp_path=None):
     """Per-case seconds from a :mod:`.train` timing run (``--validate-train``): an
     iteration's (median over iterations), the bias fill's (scaled per window) and the
-    validation's."""
+    validation's; with ``mlp_path`` (the largest network's timing run) the ratio of its
+    iteration time to the linear model's."""
     log = json.loads(path.read_text())
-    rows = log["log"]
-    per_iter = {c: sorted(r["case_seconds"][c] for r in rows[1:] or rows)[len(rows[1:] or rows) // 2]
-                for c in rows[0]["case_seconds"]}  # fmt: skip
+    per_iter = _per_iter(log["log"])
     batch = {c: (log["args"]["shear_batch"] if c.startswith("S") else log["args"]["batch"])
              for c in per_iter}  # fmt: skip
     per_window = {c: per_iter[c] / batch[c] for c in per_iter}
     validate = {c: v["seconds"] for c, v in log.get("validation", {}).items()}
+    ratio = 1.0
+    if mlp_path is not None:
+        mlp = _per_iter(json.loads(mlp_path.read_text())["log"])
+        ratio = sum(mlp.values()) / sum(per_iter[c] for c in mlp)
     return {"iter": per_iter, "fill": {c: per_window[c] * log["args"]["bias_init"]
                                        for c in per_iter},
-            "validate": validate, "startup": 120.0}  # fmt: skip
+            "validate": validate, "startup": 120.0, "mlp_ratio": ratio}  # fmt: skip
 
 
 def pack(costs, jobs):
     """Longest-processing-time packing: ``[[run indices] per job]``, the job loads."""
-    order = sorted(range(len(costs)), key=lambda i: -costs[i])
+    order = sorted(range(len(costs)), key=costs.__getitem__, reverse=True)
     bins, loads = [[] for _ in range(jobs)], [0.0] * jobs
     for i in order:
         j = loads.index(min(loads))
@@ -107,23 +132,30 @@ def pack(costs, jobs):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--timing", default="train_linear_lctime.json")
-    ap.add_argument("--hours", type=float, default=40.0)
-    ap.add_argument("--jobs", type=int, default=6)
+    ap.add_argument(
+        "--timing-mlp",
+        default="train_mlp_lctime_mlp.json",
+        help="the largest network's timing run ('' = cost as the linear model)",
+    )
+    ap.add_argument("--hours", type=float, default=60.0)
+    ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--min-iters", type=int, default=40)
     ap.add_argument("--max-iters", type=int, default=400)
-    ap.add_argument("--tag", default="v1")
+    ap.add_argument("--tag", default="v2")
     args = ap.parse_args(argv)
-    timing = timing_of(RESULTS / args.timing)
+    timing = timing_of(RESULTS / args.timing,
+                       RESULTS / args.timing_mlp if args.timing_mlp else None)  # fmt: skip
     plan = runs(design())
     budget = args.hours * 3600.0
-    fixed = sum(run_cost(c, v, 0, timing) for _, c, v, _, _ in plan)
-    per_iter = sum(run_cost(c, v, 1, timing) - run_cost(c, v, 0, timing) for _, c, v, _, _ in plan)
+    fixed = sum(run_cost(c, v, 0, timing, p) for _, c, v, _, p in plan)
+    per_iter = sum(run_cost(c, v, 1, timing, p) - run_cost(c, v, 0, timing, p)
+                   for _, c, v, _, p in plan)  # fmt: skip
     iters = math.floor((budget - fixed) / per_iter)
     if iters < args.min_iters:
         raise SystemExit(f"{args.hours} GPU-h allow only {iters} iterations per run (fixed "
                          f"{fixed / 3600:.1f} h): raise --hours or cut the design")  # fmt: skip
     iters = min(iters, args.max_iters)
-    costs = [run_cost(c, v, iters, timing) for _, c, v, _, _ in plan]
+    costs = [run_cost(c, v, iters, timing, p) for _, c, v, _, p in plan]
     bins, loads = pack(costs, args.jobs)
     out = {"iters": iters, "hours": sum(costs) / 3600, "job_hours": [x / 3600 for x in loads],
            "timing": timing, "design": design(),

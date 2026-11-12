@@ -11,11 +11,16 @@ a planar flow in a slab periodic in ``y``, and the twelve coarse cases built on 
   with ``lambda_1``), so the second axis is the resolution.  One fine reference per Mach
   serves both resolutions.
 
-Train on S3, S4, K1, K8, test on the other eight.  (The plan's extreme corners had S2, the
+Train on S3, S4, K1, K4, K8, test on the other seven.  (The plan's extreme corners had S2, the
 low-amplitude long wave, in training; its flux signal is ~5x weaker than S4's against the same
 thermal noise -- ~25x the windows per unit of squared-bias resolution, ~1e6 windows to resolve
 it -- so S2 and S4 swapped roles on 2026-11-11.  In the linear regime the coarse-cell error does
 not depend on amplitude, so S1 / S2 still test the long-wave and the small-amplitude limits.)
+K4 (M 3, ``dx_c = 4 lambda_1``) joined the training set on 2026-11-12: with K1 / K8 alone the
+Prandtl correction rested on K8 (shear waves carry no heat flux, K1's ``log_pr`` gradient SNR
+<= 1.4, lcsnr v2), and the coarse M 1.5-6 test shocks' cell sizes (median ``(dx/lambda)^2``
+6.9-11.4 against K8's 5.3) lay outside the training range.  The five leave-one-case-out folds
+are the four-case runs: how little data still extrapolates.
 
 Every slab is tall enough for ``N_SLAB`` particles per ``lambda`` of ``x`` at the coarse
 particles per cell: the 1-D collective (long-time-tail) transport of few simulators per
@@ -78,7 +83,7 @@ CASES = {
     "K1": ("shock_M1.5", 1.0, "train"),
     "K2": ("shock_M1.5", 4.0, "test"),
     "K3": ("shock_M3", 1.0, "test"),
-    "K4": ("shock_M3", 4.0, "test"),
+    "K4": ("shock_M3", 4.0, "train"),
     "K5": ("shock_M6", 1.0, "test"),
     "K6": ("shock_M6", 4.0, "test"),
     "K7": ("shock_M10", 1.0, "test"),

@@ -17,9 +17,12 @@ fill.  The bias estimator's standard error comes from the spread of its per-fill
 fill: a new table and new windows), so it carries the table's noise.  Also reported: the pair
 loss over all windows (an unbiased squared bias: is the bias detected at all?), the tables'
 squared bias (their noise floor shows as an excess over the pair loss), and each
-parameter's agreement between the estimators (same expectation).
+parameter's agreement between the estimators: the pair gradient ``(m_a - r) grad m_b +
+(m_b - r) grad m_a`` has expectation ``2 b grad m``, twice the bias estimator's (v2 printed
+the raw difference, a spurious 12-15 sigma on K8 -- the fitted ratio was 2.0), so the
+agreement compares the pair with twice the bias estimator, and the fitted ratio is reported.
 
-    PYTHONPATH=. python3 -m examples.learned_collision.grad_snr2d [--cases S3 S4 K1 K8]
+    PYTHONPATH=. python3 -m examples.learned_collision.grad_snr2d [--cases S3 S4 K1 K4 K8]
         [--blocks-list 5 10] [--fills 6] [--windows 256] [--bias-windows 512]
 
 Writes ``examples/learned_collision/results/grad_snr2d_<tag>.json``.
@@ -35,7 +38,7 @@ import numpy as np
 
 from examples.learned_collision import operators
 from examples.learned_collision.shear_wave import RESULTS
-from examples.learned_collision.train import CaseRunner, parser
+from examples.learned_collision.train import TRAIN_CASES, CaseRunner, parser
 
 
 def _flat(grad):
@@ -80,6 +83,8 @@ def study(name, blocks, args):
     b_mean = fill_means.mean(0)
     b_se = fill_means.std(0, ddof=1) / np.sqrt(len(fill_means))
     loss = np.array(pair_loss)
+    w = 1.0 / (p_se**2 + 4.0 * b_se**2)
+    ratio = float(np.sum(w * p_mean * b_mean) / np.sum(w * b_mean**2))
     return {
         "case": name, "blocks": blocks, "params": _names(theta),
         "pair_loss": float(loss.mean()),
@@ -90,7 +95,9 @@ def study(name, blocks, args):
         "bias_mean": b_mean.tolist(), "bias_se": b_se.tolist(),
         "bias_snr": (np.abs(b_mean) / b_se).tolist(),
         "bias_within_se": np.mean(within_se, axis=0).tolist(),
-        "agreement": ((p_mean - b_mean) / np.hypot(p_se, b_se)).tolist(),
+        "agreement": ((p_mean - 2.0 * b_mean) / np.hypot(p_se, 2.0 * b_se)).tolist(),
+        "pair_over_bias": ratio,
+        "cosine": float(p_mean @ b_mean / (np.linalg.norm(p_mean) * np.linalg.norm(b_mean))),
         "windows": len(pair_g),
     }  # fmt: skip
 
@@ -98,7 +105,7 @@ def study(name, blocks, args):
 def main(argv=None):
     ap = parser()
     ap.description = __doc__.split("\n\n")[0]
-    ap.set_defaults(cases=["S3", "S4", "K1", "K8"], model="linear", features="")
+    ap.set_defaults(cases=list(TRAIN_CASES), model="linear", features="")
     ap.add_argument("--blocks-list", type=int, nargs="+", default=[5, 10])
     ap.add_argument("--fills", type=int, default=6)
     ap.add_argument("--windows", type=int, default=256, help="gradient windows per fill")
@@ -120,7 +127,8 @@ def main(argv=None):
                   f" bias {row['bias_snr'][idx[1]]:.1f} | A median snr pair "
                   f"{np.median(np.array(row['pair_snr'])[a_idx]):.1f} bias "
                   f"{np.median(np.array(row['bias_snr'])[a_idx]):.1f} | rms agreement "
-                  f"{np.sqrt(np.mean(np.square(row['agreement']))):.2f} sigma | "
+                  f"{np.sqrt(np.mean(np.square(row['agreement']))):.2f} sigma (pair / bias "
+                  f"{row['pair_over_bias']:.2f}, cos {row['cosine']:.3f}) | "
                   f"{row['windows']} windows, {row['seconds']:.0f} s", flush=True)  # fmt: skip
             path.write_text(json.dumps({"args": vars(args), "rows": rows}))
 

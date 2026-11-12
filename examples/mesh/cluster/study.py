@@ -1713,7 +1713,7 @@ LC = "python3 -m examples.learned_collision"
 LC_REFS = ("shear_a0.1_L32", "shear_a0.1_L128", "shear_a0.5_L32", "shear_a0.5_L128",
            "shock_M1.5", "shock_M3", "shock_M6", "shock_M10")  # fmt: skip
 LC_BASE_BLOCKS = {"shear": "S1 S2 S3 S4", "shockA": "K1 K2 K3 K4", "shockB": "K5 K6 K7 K8"}
-LC_TEST = "S1 S2 K2 K3 K4 K5 K6 K7"
+LC_TEST = "S1 S2 K2 K3 K5 K6 K7"  # K4 joined training 2026-11-12
 LC_MODELS = ("scalar", "linear", "mlp")
 LC_CIRCLE_BASE = ("ntc", "esfp_recon", "esbgk_recon")
 
@@ -1761,14 +1761,17 @@ def _lcbase_jobs(gpus_per_node: int) -> dict[str, str]:
 
 
 def _lcsnr_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lcsnr`` (v2): both window-gradient estimators' SNR against window length on the
-    four training cases, the running bias's noise included (independent table fills)."""
+    """``lcsnr``: both window-gradient estimators' SNR, the running bias's noise included
+    (independent table fills).  v2 (2026-11-11): S3 S4 K1 K8 at 5 and 10 blocks -- gradients
+    resolved, log_pr only on K8.  v3 (2026-11-12): K4 (joined training for a second heat-flux
+    case) and S3 (the per-block shear bias table: pair / bias should come back to 2) at the
+    training window length."""
     del gpus_per_node
-    return {"lcsnr": f"{LC}.grad_snr2d --cases S3 S4 K1 K8 --blocks-list 5 10 --tag v2"}
+    return {"lcsnr": f"{LC}.grad_snr2d --cases K4 S3 --blocks-list 5 --tag v3"}
 
 
 def _lctrain_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lctrain``: scalar, linear and MLP corrections on the four training cases."""
+    """``lctrain``: scalar, linear and MLP corrections on the five training cases."""
     del gpus_per_node
     return {f"lctrain_{m}": f"{LC}.train --model {m} --tag v1" for m in LC_MODELS}
 
@@ -1788,21 +1791,24 @@ def _lceval_jobs(gpus_per_node: int) -> dict[str, str]:
 
 
 def _lctime_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lctime`` (2026-11-11): brief baseline training for the sweep's timings -- 6
-    iterations of the linear model on the four training cases with every case validated
-    forward (examples.learned_collision.sweep reads train_linear_lctime.json), and the
-    largest sweep network's iteration time."""
+    """``lctime``: brief training for the sweep's timings -- the linear model on the five
+    training cases with every case validated forward (examples.learned_collision.sweep reads
+    train_linear_lctime.json), and the largest sweep network's iteration time.  2026-11-12:
+    40 iterations at the fan-in-normalised default lr with features_v2 (after lcfeat) -- also
+    the check that the loss now falls (v1's 6 steps of plain Adam at 0.02 overshot to mu
+    0.5x)."""
     del gpus_per_node
-    common = "--iters 6 --features '' --tag"
+    common = "--iters 40 --tag"
     return {"lctime_linear": f"{LC}.train --model linear --validate-train {common} lctime",
             "lctime_mlp": f"{LC}.train --model mlp --depth 3 --width 128 {common} lctime_mlp"}  # fmt: skip
 
 
 def _lcfeat_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lcfeat``: the features' training spread and correlations (features_v1.json; the
-    sweep and the Lasso standardise by it -- run before them)."""
+    """``lcfeat``: the features' training spread and correlations (features_v2.json, the five
+    training cases; the training, the sweep and the Lasso standardise by it -- run before
+    them)."""
     del gpus_per_node
-    return {"lcfeat": f"{LC}.features --tag v1"}
+    return {"lcfeat": f"{LC}.features --tag v2"}
 
 
 def _lclasso_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1822,7 +1828,7 @@ def _lccv_jobs(gpus_per_node: int) -> dict[str, str]:
     the GPU-hour budget from lctime's timings).  One job per chain of runs."""
     del gpus_per_node
     path = Path(__file__).resolve().parents[3] / "examples/learned_collision/results"
-    plan_path = path / "sweep_plan_v1.json"
+    plan_path = path / "sweep_plan_v2.json"
     if not plan_path.exists():
         raise SystemExit(f"no {plan_path}: run `python3 -m examples.learned_collision.sweep`")
     plan = json.loads(plan_path.read_text())

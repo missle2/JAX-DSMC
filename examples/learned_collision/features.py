@@ -1,7 +1,7 @@
 """The correction features (:data:`jax_dsmc.collide.relax.FEATURES`) over coarse cells of the
 round-1 cases, as the operator sees them: thinned reference snapshots on the coarse grid.
 
-* ``phi_scale`` -- each feature's RMS over the cells of the four training cases: the fixed
+* ``phi_scale`` -- each feature's RMS over the cells of the training cases: the fixed
   standardisation of the linear and MLP corrections (an L1 penalty then weighs every term by
   its observed spread, not by a nominal guess).
 * the features' correlation matrix over the training cells (uncentred, on the standardised
@@ -67,7 +67,7 @@ def main(argv=None):
     ap.add_argument("--windows", type=int, default=32, help="snapshots per case")
     ap.add_argument("--refs-tag", default="v1")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--tag", default="v1")
+    ap.add_argument("--tag", default="v2")
     args = ap.parse_args(argv)
     rng = np.random.default_rng(args.seed)
     refs, per_case, train = {}, {}, []

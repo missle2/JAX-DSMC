@@ -1,12 +1,12 @@
 """Round-1 training (plan 2026-11-11): a correction to ES-FP + reconstruction fitted through
-the solver on the training cases (:data:`.flows.CASES` role ``train``: S3, S4, K1, K8).
+the solver on the training cases (:data:`.flows.CASES` role ``train``: S3, S4, K1, K4, K8).
 
 Each iteration draws ``--batch`` windows per case (:mod:`.windows2d`: a random snapshot
 pool pair, stripe and thinning, a forward-only burn-in of ``--burn`` blocks, a
 differentiable rollout of ``--blocks``), averages their gradients over all cases and takes
 an Adam step.  ``--estimator bias`` (default) uses the running-bias gradient ``b grad m``,
-``b`` a per-case table of the mean deviation ``E[m - ref]`` (per sample time and wave mode
-for a wave, per window time and coarse cell for a shock) updated from every window -- a
+``b`` a per-case table of the mean deviation ``E[m - ref]`` (per window time and wave mode,
+relative to the reference flux, for a wave; per window time and coarse cell for a shock) updated from every window -- a
 running mean for its first ``1 / --bias-decay`` updates, then an exponential average;
 ``--bias-init`` forward-only windows per case fill it before the first step.  ``pair`` uses
 the two-replica product.
@@ -17,8 +17,15 @@ features) -- :mod:`jax_dsmc.collide.relax`.  The linear and MLP corrections read
 standardised by their training spread (``--features``, :mod:`.features`) and, by default,
 keep the base's global ``log_tau`` / ``log_pr`` frozen at the physical values
 (``--train-intercept`` frees them): a correction then vanishes in resolved equilibrium cells.
-Regularisation: ``--weight-decay`` (decoupled, on the MLP weights), ``--l1`` (a proximal
-soft-threshold of the linear coefficients after each step).
+**Steps** (2026-11-12): Adam with each weight matrix's step divided by its fan-in, so ``--lr``
+is the per-iteration change of the correction's output whatever the width (plain Adam moves
+every coordinate by ~``lr`` at once: on near-collinear features the linear ``dlog_tau`` moved
+~``lr sum phi`` per step, and at lr 0.02 six iterations took the shear viscosity to 0.5x and
+saturated the MLP's tanh bound, lctime 2026-11-11).  The final ``theta`` is the mean of the
+last ``--average`` fraction of the iterates (the per-step gradient SNR is ~1).
+Regularisation: ``--weight-decay`` (a decoupled per-iteration shrink of the MLP weights,
+independent of ``--lr``), ``--l1`` (a proximal soft-threshold of the linear coefficients after
+each step).
 
 Cross-validation: ``--cases`` the cases trained on, ``--pool-seeds`` the reference seeds whose
 snapshots are drawn; ``--validate`` cases (and ``--validate-train``: the training cases too)
@@ -96,14 +103,14 @@ class CaseRunner:
         if self.case.kind == "shear":
             mean = self.ref[f"mean_dx{self.case.dx_c:g}"]
             self.weights = w2.field_weights(mean, self.case)
-            # the wave's bias in units of its own decaying flux: one coefficient per mode and
-            # field (a viscosity-type error scales the flux by a constant factor and phase).
-            # Keyed by absolute time instead, the 800 rows of a long wave were visited < 1x
-            # each by the gate's 64 windows -- one window's noise per row, a zero-mean
-            # gradient (lcsnr S2, 2026-11-11)
+            # the wave's bias in units of its own decaying flux, per block of the window, mode
+            # and field: a viscosity-type error scales the flux by a factor growing from 1
+            # through the window.  Keyed by absolute time instead, the 800 rows of a long wave
+            # were visited < 1x each by the gate's 64 windows (a zero-mean gradient, lcsnr S2);
+            # one entry for the whole window under-weighted S3 by ~1.5x (lcsnr v2, 2026-11-11)
             proj = np.asarray(w2.project(w2.flux(jnp.asarray(mean), "shear"), self.case))
             self.scale = np.sqrt(np.mean(proj**2, axis=1, keepdims=True))  # [T, 1, F]
-            self.bias = np.zeros((1, 2, n_fields))
+            self.bias = np.zeros((args.blocks, 2, n_fields))
         else:
             target = w2.shock_target(self.ref["prof_raw"], self.meta["x_shock"], self.case,
                                      self.meta, 1)  # fmt: skip
@@ -117,7 +124,7 @@ class CaseRunner:
         """``[T, K, F]``: the running bias at a window's rows."""
         if self.scale is None:
             return self.bias[rows]
-        return self.bias[0][None] * self.scale[rows]
+        return self.bias * self.scale[rows]
 
     def draw(self, rng, with_seed=False):
         """A window: ``(states, cstates, keys, target, rows)`` (replicas on the leading axis),
@@ -185,8 +192,8 @@ class CaseRunner:
     def update_bias(self, rows, d_mean):
         """Fold one window's mean deviation into the running bias (a running mean for the
         first ``1 / decay`` updates of an entry, then an exponential average)."""
-        if self.scale is not None:  # one entry: the window's deviation over the flux scale
-            rows, d_mean = np.zeros(1, int), np.mean(d_mean / self.scale[rows], axis=0)[None]
+        if self.scale is not None:  # per window block: the deviation over the flux scale
+            rows, d_mean = np.arange(len(rows)), d_mean / self.scale[rows]
         self.bias_n[rows] += 1.0
         beta = np.maximum(self.decay, 1.0 / self.bias_n[rows])[:, None, None]
         self.bias[rows] = (1.0 - beta) * self.bias[rows] + beta * d_mean
@@ -196,8 +203,8 @@ class CaseRunner:
         shock, over the whole reference series of a wave)."""
         if not (self.bias_n > 0).any():
             return float("nan")
-        if self.scale is not None:
-            b = self.bias_at(np.arange(self.scale.shape[0]))
+        if self.scale is not None:  # over every window position in the series
+            b = self.bias[None] * self.scale[:, None]
         else:
             b = self.bias[self.bias_n > 0]
         return float(np.mean(np.sum(self.weights * b**2, axis=-1)))
@@ -225,8 +232,22 @@ def model_options(args):
     return opts
 
 
-def _decay_mask(theta):
-    return {k: k.startswith("W") for k in theta}
+def _fan_in(theta):
+    """Each leaf's step divisor: a weight matrix's fan-in (``A``: ``[2, 9]``, ``W{i}``:
+    ``[fan_in, fan_out]``), 1 for the rest."""
+    out = {}
+    for k, v in theta.items():
+        if k == "A":
+            out[k] = float(v.shape[1])
+        elif k.startswith("W"):
+            out[k] = float(v.shape[0])
+        else:
+            out[k] = 1.0
+    return out
+
+
+def _divide(u, d):
+    return u / d
 
 
 def _frozen(args):
@@ -243,12 +264,23 @@ def _soft_threshold(a, t):
 
 
 def _step(theta, grads, state, opt, args, frozen):
+    """An Adam step divided by each leaf's fan-in, then the decoupled weight shrink and the
+    proximal L1 (at the linear coefficients' step size)."""
     grads = {k: (jnp.zeros_like(g) if k in frozen else g) for k, g in grads.items()}
     updates, state = opt.update(grads, state, theta)
+    fan = _fan_in(theta)
+    updates = jax.tree.map(_divide, updates, fan)
+    if args.weight_decay > 0.0:
+        updates = {k: (u - args.weight_decay * theta[k] if k.startswith("W") else u)
+                   for k, u in updates.items()}  # fmt: skip
     theta = optax.apply_updates(theta, updates)
     if args.l1 > 0.0 and "A" in theta:
-        theta = dict(theta, A=_soft_threshold(theta["A"], args.lr * args.l1))
+        theta = dict(theta, A=_soft_threshold(theta["A"], args.lr / fan["A"] * args.l1))
     return theta, state, grads
+
+
+def _accumulate(total, theta, w):
+    return total + w * theta
 
 
 def validate(theta, args, cases):
@@ -311,8 +343,10 @@ def train(args):
                 r.update_bias(row, d)
         print(f"bias tables filled ({args.bias_init} windows per case), "
               f"{time.time() - t0:.0f} s", flush=True)  # fmt: skip
-    opt = optax.adamw(args.lr, weight_decay=args.weight_decay, mask=_decay_mask)
+    opt = optax.adam(args.lr)
     state = opt.init(theta)
+    avg_from = args.iters - max(1, round(args.average * args.iters))
+    avg = jax.tree.map(jnp.zeros_like, theta)
     log = []
     out_path = RESULTS / f"train_{args.model}_{args.tag}.json"
     out = {"args": vars(args), "theta": _jsonable(theta), "log": log}
@@ -331,7 +365,14 @@ def train(args):
               f"{sum(pairs.values()): .4e}  |g| {row['grad_norm']:.3e}  log_tau "
               f"{row['log_tau']:+.4f} log_pr {row['log_pr']:+.4f}  {row['seconds']:.0f} s",
               flush=True)  # fmt: skip
+        if it >= avg_from:
+            avg = jax.tree.map(functools.partial(_accumulate, w=1.0 / (args.iters - avg_from)),
+                               avg, theta)  # fmt: skip
         out["theta"] = _jsonable(theta)
+        out_path.write_text(json.dumps(out))
+    if args.iters > 0:
+        theta = avg
+        out["theta_last"], out["theta"] = out["theta"], _jsonable(theta)
         out_path.write_text(json.dumps(out))
     checks = list(args.validate) + (list(args.cases) if args.validate_train else [])
     if checks:
@@ -354,7 +395,18 @@ def parser():
                          "and a low-amplitude wave's flux signal is weak)")  # fmt: skip
     ap.add_argument("--blocks", type=int, default=5)
     ap.add_argument("--burn", type=int, default=2)
-    ap.add_argument("--lr", type=float, default=0.02)
+    ap.add_argument(
+        "--lr",
+        type=float,
+        default=3e-3,
+        help="per-iteration output change: Adam's step over each weight's fan-in",
+    )
+    ap.add_argument(
+        "--average",
+        type=float,
+        default=0.25,
+        help="final theta = mean of the last fraction of the iterates",
+    )
     ap.add_argument("--bias-decay", type=float, default=1e-3,
                     help="the running bias's forgetting rate (a running mean for its first "
                          "1 / decay windows): long memory -- a per-window deviation is mostly "
@@ -366,12 +418,17 @@ def parser():
     ap.add_argument("--ppc", type=int, default=flows.PPC_COARSE)
     ap.add_argument("--width", type=int, default=64, help="MLP hidden width")
     ap.add_argument("--depth", type=int, default=2, help="MLP hidden layers")
-    ap.add_argument("--weight-decay", type=float, default=0.0)
+    ap.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.0,
+        help="per-iteration shrink fraction of the MLP weights (independent of lr)",
+    )
     ap.add_argument("--l1", type=float, default=0.0, help="proximal L1 on the linear A")
     ap.add_argument("--train-intercept", action="store_true")
     ap.add_argument(
         "--features",
-        default="features_v1.json",
+        default="features_v2.json",
         help="feature statistics (features.py; '' = nominal scales)",
     )
     ap.add_argument(
