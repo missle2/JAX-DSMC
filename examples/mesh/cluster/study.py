@@ -1864,7 +1864,7 @@ def _lctransient_jobs(gpus_per_node: int) -> dict[str, str]:
     jobs = {"lctransient": f"{LC}.transient --tag v1"}
     for k in ("ctl", "q3", "m1"):
         jobs[f"lcburnlong_{k}"] = (f"{LC}.train --model linear --validate-train --iters 40 "
-                                   f"--burn 120 {LC_LOSSES[k]} --tag lcburnlong_{k}").replace(
+                                   f"--shock-burn 120 {LC_LOSSES[k]} --tag lcburnlong_{k}").replace(
                                        "  ", " ")  # fmt: skip
     return jobs
 

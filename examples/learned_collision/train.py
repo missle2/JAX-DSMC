@@ -27,6 +27,19 @@ Regularisation: ``--weight-decay`` (a decoupled per-iteration shrink of the MLP 
 independent of ``--lr``), ``--l1`` (a proximal soft-threshold of the linear coefficients after
 each step).
 
+**Persistent shock chains** (``--warm-pool TAG``, 2026-11-12): a window from a thinned fine
+snapshot sees the coarse run still relaxing from the fine profile -- at M10 its ``int q_x``
+is 1.01 over blocks 2-7 against the steady 0.94 (lctransient), so the window objective never
+saw the heat-flux deficit and every loss variant traded heat flux for stress (lcloss).  With
+a warm pool (:mod:`.warm_pool`, ``lcwarm``: coarse runs from the snapshots relaxed ~120 blocks
+at the base operator, saved by :func:`examples.mesh.optimize.save_warm`) each shock case
+keeps ``2 --batch`` chains: every window continues two of them from where their last window
+ended, and its end states go back -- the windows follow the model's own steady state at no
+burn-in cost (the optimiser's restart, :func:`examples.ensemble_mesh._warm_up`, applied per
+window).  The target is placed at the chains' measured shock position, and a chain whose
+shock drifted more than ``--chain-drift`` [lambda_1] from the pool's median is replaced by
+a copy of a random healthy chain (its own key decorrelates it).  The waves are unchanged.
+
 Cross-validation: ``--cases`` the cases trained on, ``--pool-seeds`` the reference seeds whose
 snapshots are drawn; ``--validate`` cases (and ``--validate-train``: the training cases too)
 are evaluated forward at the end (:mod:`.evaluate`, ``--eval-seeds`` / ``--eval-starts``) and
@@ -52,10 +65,11 @@ import numpy as np
 import optax
 
 from examples.learned_collision import evaluate as ev
-from examples.learned_collision import flows, operators
+from examples.learned_collision import flows, operators, refdata
 from examples.learned_collision import windows2d as w2
 from examples.learned_collision.evaluate import load_ref
 from examples.learned_collision.shear_wave import BLOCK, RESULTS
+from examples.mesh.optimize import load_warm
 from jax_dsmc.collide import relax
 
 TRAIN_CASES = tuple(name for name, (_, _, role) in flows.CASES.items() if role == "train")
@@ -64,7 +78,26 @@ TRAIN_CASES = tuple(name for name, (_, _, role) in flows.CASES.items() if role =
 def _objective(theta, states, cstates, keys, target, weights, bias, case, collide_fn, blocks,
                step0, estimator):  # fmt: skip
     return w2.window_objective(theta, states, cstates, keys, target, weights, bias, case,
-                               collide_fn, blocks, step0, estimator)  # fmt: skip
+                               collide_fn, blocks, step0, estimator, final=True)  # fmt: skip
+
+
+def _put(chain, new, idx):
+    return chain.at[idx].set(new)
+
+
+def _pairs(x):
+    """``[m, 2, ...]`` -> ``[2 m, ...]`` (a window's two replicas, consecutive chains)."""
+    return x.reshape(-1, *x.shape[2:])
+
+
+def _windows_of(x, idx):
+    """Chains ``idx`` (``2 m``, consecutive pairs) as ``[m, 2, ...]`` windows."""
+    return x[idx].reshape(-1, 2, *x.shape[1:])
+
+
+def warm_path(name, tag):
+    """A shock case's warm pool (:mod:`.warm_pool`)."""
+    return RESULTS / f"warm_{name}_{tag}.npz"
 
 
 class CaseRunner:
@@ -84,23 +117,33 @@ class CaseRunner:
             static=dataclasses.replace(self.case.static, pairing=pairing),
             modes=min(args.shock_modes, self.case.n_coarse),
         )
-        self.blocks, self.burn = args.blocks, args.burn
+        # a long burn-in reaches a shock's steady state; a shear wave decays and has none (its
+        # windows are matched at the reference's own times: S3's series is 51 blocks long)
+        shock_burn = args.burn if args.shock_burn is None else args.shock_burn
+        chains = self.case.kind == "shock" and bool(args.warm_pool)
+        if chains and args.shock_burn is None:
+            shock_burn = 0  # the chains are already relaxed
+        self.blocks = args.blocks
+        self.burn = shock_burn if self.case.kind == "shock" else args.burn
         self.window_batch = args.window_batch
         # every compiled function maps over a batch of windows (leading axis), each window
         # over its two replicas: one launch runs window_batch x 2 coarse runs side by side
         # (2026-11-11: one window at a time ran ~1e5 particle-steps/s, ~1e-3 of the card)
         replicas = jax.vmap(functools.partial(
-            w2.burn_in, case=self.case, collide_fn=fn, blocks=args.burn),
+            w2.burn_in, case=self.case, collide_fn=fn, blocks=self.burn),
             in_axes=(None, 0, 0, 0))  # fmt: skip
         self.burn_fn = jax.jit(jax.vmap(replicas, in_axes=(None, 0, 0, 0)))
         self.grad_fn = {
             est: jax.jit(jax.vmap(jax.value_and_grad(functools.partial(
                 _objective, case=self.case, collide_fn=fn, blocks=args.blocks,
-                step0=args.burn * BLOCK, estimator=est), has_aux=True),
+                step0=self.burn * BLOCK, estimator=est), has_aux=True),
                 in_axes=(None, 0, 0, 0, 0, None, 0)))
             for est in ("pair", "bias")
         }  # fmt: skip
         self.thin = jax.jit(functools.partial(w2.pool_state, case=self.case))
+        self.chains = None
+        if chains:
+            self._init_chains(args)
         n_fields = len(w2.LOSS_FIELDS[self.case.kind])
         if self.case.kind == "shear":
             mean = self.ref[f"mean_dx{self.case.dx_c:g}"]
@@ -137,6 +180,9 @@ class CaseRunner:
         if self.case.kind == "shear":
             every = round((ref["snap_t"][1] - ref["snap_t"][0]) / (ref["t"][1] - ref["t"][0]))
             last = (len(ref["t"]) - 1 - self.burn - self.blocks) // every
+            if last < 0:
+                raise ValueError(f"{self.name}: burn {self.burn} + {self.blocks} blocks exceed "
+                                 f"the reference's {len(ref['t']) - 1} blocks")  # fmt: skip
             s = int(rng.integers(0, min(snaps, last + 1)))
             b0 = s * every + self.burn
             rows = np.arange(b0 + 1, b0 + 1 + self.blocks)
@@ -162,9 +208,78 @@ class CaseRunner:
             return states, cstates, keys, jnp.asarray(target), rows, seed
         return states, cstates, keys, jnp.asarray(target), rows
 
+    def _init_chains(self, args):
+        """``2 --batch`` chains drawn from the case's warm pool (``--warm-pool``)."""
+        path = warm_path(self.name, args.warm_pool)
+        pool = load_warm(path)
+        if pool is None:
+            raise SystemExit(f"no warm pool {path}: run examples.learned_collision.warm_pool")
+        size = pool[0].x.shape[0]
+        n = 2 * args.batch
+        if size < n:
+            raise SystemExit(f"{path}: {size} chains, the run needs {n} (2 x --batch)")
+        pick = np.random.default_rng([args.seed, size]).choice(size, n, replace=False)
+        self.chains = jax.tree.map(functools.partial(_index, i=jnp.asarray(pick)), pool)
+        self.cursor = 0
+        self.refreshed = 0
+        sums = functools.partial(refdata._fine_sums, length=self.case.hi, nx=self.case.n_coarse)
+        self.sums_fn = jax.jit(jax.vmap(sums))
+        self.x_c = (np.arange(self.case.n_coarse) + 0.5) * self.case.dx_c
+        self.ratio = flows.shock_states(flows.REFERENCES[flows.CASES[self.name][0]]["mach"])[
+            "ratio"
+        ]
+        self.x_home = float(np.median(self.positions(self.chains[0])))
+        self.drift = args.chain_drift
+
+    def positions(self, states):
+        """Each state's shock position [lambda_1] (the mass integral, as :mod:`.evaluate`)."""
+        s = np.asarray(self.sums_fn(states))
+        return np.atleast_1d(flows.shock_position(s[:, :, 0], self.x_c, self.ratio,
+                                                  self.case.ppc_up))  # fmt: skip
+
+    def _draw_chains(self, rng, n):
+        """The next ``n`` windows of consecutive chain pairs (cycling), targets placed at each
+        pair's mean shock position; ``seeds`` hold the chain indices of the write-back."""
+        total = self.chains[0].x.shape[0] // 2
+        win = (self.cursor + np.arange(n)) % total
+        self.cursor = int((self.cursor + n) % total)
+        idx = jnp.asarray(np.stack([2 * win, 2 * win + 1], axis=1).ravel())
+        states, cstates = (jax.tree.map(functools.partial(_windows_of, idx=idx), c)
+                           for c in self.chains)  # fmt: skip
+        xs = self.positions(jax.tree.map(_pairs, states)).reshape(n, 2).mean(axis=1)
+        targets = jnp.stack([jnp.asarray(w2.shock_target(self.ref["prof_raw"], float(x),
+                                                         self.case, self.meta, self.blocks))
+                             for x in xs])  # fmt: skip
+        keys = jnp.stack([jnp.stack([jax.random.PRNGKey(int(rng.integers(0, 2**31 - 1)))
+                                     for _ in range(2)]) for _ in range(n)])  # fmt: skip
+        rows = [np.arange(self.blocks)] * n
+        return states, cstates, keys, targets, rows, idx
+
+    def _write_back(self, idx, final, rng):
+        """The windows' end states ``final = (states, cstates)`` (``[m, 2, ...]``) back into
+        chains ``idx``; then every chain whose shock drifted past ``--chain-drift`` from the
+        pool's median replaced by a copy of a random healthy one."""
+        self.chains = tuple(jax.tree.map(functools.partial(_put, idx=idx), c,
+                                         jax.tree.map(_pairs, f))
+                            for c, f in zip(self.chains, final, strict=True))  # fmt: skip
+        off = np.abs(self.positions(self.chains[0]) - self.x_home) > self.drift
+        if off.any() and not off.all():
+            src = rng.choice(np.flatnonzero(~off), int(off.sum()))
+            dst = jnp.asarray(np.flatnonzero(off))
+            self.chains = tuple(jax.tree.map(
+                functools.partial(_put, idx=dst), c,
+                jax.tree.map(functools.partial(_index, i=jnp.asarray(src)), c))
+                for c in self.chains)  # fmt: skip
+            self.refreshed += int(off.sum())
+        elif off.all():
+            raise RuntimeError(f"{self.name}: every chain's shock drifted > {self.drift}")
+
     def draw_batch(self, rng, n):
         """``n`` windows stacked on a new leading axis: ``(states, cstates, keys, targets,
-        rows, seeds)`` (``rows``, ``seeds`` host lists)."""
+        rows, seeds)`` (``rows``, ``seeds`` host lists; with chains ``seeds`` is the chain
+        indices)."""
+        if self.chains is not None:
+            return self._draw_chains(rng, n)
         drawn = [self.draw(rng, with_seed=True) for _ in range(n)]
         states, cstates, keys, targets = (jax.tree.map(flows.stack, *[d[i] for d in drawn])
                                           for i in range(4))  # fmt: skip
@@ -177,13 +292,15 @@ class CaseRunner:
         while n > 0:
             m = min(n, self.window_batch)
             n -= m
-            states, cstates, keys, targets, rows, _ = self.draw_batch(rng, m)
+            states, cstates, keys, targets, rows, seeds = self.draw_batch(rng, m)
             if self.burn:
                 states, cstates = self.burn_fn(theta, states, cstates, keys)
             bias = jnp.asarray(np.stack([self.bias_at(r) for r in rows]))
-            (_, (pair, d_mean)), grad = self.grad_fn[estimator](
+            (_, (pair, d_mean, final)), grad = self.grad_fn[estimator](
                 theta, states, cstates, keys, targets, jnp.asarray(self.weights), bias
             )
+            if self.chains is not None:
+                self._write_back(seeds, final, rng)
             pair, d_mean = np.asarray(pair), np.asarray(d_mean)
             for i in range(m):
                 pairs.append(float(pair[i]))
@@ -369,6 +486,11 @@ def train(args):
                "seconds": time.time() - t0}  # fmt: skip
         if "A" in theta:
             row["A"] = np.asarray(theta["A"]).tolist()
+        chained = [r for r in runners if r.chains is not None]
+        if chained:  # the chains' shock positions and replacements so far
+            row["chains"] = {r.name: {"x_median": float(np.median(r.positions(r.chains[0]))),
+                                      "x_home": r.x_home, "refreshed": r.refreshed}
+                             for r in chained}  # fmt: skip
         log.append(row)
         print(f"it {it:4d}  bias2 {sum(row['bias2'].values()): .4e}  pair "
               f"{sum(pairs.values()): .4e}  |g| {row['grad_norm']:.3e}  log_tau "
@@ -405,12 +527,25 @@ def parser():
     ap.add_argument("--blocks", type=int, default=5)
     ap.add_argument("--burn", type=int, default=2)
     ap.add_argument(
+        "--shock-burn",
+        type=int,
+        default=None,
+        help="the shocks' burn-in blocks (default --burn; the waves keep --burn)",
+    )
+    ap.add_argument(
         "--shock-modes",
         type=int,
         default=0,
         help="shock loss on the first K cosine modes (1 = the integrals; 0 = per cell)",
     )
     ap.add_argument("--qx-weight", type=float, default=1.0, help="shock heat-flux weight factor")
+    ap.add_argument("--warm-pool", default="", help="shock chains from warm_<case>_<TAG>.npz")
+    ap.add_argument(
+        "--chain-drift",
+        type=float,
+        default=6.0,
+        help="a chain whose shock moved this far [lambda_1] from the pool's median is replaced",
+    )
     ap.add_argument(
         "--lr",
         type=float,

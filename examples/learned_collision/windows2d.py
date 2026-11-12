@@ -214,14 +214,16 @@ def burn_in(theta, state, cstate, key, case, collide_fn, blocks):
 
 
 def window_objective(theta, states, cstates, keys, target, weights, bias, case, collide_fn,
-                     blocks, step0, estimator):  # fmt: skip
+                     blocks, step0, estimator, final=False):  # fmt: skip
     """``(objective, (pair, d_mean))`` of two replicas (leading axis 2): ``pair`` the
     two-replica loss, ``d_mean`` the replicas' mean projected deviation ``[T, K, F]`` (the
     trainer's running-bias update), and the objective whose gradient is the chosen
-    estimator's (module docstring; ``bias`` ``[T, K, F]`` is ignored by ``pair``)."""
+    estimator's (module docstring; ``bias`` ``[T, K, F]`` is ignored by ``pair``).
+    ``final``: the aux also carries the replicas' end ``(states, cstates)`` (no gradient) --
+    a persistent chain's next start (:mod:`.train` ``--warm-pool``)."""
     run = functools.partial(rollout, theta, case=case, collide_fn=collide_fn, blocks=blocks,
                             step0=step0)  # fmt: skip
-    _, _, ms = jax.vmap(run)(states, cstates, keys)
+    end_s, end_c, ms = jax.vmap(run)(states, cstates, keys)
     ref = flux(target, case.kind)
     d_a = project(flux(ms[0], case.kind) - ref, case)
     d_b = project(flux(ms[1], case.kind) - ref, case)
@@ -232,4 +234,7 @@ def window_objective(theta, states, cstates, keys, target, weights, bias, case, 
         obj = pair
     else:
         obj = jnp.mean(jnp.sum(w * jax.lax.stop_gradient(bias) * d_mean, axis=-1))
-    return obj, (jax.lax.stop_gradient(pair), jax.lax.stop_gradient(d_mean))
+    aux = (jax.lax.stop_gradient(pair), jax.lax.stop_gradient(d_mean))
+    if final:
+        aux = (*aux, jax.lax.stop_gradient((end_s, end_c)))
+    return obj, aux
