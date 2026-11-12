@@ -1853,6 +1853,22 @@ def _lcloss_jobs(gpus_per_node: int) -> dict[str, str]:
             f"--tag lcloss_{k}".replace("  ", " ") for k, v in LC_LOSSES.items()}  # fmt: skip
 
 
+def _lctransient_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lctransient`` (2026-11-12): every lcloss variant (qx x10 included, where the steady
+    sensitivities ask for a slower heat-flux rate on every shock) trained the heat-flux rate
+    up -- are the 2-block-burn windows still relaxing from the fine snapshot?  Forward-only
+    integrals per block from the training starts (examples.learned_collision.transient), and
+    the same lcloss runs with a burn-in past the shocks' relaxation (120 blocks; eval relaxes
+    78-126): does the heat-flux row turn negative once the windows see the steady state?"""
+    del gpus_per_node
+    jobs = {"lctransient": f"{LC}.transient --tag v1"}
+    for k in ("ctl", "q3", "m1"):
+        jobs[f"lcburnlong_{k}"] = (f"{LC}.train --model linear --validate-train --iters 40 "
+                                   f"--burn 120 {LC_LOSSES[k]} --tag lcburnlong_{k}").replace(
+                                       "  ", " ")  # fmt: skip
+    return jobs
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -1862,8 +1878,10 @@ def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     excess (1.05 at M1.5 to 1.17 at M10)?"""
     del gpus_per_node
     common = f"{LC}.evaluate --operators esfp_recon --bound --starts 32"
-    return {"lcbound_lo": f"{common} --cases K1 K2 K3 K4 --tag bound_lo",
-            "lcbound_hi": f"{common} --cases K5 K6 K7 K8 --tag bound_hi"}
+    return {
+        "lcbound_lo": f"{common} --cases K1 K2 K3 K4 --tag bound_lo",
+        "lcbound_hi": f"{common} --cases K5 K6 K7 K8 --tag bound_hi",
+    }
 
 
 def _lcfeat_jobs(gpus_per_node: int) -> dict[str, str]:
@@ -1973,6 +1991,7 @@ NEW_GROUPS = {
     "lcsteadyfd": _lcsteadyfd_jobs,
     "lcbound": _lcbound_jobs,
     "lcloss": _lcloss_jobs,
+    "lctransient": _lctransient_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }
