@@ -309,17 +309,41 @@ def cell_features(n, n_safe, u, theta_c, grid, sp, params, periodic):
     return jnp.minimum(jnp.nan_to_num(phi, nan=0.0, posinf=1e6), 1e6) / jnp.asarray(FEATURE_SCALE)
 
 
+def _standardised(theta, phi):
+    """The features over ``theta["phi_scale"]`` (their spread over the training cells,
+    fixed: no gradient), when the parameters carry one.  A scale only, no centring: a
+    feature that is zero (a resolved, equilibrium cell) stays zero, so a correction without
+    an intercept vanishes there -- and an L1 penalty on the coefficients then weighs every
+    term by its observed spread, not by :data:`FEATURE_SCALE`'s nominal guess."""
+    if "phi_scale" not in theta:
+        return phi
+    return phi / jax.lax.stop_gradient(theta["phi_scale"])
+
+
 def correction_linear(theta, phi):
     """``f64[2, C]``: the raw linear correction ``A phi`` (``theta["A"]``: ``f64[2, 9]``)."""
-    return theta["A"] @ phi.T
+    return theta["A"] @ _standardised(theta, phi).T
+
+
+def mlp_layers(theta):
+    """The number of weight layers of an MLP parameter set (``W0`` ... ``W{L-1}``)."""
+    return sum(1 for k in theta if k.startswith("W"))
+
+
+def _mlp(theta, x):
+    layers = mlp_layers(theta)
+    for i in range(layers - 1):
+        x = jnp.tanh(x @ theta[f"W{i}"] + theta[f"b{i}"])
+    return x @ theta[f"W{layers - 1}"] + theta[f"b{layers - 1}"]
 
 
 def correction_mlp(theta, phi):
-    """``f64[2, C]``: a two-hidden-layer tanh MLP of the features (``theta["W1"]`` ...
-    ``theta["b3"]``)."""
-    h = jnp.tanh(phi @ theta["W1"] + theta["b1"])
-    h = jnp.tanh(h @ theta["W2"] + theta["b2"])
-    return (h @ theta["W3"] + theta["b3"]).T
+    """``f64[2, C]``: a tanh MLP of the standardised features, **minus its value at zero
+    features** -- no correction in a resolved, equilibrium cell (the fine-cell limit gives
+    the base operator back whatever the weights), only the finite-particle and gradient
+    terms there."""
+    x = _standardised(theta, phi)
+    return (_mlp(theta, x) - _mlp(theta, jnp.zeros((1, x.shape[1])))).T
 
 
 def correction(theta, phi, kind):
@@ -328,23 +352,31 @@ def correction(theta, phi, kind):
     return CORRECTION_BOUND * jnp.tanh(raw / CORRECTION_BOUND)
 
 
-def init_correction(kind, key=None, hidden=64):
+def init_correction(kind, key=None, width=64, depth=2, phi_scale=None):
     """The trainable parameters of correction ``kind`` added to :data:`BASELINE`, zero output
-    at initialisation (so the corrected operator starts as the base, bitwise)."""
+    at initialisation (so the corrected operator starts as the base, bitwise).  ``mlp``:
+    ``depth`` hidden tanh layers of ``width`` (``1 / sqrt(fan-in)`` weights, a zero last
+    layer).  ``phi_scale`` (``f64[9]``): the features' training spread (:func:`_standardised`)."""
     theta = {k: jnp.float64(v) for k, v in BASELINE.items()}
     k = len(FEATURES)
     if kind == "linear":
         theta["A"] = jnp.zeros((2, k))
     elif kind == "mlp":
-        k1, k2 = jax.random.split(jax.random.PRNGKey(0) if key is None else key)
-        theta["W1"] = jax.random.normal(k1, (k, hidden)) / math.sqrt(k)
-        theta["b1"] = jnp.zeros(hidden)
-        theta["W2"] = jax.random.normal(k2, (hidden, hidden)) / math.sqrt(hidden)
-        theta["b2"] = jnp.zeros(hidden)
-        theta["W3"] = jnp.zeros((hidden, 2))
-        theta["b3"] = jnp.zeros(2)
+        sizes = [k] + [width] * depth + [2]
+        keys = jax.random.split(jax.random.PRNGKey(0) if key is None else key, depth + 1)
+        for i in range(depth + 1):
+            fan_in, fan_out = sizes[i], sizes[i + 1]
+            last = i == depth
+            theta[f"W{i}"] = (
+                jnp.zeros((fan_in, fan_out))
+                if last
+                else jax.random.normal(keys[i], (fan_in, fan_out)) / math.sqrt(fan_in)
+            )
+            theta[f"b{i}"] = jnp.zeros(fan_out)
     elif kind is not None:
         raise ValueError(f"unknown correction {kind}")
+    if kind is not None and phi_scale is not None:
+        theta["phi_scale"] = jnp.asarray(phi_scale, jnp.float64)
     return theta
 
 

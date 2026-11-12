@@ -41,9 +41,11 @@ def collide_fn(base, periodic, corrected=None):
     raise ValueError(f"unknown operator {base}")
 
 
-def operator(name, flow, key=None):
+def operator(name, flow, key=None, **model):
     """``(collide_fn, theta, pairing)`` of a baseline or model ``name`` on a flow kind
-    (``None`` collide_fn = NTC with partner selection ``pairing``)."""
+    (``None`` collide_fn = NTC with partner selection ``pairing``); ``model``: a model's
+    :func:`jax_dsmc.collide.relax.init_correction` options (``width``, ``depth``,
+    ``phi_scale``)."""
     if name == "ntc":
         return None, None, "uniform"
     if name == "ntc_adjacent":
@@ -52,6 +54,6 @@ def operator(name, flow, key=None):
     if name in MODELS:
         corrected = None if name == "scalar" else name
         return (collide_fn("esfp_recon", periodic, corrected), relax.init_correction(
-            corrected, key), "uniform")  # fmt: skip
+            corrected, key, **model), "uniform")  # fmt: skip
     theta = {k: jnp.float64(v) for k, v in relax.BASELINE.items()}
     return collide_fn(name, periodic), theta, "uniform"

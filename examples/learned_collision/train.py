@@ -1,5 +1,5 @@
 """Round-1 training (plan 2026-11-11): a correction to ES-FP + reconstruction fitted through
-the solver on the training cases (:data:`.flows.CASES` role ``train``: S2, S3, K1, K8).
+the solver on the training cases (:data:`.flows.CASES` role ``train``: S3, S4, K1, K8).
 
 Each iteration draws ``--batch`` windows per case (:mod:`.windows2d`: a random snapshot
 pool pair, stripe and thinning, a forward-only burn-in of ``--burn`` blocks, a
@@ -12,7 +12,18 @@ running mean for its first ``1 / --bias-decay`` updates, then an exponential ave
 the two-replica product.
 
 Models: ``scalar`` (``log_tau``, ``log_pr``), ``linear`` (the 9-term theory basis, 18
-coefficients), ``mlp`` (the same inputs, 2 x 64 tanh) -- :mod:`jax_dsmc.collide.relax`.
+coefficients), ``mlp`` (the same inputs, ``--depth`` x ``--width`` tanh, zero at zero
+features) -- :mod:`jax_dsmc.collide.relax`.  The linear and MLP corrections read features
+standardised by their training spread (``--features``, :mod:`.features`) and, by default,
+keep the base's global ``log_tau`` / ``log_pr`` frozen at the physical values
+(``--train-intercept`` frees them): a correction then vanishes in resolved equilibrium cells.
+Regularisation: ``--weight-decay`` (decoupled, on the MLP weights), ``--l1`` (a proximal
+soft-threshold of the linear coefficients after each step).
+
+Cross-validation: ``--cases`` the cases trained on, ``--pool-seeds`` the reference seeds whose
+snapshots are drawn; ``--validate`` cases (and ``--validate-train``: the training cases too)
+are evaluated forward at the end (:mod:`.evaluate`, ``--eval-seeds`` / ``--eval-starts``) and
+the metrics written with the run.
 
     PYTHONPATH=. python3 -m examples.learned_collision.train --model linear [--iters 200]
 
@@ -33,6 +44,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
+from examples.learned_collision import evaluate as ev
 from examples.learned_collision import flows, operators
 from examples.learned_collision import windows2d as w2
 from examples.learned_collision.evaluate import load_ref
@@ -56,19 +68,30 @@ class CaseRunner:
         self.ref, self.meta = load_ref(ref_name, args.refs_tag)
         self.case = w2.make_case(name, self.meta, args.ppc)
         fn, _, pairing = operators.operator(model, self.case.kind)
+        self.collide_fn = fn
+        self.seeds = np.arange(self.ref["pool_x"].shape[0])
+        if args.pool_seeds:
+            self.seeds = np.array([k for k in args.pool_seeds if k < self.ref["pool_x"].shape[0]])
         self.case = self.case._replace(
             static=dataclasses.replace(self.case.static, pairing=pairing)
         )
         self.blocks, self.burn = args.blocks, args.burn
-        self.burn_fn = jax.jit(jax.vmap(functools.partial(
+        self.window_batch = args.window_batch
+        # every compiled function maps over a batch of windows (leading axis), each window
+        # over its two replicas: one launch runs window_batch x 2 coarse runs side by side
+        # (2026-11-11: one window at a time ran ~1e5 particle-steps/s, ~1e-3 of the card)
+        replicas = jax.vmap(functools.partial(
             w2.burn_in, case=self.case, collide_fn=fn, blocks=args.burn),
-            in_axes=(None, 0, 0, 0)))  # fmt: skip
+            in_axes=(None, 0, 0, 0))  # fmt: skip
+        self.burn_fn = jax.jit(jax.vmap(replicas, in_axes=(None, 0, 0, 0)))
         self.grad_fn = {
-            est: jax.jit(jax.value_and_grad(functools.partial(
-                _objective, case=self.case, collide_fn=fn, blocks=args.blocks, estimator=est),
-                has_aux=True))
+            est: jax.jit(jax.vmap(jax.value_and_grad(functools.partial(
+                _objective, case=self.case, collide_fn=fn, blocks=args.blocks,
+                step0=args.burn * BLOCK, estimator=est), has_aux=True),
+                in_axes=(None, 0, 0, 0, 0, None, 0)))
             for est in ("pair", "bias")
         }  # fmt: skip
+        self.thin = jax.jit(functools.partial(w2.pool_state, case=self.case))
         n_fields = len(w2.LOSS_FIELDS[self.case.kind])
         if self.case.kind == "shear":
             mean = self.ref[f"mean_dx{self.case.dx_c:g}"]
@@ -96,10 +119,11 @@ class CaseRunner:
             return self.bias[rows]
         return self.bias[0][None] * self.scale[rows]
 
-    def draw(self, rng):
-        """A window: ``(states, cstates, keys, target, rows)``, ``rows`` the bias-table rows."""
+    def draw(self, rng, with_seed=False):
+        """A window: ``(states, cstates, keys, target, rows)`` (replicas on the leading axis),
+        ``rows`` the bias-table rows (and the reference seed drawn from, ``with_seed``)."""
         ref, meta = self.ref, self.meta
-        seeds, snaps = ref["pool_x"].shape[:2]
+        snaps = ref["pool_x"].shape[1]
         if self.case.kind == "shear":
             every = round((ref["snap_t"][1] - ref["snap_t"][0]) / (ref["t"][1] - ref["t"][0]))
             last = (len(ref["t"]) - 1 - self.burn - self.blocks) // every
@@ -110,32 +134,53 @@ class CaseRunner:
         else:
             s = int(rng.integers(0, snaps))
             rows = np.arange(self.blocks)
-        seed = int(rng.integers(0, seeds))
+        seed = int(rng.choice(self.seeds))
         if self.case.kind == "shock":
             target = w2.shock_target(ref["prof_raw"], float(ref["snap_xs"][seed, s]), self.case,
                                      meta, self.blocks)  # fmt: skip
         key = jax.random.PRNGKey(int(rng.integers(0, 2**31 - 1)))
         k_thin, k_run = jax.random.split(key)
-        inits = [w2.pool_state(ref["pool_x"][seed, s, r], ref["pool_v"][seed, s, r],
-                               ref["pool_alive"][seed, s, r], self.case,
-                               jax.random.fold_in(k_thin, r)) for r in range(2)]  # fmt: skip
+        inits = [self.thin(ref["pool_x"][seed, s, r], ref["pool_v"][seed, s, r],
+                           ref["pool_alive"][seed, s, r], key=jax.random.fold_in(k_thin, r))
+                 for r in range(2)]  # fmt: skip
         if any(int(i[2]) for i in inits):
             raise RuntimeError(f"{self.name}: thinning overflowed the coarse capacity")
         states = jax.tree.map(flows.stack, *[i[0] for i in inits])
         cstates = jax.tree.map(flows.stack, *[i[1] for i in inits])
         keys = jnp.stack([jax.random.fold_in(k_run, r) for r in range(2)])
+        if with_seed:
+            return states, cstates, keys, jnp.asarray(target), rows, seed
         return states, cstates, keys, jnp.asarray(target), rows
 
-    def window(self, theta, rng, estimator):
-        """``(pair, d_mean, rows, grad)`` of one window."""
-        states, cstates, keys, target, rows = self.draw(rng)
-        if self.burn:
-            states, cstates = self.burn_fn(theta, states, cstates, keys)
-        (_, (pair, d_mean)), grad = self.grad_fn[estimator](
-            theta, states, cstates, keys, target, jnp.asarray(self.weights),
-            jnp.asarray(self.bias_at(rows)), step0=self.burn * BLOCK,
-        )  # fmt: skip
-        return float(pair), np.asarray(d_mean), rows, grad
+    def draw_batch(self, rng, n):
+        """``n`` windows stacked on a new leading axis: ``(states, cstates, keys, targets,
+        rows, seeds)`` (``rows``, ``seeds`` host lists)."""
+        drawn = [self.draw(rng, with_seed=True) for _ in range(n)]
+        states, cstates, keys, targets = (jax.tree.map(flows.stack, *[d[i] for d in drawn])
+                                          for i in range(4))  # fmt: skip
+        return states, cstates, keys, targets, [d[4] for d in drawn], [d[5] for d in drawn]
+
+    def windows(self, theta, rng, estimator, n):
+        """``n`` windows in batches of at most ``window_batch``: per window the pair loss,
+        the mean deviation ``[T, K, F]``, the bias rows and the gradient (lists)."""
+        pairs, devs, rows_all, grads = [], [], [], []
+        while n > 0:
+            m = min(n, self.window_batch)
+            n -= m
+            states, cstates, keys, targets, rows, _ = self.draw_batch(rng, m)
+            if self.burn:
+                states, cstates = self.burn_fn(theta, states, cstates, keys)
+            bias = jnp.asarray(np.stack([self.bias_at(r) for r in rows]))
+            (_, (pair, d_mean)), grad = self.grad_fn[estimator](
+                theta, states, cstates, keys, targets, jnp.asarray(self.weights), bias
+            )
+            pair, d_mean = np.asarray(pair), np.asarray(d_mean)
+            for i in range(m):
+                pairs.append(float(pair[i]))
+                devs.append(d_mean[i])
+                rows_all.append(rows[i])
+                grads.append(jax.tree.map(functools.partial(_index, i=i), grad))
+        return pairs, devs, rows_all, grads
 
     def update_bias(self, rows, d_mean):
         """Fold one window's mean deviation into the running bias (a running mean for the
@@ -158,56 +203,141 @@ class CaseRunner:
         return float(np.mean(np.sum(self.weights * b**2, axis=-1)))
 
 
+def _mean_of(*leaves, n):
+    return sum(leaves) / n
+
+
+def _index(a, i):
+    return a[i]
+
+
 def _scaled(scale, g):
     return scale * g
 
 
+def model_options(args):
+    """:func:`jax_dsmc.collide.relax.init_correction` options of the run's model."""
+    opts = {}
+    if args.model == "mlp":
+        opts.update(width=args.width, depth=args.depth)
+    if args.model != "scalar" and args.features:
+        opts["phi_scale"] = json.loads((RESULTS / args.features).read_text())["phi_scale"]
+    return opts
+
+
+def _decay_mask(theta):
+    return {k: k.startswith("W") for k in theta}
+
+
+def _frozen(args):
+    """Leaves held fixed: the feature scale always, the global coefficients of a correction
+    unless ``--train-intercept``."""
+    frozen = {"phi_scale"}
+    if args.model != "scalar" and not args.train_intercept:
+        frozen |= {"log_tau", "log_pr"}
+    return frozen
+
+
+def _soft_threshold(a, t):
+    return jnp.sign(a) * jnp.maximum(jnp.abs(a) - t, 0.0)
+
+
+def _step(theta, grads, state, opt, args, frozen):
+    grads = {k: (jnp.zeros_like(g) if k in frozen else g) for k, g in grads.items()}
+    updates, state = opt.update(grads, state, theta)
+    theta = optax.apply_updates(theta, updates)
+    if args.l1 > 0.0 and "A" in theta:
+        theta = dict(theta, A=_soft_threshold(theta["A"], args.lr * args.l1))
+    return theta, state, grads
+
+
+def validate(theta, args, cases):
+    """Forward metrics (:mod:`.evaluate`) of ``theta`` on ``cases``."""
+    out = {}
+    for name in cases:
+        t0 = time.time()
+        ref_name = flows.CASES[name][0]
+        ref, meta = load_ref(ref_name, args.refs_tag)
+        if meta["kind"] == "shear":
+            out[name] = ev.eval_shear(name, args.model, theta, ref, meta, args.eval_seeds,
+                                      args.ppc)  # fmt: skip
+        else:
+            res = ev.eval_shock(name, args.model, theta, ref, meta, args.eval_starts, 0.5, 1.0,
+                                ppc=args.ppc)  # fmt: skip
+            out[name] = {k: v for k, v in res.items() if k not in ("profile", "reference")}
+        out[name]["seconds"] = time.time() - t0
+        print(f"  validate {name}: " + ", ".join(
+            f"{k} {v:.4f}" for k, v in out[name].items()
+            if k in ("mu_ratio", "mu_ratio_se", "l2_txx", "l2_qx", "int_txx_ratio",
+                     "int_qx_ratio")), flush=True)  # fmt: skip
+    return out
+
+
+def _jsonable(theta):
+    return {k: np.asarray(v).tolist() for k, v in theta.items()}
+
+
+def _iteration(theta, runners, rng, args):
+    """One iteration's windows: the summed per-case mean gradients, the pair losses and the
+    seconds per case."""
+    grads = jax.tree.map(jnp.zeros_like, theta)
+    pairs, seconds = {}, {}
+    for r in runners:
+        t1 = time.time()
+        batch = args.shear_batch if r.case.kind == "shear" else args.batch
+        vals, devs, rows, gs = r.windows(theta, rng, args.estimator, batch)
+        for row, d in zip(rows, devs, strict=True):
+            r.update_bias(row, d)
+        # each case's mean gradient, equally weighted across cases
+        mean = jax.tree.map(functools.partial(_mean_of, n=batch), *gs)
+        grads = jax.tree.map(jnp.add, grads, mean)
+        pairs[r.name] = float(np.mean(vals))
+        seconds[r.name] = time.time() - t1
+    return grads, pairs, seconds
+
+
 def train(args):
     """The training loop (module docstring); returns the log dict."""
-    _, theta, _ = operators.operator(args.model, "shear", jax.random.PRNGKey(args.seed))
+    _, theta, _ = operators.operator(args.model, "shear", jax.random.PRNGKey(args.seed),
+                                     **model_options(args))  # fmt: skip
     runners = [CaseRunner(name, args.model, args) for name in args.cases]
     rng = np.random.default_rng(args.seed)
+    frozen = _frozen(args)
     t0 = time.time()
     if args.estimator == "bias":
         for r in runners:
-            for _ in range(args.bias_init):
-                _, d_mean, rows, _ = r.window(theta, rng, "pair")
-                r.update_bias(rows, d_mean)
+            _, devs, rows, _ = r.windows(theta, rng, "pair", args.bias_init)
+            for row, d in zip(rows, devs, strict=True):
+                r.update_bias(row, d)
         print(f"bias tables filled ({args.bias_init} windows per case), "
               f"{time.time() - t0:.0f} s", flush=True)  # fmt: skip
-    opt = optax.adam(args.lr)
+    opt = optax.adamw(args.lr, weight_decay=args.weight_decay, mask=_decay_mask)
     state = opt.init(theta)
     log = []
     out_path = RESULTS / f"train_{args.model}_{args.tag}.json"
+    out = {"args": vars(args), "theta": _jsonable(theta), "log": log}
     for it in range(args.iters):
-        grads = jax.tree.map(jnp.zeros_like, theta)
-        pairs = {}
-        for r in runners:
-            vals = []
-            batch = args.shear_batch if r.case.kind == "shear" else args.batch
-            for _ in range(batch):
-                pair, d_mean, rows, g = r.window(theta, rng, args.estimator)
-                r.update_bias(rows, d_mean)
-                # each case's mean gradient, equally weighted across cases
-                grads = jax.tree.map(
-                    jnp.add, grads, jax.tree.map(functools.partial(_scaled, 1.0 / batch), g)
-                )
-                vals.append(pair)
-            pairs[r.name] = float(np.mean(vals))
+        grads, pairs, seconds = _iteration(theta, runners, rng, args)
         grads = jax.tree.map(functools.partial(_scaled, 1.0 / len(runners)), grads)
-        updates, state = opt.update(grads, state, theta)
-        theta = optax.apply_updates(theta, updates)
+        theta, state, grads = _step(theta, grads, state, opt, args, frozen)
         row = {"iter": it, "pair": pairs, "bias2": {r.name: r.bias_norm() for r in runners},
-               "grad_norm": float(optax.global_norm(grads)),
+               "grad_norm": float(optax.global_norm(grads)), "case_seconds": seconds,
                "log_tau": float(theta["log_tau"]), "log_pr": float(theta["log_pr"]),
                "seconds": time.time() - t0}  # fmt: skip
+        if "A" in theta:
+            row["A"] = np.asarray(theta["A"]).tolist()
         log.append(row)
         print(f"it {it:4d}  bias2 {sum(row['bias2'].values()): .4e}  pair "
               f"{sum(pairs.values()): .4e}  |g| {row['grad_norm']:.3e}  log_tau "
               f"{row['log_tau']:+.4f} log_pr {row['log_pr']:+.4f}  {row['seconds']:.0f} s",
               flush=True)  # fmt: skip
-        out = {"args": vars(args), "theta": {k: np.asarray(v).tolist() for k, v in theta.items()},
-               "log": log}  # fmt: skip
+        out["theta"] = _jsonable(theta)
+        out_path.write_text(json.dumps(out))
+    checks = list(args.validate) + (list(args.cases) if args.validate_train else [])
+    if checks:
+        t1 = time.time()
+        out["validation"] = validate(theta, args, checks)
+        out["validation_seconds"] = time.time() - t1
         out_path.write_text(json.dumps(out))
     return out
 
@@ -218,16 +348,43 @@ def parser():
     ap.add_argument("--cases", nargs="+", default=list(TRAIN_CASES))
     ap.add_argument("--estimator", default="bias", choices=("bias", "pair"))
     ap.add_argument("--iters", type=int, default=200)
-    ap.add_argument("--batch", type=int, default=4, help="shock windows per case per iteration")
-    ap.add_argument("--shear-batch", type=int, default=16,
+    ap.add_argument("--batch", type=int, default=32, help="shock windows per case per iteration")
+    ap.add_argument("--shear-batch", type=int, default=32,
                     help="shear-wave windows per case per iteration (~6x cheaper than a shock's, "
                          "and a low-amplitude wave's flux signal is weak)")  # fmt: skip
     ap.add_argument("--blocks", type=int, default=5)
     ap.add_argument("--burn", type=int, default=2)
     ap.add_argument("--lr", type=float, default=0.02)
-    ap.add_argument("--bias-decay", type=float, default=0.05)
-    ap.add_argument("--bias-init", type=int, default=32)
+    ap.add_argument("--bias-decay", type=float, default=1e-3,
+                    help="the running bias's forgetting rate (a running mean for its first "
+                         "1 / decay windows): long memory -- a per-window deviation is mostly "
+                         "noise (lcsnr 2026-11-11)")  # fmt: skip
+    ap.add_argument("--bias-init", type=int, default=256)
+    ap.add_argument(
+        "--window-batch", type=int, default=32, help="windows per compiled call (x 2 replicas each)"
+    )
     ap.add_argument("--ppc", type=int, default=flows.PPC_COARSE)
+    ap.add_argument("--width", type=int, default=64, help="MLP hidden width")
+    ap.add_argument("--depth", type=int, default=2, help="MLP hidden layers")
+    ap.add_argument("--weight-decay", type=float, default=0.0)
+    ap.add_argument("--l1", type=float, default=0.0, help="proximal L1 on the linear A")
+    ap.add_argument("--train-intercept", action="store_true")
+    ap.add_argument(
+        "--features",
+        default="features_v1.json",
+        help="feature statistics (features.py; '' = nominal scales)",
+    )
+    ap.add_argument(
+        "--pool-seeds",
+        type=int,
+        nargs="*",
+        default=[],
+        help="reference seeds to draw snapshots from (default all)",
+    )
+    ap.add_argument("--validate", nargs="*", default=[], help="cases evaluated at the end")
+    ap.add_argument("--validate-train", action="store_true")
+    ap.add_argument("--eval-seeds", type=int, default=128)
+    ap.add_argument("--eval-starts", type=int, default=16)
     ap.add_argument("--refs-tag", default="v1")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--tag", default="v1")

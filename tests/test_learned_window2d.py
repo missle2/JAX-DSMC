@@ -125,3 +125,31 @@ def test_shear_window_gradients_match_finite_differences():
     case, px, pv, pa, target = _shear()
     _check(case, px, pv, pa, target, "scalar", "log_tau", "pair")
     _check(case, px, pv, pa, target, "linear", "A", "bias")
+
+
+def test_a_batch_of_windows_gives_each_window_its_own_gradient():
+    """``vmap`` over windows (the trainer's batching) reproduces the windows one at a time."""
+    case, px, pv, pa, target = _shear()
+    fn, theta, _ = operators.operator("linear", case.kind)
+    theta = dict(theta, A=jnp.full_like(theta["A"], 0.02))
+    weights = jnp.ones(1)
+    bias = jax.random.normal(jax.random.PRNGKey(5), (2, 2, 1))
+    windows = []
+    for k in range(2):
+        pairs = [w2.pool_state(px[r], pv[r], pa[r], case, jax.random.PRNGKey(40 + 2 * k + r))
+                 for r in range(2)]  # fmt: skip
+        windows.append(
+            (
+                jax.tree.map(flows.stack, *[p[0] for p in pairs]),
+                jax.tree.map(flows.stack, *[p[1] for p in pairs]),
+                jnp.stack([jax.random.PRNGKey(60 + 2 * k), jax.random.PRNGKey(61 + 2 * k)]),
+            )
+        )
+    f = functools.partial(_objective, target=jnp.asarray(target), weights=weights, bias=bias,
+                          case=case, fn=fn, estimator="bias")  # fmt: skip
+    one = [jax.jit(jax.grad(f))(theta, *w) for w in windows]
+    stacked = [jax.tree.map(flows.stack, *[w[i] for w in windows]) for i in range(3)]
+    batch = jax.jit(jax.vmap(jax.grad(f), in_axes=(None, 0, 0, 0)))(theta, *stacked)
+    for k in range(2):
+        np.testing.assert_allclose(np.asarray(batch["A"][k]), np.asarray(one[k]["A"]),
+                                   rtol=1e-9, atol=1e-12)  # fmt: skip

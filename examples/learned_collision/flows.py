@@ -11,7 +11,11 @@ a planar flow in a slab periodic in ``y``, and the twelve coarse cases built on 
   with ``lambda_1``), so the second axis is the resolution.  One fine reference per Mach
   serves both resolutions.
 
-Train on the extreme corners (S2, S3, K1, K8), test on the other eight.
+Train on S3, S4, K1, K8, test on the other eight.  (The plan's extreme corners had S2, the
+low-amplitude long wave, in training; its flux signal is ~5x weaker than S4's against the same
+thermal noise -- ~25x the windows per unit of squared-bias resolution, ~1e6 windows to resolve
+it -- so S2 and S4 swapped roles on 2026-11-11.  In the linear regime the coarse-cell error does
+not depend on amplitude, so S1 / S2 still test the long-wave and the small-amplitude limits.)
 
 Every slab is tall enough for ``N_SLAB`` particles per ``lambda`` of ``x`` at the coarse
 particles per cell: the 1-D collective (long-time-tail) transport of few simulators per
@@ -68,9 +72,9 @@ for _ref in REFERENCES.values():
 
 CASES = {
     "S1": ("shear_a0.1_L32", 2.0, "test"),
-    "S2": ("shear_a0.1_L128", 2.0, "train"),
+    "S2": ("shear_a0.1_L128", 2.0, "test"),
     "S3": ("shear_a0.5_L32", 2.0, "train"),
-    "S4": ("shear_a0.5_L128", 2.0, "test"),
+    "S4": ("shear_a0.5_L128", 2.0, "train"),
     "K1": ("shock_M1.5", 1.0, "train"),
     "K2": ("shock_M1.5", 4.0, "test"),
     "K3": ("shock_M3", 1.0, "test"),
