@@ -227,6 +227,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     if args.warm_pool:
         raise SystemExit("lasso draws snapshot windows only (no --warm-pool chains)")
+    if args.cubic:
+        raise SystemExit("lasso fits the two rate rows only (no --cubic)")
     _, theta, _ = operators.operator("linear", "shear", **model_options(args))
     runners = [CaseRunner(name, "linear", args) for name in args.cases]
     rng = np.random.default_rng(args.seed)

@@ -321,6 +321,13 @@ CORRECTION_BOUND = 2.0
 linear or MLP output is squashed by ``B tanh(x / B)``, so an input far outside the training
 range (the circle's cold wall layer, ``r ~ 30``) cannot drive ``tau`` to 0 or infinity."""
 
+CUBIC_BOUND = 0.5
+"""Bound on the cubic drift coefficient ``beta`` (:func:`cubic_drift`), squashed as the rates."""
+
+CUBIC_CAP = 25.0
+"""Cap on ``|c|^2 / theta`` in :func:`cubic_drift` (a 5-sigma particle): one tail particle
+cannot be thrown out by the cubic term."""
+
 CORRECTIONS = ("linear", "mlp")
 
 
@@ -395,22 +402,42 @@ def correction_mlp(theta, phi):
 
 
 def correction(theta, phi, kind):
-    """The bounded per-cell ``(dlog r_s, dlog r_q)`` of correction ``kind`` (:func:`rates`)."""
+    """The bounded per-cell ``(dlog r_s, dlog r_q)`` of correction ``kind`` (:func:`rates`)
+    and, with a third output row, the cubic drift coefficient ``beta`` (:func:`cubic_drift`):
+    ``f64[2 or 3, C]``."""
     raw = correction_linear(theta, phi) if kind == "linear" else correction_mlp(theta, phi)
-    return CORRECTION_BOUND * jnp.tanh(raw / CORRECTION_BOUND)
+    bound = jnp.asarray([CORRECTION_BOUND, CORRECTION_BOUND, CUBIC_BOUND][: raw.shape[0]])
+    return bound[:, None] * jnp.tanh(raw / bound[:, None])
 
 
-def init_correction(kind, key=None, width=64, depth=2, phi_scale=None):
+def cubic_drift(c, beta, a, theta_c):
+    """``f64[N, 3]``: the learned cubic drift ``s beta (|c|^2 / theta - 5) c`` of each particle
+    (``c`` its peculiar velocity; ``beta``, ``a``, ``theta_c`` its cell's, gathered), ``s = 1 -
+    a^3 = 1 - exp(-r_q dt)`` the step's heat-flux relaxation fraction -- the cubic
+    Fokker-Planck drift term (Gorji, Torrilhon & Jenny 2011) with a learned coefficient.
+
+    It is odd in ``c``: near equilibrium (Grad's 13 moments) it moves the heat flux by
+    ``~27 s beta q`` and leaves the stress (``~4 s beta`` of ``Pi_dev``) and the energy (0 for
+    a Maxwellian) nearly alone -- there a heat-flux rate like ``r_q``; in a non-Gaussian
+    shock core it acts through the fifth moment ``<|c|^4 c>``, which the Gaussian step
+    cannot.  The cell's momentum and energy are restored by the step's projection."""
+    x = jnp.minimum(jnp.sum(c**2, axis=1) / theta_c, CUBIC_CAP)
+    return ((1.0 - a**3) * beta * (x - 5.0))[:, None] * c
+
+
+def init_correction(kind, key=None, width=64, depth=2, phi_scale=None, cubic=False):
     """The trainable parameters of correction ``kind`` added to :data:`BASELINE`, zero output
     at initialisation (so the corrected operator starts as the base, bitwise).  ``mlp``:
     ``depth`` hidden tanh layers of ``width`` (``1 / sqrt(fan-in)`` weights, a zero last
-    layer).  ``phi_scale`` (``f64[F]``): the features' training spread (:func:`_standardised`)."""
+    layer).  ``phi_scale`` (``f64[F]``): the features' training spread (:func:`_standardised`).
+    ``cubic``: a third output, the cubic drift coefficient (:func:`cubic_drift`)."""
     theta = {k: jnp.float64(v) for k, v in BASELINE.items()}
     k = len(FEATURES)
+    outputs = 3 if cubic else 2
     if kind == "linear":
-        theta["A"] = jnp.zeros((2, k))
+        theta["A"] = jnp.zeros((outputs, k))
     elif kind == "mlp":
-        sizes = [k] + [width] * depth + [2]
+        sizes = [k] + [width] * depth + [outputs]
         keys = jax.random.split(jax.random.PRNGKey(0) if key is None else key, depth + 1)
         for i in range(depth + 1):
             fan_in, fan_out = sizes[i], sizes[i + 1]
@@ -481,7 +508,9 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
       viscosity of uniform in-cell collisions).  ``None``: the cell-mean target.
     - ``corrected`` (``"linear"`` / ``"mlp"``, needs ``periodic``): a learned per-cell
       ``(dlog r_s, dlog r_q)`` from the theory features (:func:`cell_features`,
-      :func:`correction`; parameters from :func:`init_correction`).
+      :func:`correction`; parameters from :func:`init_correction`), and with a third output
+      row the cubic drift coefficient (:func:`cubic_drift`, added to the OU step before the
+      projection).
     """
     del static, cell_temp
     v = state.v
@@ -497,6 +526,9 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
     xi = indexed_normal(key_for(base_key, step, STAGE_LEARNED), v.shape[0], (3,))
     c = v - u_loc
     c_new = a[row][:, None] * c + jnp.einsum("nij,nj->ni", chol[row], xi)
+    if delta is not None and delta.shape[0] > 2:
+        theta_s = safe_cells(n, pi, theta_c)[3]
+        c_new = c_new + cubic_drift(c, delta[2][row], a[row], theta_s[row])
     return _finish(state, table, cstate, c, c_new, u_loc, seg, row, n, periodic)
 
 

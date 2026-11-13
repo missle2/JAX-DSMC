@@ -1972,6 +1972,26 @@ def _lcdyn_jobs(gpus_per_node: int) -> dict[str, str]:
             for k, v in LC_DYN.items()}  # fmt: skip
 
 
+def _lccubic_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lccubic`` (2026-11-13): the cubic Fokker-Planck drift as a third learned output
+    (train.py --cubic, relax.cubic_drift) -- does it help the shock heat flux the two rates
+    did not?  On the chains, 300 iterations at lr 0.003, against lcconv's two-rate runs (q1:
+    K8 int tau_xx 1.043 / int q_x 0.853; MLP q2: 1.162 / 0.966): the linear and MLP models
+    on all five cases at qx weight 1 and 2, and the linear model on K8 alone (lccase_only_K8:
+    1.119 / 0.930).  Pass as lcloss."""
+    del gpus_per_node
+    common = f"{LC}.train --warm-pool v1 --validate-train --iters 300 --lr 0.003 --cubic"
+    mlp = "--model mlp --depth 2 --width 32"
+    return {
+        "lccubic_q1": f"{common} --model linear --tag lccubic_q1",
+        "lccubic_q2": f"{common} --model linear --qx-weight 2 --tag lccubic_q2",
+        "lccubic_mlp_q1": f"{common} {mlp} --tag lccubic_mlp_q1",
+        "lccubic_mlp_q2": f"{common} {mlp} --qx-weight 2 --tag lccubic_mlp_q2",
+        "lccubic_only_K8": f"{common} --model linear --qx-weight 2 --cases K8 "
+        "--validate S3 S4 K1 K4 --tag lccubic_only_K8",
+    }
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -2100,6 +2120,7 @@ NEW_GROUPS = {
     "lcconv": _lcconv_jobs,
     "lccase": _lccase_jobs,
     "lcdyn": _lcdyn_jobs,
+    "lccubic": _lccubic_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

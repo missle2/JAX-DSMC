@@ -359,6 +359,8 @@ def model_options(args):
     opts = {}
     if args.model == "mlp":
         opts.update(width=args.width, depth=args.depth)
+    if args.model != "scalar" and args.cubic:
+        opts["cubic"] = True
     if args.model != "scalar" and args.features:
         stats = json.loads((RESULTS / args.features).read_text())
         if stats["features"] != list(relax.FEATURES):
@@ -575,6 +577,11 @@ def parser():
     )
     ap.add_argument("--qx-weight", type=float, default=1.0, help="shock heat-flux weight factor")
     ap.add_argument("--warm-pool", default="", help="shock chains from warm_<case>_<TAG>.npz")
+    ap.add_argument(
+        "--cubic",
+        action="store_true",
+        help="a third output: the cubic Fokker-Planck drift coefficient (relax.cubic_drift)",
+    )
     ap.add_argument(
         "--case-norm",
         action="store_true",
