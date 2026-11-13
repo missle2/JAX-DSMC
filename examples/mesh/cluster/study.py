@@ -1940,6 +1940,38 @@ def _lccase_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+LC_DYN = {
+    "ref": "",
+    "decay": "--bias-decay 0.01",
+    "lr1": "--lr 0.001",
+    "pair": "--estimator pair",
+    "b20": "--blocks 20 --window-batch 8",
+    "b20decay": "--blocks 20 --window-batch 8 --bias-decay 0.01",
+    "pair_b20": "--estimator pair --blocks 20 --window-batch 8",
+}
+"""``lcdyn`` variants of the K4-alone run (train.py options)."""
+
+
+def _lcdyn_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcdyn`` (2026-11-13, after lccase): trained on K4 alone, K4 got *worse* on both
+    integrals (1.104 / 0.971 -> 1.131 / 1.070) and its own squared bias rose 2.6e-2 -> 7.1e-2
+    after ~100 iterations, while runs trained on K8 alone reached K4 1.034 / 0.983 -- a
+    better K4 exists in the parameters and K4's own gradient leads away from it (K1 alone:
+    the same).  Not the case mix (no-K1 runs fail alike) and not capacity: the training
+    signal.  Two suspects: lag -- the bias table's time constant ~31 iterations (decay 1e-3,
+    32 windows), the chains' re-relaxation ~16, Adam's momentum ~10, so the steps run on a
+    ~50-iteration-old error and overshoot (K4's qx 1.03-1.07 in every run) -- or truncation:
+    a 5-block window's sensitivity is not the steady state's (the heat flux takes ~80 blocks
+    to settle, lctransient).  K4 alone (~20-50 min each): the reference, a 10x faster table
+    (``decay``), a 3x smaller lr (``lr1``), no table at all (``pair``), 4x longer windows
+    (``b20``), and both fixes together.  Lag: decay / lr1 / pair fix it.  Truncation: b20."""
+    del gpus_per_node
+    common = (f"{LC}.train --warm-pool v1 --iters 300 --lr 0.003 --qx-weight 2 --model linear "
+              "--cases K4 --validate-train --validate K8")  # fmt: skip
+    return {f"lcdyn_{k}": f"{common} {v} --tag lcdyn_{k}".replace("  ", " ")
+            for k, v in LC_DYN.items()}  # fmt: skip
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -2067,6 +2099,7 @@ NEW_GROUPS = {
     "lcchain": _lcchain_jobs,
     "lcconv": _lcconv_jobs,
     "lccase": _lccase_jobs,
+    "lcdyn": _lcdyn_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }
