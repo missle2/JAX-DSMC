@@ -1992,6 +1992,22 @@ def _lccubic_jobs(gpus_per_node: int) -> dict[str, str]:
     }
 
 
+def _lcdirfd_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcdirfd`` (2026-11-13): is the window gradient a descent direction of the steady
+    error?  At iterates of lccase_only_K4 (K4 trained alone got worse on K4; its window loss
+    bottomed near iteration 40), the run's own window gradient against central differences of
+    the steady loss along it (and along the run's update), common random numbers, 64 starts
+    (examples.learned_collision.direction_fd).  One job per iterate, and K8 alone (it did
+    improve its stress) at iteration 150 for contrast."""
+    del gpus_per_node
+    fd = f"{LC}.direction_fd"
+    jobs = {f"lcdirfd_K4_{i}": f"{fd} --run train_linear_lccase_only_K4.json --case K4 --at {i} "
+            f"--tag K4_{i}" for i in (0, 40, 150, 299)}  # fmt: skip
+    jobs["lcdirfd_K8_150"] = (f"{fd} --run train_linear_lccase_only_K8.json --case K8 --at 150 "
+                              "--tag K8_150")  # fmt: skip
+    return jobs
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -2121,6 +2137,7 @@ NEW_GROUPS = {
     "lccase": _lccase_jobs,
     "lcdyn": _lcdyn_jobs,
     "lccubic": _lccubic_jobs,
+    "lcdirfd": _lcdirfd_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }
