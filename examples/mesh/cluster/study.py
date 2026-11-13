@@ -1894,6 +1894,23 @@ def _lcchain_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lcconv_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcconv`` (2026-11-12, after lcchain): converged runs on the chains before lccv.  At
+    40 iterations the qx weight moved the model along a frontier (ctl: K8 int txx 1.105 /
+    int qx 0.901; q3: 1.183 / 0.972; q10: 1.228 / 1.009) and nothing passed; ctl_long (120
+    iterations at lr 0.01) fixed K8's stress but over-shot K4's heat flux (1.076) -- the shared
+    coefficients serve K4 and K8 differently.  Do 300 iterations at lccv's middle lr (the
+    linear model at qx weights 1, 2, 3; the smallest sweep-like MLP at 2) reach a model that
+    corrects both integrals on both shocks?  Pass as lcloss."""
+    del gpus_per_node
+    common = f"{LC}.train --warm-pool v1 --validate-train --iters 300 --lr 0.003"
+    jobs = {f"lcconv_q{w}": f"{common} --model linear --qx-weight {w} --tag lcconv_q{w}"
+            for w in (1, 2, 3)}  # fmt: skip
+    jobs["lcconv_mlp_q2"] = (f"{common} --model mlp --depth 2 --width 32 --qx-weight 2 "
+                             "--tag lcconv_mlp_q2")  # fmt: skip
+    return jobs
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -2019,6 +2036,7 @@ NEW_GROUPS = {
     "lctransient": _lctransient_jobs,
     "lcwarm": _lcwarm_jobs,
     "lcchain": _lcchain_jobs,
+    "lcconv": _lcconv_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

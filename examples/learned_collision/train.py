@@ -220,8 +220,10 @@ class CaseRunner:
             raise SystemExit(f"{path}: {size} chains, the run needs {n} (2 x --batch)")
         pick = np.random.default_rng([args.seed, size]).choice(size, n, replace=False)
         self.chains = jax.tree.map(functools.partial(_index, i=jnp.asarray(pick)), pool)
+        self.pool = pool  # the refill when most chains drifted together (_write_back)
         self.cursor = 0
         self.refreshed = 0
+        self.refilled = 0
         sums = functools.partial(refdata._fine_sums, length=self.case.hi, nx=self.case.n_coarse)
         self.sums_fn = jax.jit(jax.vmap(sums))
         self.x_c = (np.arange(self.case.n_coarse) + 0.5) * self.case.dx_c
@@ -258,21 +260,31 @@ class CaseRunner:
     def _write_back(self, idx, final, rng):
         """The windows' end states ``final = (states, cstates)`` (``[m, 2, ...]``) back into
         chains ``idx``; then every chain whose shock drifted past ``--chain-drift`` from the
-        pool's median replaced by a copy of a random healthy one."""
+        pool's median replaced by a copy of a random healthy one -- or, once fewer than half
+        are healthy (the inflow-held shock's position random-walks, and K1's chains crept
+        upstream together, ~1.2 lambda_1 in 68 iterations of lcchain_ctl_long), by random
+        members of the warm pool (relaxed at the base operator, not the current model's
+        state: the rarer, rougher refill)."""
         self.chains = tuple(jax.tree.map(functools.partial(_put, idx=idx), c,
                                          jax.tree.map(_pairs, f))
                             for c, f in zip(self.chains, final, strict=True))  # fmt: skip
         off = np.abs(self.positions(self.chains[0]) - self.x_home) > self.drift
-        if off.any() and not off.all():
-            src = rng.choice(np.flatnonzero(~off), int(off.sum()))
-            dst = jnp.asarray(np.flatnonzero(off))
-            self.chains = tuple(jax.tree.map(
-                functools.partial(_put, idx=dst), c,
-                jax.tree.map(functools.partial(_index, i=jnp.asarray(src)), c))
-                for c in self.chains)  # fmt: skip
-            self.refreshed += int(off.sum())
-        elif off.all():
-            raise RuntimeError(f"{self.name}: every chain's shock drifted > {self.drift}")
+        if not off.any():
+            return
+        healthy = np.flatnonzero(~off)
+        if len(healthy) >= off.size // 2:
+            source = self.chains
+            src = rng.choice(healthy, int(off.sum()))
+        else:
+            source = self.pool
+            src = rng.choice(self.pool[0].x.shape[0], int(off.sum()), replace=False)
+            self.refilled += int(off.sum())
+        dst = jnp.asarray(np.flatnonzero(off))
+        self.chains = tuple(jax.tree.map(
+            functools.partial(_put, idx=dst), c,
+            jax.tree.map(functools.partial(_index, i=jnp.asarray(src)), p))
+            for c, p in zip(self.chains, source, strict=True))  # fmt: skip
+        self.refreshed += int(off.sum())
 
     def draw_batch(self, rng, n):
         """``n`` windows stacked on a new leading axis: ``(states, cstates, keys, targets,
@@ -460,7 +472,8 @@ def _chain_log(runners):
     if not chained:
         return {}
     return {"chains": {r.name: {"x_median": float(np.median(r.positions(r.chains[0]))),
-                                "x_home": r.x_home, "refreshed": r.refreshed}
+                                "x_home": r.x_home, "refreshed": r.refreshed,
+                                "refilled": r.refilled}
                        for r in chained}}  # fmt: skip
 
 

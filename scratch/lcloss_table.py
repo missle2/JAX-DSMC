@@ -12,8 +12,9 @@ BASE = {"S3": 1.065, "S4": 1.131,  # mu ratio, lcbase_shear_hi / lctime validati
 
 def main(prefix="lcloss"):
     """``python scratch/lcloss_table.py [lcloss|lcchain]``."""
-    for k in ("ctl", "q3", "q10", "m1", "m2", "m4", "m2q3", "ctl_long"):
-        path = RES / f"train_linear_{prefix}_{k}.json"
+    for k in ("ctl", "q1", "q2", "q3", "q10", "m1", "m2", "m4", "m2q3", "ctl_long", "mlp_q2"):
+        model = "mlp" if k.startswith("mlp") else "linear"
+        path = RES / f"train_{model}_{prefix}_{k}.json"
         if not path.exists():
             continue
         v = json.loads(path.read_text())["validation"]
