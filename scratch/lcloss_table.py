@@ -15,7 +15,7 @@ def main(prefix="lcloss"):
     keys = ("ctl", "q1", "q2", "q3", "q10", "m1", "m2", "m4", "m2q3", "ctl_long", "mlp_q2",
             "nok1", "nok1_mlp", "k4k8", "norm", "norm_mlp", "only_K1", "only_K4", "only_K8",
             "ref", "decay", "lr1", "pair", "b20", "b20decay", "pair_b20", "mlp_q1",
-            "only_K8")
+            "only_K8", "cubic_q1", "mlp_cubic_q1")
     for k in keys:
         model = "mlp" if "mlp" in k else "linear"
         path = RES / f"train_{model}_{prefix}_{k}.json"
@@ -40,6 +40,11 @@ def main(prefix="lcloss"):
             else:  # both closer to 1
                 ok &= abs(t - 1) < abs(bt - 1) and abs(q - 1) < abs(bq - 1)
             cells.append(f"{c} txx {t:.3f} qx {q:.3f} L2 {v[c]['l2_txx']:.3f}/{v[c]['l2_qx']:.3f}")
+        log = json.loads(path.read_text())["log"]
+        tail = log[-max(1, len(log) // 5):]
+        pairs = " ".join(f"{c}:{sum(r['pair'][c] for r in tail) / len(tail):+.3f}"
+                         for c in tail[0]["pair"] if c.startswith("K"))
+        cells.append(f"pair(last 1/5) {pairs}")
         a = json.loads(path.read_text())["theta"].get("A")
         rows = "" if a is None else " | A rows " + " ".join(f"{sum(r) / len(r):+.4f}" for r in a)
         print(f"{k:8s} {'PASS' if ok else 'fail'} | " + " | ".join(cells) + rows)

@@ -2008,6 +2008,36 @@ def _lcdirfd_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lcfix_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcfix`` (2026-11-13): the chain runs again after the pair fix.  Every chain run
+    (lcchain, lcconv, lccase, lcdyn, lccubic) paired two chains against ONE target at their
+    mean shock position: as their shocks random-walked apart the replicas' deviations became
+    anti-correlated (the pair loss drifted from +0.01 to -0.05..-0.16 in every chain run,
+    never in the snapshot runs) and the bias table learned a smeared shock -- K4's window
+    loss rose under its own gradient whatever the lr, table, window or estimator (lcdyn).
+    Now each replica has its own target and the table sits in the shock's frame.  K4 and
+    K8 alone (lccase_only: K4 1.131 / 1.070, K8 1.119 / 0.930), all five cases (linear and
+    MLP, with and without --cubic), and the descent check at the base on K4.  Pass: K4's
+    window loss falls, its pair loss stays positive, lcloss's integral rule."""
+    del gpus_per_node
+    common = f"{LC}.train --warm-pool v1 --validate-train --iters 300 --lr 0.003"
+    mlp = "--model mlp --depth 2 --width 32"
+    jobs = {
+        f"lcfix_only_{k}": f"{common} --model linear --qx-weight 2 --cases {k} --validate "
+        f"{' '.join(c for c in ('S3', 'S4', 'K1', 'K4', 'K8') if c != k)} --tag lcfix_only_{k}"
+        for k in ("K4", "K8")
+    }
+    jobs |= {
+        "lcfix_q1": f"{common} --model linear --tag lcfix_q1",
+        "lcfix_cubic_q1": f"{common} --model linear --cubic --tag lcfix_cubic_q1",
+        "lcfix_mlp_q1": f"{common} {mlp} --tag lcfix_mlp_q1",
+        "lcfix_mlp_cubic_q1": f"{common} {mlp} --cubic --tag lcfix_mlp_cubic_q1",
+        "lcfix_dirfd_K4_0": f"{LC}.direction_fd --run train_linear_lccase_only_K4.json --case K4 "
+        "--at 0 --tag fix_K4_0",
+    }
+    return jobs
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -2138,6 +2168,7 @@ NEW_GROUPS = {
     "lcdyn": _lcdyn_jobs,
     "lccubic": _lccubic_jobs,
     "lcdirfd": _lcdirfd_jobs,
+    "lcfix": _lcfix_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

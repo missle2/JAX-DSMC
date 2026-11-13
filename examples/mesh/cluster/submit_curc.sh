@@ -157,7 +157,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     bitchk|ellchk|multichk|ellprobe) HOURS=3 ;;
     lcref|lcbase|lcsnr|lceval) HOURS=12 ;;
     lccirc|lctrain|lclasso) HOURS=24 ;;
-    lctime|lcfeat|lcburn|lcsteadyfd|lcbound|lcloss|lctransient|lcwarm|lcchain|lcconv|lccase|lcdyn|lccubic|lcdirfd) HOURS=4 ;;
+    lctime|lcfeat|lcburn|lcsteadyfd|lcbound|lcloss|lctransient|lcwarm|lcchain|lcconv|lccase|lcdyn|lccubic|lcdirfd|lcfix) HOURS=4 ;;
     lccv) HOURS=12 ;;
     biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|speedprof|boxcheck|opt3dcheck|adjbias|adjm10|stepfd) HOURS=12 ;;
     # the paper's groups (2026-10-28): STUDY_MODULE=examples.paper.cluster.study

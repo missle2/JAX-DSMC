@@ -157,3 +157,23 @@ def test_a_batch_of_windows_gives_each_window_its_own_gradient():
     for k in range(2):
         np.testing.assert_allclose(np.asarray(batch["A"][k]), np.asarray(one[k]["A"]),
                                    rtol=1e-9, atol=1e-12)  # fmt: skip
+
+
+def test_per_replica_targets_and_bias_reproduce_the_shared_ones():
+    """Persistent chains give each replica its own target and bias frame (2026-11-13: one
+    target at the pair's mean shock made the replicas' deviations anti-correlated); the same
+    target and bias stacked per replica is the shared objective exactly, and the
+    deviations come back per replica."""
+    case, px, pv, pa, target = _shock()
+    fn, theta, _ = operators.operator("scalar", case.kind)
+    states, cstates, keys = _replicas(case, px, pv, pa)
+    weights = jnp.ones(len(w2.LOSS_FIELDS[case.kind]))
+    bias = jax.random.normal(jax.random.PRNGKey(5), (2, case.n_coarse, len(weights)))
+    t = jnp.asarray(target)
+    shared = w2.window_objective(theta, states, cstates, keys, t, weights, bias, case, fn, 2, 0,
+                                 "bias")  # fmt: skip
+    each = w2.window_objective(theta, states, cstates, keys, jnp.stack([t, t]), weights,
+                               jnp.stack([bias, bias]), case, fn, 2, 0, "bias")  # fmt: skip
+    np.testing.assert_allclose(float(each[0]), float(shared[0]), rtol=1e-12)
+    np.testing.assert_allclose(float(each[1][0]), float(shared[1][0]), rtol=1e-12)
+    assert each[1][1].shape == (2, 2, case.n_coarse, len(weights))

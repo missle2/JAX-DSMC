@@ -215,26 +215,30 @@ def burn_in(theta, state, cstate, key, case, collide_fn, blocks):
 
 def window_objective(theta, states, cstates, keys, target, weights, bias, case, collide_fn,
                      blocks, step0, estimator, final=False):  # fmt: skip
-    """``(objective, (pair, d_mean))`` of two replicas (leading axis 2): ``pair`` the
-    two-replica loss, ``d_mean`` the replicas' mean projected deviation ``[T, K, F]`` (the
-    trainer's running-bias update), and the objective whose gradient is the chosen
-    estimator's (module docstring; ``bias`` ``[T, K, F]`` is ignored by ``pair``).
-    ``final``: the aux also carries the replicas' end ``(states, cstates)`` (no gradient) --
-    a persistent chain's next start (:mod:`.train` ``--warm-pool``)."""
+    """``(objective, (pair, d))`` of two replicas (leading axis 2): ``pair`` the two-replica
+    loss, ``d`` the replicas' projected deviations ``[2, T, K, F]`` (the trainer's
+    running-bias update), and the objective whose gradient is the chosen estimator's (module
+    docstring; ``bias`` is ignored by ``pair``).  ``target`` (``[T, C, 13]``) and ``bias``
+    (``[T, K, F]``) are shared by the replicas, or given per replica (a leading axis 2:
+    persistent shock chains, whose shocks sit at their own positions -- 2026-11-13: one
+    target at the pair's mean position made the replicas' deviations anti-correlated, the
+    pair loss negative and the bias a smeared shock).  ``final``: the aux also carries the
+    replicas' end ``(states, cstates)`` (no gradient) -- a chain's next start."""
     run = functools.partial(rollout, theta, case=case, collide_fn=collide_fn, blocks=blocks,
                             step0=step0)  # fmt: skip
     end_s, end_c, ms = jax.vmap(run)(states, cstates, keys)
-    ref = flux(target, case.kind)
-    d_a = project(flux(ms[0], case.kind) - ref, case)
-    d_b = project(flux(ms[1], case.kind) - ref, case)
+    each = target.ndim == 4
+    refs = [flux(target[r] if each else target, case.kind) for r in range(2)]
+    d_a, d_b = (project(flux(ms[r], case.kind) - refs[r], case) for r in range(2))
     w = jnp.asarray(weights)
     pair = jnp.mean(jnp.sum(w * d_a * d_b, axis=-1))
-    d_mean = 0.5 * (d_a + d_b)
     if estimator == "pair":
         obj = pair
     else:
-        obj = jnp.mean(jnp.sum(w * jax.lax.stop_gradient(bias) * d_mean, axis=-1))
-    aux = (jax.lax.stop_gradient(pair), jax.lax.stop_gradient(d_mean))
+        b = jax.lax.stop_gradient(bias)
+        b_a, b_b = (b[0], b[1]) if bias.ndim == 4 else (b, b)
+        obj = 0.5 * jnp.mean(jnp.sum(w * (b_a * d_a + b_b * d_b), axis=-1))
+    aux = (jax.lax.stop_gradient(pair), jax.lax.stop_gradient(jnp.stack([d_a, d_b])))
     if final:
         aux = (*aux, jax.lax.stop_gradient((end_s, end_c)))
     return obj, aux

@@ -73,3 +73,11 @@ def test_chain_windows_and_write_back_keep_replica_order():
     np.testing.assert_array_equal(w[:, :, 0], [[6.0, 7.0], [2.0, 3.0]])
     back = train._put(chains, train._pairs(w + 100.0), idx)
     np.testing.assert_array_equal(back[:, 0], [0, 1, 102, 103, 4, 5, 106, 107])
+
+
+def test_shift_moves_a_deviation_between_cells_and_the_shock_frame():
+    x = np.arange(1.0, 6.0)[None, :, None] * np.ones((2, 1, 2))  # [T, K = 5, F]
+    np.testing.assert_array_equal(train._shift(x, 2)[0, :, 0], [0, 0, 1, 2, 3])
+    np.testing.assert_array_equal(train._shift(x, -1)[0, :, 0], [2, 3, 4, 5, 0])
+    np.testing.assert_array_equal(train._shift(train._shift(x, 1), -1)[0, 1:4, 0], [2, 3, 4])
+    np.testing.assert_array_equal(train._shift(x, 0), x)

@@ -95,6 +95,18 @@ def _windows_of(x, idx):
     return x[idx].reshape(-1, 2, *x.shape[1:])
 
 
+def _shift(x, s):
+    """``x[T, K, ...]`` moved ``s`` cells along ``K`` (``out[:, k] = x[:, k - s]``), zeros
+    filled in: a chain's deviation between the absolute cells and the shock's frame."""
+    out = np.zeros_like(x)
+    k = x.shape[1]
+    if s >= 0:
+        out[:, s:] = x[:, : k - s]
+    else:
+        out[:, : k + s] = x[:, -s:]
+    return out
+
+
 def warm_path(name, tag):
     """A shock case's warm pool (:mod:`.warm_pool`)."""
     return RESULTS / f"warm_{name}_{tag}.npz"
@@ -240,22 +252,28 @@ class CaseRunner:
                                                   self.case.ppc_up))  # fmt: skip
 
     def _draw_chains(self, rng, n):
-        """The next ``n`` windows of consecutive chain pairs (cycling), targets placed at each
-        pair's mean shock position; ``seeds`` hold the chain indices of the write-back."""
+        """The next ``n`` windows of consecutive chain pairs (cycling), each replica's target
+        placed at its own shock position (``[n, 2, T, C, 13]``); ``seeds`` hold the chain
+        indices of the write-back and each replica's whole-cell offset from the pool's
+        median (``[n, 2]``; 0 with ``--shock-modes``), which moves its deviation into the
+        bias table's frame."""
         total = self.chains[0].x.shape[0] // 2
         win = (self.cursor + np.arange(n)) % total
         self.cursor = int((self.cursor + n) % total)
         idx = jnp.asarray(np.stack([2 * win, 2 * win + 1], axis=1).ravel())
         states, cstates = (jax.tree.map(functools.partial(_windows_of, idx=idx), c)
                            for c in self.chains)  # fmt: skip
-        xs = self.positions(jax.tree.map(_pairs, states)).reshape(n, 2).mean(axis=1)
-        targets = jnp.stack([jnp.asarray(w2.shock_target(self.ref["prof_raw"], float(x),
-                                                         self.case, self.meta, self.blocks))
-                             for x in xs])  # fmt: skip
+        xs = self.positions(jax.tree.map(_pairs, states)).reshape(n, 2)
+        targets = jnp.stack([jnp.stack([jnp.asarray(w2.shock_target(
+            self.ref["prof_raw"], float(x), self.case, self.meta, self.blocks)) for x in pair])
+            for pair in xs])  # fmt: skip
+        shifts = np.rint((xs - self.x_home) / self.case.dx_c).astype(int)
+        if self.case.modes > 0:  # the domain's modes: no cell frame to align
+            shifts = np.zeros_like(shifts)
         keys = jnp.stack([jnp.stack([jax.random.PRNGKey(int(rng.integers(0, 2**31 - 1)))
                                      for _ in range(2)]) for _ in range(n)])  # fmt: skip
         rows = [np.arange(self.blocks)] * n
-        return states, cstates, keys, targets, rows, idx
+        return states, cstates, keys, targets, rows, (idx, shifts)
 
     def _write_back(self, idx, final, rng):
         """The windows' end states ``final = (states, cstates)`` (``[m, 2, ...]``) back into
@@ -307,16 +325,31 @@ class CaseRunner:
             states, cstates, keys, targets, rows, seeds = self.draw_batch(rng, m)
             if self.burn:
                 states, cstates = self.burn_fn(theta, states, cstates, keys)
-            bias = jnp.asarray(np.stack([self.bias_at(r) for r in rows]))
-            (_, (pair, d_mean, final)), grad = self.grad_fn[estimator](
-                theta, states, cstates, keys, targets, jnp.asarray(self.weights), bias
+            if self.chains is None:
+                bias = np.stack([self.bias_at(r) for r in rows])
+            else:  # the table (the shock's frame) moved to each replica's own cells
+                shifts = seeds[1]
+                bias = np.stack([np.stack([_shift(self.bias_at(r), int(s)) for s in sh])
+                                 for r, sh in zip(rows, shifts, strict=True)])  # fmt: skip
+            (_, (pair, d_pair, final)), grad = self.grad_fn[estimator](
+                theta,
+                states,
+                cstates,
+                keys,
+                targets,
+                jnp.asarray(self.weights),
+                jnp.asarray(bias),
             )
             if self.chains is not None:
-                self._write_back(seeds, final, rng)
-            pair, d_mean = np.asarray(pair), np.asarray(d_mean)
+                self._write_back(seeds[0], final, rng)
+            pair, d_pair = np.asarray(pair), np.asarray(d_pair)
             for i in range(m):
                 pairs.append(float(pair[i]))
-                devs.append(d_mean[i])
+                if self.chains is None:
+                    devs.append(d_pair[i].mean(axis=0))
+                else:
+                    devs.append(0.5 * sum(_shift(d_pair[i, r], -int(shifts[i, r]))
+                                          for r in range(2)))  # fmt: skip
                 rows_all.append(rows[i])
                 grads.append(jax.tree.map(functools.partial(_index, i=i), grad))
         return pairs, devs, rows_all, grads
