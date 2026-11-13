@@ -12,18 +12,24 @@ BASE = {"S3": 1.065, "S4": 1.131,  # mu ratio, lcbase_shear_hi / lctime validati
 
 def main(prefix="lcloss"):
     """``python scratch/lcloss_table.py [lcloss|lcchain]``."""
-    for k in ("ctl", "q1", "q2", "q3", "q10", "m1", "m2", "m4", "m2q3", "ctl_long", "mlp_q2"):
-        model = "mlp" if k.startswith("mlp") else "linear"
+    keys = ("ctl", "q1", "q2", "q3", "q10", "m1", "m2", "m4", "m2q3", "ctl_long", "mlp_q2",
+            "nok1", "nok1_mlp", "k4k8", "norm", "norm_mlp", "only_K1", "only_K4", "only_K8")
+    for k in keys:
+        model = "mlp" if "mlp" in k else "linear"
         path = RES / f"train_{model}_{prefix}_{k}.json"
         if not path.exists():
             continue
         v = json.loads(path.read_text())["validation"]
         cells, ok = [], True
         for c in ("S3", "S4"):
+            if c not in v:
+                continue
             mu = v[c]["mu_ratio"]
             ok &= abs(mu - 1) <= abs(BASE[c] - 1) + v[c]["mu_ratio_se"]
             cells.append(f"{c} mu {mu:.3f}")
         for c in ("K1", "K4", "K8"):
+            if c not in v:
+                continue
             t, q = v[c]["int_txx_ratio"], v[c]["int_qx_ratio"]
             st, sq = v[c]["int_txx_ratio_se"], v[c]["int_qx_ratio_se"]
             bt, bq = BASE[c]

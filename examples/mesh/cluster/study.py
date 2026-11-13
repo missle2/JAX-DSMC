@@ -1911,6 +1911,35 @@ def _lcconv_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lccase_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lccase`` (2026-11-12, after lcconv): is the K4 / K8 conflict K1's?  In every lcconv
+    run K4's squared bias *doubled* after ~100 iterations (q1 1.4e-2 -> 4.6e-2; the MLP 2.7e-2
+    -> 5.8e-2) while K1's -- the largest and noisiest, M1.5 at dx = lambda, its int tau_xx
+    already 1.05 at the base -- kept falling, and K1's int tau_xx got worse (1.05 -> 1.10).
+    Without K1 (validated on it), K4 and K8 alone, and all five cases with each case's
+    gradient over its starting squared bias (--case-norm).  ``lccase_only_<K>``: one shock
+    alone (validated on all five) -- can the correction fix both integrals of a single
+    simulation at all (lcsteadyfd's per-case 2x2 says two constant rates could)?  If not,
+    the limit is the two-rate model, not the case mix.  300 iterations on the chains."""
+    del gpus_per_node
+    common = f"{LC}.train --warm-pool v1 --validate-train --iters 300 --lr 0.003 --qx-weight 2"
+    no_k1 = "--cases S3 S4 K4 K8 --validate K1"
+    return {
+        "lccase_nok1": f"{common} --model linear {no_k1} --tag lccase_nok1",
+        "lccase_nok1_mlp": f"{common} --model mlp --depth 2 --width 32 {no_k1} "
+        "--tag lccase_nok1_mlp",
+        "lccase_k4k8": f"{common} --model linear --cases K4 K8 --validate K1 S3 S4 "
+        "--tag lccase_k4k8",
+        "lccase_norm": f"{common} --model linear --case-norm --tag lccase_norm",
+        "lccase_norm_mlp": f"{common} --model mlp --depth 2 --width 32 --case-norm "
+        "--tag lccase_norm_mlp",
+    } | {
+        f"lccase_only_{k}": f"{common} --model linear --cases {k} --validate "
+        f"{' '.join(c for c in ('S3', 'S4', 'K1', 'K4', 'K8') if c != k)} --tag lccase_only_{k}"
+        for k in ("K1", "K4", "K8")
+    }
+
+
 def _lcbound_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcbound`` (2026-11-12): where ES-FP's positive-definiteness bound (Mathiaud &
     Mieussens eq. 35; at Pr = 2/3 it acts past ``pd_max = 0.8 theta``) slows the stress
@@ -2037,6 +2066,7 @@ NEW_GROUPS = {
     "lcwarm": _lcwarm_jobs,
     "lcchain": _lcchain_jobs,
     "lcconv": _lcconv_jobs,
+    "lccase": _lccase_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
 }

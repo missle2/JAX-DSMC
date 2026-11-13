@@ -448,10 +448,11 @@ def _jsonable(theta):
 
 
 def _iteration(theta, runners, rng, args):
-    """One iteration's windows: the summed per-case mean gradients, the pair losses and the
-    seconds per case."""
+    """One iteration's windows: the summed per-case mean gradients (each over its case's
+    starting squared bias with ``--case-norm``), the pair losses, the seconds and the
+    gradient norms per case."""
     grads = jax.tree.map(jnp.zeros_like, theta)
-    pairs, seconds = {}, {}
+    pairs, seconds, norms = {}, {}, {}
     for r in runners:
         t1 = time.time()
         batch = args.shear_batch if r.case.kind == "shear" else args.batch
@@ -460,10 +461,13 @@ def _iteration(theta, runners, rng, args):
             r.update_bias(row, d)
         # each case's mean gradient, equally weighted across cases
         mean = jax.tree.map(functools.partial(_mean_of, n=batch), *gs)
+        if args.case_norm:
+            mean = jax.tree.map(functools.partial(_scaled, 1.0 / r.bias2_start), mean)
+        norms[r.name] = float(optax.global_norm(mean))
         grads = jax.tree.map(jnp.add, grads, mean)
         pairs[r.name] = float(np.mean(vals))
         seconds[r.name] = time.time() - t1
-    return grads, pairs, seconds
+    return grads, pairs, seconds, norms
 
 
 def _chain_log(runners):
@@ -477,6 +481,23 @@ def _chain_log(runners):
                        for r in chained}}  # fmt: skip
 
 
+def _fill_bias(theta, runners, rng, args):
+    """The bias estimator's tables from ``--bias-init`` forward windows per case, and each
+    case's starting squared bias (``--case-norm``)."""
+    if args.case_norm and args.estimator != "bias":
+        raise SystemExit("--case-norm needs the bias estimator (its starting squared bias)")
+    if args.estimator != "bias":
+        return
+    t0 = time.time()
+    for r in runners:
+        _, devs, rows, _ = r.windows(theta, rng, "pair", args.bias_init)
+        for row, d in zip(rows, devs, strict=True):
+            r.update_bias(row, d)
+        r.bias2_start = r.bias_norm()
+    print(f"bias tables filled ({args.bias_init} windows per case), "
+          f"{time.time() - t0:.0f} s", flush=True)  # fmt: skip
+
+
 def train(args):
     """The training loop (module docstring); returns the log dict."""
     _, theta, _ = operators.operator(args.model, "shear", jax.random.PRNGKey(args.seed),
@@ -485,13 +506,7 @@ def train(args):
     rng = np.random.default_rng(args.seed)
     frozen = _frozen(args)
     t0 = time.time()
-    if args.estimator == "bias":
-        for r in runners:
-            _, devs, rows, _ = r.windows(theta, rng, "pair", args.bias_init)
-            for row, d in zip(rows, devs, strict=True):
-                r.update_bias(row, d)
-        print(f"bias tables filled ({args.bias_init} windows per case), "
-              f"{time.time() - t0:.0f} s", flush=True)  # fmt: skip
+    _fill_bias(theta, runners, rng, args)
     opt = optax.adam(args.lr)
     state = opt.init(theta)
     avg_from = args.iters - max(1, round(args.average * args.iters))
@@ -500,11 +515,12 @@ def train(args):
     out_path = RESULTS / f"train_{args.model}_{args.tag}.json"
     out = {"args": vars(args), "theta": _jsonable(theta), "log": log}
     for it in range(args.iters):
-        grads, pairs, seconds = _iteration(theta, runners, rng, args)
+        grads, pairs, seconds, norms = _iteration(theta, runners, rng, args)
         grads = jax.tree.map(functools.partial(_scaled, 1.0 / len(runners)), grads)
         theta, state, grads = _step(theta, grads, state, opt, args, frozen)
         row = {"iter": it, "pair": pairs, "bias2": {r.name: r.bias_norm() for r in runners},
-               "grad_norm": float(optax.global_norm(grads)), "case_seconds": seconds,
+               "grad_norm": float(optax.global_norm(grads)), "case_grad_norm": norms,
+               "case_seconds": seconds,
                "log_tau": float(theta["log_tau"]), "log_pr": float(theta["log_pr"]),
                "seconds": time.time() - t0}  # fmt: skip
         if "A" in theta:
@@ -559,6 +575,12 @@ def parser():
     )
     ap.add_argument("--qx-weight", type=float, default=1.0, help="shock heat-flux weight factor")
     ap.add_argument("--warm-pool", default="", help="shock chains from warm_<case>_<TAG>.npz")
+    ap.add_argument(
+        "--case-norm",
+        action="store_true",
+        help="each case's gradient over its squared bias after the fill (relative progress; "
+        "lcconv: K1's large, noisy squared bias led while K4's doubled)",
+    )
     ap.add_argument(
         "--chain-drift",
         type=float,
