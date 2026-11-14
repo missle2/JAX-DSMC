@@ -2169,6 +2169,34 @@ def _lcin_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lcextra_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcextra`` (2026-11-14, beside lccv3): (1) the lcrich models on all twelve cases
+    (held-out generalisation of the rich correction: does the K8 txx/qx trade break carry to
+    K7, does K4's heat-flux overshoot appear on K3/K5/K6) and rich 2x32 on the coarse circles;
+    (2) the 9-input Lasso redone in the current set-up (rate basis, warm chains -- lclasso's
+    fits predate both), alpha by leave-one-case-out (expected: zero, as in11) and by the
+    split-seed CV (keeps the terms the training data supports), the latter evaluated on all
+    twelve cases."""
+    del gpus_per_node
+    cases = "S1 S2 S3 S4 K1 K2 K3 K4 K5 K6 K7 K8"
+    jobs = {}
+    for m in ("rich_linear", "rich_2x32", "rich_p7"):
+        kind = "linear" if m == "rich_linear" else "mlp"
+        jobs[f"lceval_{m}"] = (f"{LC}.evaluate --cases {cases} --operators --theta "
+                               f"train_{kind}_{m}.json --seeds 512 --tag test_{m}")  # fmt: skip
+    jobs["lceval_circle_rich_2x32"] = " && ".join(
+        _circle_chain(c, w, ["--theta train_mlp_rich_2x32.json"])
+        for c in LC_CIRCLE_CELLS for w in LC_WALLS
+    )  # fmt: skip
+    common = "--warm-pool v1 --features features_v2.json --validate-train"
+    jobs["lclasso_in9"] = f"{LC}.lasso {common} --tag in9"
+    jobs["lclasso_in9_seed"] = (
+        f"{LC}.lasso {common} --cv seed --tag in9_seed && {LC}.evaluate --cases {cases} "
+        f"--operators --theta train_linear_lasso_in9_seed.json --seeds 512 --tag test_lasso9"
+    )
+    return jobs
+
+
 NEW_GROUPS = {
     "optab": _optab_jobs,
     "optm": _optm_jobs,
@@ -2245,6 +2273,7 @@ NEW_GROUPS = {
     "lcin": _lcin_jobs,
     "lcrich": _lcrich_jobs,
     "lccv3": _lccv3_jobs,
+    "lcextra": _lcextra_jobs,
 }
 
 
