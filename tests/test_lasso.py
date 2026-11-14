@@ -6,6 +6,7 @@ from __future__ import annotations
 import numpy as np
 
 from examples.learned_collision import lasso
+from jax_dsmc.collide import relax
 
 
 def test_orthonormal_design_is_soft_thresholding():
@@ -36,7 +37,7 @@ def test_bounds_hold_and_bind():
 
 
 def test_sign_bounds_hold_the_stress_rate_row_nonnegative():
-    lower, upper = lasso._bounds(True).reshape(2, 2, -1)
+    lower, upper = lasso._bounds(True, len(relax.FEATURES)).reshape(2, 2, -1)
     for name in lasso.POSITIVE_RATE:
         assert lower[0, lasso.relax.FEATURES.index(name)] == 0.0
     assert np.all(np.isinf(lower[1])) and np.all(np.isinf(upper))

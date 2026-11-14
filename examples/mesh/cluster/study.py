@@ -1777,16 +1777,31 @@ def _lctrain_jobs(gpus_per_node: int) -> dict[str, str]:
 
 
 def _lceval_jobs(gpus_per_node: int) -> dict[str, str]:
-    """``lceval``: each trained model on the eight held-out cases and the coarse circle."""
+    """``lceval`` (2026-11-13): the final models on all twelve cases (training and held-out;
+    evaluate.py keeps the shock profiles for sweep_report's field figure) and the coarse
+    circles.  The MLP is the design chosen by examples.learned_collision.sweep_report
+    (sweep_choice_v2.json -- run it first): the sweep's own all-case runs of that design
+    (seeds 0 and 1, warm chains, the plan's iterations) are the trained models, so there is no
+    separate lctrain.  The linear model: lcfix_q1 (warm chains, 300 iterations)."""
     del gpus_per_node
+    path = Path(__file__).resolve().parents[3] / "examples/learned_collision/results"
+    choice_path = path / "sweep_choice_v2.json"
+    if not choice_path.exists():
+        raise SystemExit(f"no {choice_path}: run `python3 -m examples.learned_collision"
+                         ".sweep_report` after lccv")  # fmt: skip
+    p = json.loads(choice_path.read_text())["index"]
+    models = {"mlp": f"train_mlp_cv_p{p}_all_s0.json", "mlp_s1": f"train_mlp_cv_p{p}_all_s1.json",
+              "linear": "train_linear_lcfix_q1.json"}  # fmt: skip
+    cases = "S1 S2 S3 S4 K1 K2 K3 K4 K5 K6 K7 K8"
     jobs = {}
-    for m in LC_MODELS:
-        theta = f"train_{m}_v1.json"
-        jobs[f"lceval_{m}"] = (f"{LC}.evaluate --cases {LC_TEST} --operators --theta {theta} "
+    for m, theta in models.items():
+        jobs[f"lceval_{m}"] = (f"{LC}.evaluate --cases {cases} --operators --theta {theta} "
                                f"--seeds 512 --tag test_{m}")  # fmt: skip
-        jobs[f"lceval_circle_{m}"] = " && ".join(
-            _circle_chain(c, w, [f"--theta {theta}"]) for c in LC_CIRCLE_CELLS for w in LC_WALLS
-        )
+        if m != "mlp_s1":
+            jobs[f"lceval_circle_{m}"] = " && ".join(
+                _circle_chain(c, w, [f"--theta {theta}"])
+                for c in LC_CIRCLE_CELLS for w in LC_WALLS
+            )  # fmt: skip
     return jobs
 
 
@@ -2098,6 +2113,24 @@ def _lccv_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lcin_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcin`` (2026-11-14): the rate correction on the eleven inputs (relax.FEATURES + the
+    signed ``div_u``, ``t_strain_t``) -- the Gauss-Newton Lasso on warm chains (comparable
+    with the lccv MLPs, which trained on them) and the lccv choice (1x8, wd 0, lr 0.001,
+    sweep_choice_v2) retrained, two seeds; all validated on the five training cases.  Each
+    job first writes features_v4.json (seeded, identical, atomic)."""
+    del gpus_per_node
+    feat = f"{LC}.features --tag v4"
+    common = "--warm-pool v1 --features features_v4.json --validate-train"
+    mlp = "--model mlp --depth 1 --width 8 --weight-decay 0 --lr 0.001 --iters 177"
+    jobs = {"lcin_lasso": f"{feat} ; {LC}.lasso {common} --tag in11"}
+    for seed in (0, 1):
+        jobs[f"lcin_mlp_s{seed}"] = (
+            f"{feat} ; {LC}.train {mlp} {common} --seed {seed} --tag in11_p0_s{seed}"
+        )
+    return jobs
+
+
 NEW_GROUPS = {
     "optab": _optab_jobs,
     "optm": _optm_jobs,
@@ -2171,6 +2204,7 @@ NEW_GROUPS = {
     "lcfix": _lcfix_jobs,
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
+    "lcin": _lcin_jobs,
 }
 
 

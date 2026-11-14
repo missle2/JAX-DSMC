@@ -111,7 +111,8 @@ def test_features_measure_the_cell_size_in_local_mean_free_paths():
     phi = np.asarray(relax.cell_features(n, n_s, u, theta_s, grid, sp, params, (True,)))
     assert phi.shape == (32, len(relax.FEATURES))
     assert np.isfinite(phi).all()
-    assert (phi >= 0.0).all()
+    even = relax.FEATURES.index("div_u")  # the first signed feature: the even ones precede it
+    assert (phi[:, :even] >= 0.0).all()
     np.testing.assert_allclose(np.median(phi[:, relax.FEATURES.index("dx2")]), 1.0, rtol=0.1)
 
 

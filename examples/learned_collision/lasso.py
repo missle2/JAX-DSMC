@@ -43,7 +43,14 @@ import numpy as np
 from examples.learned_collision import operators
 from examples.learned_collision import windows2d as w2
 from examples.learned_collision.shear_wave import BLOCK, RESULTS
-from examples.learned_collision.train import TRAIN_CASES, CaseRunner, model_options, parser
+from examples.learned_collision.train import (
+    TRAIN_CASES,
+    CaseRunner,
+    _shift,
+    model_options,
+    parser,
+    validate,
+)
 from jax_dsmc.collide import relax
 
 POSITIVE_RATE = ("dx2", "dx4", "dt2", "dt1", "dx2_inv_n")
@@ -51,27 +58,40 @@ POSITIVE_RATE = ("dx2", "dx4", "dt2", "dt1", "dx2_inv_n")
 
 
 def _deviation(a, theta, states, cstates, keys, target, case, collide_fn, blocks, step0):
-    """The two replicas' mean projected deviation ``[T, K, F]`` as a function of ``A``."""
+    """The two replicas' projected deviations ``[2, T, K, F]`` as a function of ``A``, and
+    (aux, no derivative) their end ``(states, cstates)``.  ``target``: ``[T, C, 13]``
+    shared, or ``[2, T, C, 13]`` one per replica (persistent shock chains, each at its own
+    shock position -- :func:`.windows2d.window_objective`)."""
     th = dict(theta, A=a)
     run = functools.partial(w2.rollout, th, case=case, collide_fn=collide_fn, blocks=blocks,
                             step0=step0)  # fmt: skip
-    _, _, ms = jax.vmap(run)(states, cstates, keys)
-    ref = w2.flux(target, case.kind)
-    d = [w2.project(w2.flux(ms[r], case.kind) - ref, case) for r in range(2)]
-    return 0.5 * (d[0] + d[1])
+    end_s, end_c, ms = jax.vmap(run)(states, cstates, keys)
+    each = target.ndim == 4
+    d = [w2.project(w2.flux(ms[r], case.kind) - w2.flux(target[r] if each else target,
+                                                          case.kind), case)
+         for r in range(2)]  # fmt: skip
+    d = jnp.stack(d)
+    return d, (jax.lax.stop_gradient(d), jax.lax.stop_gradient((end_s, end_c)))
 
 
 def _dev_and_jac(a, theta, states, cstates, keys, target, case, collide_fn, blocks, step0):
-    """One window's deviation and its forward-mode Jacobian in ``A``."""
+    """One window's deviations, their forward-mode Jacobian in ``A`` and the end states."""
     f = functools.partial(_deviation, theta=theta, states=states, cstates=cstates, keys=keys,
                           target=target, case=case, collide_fn=collide_fn, blocks=blocks,
                           step0=step0)  # fmt: skip
-    return f(a), jax.jacfwd(f)(a)
+    jac, (dev, final) = jax.jacfwd(f, has_aux=True)(a)  # the primal comes with the tangents
+    return dev, jac, final
 
 
 class Linearised:
     """One case's windows at ``A0``: per window the deviation and its Jacobian, reduced to
-    regression rows (``[n_windows, rows, F]`` and ``[n_windows, rows, F, 18]``)."""
+    regression rows (``[n_windows, rows, F]`` and ``[n_windows, rows, F, P]``).
+
+    With ``--warm-pool`` a shock's windows run on the runner's persistent chains (relaxed
+    at the base operator -- the linearisation point of the first outer step): each
+    replica's deviation is moved from its own cells into the shock's frame (as the
+    trainer's bias table) before the two are averaged, and the end states are written back,
+    so the chains advance between windows.  The split-seed fold then splits by chain pair."""
 
     def __init__(self, runner, theta, n_windows, rng, batch=8):
         case = runner.case
@@ -85,11 +105,20 @@ class Linearised:
             states, cstates, keys, targets, rows, seed = runner.draw_batch(rng, m)
             if runner.burn:
                 states, cstates = runner.burn_fn(theta, states, cstates, keys)
-            y, x = both(theta["A"], theta, states, cstates, keys, targets)
-            y = np.asarray(y)  # [m, T, K, F]
-            x = np.asarray(x).reshape(*y.shape, -1)  # [m, T, K, F, 18]
+            y, x, final = both(theta["A"], theta, states, cstates, keys, targets)
+            y = np.asarray(y)  # [m, 2, T, K, F]
+            x = np.asarray(x).reshape(*y.shape, -1)  # [m, 2, T, K, F, P]
+            chains = runner.chains is not None
+            if chains:
+                idx, shifts = seed
+                runner._write_back(idx, final, rng)
+                seed = [int(k) // 2 for k in np.asarray(idx)[::2]]
             for i in range(m):
-                yi, xi = y[i], x[i]
+                if chains:  # each replica into the shock's frame
+                    yi = 0.5 * sum(_shift(y[i, r], -int(shifts[i, r])) for r in range(2))
+                    xi = 0.5 * sum(_shift(x[i, r], -int(shifts[i, r])) for r in range(2))
+                else:
+                    yi, xi = y[i].mean(axis=0), x[i].mean(axis=0)
                 if runner.scale is not None:  # a wave: in units of its flux, time-averaged
                     s = runner.scale[rows[i]]
                     yi, xi = np.mean(yi / s, axis=0), np.mean(xi / s[..., None], axis=0)
@@ -204,9 +233,9 @@ def stability(cases, alpha, bounds, n_boot, rng):
     return kept / n_boot
 
 
-def _bounds(signs):
-    """``[2, p]``: lower and upper bounds of the flattened ``A`` (``--signs``)."""
-    lower = np.full((2, len(relax.FEATURES)), -np.inf)
+def _bounds(signs, k):
+    """``[2, p]``: lower and upper bounds of the flattened ``A`` (``[2, k]``; ``--signs``)."""
+    lower = np.full((2, k), -np.inf)
     if signs:
         for name in POSITIVE_RATE:
             lower[0, relax.FEATURES.index(name)] = 0.0
@@ -225,14 +254,13 @@ def main(argv=None):
     ap.add_argument("--signs", action="store_true")
     ap.add_argument("--cv", default="loco", choices=("loco", "seed"), help="picks alpha")
     args = ap.parse_args(argv)
-    if args.warm_pool:
-        raise SystemExit("lasso draws snapshot windows only (no --warm-pool chains)")
     if args.cubic:
         raise SystemExit("lasso fits the two rate rows only (no --cubic)")
     _, theta, _ = operators.operator("linear", "shear", **model_options(args))
     runners = [CaseRunner(name, "linear", args) for name in args.cases]
     rng = np.random.default_rng(args.seed)
-    bounds = _bounds(args.signs)
+    n_in = relax.correction_inputs(theta)
+    bounds = _bounds(args.signs, n_in)
     record, t0 = [], time.time()
     for it in range(args.outer):
         cases = [Linearised(r, theta, args.windows, rng, args.jac_batch) for r in runners]
@@ -252,7 +280,7 @@ def main(argv=None):
             "bound_binding": (np.isfinite(bounds) & (np.abs(a - bounds) < 1e-12)).any(0).tolist(),
             "seconds": time.time() - t0,
         })  # fmt: skip
-        names = [f"{row}:{f}" for row in ("rs", "rq") for f in relax.FEATURES]
+        names = [f"{row}:{f}" for row in ("rs", "rq") for f in relax.FEATURES[:n_in]]
         kept = [f"{n} {v:+.3f} ({s:.2f})" for n, v, s in zip(names, a, stab, strict=True)
                 if abs(v) > 1e-12]  # fmt: skip
         print(f"outer {it}: bias2 {e0:.4e} -> {record[-1]['bias2_fit']:.4e}, alpha {alpha:.3e} "
@@ -267,6 +295,10 @@ def main(argv=None):
             "theta": {k: np.asarray(v).tolist() for k, v in theta.items()},
             "log": [],
         }
+        (RESULTS / f"train_linear_lasso_{args.tag}.json").write_text(json.dumps(result))
+    checks = list(args.validate) + (list(args.cases) if args.validate_train else [])
+    if checks:  # the final fit's forward metrics, as a training run's
+        result["validation"] = validate(theta, args, list(dict.fromkeys(checks)))
         (RESULTS / f"train_linear_lasso_{args.tag}.json").write_text(json.dumps(result))
 
 

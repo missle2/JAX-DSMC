@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 
 import jax
 import numpy as np
@@ -89,7 +90,11 @@ def main(argv=None):
     gram = (z.T @ z) / len(z)
     out = {"features": list(relax.FEATURES), "phi_scale": scale.tolist(),
            "correlation": gram.tolist(), "quantiles_at": list(QUANTILES), "cases": per_case}  # fmt: skip
-    (RESULTS / f"features_{args.tag}.json").write_text(json.dumps(out))
+    # atomic: concurrent jobs each compute the (seeded, identical) statistics before training
+    path = RESULTS / f"features_{args.tag}.json"
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(out))
+    os.replace(tmp, path)
     print("phi_scale", np.round(scale, 4).tolist())
     print("correlation (uncentred, standardised):")
     for name, row in zip(relax.FEATURES, gram, strict=True):

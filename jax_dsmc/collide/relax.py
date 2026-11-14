@@ -292,7 +292,8 @@ def conserve_about(c, c_new, u_loc, v, alive, seg, row, n, n_cells):
     return jnp.where(ok, alpha, 1.0)[row][:, None] * c_new, ok
 
 
-FEATURES = ("dx2", "dx4", "dt2", "dt1", "inv_n", "dx2_inv_n", "kn_u2", "kn_t2", "dx2_kn2")
+FEATURES = ("dx2", "dx4", "dt2", "dt1", "inv_n", "dx2_inv_n", "kn_u2", "kn_t2", "dx2_kn2",
+            "div_u", "t_strain_t")  # fmt: skip
 """The theory basis of the learned corrections (:func:`cell_features`), with ``r = h /
 lambda`` the cell size in local mean free paths:
 
@@ -304,7 +305,13 @@ lambda`` the cell size in local mean free paths:
 - ``Kn_u^2 = (lambda |S| / v)^2``, ``Kn_T^2 = (lambda |grad ln T|)^2``: Burnett-order
   (Chapman-Enskog O(Kn^2)) corrections to the stress and heat-flux closures;
 - ``r^2 (Kn_u^2 + Kn_T^2)``: the cell-size error growing with the local gradients (the
-  reconstruction is only linear).
+  reconstruction is only linear);
+- ``lambda div u / sqrt(theta)``, ``g.S.g`` (``g = lambda grad ln T``, ``S`` the strain over
+  ``sqrt(theta) / lambda``): the two *signed* invariants (2026-11-14) -- every term above is
+  even, so a correction could not tell compression from expansion, or the upstream side of
+  a shock from the downstream one, which the Burnett-order outputs
+  (:data:`RICH_OUTPUTS`) need.  A model's input count is its first weight's: a 9-input
+  model (features_v2) reads the first nine, unchanged.
 
 No positive-definiteness term: a ``max(0, pd_max / theta - 0.8)`` feature was tried and
 dropped (2026-11-12, lcbound): in the coarse steady shocks the bound slows the stress
@@ -312,7 +319,7 @@ relaxation by ~2 % in the M10 core (not the operator's +17 % ``int tau_xx``), an
 feature is mostly sampling noise (8 % of shear-wave cells) and large only in the thinned
 fine snapshots the windows start from (q95 2.7 at M10, against a steady maximum of 0.3)."""
 
-FEATURE_SCALE = np.array([4.0, 16.0, 0.01, 0.1, 0.1, 0.4, 0.01, 0.01, 0.04])
+FEATURE_SCALE = np.array([4.0, 16.0, 0.01, 0.1, 0.1, 0.4, 0.01, 0.01, 0.04, 0.1, 0.001])
 """Nominal size of each feature at the training conditions (``r = 2``, ``dt / tau = 0.1``,
 ``N_c = 10``, ``Kn ~ 0.1``): the features are divided by it so the coefficients are O(1)."""
 
@@ -330,6 +337,54 @@ cannot be thrown out by the cubic term."""
 
 CORRECTIONS = ("linear", "mlp")
 
+STRESS_BASES = ("bulk_strain", "strain_sq", "grad_t_sq", "strain_spin")
+"""The stress target's tensor basis (:func:`burnett_bases`; dimensionless, symmetric,
+traceless): the Burnett stress terms without second derivatives (Chapman & Cowling ch. 15:
+``omega_1 (div u) S``, ``omega_6 dev(S S)``, ``omega_5 dev(grad T grad T)``, and the
+co-rotational part of ``omega_2``, ``S W - W S``).  No Navier-Stokes ``S``: in the linear
+regime it is a viscosity, which the rate row already is."""
+
+FLUX_BASES = ("strain_grad_t", "bulk_grad_t", "strain_grad_p")
+"""The heat-flux target's vector basis: Burnett ``theta_5 S grad T``, ``theta_1 (div u) grad
+T``, ``theta_3 S grad p`` -- no Fourier ``grad T`` (a conductivity: the ``r_q`` row)."""
+
+RICH_OUTPUTS = ("dlog_rs", "dlog_rq", *(f"stress_{b}" for b in STRESS_BASES),
+                *(f"flux_{b}" for b in FLUX_BASES), "recon_u", "recon_t", "kurtosis")  # fmt: skip
+"""The rich correction's outputs (``--outputs rich``, 2026-11-14), each zero at
+initialisation (the base operator) and each a *target* or a shape, never a rate on a moment
+(the cubic drift's failure: its effect on ``q`` was proportional to ``q``, ``q' = q (1 - s (1
+- 27 beta))``, so ``beta > 1/27`` grew the heat flux -- :data:`CUBIC_BOUND` allowed 0.5):
+
+- the two rates (:func:`rates`);
+- ``stress_*``: coefficients of the stress target ``Pi* / theta = sum_k alpha_k T_k``
+  (:data:`STRESS_BASES`), imposed by a symmetric congruence ``c -> (I + K) c`` (positive
+  semi-definite by construction; :func:`stress_stretch`);
+- ``flux_*``: coefficients of the heat-flux target ``q* / theta^(3/2)`` (:data:`FLUX_BASES`),
+  imposed by a Hermite drift independent of the cell's own ``q`` (:func:`heat_drift`);
+- ``recon_u``: the velocity reconstruction's gain ``1 + g`` (1: the linear reconstruction);
+- ``recon_t``: a temperature reconstruction's gain (0: one temperature per cell, the base) --
+  each particle's noise at ``theta (1 + g grad ln T . (x - xbar))``;
+- ``kurtosis``: the noise's radial shape (:func:`shaped_noise`; same covariance, fourth
+  moment 11 to 40 against the Gaussian's 15)."""
+
+RICH_BOUND = np.array([CORRECTION_BOUND, CORRECTION_BOUND, *([2.0] * len(STRESS_BASES)),
+                       *([2.0] * len(FLUX_BASES)), 0.5, 1.5, 0.125])  # fmt: skip
+"""Each rich output's ``B`` in ``B tanh(x / B)``."""
+
+TARGET_CAP = 0.5
+"""``|Pi*| / theta`` and ``|q*| / theta^(3/2)`` saturate smoothly at this (:func:`_saturate`):
+a target is a moderate departure from equilibrium whatever the bases' size in a coarse
+shock core."""
+
+RECON_T_CLIP = 0.5
+"""The temperature reconstruction's per-particle factor stays in ``1 -+`` this."""
+
+HERMITE_CAP = 9.0
+"""Cap on ``|c|^2 / theta`` in :func:`heat_drift` (a 3-sigma particle)."""
+
+KURTOSIS_CAP = 25.0
+"""Cap on ``|xi|^2`` in :func:`shaped_noise`'s exponent."""
+
 
 def lambda_factor(omega):
     """``K`` in ``lambda = K tau_s sqrt(kT / m)``: Bird's VSS mean free path (4.52) in terms of
@@ -338,7 +393,7 @@ def lambda_factor(omega):
 
 
 def cell_features(n, n_safe, u, theta_c, grid, sp, params, periodic):
-    """``f64[C, 9]``: the :data:`FEATURES` of each cell, divided by :data:`FEATURE_SCALE`.
+    """``f64[C, F]``: the :data:`FEATURES` of each cell, divided by :data:`FEATURE_SCALE`.
     ``n`` the particle counts (empty neighbours drop out of the gradients), ``n_safe`` and
     ``theta_c`` the safe ones (:func:`safe_cells`); ``u`` the cell means (the gradients come
     from neighbouring cells, so a coarse cell sees its own resolved shear)."""
@@ -356,12 +411,23 @@ def cell_features(n, n_safe, u, theta_c, grid, sp, params, periodic):
     kn_t2 = lam**2 * jnp.sum(g_t**2, axis=1)
     dt_tau = params.dt / tau
     inv_n = 1.0 / n_safe
+    # the signed invariants: lambda div u / sqrt(theta), and g.S.g with g = lambda grad ln T
+    # and S the strain over sqrt(theta) / lambda
+    div_u = lam * jnp.trace(g, axis1=1, axis2=2) / jnp.sqrt(theta_c)
+    g3 = jnp.zeros((n.shape[0], 3)).at[:, :dim].set(lam[:, None] * g_t)
+    t_strain_t = jnp.einsum("ci,cij,cj->c", g3, strain, g3) * lam / jnp.sqrt(theta_c)
     phi = jnp.stack([r2, r2**2, dt_tau**2, dt_tau, inv_n, r2 * inv_n, kn_u2, kn_t2,
-                     r2 * (kn_u2 + kn_t2)], axis=1)  # fmt: skip
+                     r2 * (kn_u2 + kn_t2), div_u, t_strain_t], axis=1)  # fmt: skip
     # a cell with no volume (inside a body) has tau = 0: its features are infinite, and a
     # zero coefficient times infinity would be NaN -- cap them (the bounded correction
     # saturates there anyway, and the cell holds no particle)
     return jnp.minimum(jnp.nan_to_num(phi, nan=0.0, posinf=1e6), 1e6) / jnp.asarray(FEATURE_SCALE)
+
+
+def correction_inputs(theta):
+    """The number of features a correction reads (its first weight's input size): the first
+    that many :data:`FEATURES` -- a model fitted on an earlier, shorter list still runs."""
+    return int(theta["A"].shape[1]) if "A" in theta else int(theta["W0"].shape[0])
 
 
 def _standardised(theta, phi):
@@ -425,14 +491,19 @@ def cubic_drift(c, beta, a, theta_c):
     return ((1.0 - a**3) * beta * (x - 5.0))[:, None] * c
 
 
-def init_correction(kind, key=None, width=64, depth=2, phi_scale=None, cubic=False):
+def init_correction(kind, key=None, width=64, depth=2, phi_scale=None, cubic=False,
+                    n_features=None):  # fmt: skip
     """The trainable parameters of correction ``kind`` added to :data:`BASELINE`, zero output
     at initialisation (so the corrected operator starts as the base, bitwise).  ``mlp``:
     ``depth`` hidden tanh layers of ``width`` (``1 / sqrt(fan-in)`` weights, a zero last
     layer).  ``phi_scale`` (``f64[F]``): the features' training spread (:func:`_standardised`).
-    ``cubic``: a third output, the cubic drift coefficient (:func:`cubic_drift`)."""
+    ``cubic``: a third output, the cubic drift coefficient (:func:`cubic_drift`).
+    ``n_features``: the inputs (the first that many :data:`FEATURES`; default
+    ``len(phi_scale)``, else all)."""
     theta = {k: jnp.float64(v) for k, v in BASELINE.items()}
-    k = len(FEATURES)
+    if n_features is None:
+        n_features = len(FEATURES) if phi_scale is None else len(phi_scale)
+    k = int(n_features)
     outputs = 3 if cubic else 2
     if kind == "linear":
         theta["A"] = jnp.zeros((outputs, k))
@@ -521,7 +592,7 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
             raise ValueError("a corrected operator needs periodic= (its features use gradients)")
         _, n_s, _, theta_s = safe_cells(n, pi, theta_c)
         phi = cell_features(n, n_s, u, theta_s, grid, sp, params, periodic)
-        delta = correction(theta, phi, corrected)
+        delta = correction(theta, phi[:, : correction_inputs(theta)], corrected)
     a, chol = step_coefficients(n, pi, theta_c, grid, sp, params, theta, splitting, delta)
     xi = indexed_normal(key_for(base_key, step, STAGE_LEARNED), v.shape[0], (3,))
     c = v - u_loc

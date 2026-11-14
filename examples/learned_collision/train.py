@@ -396,12 +396,15 @@ def model_options(args):
         opts["cubic"] = True
     if args.model != "scalar" and args.features:
         stats = json.loads((RESULTS / args.features).read_text())
-        if stats["features"] != list(relax.FEATURES):
+        k = len(stats["features"])
+        if stats["features"] != list(relax.FEATURES[:k]):
             raise SystemExit(
                 f"{args.features} has features {stats['features']}, the operator "
                 f"{list(relax.FEATURES)}: rerun features.py (lcfeat)"
             )
+        # a model reads the features its statistics cover (features_v2: the first nine)
         opts["phi_scale"] = stats["phi_scale"]
+        opts["n_features"] = k
     return opts
 
 
