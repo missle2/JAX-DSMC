@@ -2116,18 +2116,24 @@ def _lccv_jobs(gpus_per_node: int) -> dict[str, str]:
 def _lcin_jobs(gpus_per_node: int) -> dict[str, str]:
     """``lcin`` (2026-11-14): the rate correction on the eleven inputs (relax.FEATURES + the
     signed ``div_u``, ``t_strain_t``) -- the Gauss-Newton Lasso on warm chains (comparable
-    with the lccv MLPs, which trained on them) and the lccv choice (1x8, wd 0, lr 0.001,
-    sweep_choice_v2) retrained, two seeds; all validated on the five training cases.  Each
+    with the lccv MLPs, which trained on them), the lccv choice p0 (1x8, wd 0, lr 0.001,
+    sweep_choice_v2) and the lowest held-out design p7 (3x32, wd 0, lr 0.01) retrained, two
+    seeds each; all validated on the five training cases.  Each
     job first writes features_v4.json (seeded, identical, atomic)."""
     del gpus_per_node
     feat = f"{LC}.features --tag v4"
     common = "--warm-pool v1 --features features_v4.json --validate-train"
-    mlp = "--model mlp --depth 1 --width 8 --weight-decay 0 --lr 0.001 --iters 177"
+    designs = {
+        "p0": "--depth 1 --width 8 --weight-decay 0 --lr 0.001",  # the 1-s.e. choice
+        "p7": "--depth 3 --width 32 --weight-decay 0 --lr 0.01",  # the lowest held-out error
+    }
     jobs = {"lcin_lasso": f"{feat} ; {LC}.lasso {common} --tag in11"}
-    for seed in (0, 1):
-        jobs[f"lcin_mlp_s{seed}"] = (
-            f"{feat} ; {LC}.train {mlp} {common} --seed {seed} --tag in11_p0_s{seed}"
-        )
+    for point, design in designs.items():
+        for seed in (0, 1):
+            jobs[f"lcin_mlp_{point}_s{seed}"] = (
+                f"{feat} ; {LC}.train --model mlp {design} --iters 177 {common} --seed {seed} "
+                f"--tag in11_{point}_s{seed}"
+            )
     return jobs
 
 
