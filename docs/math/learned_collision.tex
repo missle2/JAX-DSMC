@@ -1,0 +1,248 @@
+% docs/math/learned_collision.tex
+% Presentation deck (2026-11-13): the learned coarse-cell collision operator of branch
+% neural-collision -- the ES-FP + cubic drift step and its learned outputs, the feature basis,
+% training through the solver, the linear/Lasso model and the MLP sweep -- at the state of
+% the lcfix / lccv runs.  Build: see docs/math/README.md (shared style shape_slides_style).
+\documentclass[10pt,aspectratio=169]{beamer}
+\newif\ifcodedeck
+\codedeckfalse
+\input{shape_slides_style}
+
+\title{A learned collision operator for coarse-cell DSMC}
+\subtitle{ES-Fokker--Planck with learned rates and cubic drift, trained through the solver}
+\date{2026-11-13 \quad (intermediate state)}
+
+\begin{document}
+\begin{frame}
+\titlepage
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\begin{frame}{1. The operator: ES-FP + reconstruction + learned cubic drift}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+\small
+In each coarse collision cell, every step:
+\begin{itemize}\setlength{\itemsep}{2pt}
+\item reconstructed target $u(x_i)=u_c+G_c(x_i-\bar x_c)$, peculiar $c_i=v_i-u(x_i)$;
+  $\Pi=\langle cc^T\rangle$, $\theta=\tfrac13\operatorname{tr}\Pi$
+\item rates \quad $r_s=e^{\delta_s}\,p/\mu(T)$, \quad $r_q=e^{\delta_q}\,\mathrm{Pr}\,p/\mu(T)$,
+  \quad $\mathrm{Pr}=\tfrac23$
+\item $a=e^{-r_q\Delta t/3}$, \; $e_s=e^{-r_s\Delta t}$ (raised where needed: Mathiaud--Mieussens
+  $\nu$-clamp)
+\end{itemize}
+\vspace{-4pt}
+\begin{align*}
+c_i' &= a\,c_i + \operatorname{chol}(\Sigma)\,\xi_i
+ + (1-a^3)\,\beta\Big(\tfrac{|c_i|^2}{\theta}-5\Big)c_i,\\
+\Sigma &= \theta(1-a^2)I+(e_s-a^2)\,\Pi_{\mathrm{dev}},\qquad \xi_i\sim\mathcal N(0,I)
+\end{align*}
+then a projection restores each cell's momentum and energy exactly.
+Exactly integrated: stress relaxes at $r_s$, heat flux at $r_q$, for any $\Delta t$; the
+cubic term adds $\approx27(1-a^3)\beta\,q$ to the heat flux, $\approx0$ to stress.
+\end{column}
+\begin{column}{0.43\textwidth}
+\footnotesize
+\textbf{Learned per cell} (bounded, zero $\Rightarrow$ the physical operator):
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+output & acts on & physics \\ \midrule
+$\delta_s\in(-2,2)$ & $\log r_s$ & viscosity \\
+$\delta_q\in(-2,2)$ & $\log r_q$ & conductivity \\
+$\beta\in(-\tfrac12,\tfrac12)$ & cubic drift & heat flux via $\langle|c|^4c\rangle$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+$(\delta_s,\delta_q,\beta)=B\tanh\!\big(f_\theta(\phi_c/\sigma)/B\big)$, $\phi_c$: 9 cell features.
+
+\medskip
+\textbf{Why:} coarse cells relax every particle toward one cell state
+$\Rightarrow$ excess transport $\propto(\Delta x/\lambda)^2$
+(NTC $+23\%$, ES-FP+recon $+11\%$ viscosity at $\Delta x=2\lambda$).
+\textbf{Potential:} $\Delta x=\lambda/4\to2\lambda$ is $8\times$ per axis $=64\times$ fewer
+particles in 2-D ($512\times$ in 3-D) at fixed particles/cell; a pathwise-differentiable,
+conservative, Galilean/rotation-invariant operator.
+\end{column}
+\end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\begin{frame}{2. The features: one term per known error mechanism}
+\small
+All local, dimensionless, invariant ($\lambda,\tau$ the cell's own VSS mean free path and time);
+each standardised by its RMS over the training cells.
+\begin{center}
+\footnotesize
+\renewcommand{\arraystretch}{1.12}
+\begin{tabular}{@{}llp{0.6\textwidth}@{}}
+\toprule
+feature & form & mechanism \\ \midrule
+dx2 & $(\Delta x/\lambda)^2$ & cell-size error of uniform in-cell collisions,
+  $\mu_{\rm eff}/\mu-1=\tfrac{16}{45\pi}(\Delta x/\lambda)^2$ (Alexander--Garcia--Alder) \\
+dx4 & $(\Delta x/\lambda)^4$ & next order of the same expansion \\
+dt2 & $(\Delta t/\tau)^2$ & time-step error \\
+dt1 & $\Delta t/\tau$ & residual first-order splitting error \\
+inv\_n & $1/N_c$ & finite-particle bias of the cell state \\
+dx2\_inv\_n & $(\Delta x/\lambda)^2/N_c$ & cell-size error measured with a noisy cell state \\
+kn\_u2 & $(\lambda|S|/v_{\rm th})^2$ & Burnett-order (Chapman--Enskog $O(\mathrm{Kn}^2)$) stress
+  closure \\
+kn\_t2 & $(\lambda|\nabla\ln T|)^2$ & Burnett-order heat-flux closure \\
+dx2\_kn2 & $(\Delta x/\lambda)^2(\mathrm{Kn}_u^2+\mathrm{Kn}_T^2)$ & cell-size error growing
+  with gradients (the reconstruction is linear) \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{2pt}
+\footnotesize
+Not used: the 1-D collective (particles-per-$\lambda$) term -- non-local, suppressed in 2-D slabs;
+a positive-definiteness-limiter term -- tried and dropped (it slows stress relaxation only
+$\sim$2\% in the M10 core, and is mostly sampling noise).
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\begin{frame}{3. Learning through the solver}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\small
+\textbf{Data} (no gradient): fine NTC at $\Delta x=\lambda/4$, 20 particles/cell --
+4 shear waves ($u_0/v_{\rm th}\in\{0.1,0.5\}$, $L\in\{32,128\}\lambda$) and 4 normal shocks
+(M 1.5, 3, 6, 10); coarse cases at $\Delta x=2\lambda$ (waves), $\lambda_1$ and $4\lambda_1$
+(shocks). Train S3 S4 K1 K4 K8, test the other 7.
+
+\medskip
+\textbf{Window}: two independent coarse replicas, 5 blocks $\times$ 20 steps;
+waves from thinned fine snapshots, shocks from \emph{persistent chains} at the model's own
+steady state (snapshot starts hid the heat-flux deficit: $\int q_x$ 1.01 in the window vs 0.94
+steady).
+
+\medskip
+\textbf{Deviation}: $d_{tkf}=P\big[F(m_t)-F(m^{\rm ref}_t)\big]_{kf}$, \; $F$: $P_{xy}$ (waves,
+Fourier mode), $\tau_{xx},q_x$ per cell (shocks, reference placed at each replica's shock);
+$w_f=1/\langle F_{\rm ref}^2\rangle$.
+\end{column}
+\begin{column}{0.48\textwidth}
+\small
+\textbf{Objective} $\tfrac12 w\,\E[d]^2$; running-bias estimator ($b\approx\E[d]$, stop-gradient):
+\[
+\nabla_\theta J=\operatorname*{mean}_{t,k}\sum_f w_f\, b_{tkf}\,\tfrac12
+\Big(\tfrac{\partial m^a}{\partial\theta}+\tfrac{\partial m^b}{\partial\theta}\Big)_{tkf}
+\]
+\vspace{-4pt}
+\begin{itemize}\setlength{\itemsep}{2pt}
+\item $\partial m/\partial\theta$: \textbf{exact reverse-mode AD} through the 100 steps
+  (checkpointed scan, keys replayed) -- collision (rates, Cholesky, cubic, projection,
+  features), free flight, inflow; discrete events carry no gradient
+\item cost $\approx$ a few forward windows; no fine-grid adjoint, no ensemble terms
+\item cases summed, Adam with fan-in-normalised steps, tail-averaged iterates
+\end{itemize}
+\footnotesize
+Checks: AD $=$ FD per window (common random numbers); estimator sign vs.\ steady FD at the base.
+Open: the window start is held fixed (truncation of the steady-state response).
+\end{column}
+\end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\begin{frame}{4. The linear model and the Lasso: which mechanisms matter}
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+\small
+\textbf{Model}: $(\delta_s,\delta_q,\beta)=A\,\phi_c/\sigma$, \; $A\in\R^{3\times9}$
+(18 coefficients without the cubic row). Each coefficient = the weight of one error mechanism
+on one transport coefficient: directly interpretable.
+
+\medskip
+\textbf{Gauss--Newton Lasso}: per window $d(A)\approx d(A_0)+J(A-A_0)$, $J$ by forward-mode AD
+(one tangent per coefficient), averaged per case:
+\[
+\min_A\ \tfrac12\sum_{\rm cases}\operatorname*{mean}_{\rm rows}
+w\big(\bar d+\bar J(A-A_0)\big)^2+\alpha\|A\|_1
+\]
+coordinate descent along the $\alpha$ path; $\alpha$ by leave-one-case-out CV (one-s.e.\ rule);
+stability selection over 200 window bootstraps; optional sign constraints
+(cell-size/time-step terms may only speed up stress relaxation).
+\end{column}
+\begin{column}{0.46\textwidth}
+\small
+\textbf{First result} (snapshot windows, before chains):
+\begin{itemize}\setlength{\itemsep}{2pt}
+\item kept 2 of 18, stability 0.99--1.0: $1/N_c$ and $(\Delta x/\lambda)^2\mathrm{Kn}^2$, both
+  speeding up relaxation (lower viscosity/conductivity); no Prandtl-row term
+\item free and sign-constrained fits identical
+\item squared bias $4.5\!\times\!10^{-3}\to3.0\!\times\!10^{-3}$
+\item held-out (LOCO) error improves for S3, S4, K4, K8 at moderate $\alpha$, not K1;
+  small $\alpha$ overfits (held-out K4 error $\times15$)
+\end{itemize}
+\footnotesize
+To redo with chains and the cubic row; the linear fits also serve as the MLP's interpretable
+baseline (linear $\approx$ MLP $\Rightarrow$ the theory basis suffices).
+\end{column}
+\end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\begin{frame}{5. The MLP and its cross-validated design}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\small
+\textbf{Model}: $f_\theta(\phi)=\mathrm{MLP}(\phi/\sigma)-\mathrm{MLP}(0)$, tanh hidden layers,
+zero-initialised last layer $\Rightarrow$ starts as the physical operator and vanishes in
+resolved equilibrium cells; same bounded outputs. Depth 2, width 32 $\approx$ 1.4k parameters.
+
+\medskip
+\textbf{Design sweep} (L9 orthogonal array, every pair of levels once):
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+factor & levels \\ \midrule
+hidden layers & 1, 2, 3 \\
+width & 8, 32, 128 \\
+weight decay & 0, $10^{-3}$, $10^{-2}$ \\
+learning rate & $10^{-3}$, $3\!\times\!10^{-3}$, $10^{-2}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{column}
+\begin{column}{0.48\textwidth}
+\small
+\textbf{Per design point, 7 runs}: 5 leave-one-case-out folds (train on 4 of S3 S4 K1 K4 K8,
+validate forward on the held-out one) and 2 all-case runs with different seeds (training
+variance; seeds also pick each run's shock chains from the shared warm pool).
+63 runs, $\sim$215 iterations each, sized to 55 GPU-h on 7 MIG slices (one shared warm pool,
+built once).
+
+\medskip
+\textbf{Selection}: held-out error of the folds; then the chosen design trained on all five
+and evaluated on the 7 test cases and a coarse M10 cylinder.
+
+\medskip
+\footnotesize
+Steps: Adam divided by each layer's fan-in (lr = output change per iteration, independent of
+width); decoupled weight decay; mean of the last 25\% of iterates.
+\end{column}
+\end{columns}
+\end{frame}
+
+% ---------------------------------------------------------------------------------------
+\begin{frame}{Status (2026-11-13)}
+\small
+\begin{itemize}\setlength{\itemsep}{3pt}
+\item \textbf{Base operators} (coarse, untrained): ES-FP+recon removes about half of NTC's
+  cell-size viscosity error; its shock stress excess grows with Mach
+  ($\int\tau_{xx}$ 1.05 at M1.5 $\to$ 1.17 at M10), the heat flux is 3--13\% low.
+\item \textbf{Robust so far}: shear-wave viscosity corrected in every run
+  (S3 1.065 $\to$ 0.97--1.05, S4 1.131 $\to$ 1.04--1.08); M10 stress partly (1.17 $\to$ 1.04--1.16).
+\item \textbf{Diagnosed}: (i) snapshot-started windows never saw the steady heat-flux deficit
+  $\Rightarrow$ persistent chains; (ii) chain pairs compared against one target at their mean
+  shock position $\Rightarrow$ anti-correlated replicas (negative pair loss), a smeared-shock
+  fake bias, and K4 worsening under its own gradient -- fixed (per-replica targets,
+  bias table in the shock frame).
+\item \textbf{Running}: re-checks with the fix (K4/K8 alone, linear/MLP, two rates vs.\ cubic),
+  then the MLP sweep.
+\item \textbf{Open}: window truncation (the start state is held fixed); what two rates can express
+  in non-Gaussian shock cores (the cubic row); the weak M1.5 signal.
+\end{itemize}
+\end{frame}
+
+\end{document}

@@ -15,7 +15,7 @@ def main(prefix="lcloss"):
     keys = ("ctl", "q1", "q2", "q3", "q10", "m1", "m2", "m4", "m2q3", "ctl_long", "mlp_q2",
             "nok1", "nok1_mlp", "k4k8", "norm", "norm_mlp", "only_K1", "only_K4", "only_K8",
             "ref", "decay", "lr1", "pair", "b20", "b20decay", "pair_b20", "mlp_q1",
-            "only_K8", "cubic_q1", "mlp_cubic_q1")
+            "cubic_q1", "mlp_cubic_q1")
     for k in keys:
         model = "mlp" if "mlp" in k else "linear"
         path = RES / f"train_{model}_{prefix}_{k}.json"

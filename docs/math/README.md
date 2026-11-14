@@ -17,6 +17,7 @@ so do not renumber sections without updating the comments that cite them.
 | `shape_derivation.tex` | beamer, presentation of the shape gradient, no code references | 2026-10-19 |
 | `shape_derivation_code.tex` | same frames plus code references and an implementation appendix | 2026-10-19; defaults table checked against `ensemble_mesh`, `optimize`, `optimize_squash`, `study.py` |
 | `shape_validation.tex` | beamer, the whole validation history | 2026-10-19; contains superseded results, each marked as such |
+| `learned_collision.tex` | beamer, the learned coarse-cell collision operator (branch neural-collision): operator, features, training, Lasso, MLP sweep, status | 2026-11-13 (intermediate) |
 | `shape_slides_style.tex`, `shape_audit_gate.tex`, `shape_bias_{fm,diffuse,kn}.tex` | shared preamble; generated table inputs | n/a |
 
 Rule for new material: derivation changes go in `shape_derivation_body.tex` only (shared by both derivation decks;
