@@ -155,10 +155,10 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     opt|optc) HOURS=24 ;;
     squash|squashkn|squashkn2|optckn|optc2|optab|optm|optrules|optrules2|optrules1seed|optax1seed|optcm|optct|optrules3|adjfix|optrc|ldopt|sph3d|lsfilter|lsfilter3d|ld3dwide|dlh3d|fitgate|diffchk|m2chk|m2split|silfix|termchk|termvol|bumpchk|dlhe|dlhp|fitlab|fitlab2|fitlab3|shiftfd) HOURS=24 ;;
     bitchk|ellchk|multichk|ellprobe) HOURS=3 ;;
-    lcref|lcbase|lcsnr|lceval|lcin) HOURS=12 ;;
+    lcref|lcbase|lcsnr|lceval|lcin|lcrich) HOURS=12 ;;
     lccirc|lctrain|lclasso) HOURS=24 ;;
     lctime|lcfeat|lcburn|lcsteadyfd|lcbound|lcloss|lctransient|lcwarm|lcchain|lcconv|lccase|lcdyn|lccubic|lcdirfd|lcfix) HOURS=4 ;;
-    lccv) HOURS=12 ;;
+    lccv|lccv3) HOURS=12 ;;
     biasgate|cellgate|gapgate|thingate|guardgate|shapeprof|speedprof|boxcheck|opt3dcheck|adjbias|adjm10|stepfd) HOURS=12 ;;
     # the paper's groups (2026-10-28): STUDY_MODULE=examples.paper.cluster.study
     paper_fd) HOURS=12 ;;

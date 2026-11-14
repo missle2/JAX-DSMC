@@ -2092,10 +2092,42 @@ def _lccv_jobs(gpus_per_node: int) -> dict[str, str]:
     .sweep -- run it on the login node first: it writes the plan this group reads, sized to
     the GPU-hour budget from lctime's timings).  One job per chain of runs."""
     del gpus_per_node
+    return _sweep_jobs("v2", "lccv")
+
+
+def _lccv3_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lccv3`` (2026-11-14): the same design sweep of the rich correction (--outputs rich,
+    the eleven inputs; sweep --tag v3 --train-args '--outputs rich --features
+    features_v4.json --warm-pool v1'), run tags ``cv_v3_*``."""
+    del gpus_per_node
+    return _sweep_jobs("v3", "lccv3")
+
+
+def _lcrich_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcrich`` (2026-11-14): the rich correction (relax.RICH_OUTPUTS: stress and heat-flux
+    targets on the Burnett bases, reconstruction gains, noise shape) trained full length on
+    the five cases with warm chains -- the smoke test at scale before lccv3 (pool refills,
+    chain drift, the bias's course) and the linear all-output baseline -- the linear model
+    (as lcfix_q1) and two MLPs (the lccv designs p7 and a 2x32 middle one)."""
+    del gpus_per_node
+    common = ("--outputs rich --features features_v4.json --warm-pool v1 --validate-train "
+              "--iters 177")  # fmt: skip
+    return {
+        "lcrich_linear": f"{LC}.train --model linear --lr 0.003 {common} --tag rich_linear",
+        "lcrich_mlp_p7": f"{LC}.train --model mlp --depth 3 --width 32 --weight-decay 0 "
+        f"--lr 0.01 {common} --tag rich_p7",
+        "lcrich_mlp_2x32": f"{LC}.train --model mlp --depth 2 --width 32 --weight-decay 0 "
+        f"--lr 0.003 {common} --tag rich_2x32",
+    }
+
+
+def _sweep_jobs(tag: str, group: str) -> dict[str, str]:
+    """One job per chain of runs of sweep plan ``tag`` (examples.learned_collision.sweep)."""
     path = Path(__file__).resolve().parents[3] / "examples/learned_collision/results"
-    plan_path = path / "sweep_plan_v2.json"
+    plan_path = path / f"sweep_plan_{tag}.json"
     if not plan_path.exists():
-        raise SystemExit(f"no {plan_path}: run `python3 -m examples.learned_collision.sweep`")
+        raise SystemExit(f"no {plan_path}: run `python3 -m examples.learned_collision.sweep "
+                         f"--tag {tag}`")  # fmt: skip
     plan = json.loads(plan_path.read_text())
     jobs = {}
     for j, members in enumerate(plan["jobs"]):
@@ -2109,7 +2141,7 @@ def _lccv_jobs(gpus_per_node: int) -> dict[str, str]:
                 f"--cases {' '.join(r['cases'])} {val}--validate-train --seed {r['seed']} "
                 f"--tag {r['tag']} {plan.get('train_args', '')}".rstrip()
             )
-        jobs[f"lccv_{j}"] = " ; ".join(cmds)
+        jobs[f"{group}_{j}"] = " ; ".join(cmds)
     return jobs
 
 
@@ -2211,6 +2243,8 @@ NEW_GROUPS = {
     "lclasso": _lclasso_jobs,
     "lccv": _lccv_jobs,
     "lcin": _lcin_jobs,
+    "lcrich": _lcrich_jobs,
+    "lccv3": _lccv3_jobs,
 }
 
 

@@ -64,16 +64,33 @@ def design():
     return [{n: FACTORS[n][i] for n, i in zip(names, row, strict=True)} for row in L9]
 
 
-def runs(points, seeds_all=(0, 1)):
+def run_prefix(tag):
+    """The run tags' prefix of plan ``tag``: ``cv`` for v2 (the first sweep's files), else
+    ``cv_<tag>`` (a later plan's runs do not overwrite them)."""
+    return "cv" if tag == "v2" else f"cv_{tag}"
+
+
+def runs(points, seeds_all=(0, 1), prefix="cv"):
     """``(tag, cases, validate, seed, point)`` of every run."""
     out = []
     for p_i, point in enumerate(points):
         for held in TRAIN:
             cases = [c for c in TRAIN if c != held]
-            out.append((f"cv_p{p_i}_loco{held}", cases, [held], 0, point))
+            out.append((f"{prefix}_p{p_i}_loco{held}", cases, [held], 0, point))
         for seed in seeds_all:
-            out.append((f"cv_p{p_i}_all_s{seed}", list(TRAIN), [], seed, point))
+            out.append((f"{prefix}_p{p_i}_all_s{seed}", list(TRAIN), [], seed, point))
     return out
+
+
+def model_shape(train_args, results=RESULTS):
+    """``(inputs, outputs)`` of the runs' correction from their train.py options: the
+    feature statistics' length (``--features``, default features_v2) and the rich outputs
+    (``--outputs rich``: 12) or the two rates.  No JAX import."""
+    words = train_args.split()
+    feats = words[words.index("--features") + 1] if "--features" in words else "features_v2.json"
+    inputs = len(json.loads((results / feats).read_text())["features"])
+    rich = "--outputs" in words and words[words.index("--outputs") + 1] == "rich"
+    return inputs, 12 if rich else 2
 
 
 def run_cost(cases, validate, iters, timing, point=None):
@@ -157,7 +174,8 @@ def main(argv=None):
     args = ap.parse_args(argv)
     timing = timing_of(RESULTS / args.timing,
                        RESULTS / args.timing_mlp if args.timing_mlp else None)  # fmt: skip
-    plan = runs(design())
+    plan = runs(design(), prefix=run_prefix(args.tag))
+    inputs, outputs = model_shape(args.train_args)
     budget = args.hours * 3600.0
     fixed = sum(run_cost(c, v, 0, timing, p) for _, c, v, _, p in plan)
     per_iter = sum(run_cost(c, v, 1, timing, p) - run_cost(c, v, 0, timing, p)
@@ -173,7 +191,8 @@ def main(argv=None):
            "timing": timing, "design": design(),
            "runs": [{"tag": t, "cases": c, "validate": v, "seed": s, **p}
                     for t, c, v, s, p in plan],
-           "jobs": bins, "train_args": args.train_args}  # fmt: skip
+           "jobs": bins, "train_args": args.train_args, "prefix": run_prefix(args.tag),
+           "inputs": inputs, "outputs": outputs}  # fmt: skip
     (RESULTS / f"sweep_plan_{args.tag}.json").write_text(json.dumps(out, indent=1))
     print(
         f"{len(plan)} runs x {iters} iterations = {out['hours']:.1f} GPU-h over {args.jobs} "

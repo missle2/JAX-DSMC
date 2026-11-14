@@ -365,7 +365,7 @@ initialisation (the base operator) and each a *target* or a shape, never a rate 
 - ``recon_t``: a temperature reconstruction's gain (0: one temperature per cell, the base) --
   each particle's noise at ``theta (1 + g grad ln T . (x - xbar))``;
 - ``kurtosis``: the noise's radial shape (:func:`shaped_noise`; same covariance, fourth
-  moment 11 to 40 against the Gaussian's 15)."""
+  moment 11 to 38 against the Gaussian's 15)."""
 
 RICH_BOUND = np.array([CORRECTION_BOUND, CORRECTION_BOUND, *([2.0] * len(STRESS_BASES)),
                        *([2.0] * len(FLUX_BASES)), 0.5, 1.5, 0.125])  # fmt: skip
@@ -381,6 +381,23 @@ RECON_T_CLIP = 0.5
 
 HERMITE_CAP = 9.0
 """Cap on ``|c|^2 / theta`` in :func:`heat_drift` (a 3-sigma particle)."""
+
+
+def _hermite_constants(cap):
+    """``(m, g)`` of the capped weight ``min(x, cap) - m`` (``x = |c|^2 / theta``) over a
+    Maxwellian: ``m = E[min(x, cap)]`` (zero mean: no momentum), ``g = (5/6) E[x (min(x, cap)
+    - m)]`` (its heat-flux gain, ``dq = g theta d``; uncapped ``m = 3``, ``g = 5``) -- by
+    quadrature over the chi(3) density of ``|c|``."""
+    r = np.linspace(0.0, 40.0, 400_001)
+    pdf = math.sqrt(2.0 / math.pi) * r**2 * np.exp(-(r**2) / 2.0)
+    capped = np.minimum(r**2, cap)
+    m = float(np.trapezoid(capped * pdf, r))
+    g = float(5.0 / 6.0 * np.trapezoid(r**2 * (capped - m) * pdf, r))
+    return m, g
+
+
+HERMITE_MEAN, HERMITE_GAIN = _hermite_constants(HERMITE_CAP)
+"""The capped Hermite weight's mean and heat-flux gain (2.936 and 4.455 at cap 9)."""
 
 KURTOSIS_CAP = 25.0
 """Cap on ``|xi|^2`` in :func:`shaped_noise`'s exponent."""
@@ -469,11 +486,147 @@ def correction_mlp(theta, phi):
 
 def correction(theta, phi, kind):
     """The bounded per-cell ``(dlog r_s, dlog r_q)`` of correction ``kind`` (:func:`rates`)
-    and, with a third output row, the cubic drift coefficient ``beta`` (:func:`cubic_drift`):
-    ``f64[2 or 3, C]``."""
+    and, with a third output row, the cubic drift coefficient ``beta`` (:func:`cubic_drift`);
+    with :data:`RICH_OUTPUTS` rows, the rich outputs: ``f64[2, 3 or 12, C]``."""
     raw = correction_linear(theta, phi) if kind == "linear" else correction_mlp(theta, phi)
-    bound = jnp.asarray([CORRECTION_BOUND, CORRECTION_BOUND, CUBIC_BOUND][: raw.shape[0]])
+    if raw.shape[0] == len(RICH_OUTPUTS):
+        bound = jnp.asarray(RICH_BOUND)
+    else:
+        bound = jnp.asarray([CORRECTION_BOUND, CORRECTION_BOUND, CUBIC_BOUND][: raw.shape[0]])
     return bound[:, None] * jnp.tanh(raw / bound[:, None])
+
+
+def is_rich(delta):
+    """Whether a correction's output ``delta`` (:func:`correction`) is the rich one."""
+    return delta is not None and delta.shape[0] == len(RICH_OUTPUTS)
+
+
+ROW = {name: i for i, name in enumerate(RICH_OUTPUTS)}
+"""Each rich output's row in ``delta``."""
+STRESS_ROWS = slice(ROW[f"stress_{STRESS_BASES[0]}"], ROW[f"stress_{STRESS_BASES[-1]}"] + 1)
+FLUX_ROWS = slice(ROW[f"flux_{FLUX_BASES[0]}"], ROW[f"flux_{FLUX_BASES[-1]}"] + 1)
+
+
+def _dev(m):
+    """The traceless part of ``m[..., 3, 3]``."""
+    return m - jnp.trace(m, axis1=-2, axis2=-1)[..., None, None] * jnp.eye(3) / 3.0
+
+
+def _finite(x):
+    """``x`` with NaN set to 0 and magnitudes capped at 1e6 (cells inside a body: no
+    particle, ``tau = 0``, see :func:`cell_features`)."""
+    return jnp.clip(jnp.nan_to_num(x, nan=0.0, posinf=1e6, neginf=-1e6), -1e6, 1e6)
+
+
+def burnett_bases(n, n_safe, u, theta_c, grid, sp, params, periodic):
+    """``(T, b, g_t)``: per cell the stress target's tensor basis ``T`` (``f64[C, 4, 3, 3]``,
+    :data:`STRESS_BASES`), the heat-flux target's vector basis ``b`` (``f64[C, 3, 3]``,
+    :data:`FLUX_BASES`) -- both dimensionless -- and ``grad ln T`` (``f64[C, D]``, for the
+    temperature reconstruction).  With ``S``, ``W`` the strain (traceless) and spin of the
+    cell gradient over ``sqrt(theta) / lambda``, ``d = lambda div u / sqrt(theta)``, ``g =
+    lambda grad ln T``, ``g_p = lambda grad ln p``::
+
+        T = (d S, dev(S S), dev(g g), S W - W S),   b = (S g, d g, S g_p).
+
+    Arguments as :func:`cell_features` (``n`` the raw counts, ``n_safe``, ``theta_c`` safe)."""
+    tau = stress_time(n_safe, theta_c, grid, sp, params)
+    lam = lambda_factor(sp.omega[0, 0]) * tau * jnp.sqrt(theta_c)
+    grad_u = cell_gradient(u, n, grid, periodic)  # [C, 3, D]
+    cells, dim = n.shape[0], grad_u.shape[2]
+    grad = jnp.zeros((cells, 3, 3)).at[:, :, :dim].set(grad_u)
+    scale = (lam / jnp.sqrt(theta_c))[:, None, None]
+    strain = scale * _dev(0.5 * (grad + jnp.swapaxes(grad, 1, 2)))
+    spin = scale * 0.5 * (grad - jnp.swapaxes(grad, 1, 2))
+    div = scale[:, 0, 0] * jnp.trace(grad, axis1=1, axis2=2)
+    g_t = cell_gradient(jnp.log(theta_c)[:, None], n, grid, periodic)[:, 0, :]
+    vol = jnp.broadcast_to(cell_volume(grid), (cells,))
+    vol = jnp.where(vol > 0.0, vol, jnp.max(vol))
+    log_p = jnp.log(jnp.maximum(n, 1.0) / vol * theta_c)
+    g_p = cell_gradient(log_p[:, None], n, grid, periodic)[:, 0, :]
+    gt3 = jnp.zeros((cells, 3)).at[:, :dim].set(lam[:, None] * g_t)
+    gp3 = jnp.zeros((cells, 3)).at[:, :dim].set(lam[:, None] * g_p)
+    tensors = jnp.stack([
+        div[:, None, None] * strain,
+        _dev(strain @ strain),
+        _dev(gt3[:, :, None] * gt3[:, None, :]),
+        strain @ spin - spin @ strain,
+    ], axis=1)  # fmt: skip
+    vectors = jnp.stack([
+        jnp.einsum("cij,cj->ci", strain, gt3),
+        div[:, None] * gt3,
+        jnp.einsum("cij,cj->ci", strain, gp3),
+    ], axis=1)  # fmt: skip
+    return _finite(tensors), _finite(vectors), _finite(g_t)
+
+
+def _saturate(x, axes):
+    """``x cap / sqrt(cap^2 + |x|^2)`` (``|x|`` over ``axes``, ``cap`` :data:`TARGET_CAP`): ``x``
+    when small, magnitude below ``cap`` always, smooth at 0."""
+    norm2 = jnp.sum(x**2, axis=axes, keepdims=True)
+    return x * TARGET_CAP / jnp.sqrt(TARGET_CAP**2 + norm2)
+
+
+def stress_target(alpha, tensors):
+    """``f64[C, 3, 3]``: the dimensionless stress target ``Pi* / theta = sum_k alpha_k T_k``,
+    saturated (``alpha``: ``f64[4, C]``, rows of :data:`STRESS_BASES`)."""
+    return _saturate(jnp.einsum("kc,ckij->cij", alpha, tensors), (1, 2))
+
+
+def flux_target(gamma, vectors):
+    """``f64[C, 3]``: the dimensionless heat-flux target ``q* / theta^(3/2) = sum_k gamma_k
+    b_k``, saturated (``gamma``: ``f64[3, C]``, rows of :data:`FLUX_BASES`)."""
+    return _saturate(jnp.einsum("kc,cki->ci", gamma, vectors), (1,))
+
+
+def stress_stretch(c, k_row):
+    """``f64[N, 3]``: ``(I + K) c``, ``K`` (``f64[N, 3, 3]``, symmetric) each particle's cell's.
+
+    ``K = s Pi* / (2 theta)`` (:func:`collide`, ``s = min(1 - e_s, 1 - a^3)``) moves the
+    kinetic tensor by ``(I + K) Pi (I + K) - Pi = s Pi* + O(s Pi_dev Pi* / theta)``: each
+    step a fraction ``s`` of the target, against the stress's own relaxation at ``r_s``, so a
+    homogeneous cell's ``Pi_dev`` settles near ``Pi*`` (a constitutive target, independent of
+    the rate).  A congruence keeps the tensor positive semi-definite whatever ``K`` is, and
+    ``|K| <= s cap / 2 < 1 - a^3`` keeps it from growing the heat flux (``q`` scales by at most
+    ``1 + |K|`` while it relaxes by ``a^3``)."""
+    return c + jnp.einsum("nij,nj->ni", k_row, c)
+
+
+def heat_drift(c, d_row, theta_row):
+    """``f64[N, 3]``: the Hermite drift ``(min(|c|^2 / theta, 9) - m) d`` (``d``, ``theta``
+    each particle's cell's; ``m`` :data:`HERMITE_MEAN`).
+
+    For a Maxwellian (``x = |c|^2 / theta``; uncapped ``<x> = 3``, ``<x^2> = 15``) the weight
+    ``x - 3`` changes ``q = <|c|^2 c> / 2`` by ``(1/2 <x w> + 1/3 <x w>) theta d = 5 theta d``
+    and to first order leaves the momentum (``<w> = 0``), the energy and the stress (odd in
+    ``c``) alone; capped at 9 (a tail particle's weight at most ~6), its mean is
+    :data:`HERMITE_MEAN` and its gain :data:`HERMITE_GAIN`.  With ``d = (1 - a^3) q* / (g
+    theta)`` a cell's heat flux relaxes toward ``q*`` at its own rate (``q' = a^3 q + (1 - a^3)
+    q*``): a target, not a rate -- it does not depend on the cell's ``q`` (the cubic drift's
+    ``27 s beta q`` grew the heat flux for ``beta > 1/27``)."""
+    x = jnp.minimum(jnp.sum(c**2, axis=1) / theta_row, HERMITE_CAP)
+    return (x - HERMITE_MEAN)[:, None] * d_row
+
+
+def shaped_noise(xi, t_row):
+    """``f64[N, 3]``: ``xi sqrt(w)``, ``w = (1 - 2t)^(5/2) exp(t min(|xi|^2, 25))`` (``t`` each
+    particle's cell's).  For standard normal ``xi``, ``E[w |xi|^2] = 3``: the same covariance
+    ``I`` (``w`` depends on ``|xi|`` only), odd moments zero, any ``t`` -- and the fourth
+    moment ``E|xi'|^4 = 15 (1 - 2t)^5 / (1 - 4t)^(7/2)`` uncapped: 11.1 at ``t = -1/8``,
+    40.3 at ``t = 1/8`` (38.2 with the cap, whose covariance error is 6e-4), against 15.  So the kinetic tensor and its positive definiteness are
+    untouched; only the step's fourth moment moves, by ``~(1 - a^2) / (1 + a^2)`` of the
+    noise's excess in a homogeneous steady state (a weak, dt-scaled lever: a continuous
+    Fokker-Planck noise is Gaussian)."""
+    r2 = jnp.minimum(jnp.sum(xi**2, axis=1), KURTOSIS_CAP)
+    w = (1.0 - 2.0 * t_row) ** 2.5 * jnp.exp(t_row * r2)
+    return xi * jnp.sqrt(w)[:, None]
+
+
+def recon_t_factor(gain_row, g_t_row, offset):
+    """``f64[N]``: each particle's noise-variance factor ``1 + g grad ln T . (x - xbar)``,
+    clipped to ``1 -+`` :data:`RECON_T_CLIP` -- the temperature reconstruction (its mean over a
+    cell is 1: ``xbar`` the centroid; the projection makes the energy exact)."""
+    return 1.0 + jnp.clip(gain_row * jnp.sum(g_t_row * offset, axis=1), -RECON_T_CLIP,
+                          RECON_T_CLIP)  # fmt: skip
 
 
 def cubic_drift(c, beta, a, theta_c):
@@ -492,19 +645,21 @@ def cubic_drift(c, beta, a, theta_c):
 
 
 def init_correction(kind, key=None, width=64, depth=2, phi_scale=None, cubic=False,
-                    n_features=None):  # fmt: skip
+                    n_features=None, rich=False):  # fmt: skip
     """The trainable parameters of correction ``kind`` added to :data:`BASELINE`, zero output
     at initialisation (so the corrected operator starts as the base, bitwise).  ``mlp``:
     ``depth`` hidden tanh layers of ``width`` (``1 / sqrt(fan-in)`` weights, a zero last
     layer).  ``phi_scale`` (``f64[F]``): the features' training spread (:func:`_standardised`).
     ``cubic``: a third output, the cubic drift coefficient (:func:`cubic_drift`).
     ``n_features``: the inputs (the first that many :data:`FEATURES`; default
-    ``len(phi_scale)``, else all)."""
+    ``len(phi_scale)``, else all).  ``rich``: the :data:`RICH_OUTPUTS`."""
+    if cubic and rich:
+        raise ValueError("the cubic drift and the rich outputs are exclusive")
     theta = {k: jnp.float64(v) for k, v in BASELINE.items()}
     if n_features is None:
         n_features = len(FEATURES) if phi_scale is None else len(phi_scale)
     k = int(n_features)
-    outputs = 3 if cubic else 2
+    outputs = len(RICH_OUTPUTS) if rich else 3 if cubic else 2
     if kind == "linear":
         theta["A"] = jnp.zeros((outputs, k))
     elif kind == "mlp":
@@ -544,10 +699,25 @@ def local_state(state, table, grid, periodic):
     grad = velocity_gradient(u, n, grid, periodic)
     u_loc = u[row] + jnp.einsum("nij,nj->ni", grad[row], state.x - xbar[row])
     # the kinetic tensor about the reconstructed velocity: no in-cell shear in it
-    _, _, s2 = cell_sums(v - u_loc, alive, seg, n_cells)
+    pi, theta_c = tensor_about(v, u_loc, alive, seg, n)
+    return seg, row, n, u, u_loc, pi, theta_c
+
+
+def tensor_about(v, u_loc, alive, seg, n):
+    """``(Pi, theta)`` per cell about a per-particle target velocity ``u_loc`` (whose cell mean
+    is the cell's mean velocity: a centroid-centred reconstruction)."""
+    _, _, s2 = cell_sums(v - u_loc, alive, seg, n.shape[0])
     pi = s2 / jnp.maximum(n, 1.0)[:, None, None]
     theta_c = jnp.maximum(jnp.trace(pi, axis1=1, axis2=2) / 3.0, 1e-300)
-    return seg, row, n, u, u_loc, pi, theta_c
+    return pi, theta_c
+
+
+def cell_centroid(state, seg, n):
+    """``f64[C, D]``: each cell's particle centroid (alive particles)."""
+    dim = state.x.shape[1]
+    n_x, xs, _ = cell_sums(jnp.pad(state.x, ((0, 0), (0, 3 - dim))), state.alive, seg,
+                           n.shape[0])  # fmt: skip
+    return (xs / jnp.maximum(n_x, 1.0)[:, None])[:, :dim]
 
 
 def _finish(state, table, cstate, c, c_new, u_loc, seg, row, n, periodic):
@@ -581,7 +751,11 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
       ``(dlog r_s, dlog r_q)`` from the theory features (:func:`cell_features`,
       :func:`correction`; parameters from :func:`init_correction`), and with a third output
       row the cubic drift coefficient (:func:`cubic_drift`, added to the OU step before the
-      projection).
+      projection); with :data:`RICH_OUTPUTS` rows the rich correction (2026-11-14): the
+      velocity reconstruction's gain, a temperature reconstruction in the noise, the noise's
+      radial shape (:func:`shaped_noise`), then the stress target's congruence
+      (:func:`stress_stretch`) and the heat-flux target's drift (:func:`heat_drift`), before
+      the projection.
     """
     del static, cell_temp
     v = state.v
@@ -593,11 +767,36 @@ def collide(state, table, cstate, grid, sp, params, static, cell_temp, step, bas
         _, n_s, _, theta_s = safe_cells(n, pi, theta_c)
         phi = cell_features(n, n_s, u, theta_s, grid, sp, params, periodic)
         delta = correction(theta, phi[:, : correction_inputs(theta)], corrected)
+    rich = is_rich(delta)
+    if rich:
+        # the cell's gradients at the measured (gain-1) state: the targets' bases
+        tensors, vectors, g_t = burnett_bases(n, n_s, u, theta_s, grid, sp, params, periodic)
+        # the velocity reconstruction's gain 1 + g, and the tensor about the new target
+        u_loc = u_loc + delta[ROW["recon_u"]][row][:, None] * (u_loc - u[row])
+        pi, theta_c = tensor_about(v, u_loc, state.alive, seg, n)
     a, chol = step_coefficients(n, pi, theta_c, grid, sp, params, theta, splitting, delta)
     xi = indexed_normal(key_for(base_key, step, STAGE_LEARNED), v.shape[0], (3,))
     c = v - u_loc
-    c_new = a[row][:, None] * c + jnp.einsum("nij,nj->ni", chol[row], xi)
-    if delta is not None and delta.shape[0] > 2:
+    if rich:
+        xi = shaped_noise(xi, delta[ROW["kurtosis"]][row])
+    noise = jnp.einsum("nij,nj->ni", chol[row], xi)
+    if rich:
+        offset = state.x - cell_centroid(state, seg, n)[row]
+        factor = recon_t_factor(delta[ROW["recon_t"]][row], g_t[row], offset)
+        noise = jnp.sqrt(factor)[:, None] * noise
+    c_new = a[row][:, None] * c + noise
+    if rich:
+        _, n_s, _, theta_s = safe_cells(n, pi, theta_c)
+        r_s, r_q = rates(n_s, theta_s, grid, sp, params, theta, splitting, delta)
+        s_s = -jnp.expm1(-r_s * params.dt)  # 1 - e_s
+        s_q = -jnp.expm1(-r_q * params.dt)  # 1 - a^3
+        k = 0.5 * jnp.minimum(s_s, s_q)[:, None, None] * stress_target(delta[STRESS_ROWS],
+                                                                      tensors)  # fmt: skip
+        c_new = stress_stretch(c_new, k[row])
+        d = (s_q * jnp.sqrt(theta_s) / HERMITE_GAIN)[:, None] * flux_target(delta[FLUX_ROWS],
+                                                                            vectors)  # fmt: skip
+        c_new = c_new + heat_drift(c, d[row], theta_s[row])
+    elif delta is not None and delta.shape[0] == 3:
         theta_s = safe_cells(n, pi, theta_c)[3]
         c_new = c_new + cubic_drift(c, delta[2][row], a[row], theta_s[row])
     return _finish(state, table, cstate, c, c_new, u_loc, seg, row, n, periodic)

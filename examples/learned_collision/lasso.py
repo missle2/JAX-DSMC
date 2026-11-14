@@ -254,8 +254,8 @@ def main(argv=None):
     ap.add_argument("--signs", action="store_true")
     ap.add_argument("--cv", default="loco", choices=("loco", "seed"), help="picks alpha")
     args = ap.parse_args(argv)
-    if args.cubic:
-        raise SystemExit("lasso fits the two rate rows only (no --cubic)")
+    if args.cubic or args.outputs != "rates":
+        raise SystemExit("lasso fits the two rate rows only (no --cubic, --outputs rates)")
     _, theta, _ = operators.operator("linear", "shear", **model_options(args))
     runners = [CaseRunner(name, "linear", args) for name in args.cases]
     rng = np.random.default_rng(args.seed)

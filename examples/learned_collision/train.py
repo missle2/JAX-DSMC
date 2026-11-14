@@ -394,6 +394,10 @@ def model_options(args):
         opts.update(width=args.width, depth=args.depth)
     if args.model != "scalar" and args.cubic:
         opts["cubic"] = True
+    if args.model != "scalar" and args.outputs == "rich":
+        if args.cubic:
+            raise SystemExit("--cubic and --outputs rich are exclusive")
+        opts["rich"] = True
     if args.model != "scalar" and args.features:
         stats = json.loads((RESULTS / args.features).read_text())
         k = len(stats["features"])
@@ -617,6 +621,13 @@ def parser():
         "--cubic",
         action="store_true",
         help="a third output: the cubic Fokker-Planck drift coefficient (relax.cubic_drift)",
+    )
+    ap.add_argument(
+        "--outputs",
+        default="rates",
+        choices=("rates", "rich"),
+        help="the correction's outputs: the two rates, or relax.RICH_OUTPUTS (stress and "
+        "heat-flux targets, reconstruction gains, noise shape)",
     )
     ap.add_argument(
         "--case-norm",

@@ -112,10 +112,12 @@ def collect(plan, results, base, metric):
     held-out log-ratios; runs without results are skipped (and counted)."""
     points = []
     for p_i, point in enumerate(plan["design"]):
-        rec = {"index": p_i, "point": point, "params": n_params(point["depth"], point["width"]),
+        params = n_params(point["depth"], point["width"], plan.get("inputs", 9),
+                          plan.get("outputs", 2))  # fmt: skip
+        rec = {"index": p_i, "point": point, "params": params,
                "held": {}, "fold_train": [], "all": [], "missing": 0, "logs": []}  # fmt: skip
         for r in plan["runs"]:
-            if not r["tag"].startswith(f"cv_p{p_i}_"):
+            if not r["tag"].startswith(f"{plan.get('prefix', 'cv')}_p{p_i}_"):
                 continue
             path = results / f"train_mlp_{r['tag']}.json"
             if not path.exists():
