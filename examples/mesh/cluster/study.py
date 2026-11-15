@@ -2211,6 +2211,19 @@ def _lcp3_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lcp3circ_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcp3circ`` (2026-11-15): the cross-validated MLP (lccv3 p3, both all-case seeds) on the
+    coarse circles, both walls and cell sizes -- the cylinder test of the report's recommended
+    model (lcextra ran only the pre-sweep rich 2x32 there)."""
+    del gpus_per_node
+    jobs = {}
+    for s in (0, 1):
+        theta = [f"--theta train_mlp_cv_v3_p3_all_s{s}.json"]
+        jobs[f"lccirc_v3p3_s{s}"] = " && ".join(_circle_chain(c, w, theta)
+                                                for c in LC_CIRCLE_CELLS for w in LC_WALLS)  # fmt: skip
+    return jobs
+
+
 NEW_GROUPS = {
     "optab": _optab_jobs,
     "optm": _optm_jobs,
@@ -2289,6 +2302,7 @@ NEW_GROUPS = {
     "lccv3": _lccv3_jobs,
     "lcextra": _lcextra_jobs,
     "lcp3": _lcp3_jobs,
+    "lcp3circ": _lcp3circ_jobs,
 }
 
 
