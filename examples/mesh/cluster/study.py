@@ -2197,6 +2197,20 @@ def _lcextra_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _lcp3_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``lcp3`` (2026-11-15): the lccv3 cross-validated choice (p3: 2x8, weight decay 1e-3,
+    lr 0.01; its two all-case runs) on all twelve cases -- the honestly tuned flexible model
+    of the write-up (rich 2x32 was an exploratory lcrich run, not a CV choice)."""
+    del gpus_per_node
+    cases = "S1 S2 S3 S4 K1 K2 K3 K4 K5 K6 K7 K8"
+    jobs = {}
+    for s in (0, 1):
+        jobs[f"lceval_v3p3_s{s}"] = (f"{LC}.evaluate --cases {cases} --operators --theta "
+                                     f"train_mlp_cv_v3_p3_all_s{s}.json --seeds 512 "
+                                     f"--tag test_v3p3_s{s}")  # fmt: skip
+    return jobs
+
+
 NEW_GROUPS = {
     "optab": _optab_jobs,
     "optm": _optm_jobs,
@@ -2274,6 +2288,7 @@ NEW_GROUPS = {
     "lcrich": _lcrich_jobs,
     "lccv3": _lccv3_jobs,
     "lcextra": _lcextra_jobs,
+    "lcp3": _lcp3_jobs,
 }
 
 

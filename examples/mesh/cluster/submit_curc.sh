@@ -156,6 +156,7 @@ for group in "${GROUPS_TO_RUN[@]}"; do
     squash|squashkn|squashkn2|optckn|optc2|optab|optm|optrules|optrules2|optrules1seed|optax1seed|optcm|optct|optrules3|adjfix|optrc|ldopt|sph3d|lsfilter|lsfilter3d|ld3dwide|dlh3d|fitgate|diffchk|m2chk|m2split|silfix|termchk|termvol|bumpchk|dlhe|dlhp|fitlab|fitlab2|fitlab3|shiftfd) HOURS=24 ;;
     bitchk|ellchk|multichk|ellprobe) HOURS=3 ;;
     lcref|lcbase|lcsnr|lceval|lcin|lcrich|lcextra) HOURS=12 ;;
+    lcp3) HOURS=3 ;;
     lccirc|lctrain|lclasso) HOURS=24 ;;
     lctime|lcfeat|lcburn|lcsteadyfd|lcbound|lcloss|lctransient|lcwarm|lcchain|lcconv|lccase|lcdyn|lccubic|lcdirfd|lcfix) HOURS=4 ;;
     lccv|lccv3) HOURS=12 ;;
