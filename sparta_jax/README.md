@@ -201,3 +201,37 @@ code now uses the same partition sort (`jax_dsmc.sort.update_table`, `SimStatic.
 1. **XLA vs C++, same algorithm, one CPU core: 2.5x** (1.295 s vs 0.518 s), and 2.3x with tallies against SPARTA's full deck. By stage: move 2.3x, sort 6.4x, emit 1.7x, collisions faster in JAX (all cells at once). The work accounting shows the residual is per-op XLA runtime overhead and lock-step padding, not extra algorithmic work. On GPU with command buffers sparta_jax is 1.6x SPARTA serial, and 3.9x SPARTA MPI x8.
 2. **The main code is 4.9x slower than sparta_jax on one CPU core** (6.31 s vs 1.295 s; 10.5x on 2026-09-30) **and 3.2x on GPU** (4.48 s vs 1.41 s, same flags). By stage (main minus sparta_jax, ms per step): move/tracker +2.4, other +1.9 (small-op overhead: ~280 tiny reductions and ~40 carry copies per step, and the cell temperature the certified majorant needs), inflow +0.5, sort +0.4 (the same partition sort, over 60k slots), collide +0.3.
 3. **Budget on one CPU core: main code 6.31 s ≈ SPARTA 0.52 s × 2.5 (XLA) × 4.9 (the main code's differentiable machinery).** The main code is 12.2x SPARTA serial (51x on 2026-09-28). Getting under 5x needs fewer, larger XLA ops in the tracker and the bookkeeping; the sort is now the same as sparta_jax's.
+
+## 3-D: SPARTA's benchmark decks (`in.free`, `in.collide`, `in.sphere`)
+
+`sim3d.py`, `geometry3d.py`, `decks.py`, `decomp3d.py` and `driver.py` port the 3-D benchmark decks of SPARTA's `bench/` directory. They follow the 2-D code above and reuse main's dimension-agnostic pieces, specialised for SPARTA parity: the row-major grid, per-face boundaries, emit per face, `read_sparta_surf`, the triangle/box separating-axis test from `mesh/cut.py`, the cell walk, and the capacity/overflow design of `decomp.py`. The scaling study that uses them is in `bench/README.md`.
+
+| SPARTA | sparta_jax (3-D) | Notes |
+|---|---|---|
+| `create_grid`, `read_surf`, `Cut3d` | `geometry3d.build` | Cut-cell census identical to SPARTA's log (10³ sphere: 32 cells, 1860 surf-cell pairs). Flow volumes are exact, from the divergence theorem (clipped triangles + face sections + edge crossings), and sum to the body volume within 1e-10 |
+| `create_particles` | `sim3d.create_particles` | Same per-cell counts rule; rejection in cut cells by SPARTA's segment-to-flow-point test |
+| `Update::move<3,0,0>` | `sim3d.dense_move` + `walk` | Dense straight move inside the cut-free Chebyshev ring of the start cell. REFLECT walls are mirrored in the dense move in decks without surfaces. Otherwise the cell walk runs on a compacted lane with `Geometry::line_tri_intersect`, transcribed and tested against a reference |
+| `SurfCollideDiffuse` (acc 1) | `sim3d._diffuse` | |
+| `FixEmitFace::perform_task_onepass` | `sim3d.emit` | All six faces. The accept-reject sampler runs in rounds of vectorised trials until every insert is accepted |
+| `Particle::sort` | `sim3d.sort_full` | One packed int64 radix sort per step (`sort=pack`; 2.9× faster than (key, value) pairs on GPU) |
+| `CollideVSS` NTC, `collide_modify vremax N yes/no` | `sim3d.collide`, `step` | Resets at the start of a run (`vre_start`) and every N steps. The `prefix` and unrolled attempt variants are bitwise identical to the default |
+| `Comm::migrate_particles`, `balance_grid rcb` | `decomp3d` | Static bricks Px×Py×Pz; dimension-ordered `ppermute` exchange. `fix balance` is not reproduced (the imbalance is reported) |
+
+**Validation.** 10K particles, 8 seeds per code; `bench/validate.py`, 2026-11-25, sparta_jax on the laptop GPU against serial SPARTA. Every per-move event rate agrees within seed noise (max |z| 1.47):
+
+| deck | quantity | sparta_jax | SPARTA | z |
+|---|---|---|---|---|
+| free | boundary collides | 0.039975 | 0.039923 | 0.69 |
+| collide | attempts / collisions | 0.093741 / 0.070180 | 0.093645 / 0.070210 | 1.47 / -0.32 |
+| sphere | attempts / collisions | 0.015609 / 0.011991 | 0.015556 / 0.011941 | 0.84 / 1.03 |
+| sphere | surface checks / collisions | 2.4896 / 1.4716e-4 | 2.4555 / 1.4564e-4 | 0.96 / 0.58 |
+| sphere | boundary exits | 0.0027664 | 0.0027689 | -0.49 |
+
+**Tests.** `tests/test_sparta_jax_3d.py` (11 tests, about 1 min on CPU) covers:
+* the triangle test against a transcription of SPARTA's;
+* that cut volumes sum to the body volume;
+* the census against SPARTA's log;
+* conservation of particle count and energy in the collide box;
+* the sphere inflow against the theoretical flux;
+* 8-device decomposition against 1 device (forced host devices);
+* that the collide variants are bitwise identical.
