@@ -6,6 +6,8 @@
 #   PLATFORM=pm-gpu VARIANT=nomallocasync bash bench/env/build_sparta.sh
 #   PLATFORM=pm-cpu VARIANT=mpi bash bench/env/build_sparta.sh                  # plain MPI (no Kokkos)
 #   PLATFORM=pm-cpu VARIANT=kokkos_omp bash bench/env/build_sparta.sh
+#   PLATFORM=alp-rtx6000 BUILD_MODULES="gcc cmake openmpi" CUDA_ROOT=/projects/$USER/cuda-12.8 \
+#       bash bench/env/build_sparta.sh                                       # own CUDA toolkit
 #
 # -> ${BENCH_ROOT}/builds/sparta-${PLATFORM}-${VARIANT}/src/spa_*  (+ BUILD_INFO.txt)
 #
@@ -28,6 +30,20 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${HERE}/platforms.sh"
 pf_modules "${BUILD_MODULES}"
+# CUDA_ROOT: a user-installed CUDA toolkit instead of a cuda module (Alpine's newest module is
+# 12.1.1; Blackwell sm_120 needs >= 12.8 and Kokkos 5 a recent CUDA).  Toolkit only: the node's
+# driver is used, and nvcc links the CUDA runtime statically, so jobs need nothing from it.
+if [ -n "${CUDA_ROOT:-}" ]; then
+  [ -x "${CUDA_ROOT}/bin/nvcc" ] || { echo "no nvcc in ${CUDA_ROOT}/bin"; exit 1; }
+  export PATH="${CUDA_ROOT}/bin:${PATH}" CUDA_HOME="${CUDA_ROOT}" CUDA_PATH="${CUDA_ROOT}"
+  export LD_LIBRARY_PATH="${CUDA_ROOT}/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  CUDA_ARGS=(-D "CUDAToolkit_ROOT=${CUDA_ROOT}")
+else
+  CUDA_ARGS=()
+fi
+if [ "${KOKKOS_PRESET}" = kokkos_cuda ] && command -v nvcc > /dev/null; then
+  echo "[build_sparta] nvcc: $(nvcc --version | tail -1)"
+fi
 VARIANT="${VARIANT:-default}"
 SRC="${SPARTA_SRC}"
 BUILD="${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-${VARIANT}"
@@ -74,11 +90,11 @@ fi
 echo "[build_sparta] ${PLATFORM}/${VARIANT}: preset ${PRESET}, arch '${KOKKOS_ARCH}', ${SRC} -> ${BUILD}"
 if [ -n "${CHECK:-}" ]; then
   echo cmake -S "${SRC}/cmake" -B "${BUILD}" -C "${SRC}/cmake/presets/${PRESET}.cmake" \
-    -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" "${ARCH[@]}" "${EXTRA[@]}"
+    -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" "${ARCH[@]}" "${EXTRA[@]}" "${CUDA_ARGS[@]}"
   exit 0
 fi
 cmake -S "${SRC}/cmake" -B "${BUILD}" -C "${SRC}/cmake/presets/${PRESET}.cmake" \
-  -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" "${ARCH[@]}" "${EXTRA[@]}" \
+  -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" "${ARCH[@]}" "${EXTRA[@]}" "${CUDA_ARGS[@]}" \
   2>&1 | tee "${BUILD}.configure.log"
 cmake --build "${BUILD}" -j "${JOBS:-16}" 2>&1 | tail -20
 EXE="$(find "${BUILD}" -maxdepth 2 -type f -perm -u+x -name 'spa_*' | head -1)"
