@@ -85,8 +85,11 @@ case "${PLATFORM}" in
     # load no cuda module that could shadow the wheels' libraries; nvcc (cuda module) is only
     # needed to build SPARTA/Kokkos, which links the CUDA runtime statically.
     if [ "${PLATFORM}" = alp-mi100 ]; then
-      MODULES="${MODULES:-python gcc rocm openmpi}"
-      BUILD_MODULES="${BUILD_MODULES:-gcc rocm cmake openmpi}"
+      # rocm/6.1.0 is Alpine's newest (2026-11-25).  SPARTA's bundled Kokkos 5 needs hipcc
+      # >= 6.2, so the MI100 SPARTA build uses an external Kokkos 4.7 (build_kokkos.sh,
+      # KOKKOS_ROOT); JAX uses the jax-rocm60 plugin wheels on this ROCm.
+      MODULES="${MODULES:-python gcc rocm/6.1.0 openmpi}"
+      BUILD_MODULES="${BUILD_MODULES:-gcc rocm/6.1.0 cmake openmpi}"
       DEVICES_PER_GRES=1  # one HIP device per MI100 card
     else
       MODULES="${MODULES:-python gcc openmpi}"

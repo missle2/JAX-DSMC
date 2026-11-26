@@ -46,13 +46,21 @@ case "${JAX_FLAVOR}" in
     if [ -n "${ROCM_JAX_SIF:-}" ]; then
       echo "ROCm via the Apptainer image ${ROCM_JAX_SIF}: nothing to pip-install (jobs run 'apptainer exec --rocm')"
     else
-      # ROCm major version of the loaded module: hipconfig prints e.g. 6.3.42131-...
-      RV="$(hipconfig --version 2>/dev/null | cut -d. -f1 || true)"
-      : "${RV:?no hipconfig: load a rocm module (MODULES) or set ROCM_JAX_SIF}"
-      pip install "jax${PIN}" \
-        && { pip install "jax[rocm${RV}-local]${PIN}" \
-             || pip install "jax-rocm${RV}-plugin${PIN}" "jax-rocm${RV}-pjrt${PIN}" \
-             || pip install "jax-rocm${RV}0-plugin${PIN}" "jax-rocm${RV}0-pjrt${PIN}"; }
+      # The plugin wheels pin their jaxlib; installing plugin + pjrt + jax in ONE pip call lets
+      # the resolver pick a matching jax (installing jax first and the plugin after leaves a
+      # newer jax over an older jaxlib).  ROCM_JAX_WHEELS: jax-rocm60-* (built for ROCm 6.0)
+      # run on the ROCm 6.x user space of the module (Alpine: rocm/6.1.0; MI100 = gfx908).
+      hipconfig --version 2>/dev/null | head -1 || echo "warning: no hipconfig (rocm module not loaded?)"
+      W="${ROCM_JAX_WHEELS:-jax-rocm60-plugin jax-rocm60-pjrt}"
+      if [ -n "${PIN}" ]; then W="$(for w in ${W}; do printf '%s%s ' "${w}" "${PIN}"; done)"; fi
+      # shellcheck disable=SC2086
+      pip install ${W} "jax${PIN}"
+      python3 - <<'PY'
+import importlib.metadata as md
+v = {p: md.version(p) for p in ("jax", "jaxlib") }
+plug = [d.metadata["Name"] for d in md.distributions() if "rocm" in d.metadata["Name"]]
+print("installed:", v, {p: md.version(p) for p in plug})
+PY
     fi
     ;;
   cpu)

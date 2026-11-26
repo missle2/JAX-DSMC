@@ -25,6 +25,7 @@
 #   kokkos_omp       Kokkos OpenMP backend                             [CPU platforms]
 #   kokkos_serial    Kokkos Serial backend (one rank per core)         [CPU platforms]
 #   clang / cce      another compiler: CXX for host/MPI builds (cce = Cray CC wrapper on NERSC)
+# KOKKOS_ROOT=<install>  use an external Kokkos (bench/env/build_kokkos.sh) instead of lib/kokkos
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
@@ -84,7 +85,14 @@ if [ "${SITE}" = nersc ]; then
   fi
 fi
 if [ "${PRESET}" = kokkos_hip ]; then
-  EXTRA+=(-D CMAKE_CXX_COMPILER="${CXX:-hipcc}")
+  # KISS FFT: the decks use no FFT, and it avoids a hipFFT dependency
+  EXTRA+=(-D CMAKE_CXX_COMPILER="${CXX:-hipcc}" -D FFT_KOKKOS=KISS)
+fi
+# KOKKOS_ROOT: link an installed Kokkos (build_kokkos.sh) instead of the bundled lib/kokkos,
+# e.g. Kokkos 4.7 where the toolchain is older than Kokkos 5's minimum (hipcc 6.2, nvcc 12.2)
+if [ -n "${KOKKOS_ROOT:-}" ]; then
+  EXTRA+=(-D USE_EXTERNAL_KOKKOS=ON -D "Kokkos_ROOT=${KOKKOS_ROOT}")
+  ARCH=()  # the architecture is that of the installed Kokkos
 fi
 
 echo "[build_sparta] ${PLATFORM}/${VARIANT}: preset ${PRESET}, arch '${KOKKOS_ARCH}', ${SRC} -> ${BUILD}"
