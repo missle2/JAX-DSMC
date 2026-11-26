@@ -14,6 +14,8 @@
 # Overrides: PLATFORMS="alp-h200 ..." VARIANTS="default nomallocasync" BUILD_MODULES="gcc/... cmake openmpi"
 #SBATCH --job-name=build_alpine
 #SBATCH --partition=acompile
+#SBATCH --qos=compile
+#SBATCH --account=ucb856_asc1
 #SBATCH --ntasks=4
 #SBATCH --time=06:00:00
 #SBATCH --output=build_alpine_%j.out
