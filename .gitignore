@@ -232,3 +232,6 @@ scratch/**/*.done
 
 # sparta_jax: raw profiler traces (the per-stage JSONs next to them are kept)
 examples/sparta_jax/results/profile_*/
+
+# the scaling study's environment scripts (not a virtualenv)
+!bench/env/
