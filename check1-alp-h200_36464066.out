@@ -1,0 +1,9 @@
+[platforms.sh] module python not available on c3gpu-g5-u1
+[platforms.sh] module gcc not available on c3gpu-g5-u1
+[platforms.sh] module openmpi not available on c3gpu-g5-u1
+[runtime] alp-h200 on c3gpu-g5-u1: jax env /projects/aaja8389/jax-env (0.6.2), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa
+[2026-11-27T00:54:28-07:00] job 36464066 check1-alp-h200: 1 node(s) c3gpu-g5-u1...
+grep: /dev/fd/63: No such file or directory
+plan /dev/fd/63:  runs
+/var/spool/slurmd/job36464066/slurm_script: line 28: /dev/fd/63: No such file or directory
+[2026-11-27T00:54:28-07:00] 0 runs, 0 failed

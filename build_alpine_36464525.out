@@ -1,0 +1,82 @@
+[2026-11-27T01:05:38-07:00] build_alpine on c3cpu-a2-u32-1: platforms 'alp-h200 alp-a100 alp-l40 alp-rtx6000', variants 'default'
+CUDA toolkit present: Build cuda_12.8.r12.8/compiler.35583870_0
+jax 0.6.2
+JAX env ok
+Lmod has detected the following error: These module(s) or extension(s) exist
+but cannot be loaded as requested: "gcc"
+   Try: "module spider gcc" to see how to load the module(s).
+
+
+
+Lmod has detected the following error: These module(s) or extension(s) exist
+but cannot be loaded as requested: "cmake"
+   Try: "module spider cmake" to see how to load the module(s).
+
+
+
+Lmod has detected the following error: These module(s) or extension(s) exist
+but cannot be loaded as requested: "openmpi"
+   Try: "module spider openmpi" to see how to load the module(s).
+
+
+
+host compiler: g++ (GCC) 8.5.0 20210514 (Red Hat 8.5.0-28)   (CUDA 12.8 supports GCC <= 14)
+
+[2026-11-27T01:05:40-07:00] ===== SPARTA alp-h200 / default =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-h200/default: preset kokkos_cuda, arch 'HOPPER90', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default
+bench/env/build_sparta.sh: line 107: cmake: command not found
+
+[2026-11-27T01:05:41-07:00] ===== SPARTA alp-a100 / default =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-a100/default: preset kokkos_cuda, arch 'AMPERE80', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default
+bench/env/build_sparta.sh: line 107: cmake: command not found
+
+[2026-11-27T01:05:41-07:00] ===== SPARTA alp-l40 / default =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-l40/default: preset kokkos_cuda, arch 'ADA89', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default
+bench/env/build_sparta.sh: line 107: cmake: command not found
+
+[2026-11-27T01:05:42-07:00] ===== SPARTA alp-rtx6000 / default =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-rtx6000/default: preset kokkos_cuda, arch 'BLACKWELL120', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default
+bench/env/build_sparta.sh: line 107: cmake: command not found
+
+[2026-11-27T01:05:43-07:00] ===== MI100: user-space ROCm 6.4.4 (toolchain + libraries) =====
+[rocm_user] /opt/rocm-6.4.4 (system runtime) + RPMs -> /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4
+Last metadata expiration check: 0:40:03 ago on Fri Nov 27 00:25:40 2026.
+(1/21): libatomic-8.5.0-31.el8_10.x86_64.rpm    527 kB/s |  26 kB     00:00    
+(2/21): hipsolver-2.4.0.60404-129.el8.x86_64.rp 242 kB/s |  66 kB     00:00    
+(3/21): rccl-2.22.3.60404-129.el8.x86_64.rpm     12 MB/s | 165 MB     00:13    
+(4/21): rocm-llvm-19.0.0.25224.60404-129.el8.x8 3.6 MB/s | 251 MB     01:08    
+(5/21): hipsparse-3.2.0.60404-129.el8.x86_64.rp  84 kB/s |  50 kB     00:00    
+(6/21): roctracer-4.1.60404.60404-129.el8.x86_6 449 kB/s | 358 kB     00:00    
+(7/21): rocsparse-3.4.0.60404-129.el8.x86_64.rp 3.6 MB/s | 524 MB     02:23    
+(8/21): rocblas-4.4.1.60404-129.el8.x86_64.rpm  2.3 MB/s | 157 MB     01:07    
+(9/21): hsa-rocr-devel-1.15.0.60404-129.el8.x86 312 kB/s | 128 kB     00:00    
+(10/21): hip-devel-6.4.43484.60404-129.el8.x86_ 323 kB/s | 296 kB     00:00    
+(11/21): rocm-smi-lib-7.7.0.60404-129.el8.x86_6 656 kB/s | 835 kB     00:01    
+(12/21): rocsolver-3.28.2.60404-129.el8.x86_64. 3.4 MB/s | 680 MB     03:18    
+(13/21): rocfft-1.0.32.60404-129.el8.x86_64.rpm 2.2 MB/s | 144 MB     01:06    
+(14/21): rocm-cmake-0.14.0.60404-129.el8.x86_64 2.9 kB/s |  36 kB     00:12    
+(15/21): hipblas-2.4.0.60404-129.el8.x86_64.rpm  42 kB/s | 167 kB     00:03    
+(16/21): hipcc-1.1.1.60404-129.el8.x86_64.rpm   368 kB/s | 160 kB     00:00    
+(17/21): rocm-device-libs-1.0.0.60404-129.el8.x 973 kB/s | 512 kB     00:00    
+(18/21): hipfft-1.0.18.60404-129.el8.x86_64.rpm  26 kB/s |  34 kB     00:01    
+(19/21): rocrand-3.3.0.60404-129.el8.x86_64.rpm 1.9 MB/s |  39 MB     00:20    
+(20/21): miopen-hip-3.4.0.60404-129.el8.x86_64. 1.9 MB/s | 206 MB     01:48    
+(21/21): hipblaslt-0.12.1.60404-129.el8.x86_64. 4.3 MB/s | 626 MB     02:26    
+[rocm_user] 21 RPMs, 2.8G
+slurmstepd: error: *** JOB 36464525 ON c3cpu-a2-u32-1 CANCELLED AT 2026-11-27T01:20:20 ***

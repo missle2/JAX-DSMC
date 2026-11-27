@@ -1,0 +1,21 @@
+[2026-11-27T01:20:30-07:00] build_alpine on c3cpu-a2-u32-1: platforms 'alp-h200', variants 'default'
+CUDA toolkit present: Build cuda_12.8.r12.8/compiler.35583870_0
+[platforms.sh] module python not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core)
+jax 0.6.2
+JAX env ok
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core)
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core)
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core)
+host compiler: g++ (GCC) 8.5.0 20210514 (Red Hat 8.5.0-28)   (CUDA 12.8 supports GCC <= 14)
+
+[2026-11-27T01:20:32-07:00] ===== SPARTA alp-h200 / default =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core)
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core)
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core)
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-h200/default: preset kokkos_cuda, arch 'HOPPER90', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default
+bench/env/build_sparta.sh: line 107: cmake: command not found
+
+[2026-11-27T01:20:32-07:00] ===== MI100: user-space ROCm 6.4.4 (toolchain + libraries) =====
+[rocm_user] /opt/rocm-6.4.4 (system runtime) + RPMs -> /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4
+[rocm_user] 21 RPMs, 2.8G

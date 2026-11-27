@@ -1,0 +1,14 @@
+[platforms.sh] module python not available on c3gpu-a9-u17-1
+[platforms.sh] module gcc not available on c3gpu-a9-u17-1
+[platforms.sh] module openmpi not available on c3gpu-a9-u17-1
+[runtime] alp-l40 on c3gpu-a9-u17-1: jax env /projects/aaja8389/jax-env (0.6.2), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa
+[2026-11-27T01:14:09-07:00] job 36464318 check-alp-l40-n1: 1 node(s) c3gpu-a9-u17-1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-l40/check-alp-l40-n1.plan: 1 runs
+[2026-11-27T01:14:09-07:00] run 1: python3 bench/env/check_env.py
+host c3gpu-a9-u17-1 python 3.10.18 jax 0.6.2 jaxlib 0.6.2
+backend gpu processes 1 devices 1: NVIDIA L40
+SLURM_GPUS_ON_NODE=1 CUDA_VISIBLE_DEVICES=0 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+collide 8x8x8 on 1 device(s): np 5120 ncoll 6990 overflow 0 compile 1.3s total 3.8s
+check ok
+[2026-11-27T01:14:47-07:00] run 1 done in 38 s
+[2026-11-27T01:14:47-07:00] 1 runs, 0 failed
