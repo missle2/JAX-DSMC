@@ -85,3 +85,256 @@ loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/pr
 [2026-11-27T01:29:24-07:00] ===== MI100: user-space ROCm 6.4.4 (toolchain + libraries) =====
 [rocm_user] /opt/rocm-6.4.4 (system runtime) + RPMs -> /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4
 [rocm_user] 21 RPMs, 2.8G
+[rocm_user] tree: 7.2G
+HIP version: 6.4.43484-123eb5128
+AMD clang version 19.0.0git (https://github.com/RadeonOpenCompute/llvm-project roc-6.4.4 25224 d366fa84f3fdcbd4b10847ebd5db572ae12a34fb)
+[rocm_user] all plugin libraries resolve
+ROCM_ROOT=/scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4
+ROCM_EXTRA_LIBS=/scratch/alpine/aaja8389/rocm-6.4.4-user/usr/lib64
+
+[2026-11-27T01:38:12-07:00] ===== MI100: JAX env =====
+[build_jax] alp-mi100: flavor rocm, jax(latest) -> /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100
+Requirement already satisfied: pip in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (26.3)
+Requirement already satisfied: wheel in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (0.48.0)
+Requirement already satisfied: packaging>=24.0 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from wheel) (26.4)
+6.4.43484-123eb5128Collecting jax==0.4.35
+  Downloading jax-0.4.35-py3-none-any.whl (2.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 13.4 MB/s  0:00:00
+Collecting jaxlib==0.4.35
+  Downloading jaxlib-0.4.35-cp310-cp310-manylinux_2_28_x86_64.whl (93.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 93.6/93.6 MB 25.8 MB/s  0:00:03
+Collecting jax-rocm60-plugin==0.4.35
+  Downloading jax_rocm60_plugin-0.4.35-cp310-cp310-manylinux_2_28_x86_64.whl (7.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.0/7.0 MB 28.8 MB/s  0:00:00
+Collecting jax-rocm60-pjrt==0.4.35
+  Downloading jax_rocm60_pjrt-0.4.35-py3-none-manylinux_2_28_x86_64.whl (109.4 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 109.4/109.4 MB 26.0 MB/s  0:00:04
+Requirement already satisfied: ml_dtypes>=0.4.0 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from jax==0.4.35) (0.7.0)
+Requirement already satisfied: numpy>=1.24 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from jax==0.4.35) (2.2.6)
+Requirement already satisfied: opt_einsum in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from jax==0.4.35) (3.4.0)
+Requirement already satisfied: scipy>=1.10 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from jax==0.4.35) (1.15.3)
+Installing collected packages: jax-rocm60-pjrt, jax-rocm60-plugin, jaxlib, jax
+  Attempting uninstall: jax-rocm60-pjrt
+    Found existing installation: jax-rocm60-pjrt 0.5.0
+    Uninstalling jax-rocm60-pjrt-0.5.0:
+      Successfully uninstalled jax-rocm60-pjrt-0.5.0
+  Attempting uninstall: jax-rocm60-plugin
+    Found existing installation: jax-rocm60-plugin 0.5.0
+    Uninstalling jax-rocm60-plugin-0.5.0:
+      Successfully uninstalled jax-rocm60-plugin-0.5.0
+  Attempting uninstall: jaxlib
+    Found existing installation: jaxlib 0.5.0
+    Uninstalling jaxlib-0.5.0:
+      Successfully uninstalled jaxlib-0.5.0
+  Attempting uninstall: jax
+    Found existing installation: jax 0.5.0
+    Uninstalling jax-0.5.0:
+      Successfully uninstalled jax-0.5.0
+
+Successfully installed jax-0.4.35 jax-rocm60-pjrt-0.4.35 jax-rocm60-plugin-0.4.35 jaxlib-0.4.35
+[build_jax] ROCm plugin: every shared library resolves
+Requirement already satisfied: numpy in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (2.2.6)
+Requirement already satisfied: scipy in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (1.15.3)
+Requirement already satisfied: matplotlib in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (3.10.9)
+Requirement already satisfied: pytest in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (9.2.0)
+Requirement already satisfied: contourpy>=1.0.1 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (1.3.2)
+Requirement already satisfied: cycler>=0.10 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (0.12.1)
+Requirement already satisfied: fonttools>=4.22.0 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (4.65.0)
+Requirement already satisfied: kiwisolver>=1.3.1 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (1.5.1)
+Requirement already satisfied: packaging>=20.0 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (26.4)
+Requirement already satisfied: pillow>=8 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (12.3.0)
+Requirement already satisfied: pyparsing>=3 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (3.3.3)
+Requirement already satisfied: python-dateutil>=2.7 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (3.0.0)
+Requirement already satisfied: exceptiongroup>=1 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from pytest) (1.3.2)
+Requirement already satisfied: iniconfig>=2 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: pluggy<2,>=1.6 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: tomli>=2 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from pytest) (2.5.0)
+Requirement already satisfied: typing-extensions>=4.6.0 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from exceptiongroup>=1->pytest) (4.16.0)
+Requirement already satisfied: six>=1.6 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from python-dateutil>=2.7->matplotlib) (1.17.0)
+Requirement already satisfied: tzdata in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from python-dateutil>=2.7->matplotlib) (2026.6)
+[build_jax] manifest: /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/MANIFEST.txt
+host c3cpu-a2-u32-4 python 3.10.2 jax 0.4.35 jaxlib 0.4.35
+import ok
+
+[2026-11-27T01:39:35-07:00] ===== SPARTA alp-mi100 / default (bundled Kokkos, ROCm /opt/rocm-6.4.4) =====
+[build_sparta] alp-mi100/default: preset kokkos_hip, arch 'AMD_GFX908', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-default
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_hip.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is Clang 19.0.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/bin/hipcc - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_hip
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using HIPCC version 6.4.43484)
+CMake Warning (dev) at /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/hip/hip-config-amd.cmake:98 (message):
+   GPU_TARGETS was not set, and system GPU detection was unsuccsesful.
+   
+   The amdgpu-arch tool failed:
+   Error: 'Failed to get device count'
+   Output: ''
+   
+   As a result, --offload-arch will not be set for subsuqent
+   compilations, and the default architecture
+   (gfx906 for dynamic build / gfx942 for static build) will be used
+
+Call Stack (most recent call first):
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/hip/hip-config.cmake:149 (include)
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/cmake/kokkos_enable_options.cmake:108 (find_package)
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/cmake/kokkos_tribits.cmake:159 (include)
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/CMakeLists.txt:212 (kokkos_setup_build_environment)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Performing Test HIP_CLANG_SUPPORTS_PARALLEL_JOBS
+-- Performing Test HIP_CLANG_SUPPORTS_PARALLEL_JOBS - Success
+-- Using -std=c++20 for C++20 standard as feature
+CMake Error at /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/cmake/kokkos_test_cxx_std.cmake:100 (message):
+  C++20-compliant compiler detected, but unable to compile C++20 or later
+  program.  Verify that Clang:19.0.0 is set up correctly (e.g., check that
+  correct library headers are being used).
+
+  Failing output:
+
+   Change Dir: '/projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-default/src/KOKKOS/lib/kokkos/corner_cases/CMakeFiles/CMakeTmp'
+
+
+
+  Run Build Command(s): /curc/sw/install/cmake/4.2.3/bin/cmake -E env
+  VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_23ce2/fast
+
+  /usr/bin/gmake -f CMakeFiles/cmTC_23ce2.dir/build.make
+  CMakeFiles/cmTC_23ce2.dir/build
+
+  gmake[1]: Entering directory
+  '/projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-default/src/KOKKOS/lib/kokkos/corner_cases/CMakeFiles/CMakeTmp'
+
+  Building CXX object CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o
+
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/bin/hipcc -O3
+  -std=c++20 -MD -MT CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o -MF
+  CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o.d -o
+  CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o -c
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/cmake/compile_tests/cplusplus20.cpp
+
+  
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/cmake/compile_tests/cplusplus20.cpp:4:10:
+  fatal error: 'concepts' file not found
+
+      4 | #include <concepts>
+        |          ^~~~~~~~~~
+
+  1 error generated when compiling for gfx906.
+
+  failed to
+  execute:/scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/llvm/bin/clang++
+  -O3 -std=c++20 -MD -MT CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o -MF
+  CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o.d -o
+  "CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o" -c -x hip
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/cmake/compile_tests/cplusplus20.cpp
+
+  gmake[1]: *** [CMakeFiles/cmTC_23ce2.dir/build.make:82:
+  CMakeFiles/cmTC_23ce2.dir/cplusplus20.cpp.o] Error 1
+
+  gmake[1]: Leaving directory
+  '/projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-default/src/KOKKOS/lib/kokkos/corner_cases/CMakeFiles/CMakeTmp'
+
+  gmake: *** [Makefile:134: cmTC_23ce2/fast] Error 2
+
+
+
+Call Stack (most recent call first):
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/cmake/kokkos_tribits.cmake:160 (include)
+  /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/CMakeLists.txt:212 (kokkos_setup_build_environment)
+
+
+-- Configuring incomplete, errors occurred!
+
+[2026-11-27T01:39:55-07:00] ===== MI100 fallback: Kokkos 4.7 (HIP, gfx908) + SPARTA =====
+[build_kokkos] Kokkos 4.7.01 for alp-mi100: -D Kokkos_ENABLE_HIP=ON -D CMAKE_CXX_COMPILER=/scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/bin/hipcc -D Kokkos_ARCH_AMD_GFX908=ON -> /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 4.7.1
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Compiler Version: 14.2.0
+-- Using -std=gnu++20 for C++20 extensions as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::HIP
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  AMD_GFX908
+g++: error: unrecognized command-line option ‘--rtlib=compiler-rt’
+-- Found TPLROCM: /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/libamdhip64.so
+CMake Error at cmake/Modules/FindTPLROCTHRUST.cmake:11 (find_package):
+  By not providing "Findrocthrust.cmake" in CMAKE_MODULE_PATH this project
+  has asked CMake to find a package configuration file provided by
+  "rocthrust", but CMake did not find one.
+
+  Could not find a package configuration file provided by "rocthrust" with
+  any of the following names:
+
+    rocthrustConfig.cmake
+    rocthrust-config.cmake
+
+  Add the installation prefix of "rocthrust" to CMAKE_PREFIX_PATH or set
+  "rocthrust_DIR" to a directory containing one of the above files.  If
+  "rocthrust" provides a separate development package or SDK, be sure it has
+  been installed.
+Call Stack (most recent call first):
+  cmake/kokkos_functions.cmake:260 (find_package)
+  cmake/kokkos_tpls.cmake:93 (kokkos_import_tpl)
+  cmake/kokkos_tribits.cmake:165 (include)
+  CMakeLists.txt:225 (kokkos_setup_build_environment)
+
+
+-- Configuring incomplete, errors occurred!
+You have changed variables that require your cache to be deleted.
+Configure will be re-run and you may have to reset some variables.
+The following variables have changed:
+CMAKE_CXX_COMPILER= /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/bin/hipcc
+
+-- Generating done (1.4s)
+CMake Generate step failed.  Build files cannot be regenerated correctly.
+
+[2026-11-27T01:40:03-07:00] built: alp-h200/default alp-mi100/rocm-6.4.4 alp-mi100/jax-env
+failed: alp-mi100/default
+lrwxrwxrwx 1 aaja8389 aaja8389grp 84 Nov 25 20:29 /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aaja8389 aaja8389grp 84 Nov 27 01:29 /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aaja8389 aaja8389grp 83 Nov 25 20:49 /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aaja8389 aaja8389grp 87 Nov 25 21:07 /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/src/spa_kokkos_cuda
