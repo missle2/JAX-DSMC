@@ -62,17 +62,30 @@ def setup(deck, seed=12345, geo=None, **cfg_overrides):
     return geo, cfg, consts, state, {"geometry_s": t_geo, "create_s": t_create}
 
 
+# Compiled chunk executables, keyed by everything that fixes their shapes (the static Config,
+# which holds the capacity, cell counts and table sizes, and the chunk length).  The runs CALL
+# these executables, so a run compiles once -- before, the ahead-of-time compile used for the
+# timing was thrown away and the first jitted call compiled again -- and further reps of the
+# same size in the process (other seeds) compile nothing.
+_EXECUTABLES = {}
+
+
 def compile_chunk(state, consts, cfg, deck):
-    """Compile the chunk executable ahead of the runs; returns the compile time (s)."""
+    """The chunk executable for (cfg, stats_every), compiled once per process; returns
+    (executable, compile seconds -- 0 when it was already compiled)."""
+    key = ("single", cfg, deck.stats_every)
+    if key in _EXECUTABLES:
+        return _EXECUTABLES[key], 0.0
     t0 = time.perf_counter()
-    S.run.lower(state, 0, deck.runs[0].dt, 0, consts, cfg, deck.stats_every).compile()
-    return time.perf_counter() - t0
+    exe = S.run.lower(state, 0, deck.runs[0].dt, 0, consts, cfg, deck.stats_every).compile()
+    _EXECUTABLES[key] = exe
+    return exe, time.perf_counter() - t0
 
 
 def run_deck(deck, seed=12345, log=None, **cfg_overrides):
     """All runs of the deck.  Returns a dict: timings, per-run results, config summary."""
     geo, cfg, consts, state, setup_t = setup(deck, seed, **cfg_overrides)
-    t_compile = compile_chunk(state, consts, cfg, deck)
+    exe, t_compile = compile_chunk(state, consts, cfg, deck)
     every = deck.stats_every
     out = {
         "deck": deck.name,
@@ -104,7 +117,7 @@ def run_deck(deck, seed=12345, log=None, **cfg_overrides):
         chunks, diags = [], []
         t_start = time.perf_counter()
         for c in range(nchunk):
-            state, st = S.run(state, step0 + c * every, r.dt, seed, consts, cfg, every)
+            state, st = exe(state, step0 + c * every, r.dt, seed, consts)
             chunks.append(st)
             diags.append(S.diagnostics(state, cfg))
         jax.block_until_ready((state, diags))
@@ -175,10 +188,14 @@ def run_deck_decomposed(deck, nrank, seed=12345, log=None, layout=None, headroom
     jax.block_until_ready(state)
     t_create = time.perf_counter() - t0
     every = deck.stats_every
-    t0 = time.perf_counter()
-    fn = DD._run_fn(dec.cfg, dec.layout, dec.L, dec.M, every, dec.mesh, DD._spec_key(dec.consts))
-    fn.lower(state, dec.consts, seeds, jnp.int32(0), jnp.float64(deck.runs[0].dt)).compile()
-    t_compile = time.perf_counter() - t0
+    key = ("decomp", dec.cfg, dec.layout, dec.L, dec.M, every, nrank)
+    t_compile = 0.0
+    if key not in _EXECUTABLES:
+        t0 = time.perf_counter()
+        fn = DD._run_fn(dec.cfg, dec.layout, dec.L, dec.M, every, dec.mesh, DD._spec_key(dec.consts))
+        _EXECUTABLES[key] = fn.lower(state, dec.consts, seeds, jnp.int32(0), jnp.float64(deck.runs[0].dt)).compile()
+        t_compile = time.perf_counter() - t0
+    exe = _EXECUTABLES[key]
     out = {
         "deck": deck.name,
         "x": deck.x,
@@ -213,7 +230,7 @@ def run_deck_decomposed(deck, nrank, seed=12345, log=None, layout=None, headroom
         chunks, diags = [], []
         t_start = time.perf_counter()
         for c in range(nchunk):
-            state, st = DD.run(dec, state, step0 + c * every, r.dt, seeds, every)
+            state, st = exe(state, dec.consts, seeds, jnp.int32(step0 + c * every), jnp.float64(r.dt))
             chunks.append(st)
             diags.append(DD.diagnostics(dec, state))
         jax.block_until_ready((state, diags))

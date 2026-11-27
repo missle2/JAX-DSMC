@@ -23,9 +23,12 @@ case "${KOKKOS_PRESET}" in
   kokkos_omp)  BACKEND=(-D Kokkos_ENABLE_OPENMP=ON) ;;
   *)           BACKEND=() ;;
 esac
-echo "[build_kokkos] Kokkos ${V} for ${PLATFORM}: ${BACKEND[*]} ${ARCH[*]} -> ${PREFIX}"
+FLAGS="-O3"
+# hipcc: the loaded gcc's C++ library, not the OS's GCC 8.5 (no C++20 headers)
+[ "${KOKKOS_PRESET}" = kokkos_hip ] && FLAGS="${FLAGS} --gcc-toolchain=$(dirname "$(dirname "$(command -v gcc)")")"
+echo "[build_kokkos] Kokkos ${V} for ${PLATFORM}: ${BACKEND[*]} ${ARCH[*]} flags '${FLAGS}' -> ${PREFIX}"
 cmake -S "${SRC}" -B "${PREFIX}.build" -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX="${PREFIX}" \
-  -D CMAKE_CXX_STANDARD=20 -D Kokkos_ENABLE_SERIAL=ON "${BACKEND[@]}" "${ARCH[@]}"
+  -D CMAKE_CXX_STANDARD=20 -D CMAKE_CXX_FLAGS="${FLAGS}" -D Kokkos_ENABLE_SERIAL=ON "${BACKEND[@]}" "${ARCH[@]}"
 cmake --build "${PREFIX}.build" -j "${JOBS:-4}"
 cmake --install "${PREFIX}.build"
 echo "[build_kokkos] installed: ${PREFIX}  (KOKKOS_ROOT=${PREFIX})"

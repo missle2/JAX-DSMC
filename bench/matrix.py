@@ -330,12 +330,18 @@ def runs_tune(platform, rows, cfg):
     """One node: the knobs of bench/README.md section 'Tuning', at a size that fills a device."""
     pf = PLATFORMS[platform]
     out = []
-    n_dev = 16_000_000 if pf["gpu"] else 32_000_000
+    # 16.384M = 32K x 2^9, a size of the single-device sweep: the tuned variant's rows double as
+    # that sweep point (dedupe in build_jobs), and the step counts are the sweep's (GPU_STEPS)
+    n_dev = 16_384_000 if pf["gpu"] else 32_000_000
     rpn = pf["devices"] if pf["gpu"] else pf["cores"]
     decks = ("collide", "sphere")
     if pf["gpu"]:
-        # --- SPARTA/Kokkos: runtime switches x build variants (1 GPU and the full node)
-        for build in ("default", "nomallocasync"):
+        # --- SPARTA/Kokkos: runtime switches (1 GPU and the full node).  Only the default build:
+        # Kokkos 5's default already disables CUDA malloc-async ("KOKKOS: CUDA malloc async
+        # support disabled", Alpine build logs 2026-11-25), so a "nomallocasync" build is the same
+        # binary.  The comm / gpu-aware switches act between MPI ranks only: on one GPU they
+        # repeat the baseline, so single-GPU platforms skip SPARTA tuning (the sweep has it).
+        for build in (() if single_gpu_only(platform) else ("default",)):
             for tag, accel in (
                 ("kk", f"-k on g {pf['devices']} -sf kk"),
                 ("kk_commserial", f"-k on g {pf['devices']} -sf kk -pk kokkos comm serial"),
@@ -423,6 +429,10 @@ def runs_tune(platform, rows, cfg):
                 r = Run("jax", deck, nj, 1, 8, variant=tag, env=env, reps=1, threads=16)
                 estimate(r, platform, rows)
                 out.append(r)
+    if pf["gpu"]:
+        for r in out:
+            r.steps = GPU_STEPS[r.deck]
+            estimate(r, platform, rows)
     return out
 
 
@@ -441,6 +451,42 @@ def single_gpu_only(platform):
     gpu-normal queue, and Alpine's role in the study is the single-GPU comparison across
     architectures; multi-GPU and multi-node scaling is Perlmutter's)."""
     return PLATFORMS[platform]["site"] == "curc"
+
+
+DECK_STEPS = {"free": 100, "collide": 100, "sphere": 1000}  # the decks' timed run length
+
+
+def done_reps(run: Run, platform, rows):
+    """Rows already recorded for this exact run (code, variant, deck, size, procs, steps)."""
+    steps = run.steps or DECK_STEPS[run.deck]
+    procs = run.nodes * run.ranks_per_node
+    return sum(
+        1
+        for r in rows
+        if r.get("machine", "").startswith(platform)
+        and r["code"] == run.code
+        and r["variant"] == run.variant
+        and r["deck"] == run.deck
+        and r["particles"] == run.particles
+        and r["procs"] == procs
+        and r["steps"] == steps
+    )
+
+
+def dedupe(jobs, platform, rows):
+    """Drop the runs whose reps are all recorded already (a resubmitted or overlapping phase)."""
+    skipped = 0
+    for j in jobs:
+        keep = []
+        for r in j.runs:
+            if done_reps(r, platform, rows) >= r.reps:
+                skipped += 1
+            else:
+                keep.append(r)
+        j.runs = keep
+    if skipped:
+        print(f"{skipped} run(s) already recorded in the results: skipped (--redo runs them again)")
+    return [j for j in jobs if j.runs or j.phase == "check"]
 
 
 def build_jobs(phase, platform, nodes, rows, prune_s, codes, big=False):
@@ -490,6 +536,15 @@ def write_plan(job: Job, plan_dir):
         fh.write(f"# {job.name}: {len(job.runs)} runs, estimate {job.est_s / 60:.1f} min\n")
         if job.phase == "check":
             fh.write("python3 bench/env/check_env.py\n")
+            # SPARTA: the binary finds its libraries (gcc/openmpi modules) and runs on the GPU
+            spa = '"${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa"'
+            fh.write(f'echo "ldd spa:"; ldd {spa} | grep -E "not found|libmpi|libstdc" || true\n')
+            if PLATFORMS[job.platform]["gpu"]:
+                fh.write(
+                    f'python3 bench/run_bench.py sparta --exe {spa} --deck collide --particles 10K --steps 20 --reps 1 '
+                    f'--machine "${{MACHINE}}" --variant check --out "${{RESULTS_DIR}}/check" '
+                    f'--launch "$(pf_launch 1 1 bind)" --accel "-k on g 1 -sf kk"\n'
+                )
             if not single_gpu_only(job.platform):
                 fh.write(f"NCCL_DEBUG=INFO $(pf_launch 1 {max(1, PLATFORMS[job.platform]['devices'])}) python3 bench/env/check_env.py --distributed\n")
         for r in job.runs:
@@ -509,6 +564,18 @@ def sbatch_args(platform, nodes, shared_gpus=0):
     return subprocess.run(["bash", "-c", cmd], env=env, capture_output=True, text=True, check=True).stdout.strip()
 
 
+def default_results():
+    """RESULTS_DIR, else the cluster's results root (Alpine /projects, NERSC $PSCRATCH), else
+    bench/results.  The planner must see the study's rows to skip finished runs."""
+    if os.environ.get("RESULTS_DIR"):
+        return os.environ["RESULTS_DIR"]
+    for base in (f"/projects/{os.environ.get('USER', '')}", os.environ.get("PSCRATCH", "")):
+        d = os.path.join(base, "sparta-scaling", "results")
+        if base and os.path.isdir(d):
+            return d
+    return os.path.join(ROOT, "bench", "results")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("phase", choices=("check", "validate", "tune", "single", "strong", "weak", "all"))
@@ -516,9 +583,12 @@ def main():
     p.add_argument("--nodes", type=int, nargs="+", default=list(NODES))
     p.add_argument("--codes", nargs="+", default=["sparta", "jax"])
     p.add_argument("--prune-seconds", type=float, default=300.0)
-    p.add_argument("--results", default=os.environ.get("RESULTS_DIR", os.path.join(ROOT, "bench", "results")))
+    p.add_argument("--results", default=default_results(),
+                   help="results root (rows of <root>/<platform>/rows.jsonl are read: estimates and dedupe)")
     p.add_argument("--plans", default=os.path.join(ROOT, "bench", "plans"))
     p.add_argument("--big", action="store_true", help="add the 512M strong / 128M-per-node weak GPU series")
+    p.add_argument("--redo", action="store_true", help="also run what the results already hold")
+    p.add_argument("--after", default="", help="sbatch --dependency=afterok:<jobid>[:<jobid>...]")
     p.add_argument("--submit", action="store_true")
     p.add_argument("--list", action="store_true", help="print every run")
     a = p.parse_args()
@@ -531,6 +601,8 @@ def main():
     jobs = []
     for ph in phases:
         jobs += build_jobs(ph, a.platform, a.nodes, rows, a.prune_seconds, a.codes, big=a.big)
+    if not a.redo:
+        jobs = dedupe(jobs, a.platform, rows)
     total = 0.0
     print(f"{'job':34s} {'nodes':>5s} {'runs':>5s} {'est':>8s} {'limit':>8s} {'node-h':>8s}")
     for j in jobs:
@@ -544,7 +616,8 @@ def main():
         for j in jobs:
             plan = write_plan(j, os.path.join(a.plans, a.platform))
             res = sbatch_args(a.platform, j.nodes, j.shared_gpus)
-            cmd = ["sbatch", *shlex.split(res), f"--time={hms(j.walltime_s)}", f"--job-name={j.name}",
+            dep = [f"--dependency=afterok:{a.after}"] if a.after else []
+            cmd = ["sbatch", *shlex.split(res), *dep, f"--time={hms(j.walltime_s)}", f"--job-name={j.name}",
                    f"--export=ALL,PLATFORM={a.platform},PLAN={plan}", os.path.join(HERE, "jobs", "bench.sbatch")]
             print("+", " ".join(shlex.quote(c) for c in cmd))
             subprocess.run(cmd, check=True)

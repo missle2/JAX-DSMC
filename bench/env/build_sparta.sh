@@ -88,6 +88,9 @@ if [ "${PRESET}" = kokkos_hip ]; then
   # hipcc explicitly: the openmpi module exports CXX=mpicxx (g++), which cannot compile HIP
   # (2026-11-25 build log); MPI is found by CMake.  KISS FFT: the decks use no FFT.
   EXTRA+=(-D CMAKE_CXX_COMPILER="${HIPCXX:-$(command -v hipcc)}" -D FFT_KOKKOS=KISS)
+  # hipcc (clang) takes the C++ standard library of the OS's GCC 8.5 unless told otherwise:
+  # no C++20 <concepts> (2026-11-27 build log).  Point it at the loaded gcc module's toolchain.
+  CXX_FLAGS="${CXX_FLAGS} --gcc-toolchain=$(dirname "$(dirname "$(command -v gcc)")")"
 fi
 # KOKKOS_ROOT: link an installed Kokkos (build_kokkos.sh) instead of the bundled lib/kokkos,
 # e.g. Kokkos 4.7 where the toolchain is older than Kokkos 5's minimum (hipcc 6.2, nvcc 12.2)

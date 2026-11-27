@@ -26,7 +26,7 @@ ROOT="${ROCM_USER_DIR}/opt/rocm-${V}"
 RPMS="${ROCM_USER_DIR}/rpms"
 KEEP_ARCH="${KEEP_ARCH:-gfx908}"
 PKGS="${ROCM_PKGS:-hipcc hip-devel rocm-llvm rocm-device-libs hsa-rocr-devel rocm-cmake \
-rocblas rocsolver hipsolver hipblas hipsparse rocsparse hipfft rocfft miopen-hip rccl}"
+rocblas rocsolver hipsolver hipblas hipsparse rocsparse hipfft rocfft miopen-hip rccl rocthrust rocprim}"
 [ -d "${SYS}" ] || { echo "no ${SYS} on $(hostname)"; exit 1; }
 mkdir -p "${RPMS}" "${ROCM_USER_DIR}"
 echo "[rocm_user] ${SYS} (system runtime) + RPMs -> ${ROOT}"
@@ -38,20 +38,52 @@ if [ ! -e "${ROOT}/lib/libamdhip64.so.6" ]; then
 fi
 
 # 2. the missing packages (only Rocky's and the ROCm repository: other vendor repos are slow)
-if [ ! -e "${RPMS}/.downloaded" ]; then
-  # shellcheck disable=SC2086
+#    Incremental: only the packages whose RPM is not in ${RPMS} yet (a later addition to PKGS,
+#    e.g. rocthrust/rocprim 2026-11-27, does not download the 2.8 GB again).
+# an empty .unpacked is the old all-done marker: list the RPMs present BEFORE new downloads
+if [ -f "${ROCM_USER_DIR}/.unpacked" ] && [ ! -s "${ROCM_USER_DIR}/.unpacked" ]; then
+  ls "${RPMS}"/*.rpm | xargs -n1 basename > "${ROCM_USER_DIR}/.unpacked"
+fi
+NEED=()
+for p in ${PKGS}; do
+  ls "${RPMS}/${p}"-[0-9]*.rpm > /dev/null 2>&1 || NEED+=("${p}")
+done
+if [ "${#NEED[@]}" -gt 0 ]; then
+  echo "[rocm_user] downloading: ${NEED[*]}"
   timeout 1800 dnf download --resolve --disablerepo='*' --enablerepo=rocm,baseos,appstream,powertools \
-    --destdir "${RPMS}" ${PKGS}
-  touch "${RPMS}/.downloaded"
+    --destdir "${RPMS}" "${NEED[@]}"
 fi
 echo "[rocm_user] $(ls "${RPMS}"/*.rpm | wc -l) RPMs, $(du -sh "${RPMS}" | cut -f1)"
 
-# 3. unpack (files land under opt/rocm-6.4.4 and usr/...); never over the system runtime links
-if [ ! -e "${ROCM_USER_DIR}/.unpacked" ]; then
-  for r in "${RPMS}"/*.rpm; do
-    ( cd "${ROCM_USER_DIR}" && rpm2cpio "${r}" | cpio -idm --quiet 2> /dev/null ) || echo "  (cpio warnings: ${r##*/})"
+# 3. unpack, in parallel (one RPM per allocated task), with progress.  The RPMs are xz-compressed
+#    (2.8 GB -> 10+ GB, tens of thousands of files on /scratch): minutes, CPU-bound.  GPU kernel
+#    files of other architectures are not written at all (cpio --nonmatching), and -u overwrites
+#    whatever a cancelled earlier run left half-written.
+#    Incremental too: ${ROCM_USER_DIR}/.unpacked lists the RPMs already unpacked.
+DONE_LIST="${ROCM_USER_DIR}/.unpacked"
+touch "${DONE_LIST}"
+TODO="$(ls -S "${RPMS}"/*.rpm | while read -r r; do grep -qxF "${r##*/}" "${DONE_LIST}" || echo "${r}"; done)"
+if [ -n "${TODO}" ]; then
+  SKIP=()
+  for a in gfx803 gfx900 gfx906 gfx90a gfx940 gfx941 gfx942 gfx950 gfx1010 gfx1011 gfx1012 gfx1030 \
+           gfx1031 gfx1100 gfx1101 gfx1102 gfx1150 gfx1151 gfx1200 gfx1201; do
+    [ "${a}" = "${KEEP_ARCH}" ] || SKIP+=("*${a}*")
   done
-  touch "${ROCM_USER_DIR}/.unpacked"
+  [ "${TRIM:-1}" = 1 ] || SKIP=()
+  export ROCM_USER_DIR
+  unpack_one() {
+    local r="$1" t0; t0=$(date +%s)
+    shift
+    ( cd "${ROCM_USER_DIR}" && rpm2cpio "${r}" | cpio -idmu --quiet ${1:+--nonmatching} "$@" 2> /dev/null ) \
+      || echo "  (cpio warnings: ${r##*/})"
+    echo "  unpacked ${r##*/} ($(du -h "${r}" | cut -f1) rpm) in $(( $(date +%s) - t0 )) s"
+  }
+  export -f unpack_one
+  NPAR="${SLURM_NTASKS:-4}"
+  echo "[rocm_user] unpacking $(echo "${TODO}" | wc -l) RPM(s), ${NPAR} at a time, keeping ${KEEP_ARCH} kernels"
+  # largest first, so the long ones start early
+  echo "${TODO}" | xargs -P "${NPAR}" -I{} bash -c 'unpack_one "$@"' _ {} "${SKIP[@]}"
+  echo "${TODO}" | xargs -n1 basename >> "${DONE_LIST}"
 fi
 
 # 4. trim the GPU kernel libraries to KEEP_ARCH
