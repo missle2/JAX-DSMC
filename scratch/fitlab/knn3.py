@@ -26,6 +26,7 @@ import argparse
 import json
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -149,7 +150,7 @@ def fit_with_variance(feat_n, lam, feat_q, idx):
     return g, var
 
 
-def run_seed(case, seed, path, metrics, owns, taus):
+def run_seed(case, seed, path, metrics, owns, taus, ks=(K,)):
     t0 = time.time()
     z = lab.load(path, ("node_step", "node_slot", "node_x", "node_v", "node_lam"))
     nc, _th = knn.coordinates(z["node_x"], z["node_v"], z["node_step"])
@@ -180,14 +181,15 @@ def run_seed(case, seed, path, metrics, owns, taus):
     diag = {"d_hit_median_m": d_hit, "sigma_v_vref": sigma_v, "wall_mfp_m": mfp, "cell_m": cell}
     for metric in metrics:
         sc = scales(metric, d_hit, sigma_v, mfp, cell)
-        _d, idx = cKDTree(feat_n / sc).query(feat_q / sc, k=K + 64, workers=-1)
-        for own in owns:
+        _d, idx_all = cKDTree(feat_n / sc).query(feat_q / sc, k=max(ks) + 64, workers=-1)
+        for own, k in ((o, kk) for o in owns for kk in ks):
+            idx = idx_all
             drop = nslot[idx] == h["hit_slot"][:, None] if own else nkey[idx] == hkey[:, None]
             order = np.argsort(drop, axis=1, kind="stable")
-            ii = np.take_along_axis(idx, order, axis=1)[:, :K]
-            short = np.mean(np.take_along_axis(drop, order, axis=1)[:, K - 1])
+            ii = np.take_along_axis(idx, order, axis=1)[:, :k]
+            short = np.mean(np.take_along_axis(drop, order, axis=1)[:, k - 1])
             g, var = fit_with_variance(feat_n, lam, feat_q, ii)
-            base = f"k3_{metric}_o{own}"
+            base = f"k3_{metric}_o{own}" + ("" if k == K else f"_k{k}")
             fits[base] = g[:, :1] * n_hat + g[:, 1:2] * t_hat
             # regional shrinkage: per 10 degree wall sector, the sector's mean difference
             # against the variance of that mean (per-hit noise averages out over the hits)
@@ -230,7 +232,10 @@ def main():
     ap.add_argument("--seeds", type=int, nargs=2, default=(0, 8))
     ap.add_argument("--metrics", nargs="+", default=list(METRICS))
     ap.add_argument("--owns", type=int, nargs="+", default=[0, 1])
-    ap.add_argument("--taus", type=float, nargs="+", default=[1.0, 4.0])
+    ap.add_argument("--taus", type=float, nargs="*", default=[1.0, 4.0])
+    ap.add_argument("--ks", type=int, nargs="+", default=[K], help="neighbour counts")
+    ap.add_argument("--out-dir", default=str(lab.OUT),
+                    help="where the json goes (scratch/fitlab/cluster on the cluster: pulled)")
     ap.add_argument("--tag", default="")
     ap.add_argument(
         "--d-max",
@@ -244,8 +249,10 @@ def main():
     rows = []
     for seed, path in lab.seed_files(lab.CASES[args.case]):
         if args.seeds[0] <= seed < args.seeds[1]:
-            rows.append(run_seed(args.case, seed, path, args.metrics, args.owns, args.taus))
-    out = lab.OUT / f"knn3_{args.case}{args.tag}.json"
+            rows.append(run_seed(args.case, seed, path, args.metrics, args.owns, args.taus,
+                                    args.ks))
+    out = Path(args.out_dir) / f"knn3_{args.case}{args.tag}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"case": args.case, "settings": vars(args), "rows": rows}))
     print(f"wrote {out}")
 

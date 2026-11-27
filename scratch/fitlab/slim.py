@@ -2,7 +2,8 @@
 Keeps what the lab's window / kNN / closure scripts read -- the nodes with v_n > 0 within
 ``--d-max`` of the wall (step, slot, x, v, lambda) and every hit array -- and writes
 ``scratch/fitlab/cache_slim/<stem>.npz`` + the json, for ``pull_results.sh`` to fetch instead
-of the full cache.  numpy only (no JAX, no GPU): run it on the cluster.
+of the full cache (``--incoming``: also the v_n < 0 nodes and ``node_coll``, for the
+specular reflection-identity and tracer gates, 2026-11-27).  numpy only (no JAX, no GPU): run it on the cluster.
 
     python3 scratch/fitlab/slim.py [--gates c25_diff_m2 ...] [--d-max 0.6]
 """
@@ -33,17 +34,22 @@ GATES = (
 )
 
 
-def slim(path, d_max):
+def slim(path, d_max, incoming=False):
     out = SLIM / path.name
     if out.exists() and (SLIM / path.with_suffix(".json").name).exists():
-        return
+        with np.load(out) as done:
+            if not incoming or "node_coll" in done.files:
+                return
     with np.load(path) as z:
         x, v = z["node_x"], z["node_v"]
         rel = x - CENTRE
         r = np.hypot(rel[:, 0], rel[:, 1])
         vn = (v[:, 0] * rel[:, 0] + v[:, 1] * rel[:, 1]) / r
-        keep = (vn > 0) & (r - RADIUS < d_max)
-        arrays = {k: z[k][keep] for k in NODE_KEEP}
+        # incoming (2026-11-27, the specular labs): both directions and the collision
+        # increment (the reflection-identity and tracer gates)
+        keep = ((vn > 0) | incoming) & (r - RADIUS < d_max)
+        names = NODE_KEEP + (("node_coll",) if incoming and "node_coll" in z.files else ())
+        arrays = {k: z[k][keep] for k in names}
         arrays.update({k: z[k] for k in z.files if k.startswith("hit_")})
     SLIM.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out, **arrays)
@@ -56,11 +62,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--gates", nargs="+", default=list(GATES))
     ap.add_argument("--d-max", type=float, default=0.6)
+    ap.add_argument("--incoming", action="store_true",
+                    help="keep the v_n < 0 nodes and node_coll too (redoes a slimmer copy)")
     args = ap.parse_args()
     for gate in args.gates:
         for path in sorted(CACHE.glob(f"{gate}_s*.npz")):
             if "_smoke" not in path.name and path.with_suffix(".json").exists():
-                slim(path, args.d_max)
+                slim(path, args.d_max, args.incoming)
 
 
 if __name__ == "__main__":

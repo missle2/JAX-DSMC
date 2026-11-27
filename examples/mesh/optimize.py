@@ -108,6 +108,7 @@ from jax_dsmc import ensemble_backward
 from jax_dsmc.mesh import cut
 from jax_dsmc.mesh import helmholtz as HZ
 from jax_dsmc.mesh import levelset as L
+from jax_dsmc.mesh import skeleton as SK
 from jax_dsmc.mesh import topology as T
 from jax_dsmc.mesh.types import LevelSet
 from jax_dsmc.state import CollideState, ParticleState
@@ -208,6 +209,17 @@ def default_config():
             "thickness_rate": 0.0,
             "thickness_tol": 0.02,
             "thickness_min": 0.0,
+            # the thinness measure (2026-11-27): "probe" (the above, the default) or "skeleton"
+            # (jax_dsmc.mesh.skeleton, Hermann & Noel 2026: the activated share of the surface
+            # on members thinner than thickness_min, a penalty with fixed weight `thickness` x
+            # scale -- thickness_rate and thickness_tol unused; the paper's continuation ramps
+            # the activation threshold 0 -> 1 over iterates thickness_ramp_start ..
+            # thickness_ramp_end, end 0 = threshold 1 from the start).  The probe measure's
+            # descent grows thin noses (scratch/skeleton/compare.py: the dlhp bulge); the
+            # skeleton's removes the thin tip
+            "thickness_method": "probe",
+            "thickness_ramp_start": 0,
+            "thickness_ramp_end": 0,
             # topology guard (2026-10-27; 1 = on): after each step the knots' inside set keeps
             # its face-connected components -- no pinch-off, no droplets (jax_dsmc.mesh.topology)
             "topology_guard": 0,
@@ -1394,8 +1406,18 @@ def thickness_min(cfg, ls) -> float:
     return cfg["thickness_min"] or 2.0 * float(ls.h)
 
 
-def thinness_and_gradient(ls, lo, hi, depth):
-    """``(T, dT/dcoef)`` of :func:`levelset.body_thinness` (on the surface band)."""
+def thinness_and_gradient(cfg, ls, lo, hi, iterate):
+    """``(T, dT/dcoef)``: :func:`levelset.body_thinness` (on the surface band) for
+    ``thickness_method`` "probe", the spread-skeleton penalty (:mod:`jax_dsmc.mesh.skeleton`,
+    ``r_s`` half of :func:`thickness_min`, the threshold ramped to 1) for "skeleton"."""
+    depth = thickness_min(cfg, ls)
+    if cfg["thickness_method"] == "skeleton":
+        threshold = (SK.ramp(iterate, cfg["thickness_ramp_start"], cfg["thickness_ramp_end"])
+                     if cfg["thickness_ramp_end"] > 0 else 1.0)  # fmt: skip
+        t, g = SK.penalty_and_gradient(ls, lo, hi, threshold, SK.SkeletonSettings(r_s=0.5 * depth))
+        return t, np.asarray(g)
+    if cfg["thickness_method"] != "probe":
+        raise ValueError(f"unknown thickness_method {cfg['thickness_method']!r}")
     t, g = L.thinness_and_gradient(ls, lo, hi, depth, 4)
     return t, np.asarray(g)
 
@@ -1601,12 +1623,13 @@ def run(cfg, out: Path, argv=()):  # noqa: PLR0912, PLR0915 -- one optimiser loo
             g = g + weight * g_perimeter
         thinness = None
         if cfg["thickness"] > 0.0 or cfg["thickness_rate"] > 0.0:
-            thinness, g_thin = thinness_and_gradient(ls, lo, hi, thickness_min(cfg, ls))
+            thinness, g_thin = thinness_and_gradient(cfg, ls, lo, hi, k)
             if thickness_ref is None:
                 lift = cfg["objective"] == "lift_drag"
                 thickness_ref = 1.0 if lift else float(lift_ref or avg["objective"])
             weight = lam * thickness_ref
-            lam_next = max(0.0, lam + cfg["thickness_rate"] * (thinness - cfg["thickness_tol"]))
+            lam_next = (lam if cfg["thickness_method"] == "skeleton" else
+                        max(0.0, lam + cfg["thickness_rate"] * (thinness - cfg["thickness_tol"])))
             objective = objective + weight * thinness
             objectives = objectives + weight * thinness
             g = g + weight * g_thin

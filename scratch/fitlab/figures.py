@@ -10,6 +10,8 @@ nose, the scale mismatch with the per-cell fit, and the closure of every fit tri
   running-sum windows, kNN) and the slope the nose closure needs.  Specular too (its post-hit
   shift is 2 delta n: pathwise_x is purely this slope).
 * ``closure.png``: adjoint / FD (+- 2 s.e.) per fit family for the nose bump and cos 2 theta.
+* ``summary.png``: every fit family x every case and control (closure, t) and its RMS
+  per-seed error (``--summary`` renders only it).
 * ``steady.png``: the captured window's near-wall statistics per 25-step block, every case
   (scratch/fitlab/steady.py; ``--steady`` renders only it).
 
@@ -321,12 +323,14 @@ def _closure_rows():
                          ("k256_d0.03_s0.3_v1", "k 256, d 3 cm, s 0.3, v 1"),
                          ("k64_d0.003_s0.1_v0.5", "k 64, d 3 mm")):  # fmt: skip
         rows.append(("kNN (single seed)", lab_, f"knn_{metric}", "knn_{case}"))
-    for name, lab_ in (("k3_C1_0.25_0.033_0.3_o0", "d / min(mfp, cell/4) (chosen)"),
+    for name, lab_ in (("k3_C0.5_0.25_0.033_0.5_o0", "d / min(0.5 mfp, cell/4), v / 0.5"),
+                       ("k3_C1_0.25_0.033_0.3_o0", "d / min(mfp, cell/4) (chosen)"),
                        ("k3_P10_0.033_0.3_o0", "d / 10x post-hit distance"),
                        ("k3_P10_0.033_0.3_o0_rsh1", "+ regional shrinkage"),
                        ("k3_d0.03_s0.1_v0.5_o0", "M10 metric, ridge + guard")):  # fmt: skip
         rows.append(("kNN, ridge + guard", lab_, name,
-                     "knn3_{case}_C" if name.startswith("k3_C") else "knn3_{case}"))  # fmt: skip
+                     "knn3_{case}_C05" if name.startswith("k3_C0.5_0.25_0.033_0.5")
+                     else "knn3_{case}_C" if name.startswith("k3_C") else "knn3_{case}"))  # fmt: skip
     return rows
 
 
@@ -418,6 +422,7 @@ TRANSFER_FITS = (
     ("k3_d0.03_s0.1_v0.5_o0", "kNN, M10 metric (3 cm, 0.5 V_REF)", VIOLET),
     ("k3_P10_0.033_0.3_o0", "kNN, d / 10x post-hit distance (tracks dt)", YELLOW),
     ("k3_C1_0.25_0.033_0.3_o0", "kNN, d / min(wall mfp, cell / 4) (chosen)", BLUE),
+    ("k3_C0.5_0.25_0.033_0.5_o0", "kNN, d / min(0.5 wall mfp, cell / 4), v / 0.5", GREEN),
 )
 TRANSFER_PANELS = (
     ("drag", "radius", "M10 drag"), ("drag", "mode2", "M10 drag"),
@@ -444,7 +449,7 @@ def _transfer():
         labels.append(f"{title}\n{control.replace('mode2', 'cos 2θ')}")
         # the fits live in the sweeps' files (knn3_<case>[_M|_C].json; same seeds and dumps)
         sets = [json.loads(p.read_text())["rows"] for p in
-                (lab.OUT / f"knn3_{case}{t}.json" for t in ("", "_M", "_C")) if p.exists()]  # fmt: skip
+                (lab.OUT / f"knn3_{case}{t}.json" for t in ("", "_M", "_C", "_C05")) if p.exists()]  # fmt: skip
         fds = lab.finite_differences(case)
         if not sets or control not in fds or len(sets[0]) < 2:
             continue
@@ -474,6 +479,127 @@ def _transfer():
     fig.tight_layout()
     fig.savefig(FIG / "transfer.png", dpi=150, facecolor=SURF)
     plt.close(fig)
+
+
+# the summary grid: (fit, label) rows and (case, control, label) columns
+SUMMARY_FITS = (
+    ("cell_along_pool_plane", "production: per-cell fit + along-flight"),
+    ("cell_pool_plane", "per-cell fit"),
+    ("k3_d0.03_s0.1_v0.5_o0", "kNN: d / 3 cm, v / 0.5 V_REF (fixed)"),
+    ("k3_P10_0.033_0.3_o0", "kNN: d / 10x post-hit flight (tracks dt)"),
+    ("k3_M0.5_0.033_0.3_o0", "kNN: d / 0.5 wall mfp, v / 0.3 thermal"),
+    ("k3_C1_0.25_0.033_0.3_o0", "kNN: d / min(mfp, cell/4), v / 0.3 thermal  [chosen]"),
+    ("k3_C1_0.25_0.033_0.6_o0", "kNN: d / min(mfp, cell/4), v / 0.6 thermal"),
+    ("k3_C2_0.25_0.033_0.6_o0", "kNN: d / min(2 mfp, cell/4), v / 0.6 thermal"),
+    ("k3_C0.5_0.25_0.033_0.5_o0", "kNN: d / min(0.5 mfp, cell/4), v / 0.5 thermal  [new]"),
+)
+SUMMARY_COLS = (
+    ("drag", "bump_nose", "M10 drag\nnose bump"),
+    ("drag", "radius", "M10 drag\nradius"),
+    ("drag", "mode2", "M10 drag\ncos 2θ"),
+    ("heat", "bump_nose", "M10 heat\nnose bump"),
+    ("heat", "mode2", "M10 heat\ncos 2θ"),
+    ("spec", "radius", "M10 spec\nradius"),
+    ("spec", "mode2", "M10 spec\ncos 2θ"),
+    ("hot", "radius", "hot wall\nradius"),
+    ("hot", "mode2", "hot wall\ncos 2θ"),
+    ("kn10", "radius", "Kn 10\nradius"),
+    ("kn10", "mode2", "Kn 10\ncos 2θ"),
+    ("drag_g2", "radius", "grid /2\nradius"),
+    ("drag_g2", "mode2", "grid /2\ncos 2θ"),
+    ("m25_diff", "radius", "M25 diff\nradius"),
+    ("m25_diff", "mode2", "M25 diff\ncos 2θ"),
+    ("m25_spec", "radius", "M25 spec\nradius"),
+    ("m25_spec", "mode2", "M25 spec\ncos 2θ"),
+    ("m03_diff", "radius", "M0.32 diff\nradius"),
+    ("m03_diff", "mode2", "M0.32 diff\ncos 2θ"),
+    ("m03_spec", "radius", "M0.32 spec\nradius"),
+    ("m03_spec", "mode2", "M0.32 spec\ncos 2θ"),
+)  # fmt: skip
+SUMMARY_N_EFF = 10  # the optimiser's effective averaging (Adam's ~10-iterate first moment)
+
+
+def _seed_error(rows, fds, c, name):
+    """Per-seed relative error at ``SUMMARY_N_EFF`` seeds' averaging: sqrt(bias^2 + var /
+    N_eff) over |FD|, the FD's own noise taken out of bias^2 (floored at 0)."""
+    tot = np.array([r["base_total"][c] - r["pathwise_x"][c][lab.BASE_VARIANT]
+                    + r["pathwise_x"][c][name] for r in rows])  # fmt: skip
+    fdv = np.array(list(fds[c].values()))
+    scale = abs(fdv.mean())
+    fd_var = fdv.var(ddof=1) / len(fdv) if len(fdv) > 1 else 0.0
+    bias2 = max((tot.mean() - fdv.mean()) ** 2 - fd_var - tot.var(ddof=1) / len(tot), 0.0)
+    return np.sqrt(bias2 + tot.var(ddof=1) / SUMMARY_N_EFF) / scale
+
+
+def _summary():
+    """``summary.png``: every fit family x every case / control -- the closure adjoint / FD
+    (text) coloured by its t = (adjoint - FD) / s.e. (white |t| < 2: consistent with the FD) --
+    with each fit's RMS per-seed error over the radius / cos 2 theta columns at N_eff = 10."""
+    import matplotlib.colors as mcolors  # noqa: PLC0415
+
+    cache, sets = {}, {}
+    for case in {c for c, _k, _l in SUMMARY_COLS}:
+        sets[case] = [json.loads(p.read_text())["rows"] for p in
+                      (lab.OUT / f"knn3_{case}{t}.json" for t in ("", "_M", "_C", "_C05")) if p.exists()]  # fmt: skip
+        cache[case] = lab.finite_differences(case)
+    nr, nc = len(SUMMARY_FITS), len(SUMMARY_COLS)
+    tval = np.full((nr, nc), np.nan)
+    ratio = np.full((nr, nc), np.nan)
+    err = np.full((nr, nc), np.nan)
+    for i, (name, _l) in enumerate(SUMMARY_FITS):
+        for j, (case, c, _lab) in enumerate(SUMMARY_COLS):
+            fds = cache[case]
+            rows = next((r for r in sets[case] if name in r[0]["pathwise_x"].get(c, {})), None)
+            if rows is None or c not in fds or len(rows) < 2:
+                continue
+            ratio[i, j], t = summary.closure(rows, fds, c, name)
+            tval[i, j] = np.sign(ratio[i, j] - 1.0) * abs(t)  # + : |adjoint| above |FD|
+            if c != "bump_nose":
+                err[i, j] = _seed_error(rows, fds, c, name)
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(21, 7.0), facecolor=SURF,
+                                  gridspec_kw={"width_ratios": [nc, 2.8]})  # fmt: skip
+    # diverging: blue = adjoint below FD, red = above, white within 2 s.e.
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "div", [(0.0, "#2a78d6"), (0.25, "#9cc3ef"), (0.4, "#ffffff"), (0.6, "#ffffff"),
+                (0.75, "#f3a07e"), (1.0, "#e34948")])  # fmt: skip
+    ax.imshow(np.clip(tval, -5, 5), cmap=cmap, vmin=-5, vmax=5, aspect="auto")
+    for i in range(nr):
+        for j in range(nc):
+            if np.isfinite(ratio[i, j]):
+                txt = f"{ratio[i, j]:.2f}" if abs(ratio[i, j]) < 10 else f"{ratio[i, j]:.0f}"
+                ax.text(j, i, txt, ha="center", va="center", fontsize=8, color=INK)
+            else:
+                ax.text(j, i, "–", ha="center", va="center", fontsize=8, color=INK2)
+    ax.set_xticks(range(nc), [lb for _c, _k, lb in SUMMARY_COLS], fontsize=7.5, color=INK)
+    ax.set_yticks(range(nr), [lb for _n, lb in SUMMARY_FITS], fontsize=9, color=INK)
+    ax.tick_params(length=0)
+    for x in (2.5, 4.5, 6.5, 8.5, 10.5, 12.5, 14.5, 16.5, 18.5):
+        ax.axvline(x, color=SURF, lw=3)
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.set_title("adjoint / FD per case (colour: |adjoint - FD| / s.e.; white = within 2 s.e.; "
+                 "blue: |adjoint| low, red: high; saturating at 5).  M25 diff: 2 seeds; M0.32 FDs ±8-26 %",
+                 loc="left", fontsize=10, color=INK)  # fmt: skip
+    rms = np.sqrt(np.nanmean(err**2, axis=1))
+    _style(ax2)
+    bar_c = [BLUE if "[chosen]" in lb else GREEN if "[new]" in lb else INK2
+             for _n, lb in SUMMARY_FITS]  # fmt: skip
+    ax2.barh(range(nr), rms, color=bar_c, height=0.6)
+    for i, v in enumerate(rms):
+        ax2.text(v + 0.003, i, f"{v:.3f}", va="center", fontsize=8.5, color=INK)
+    ax2.set_ylim(nr - 0.5, -0.5)
+    ax2.set_yticks([])
+    ax2.set_xlim(0, max(rms) * 1.3)
+    ax2.set_title("RMS per-seed error\n(radius + cos 2θ, N_eff 10)", loc="left", fontsize=10,
+                  color=INK)  # fmt: skip
+    fig.tight_layout()
+    fig.savefig(FIG / "summary.png", dpi=150, facecolor=SURF)
+    plt.close(fig)
+    print("summary: fit, RMS err, worst |t| column")
+    for i, (_n, lb) in enumerate(SUMMARY_FITS):
+        j = int(np.nanargmax(np.abs(tval[i])))
+        print(f"  {lb:58s} {rms[i]:.3f}  worst {SUMMARY_COLS[j][2].replace(chr(10), ' ')} "
+              f"{ratio[i, j]:.2f} (t {tval[i, j]:+.1f})")  # fmt: skip
 
 
 STEADY_GROUPS = (
@@ -571,10 +697,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--recompute", action="store_true")
     ap.add_argument("--steady", action="store_true", help="only steady.png")
+    ap.add_argument("--summary", action="store_true", help="only summary.png")
     args = ap.parse_args()
     FIG.mkdir(parents=True, exist_ok=True)
     if args.steady:
         _steady()
+        return
+    if args.summary:
+        _summary()
         return
     zs = {}
     for case in ("drag", "heat", "spec"):
@@ -586,6 +716,7 @@ def main():
     _slopes(zs)
     _closure()
     _transfer()
+    _summary()
     _steady()
     print(f"wrote {FIG}")
 

@@ -1489,7 +1489,8 @@ def _fitlab4_jobs(gpus_per_node: int) -> dict[str, str]:
       second OOMed in the production backward (6.6 GB more) -- ``GPU_KIND=rtx_48``
       (``ONLY='c25'``);
     * ``c10_diff_m2_g4`` seeds 0-7: the forward compiles to 72.75 GiB, over a 3g.71gb slice --
-      ``GPU_KIND=h200_full`` or ``rtx_full`` (``ONLY='g4'``); slim with ``--d-max 0.2``.
+      ``GPU_KIND=rtx_full`` (a whole 96 GB RTX PRO 6000; ``ONLY='g4_s0'`` first, the
+      backward's peak is unmeasured at k = 4); slim with ``--d-max 0.2``.
 
     ``dump.py`` skips a seed whose json exists."""
     del gpus_per_node
@@ -1503,6 +1504,66 @@ def _fitlab4_jobs(gpus_per_node: int) -> dict[str, str]:
         jobs[f"lab_c10_diff_m2_g4_s{s}"] = (
             f"{dump} --gate c10_diff_m2_g4 --seeds {s} {s + 1} --fd radius mode2 --width 5.0"
         )
+    return jobs
+
+
+KNNTUNE_CASES = ("drag", "m03_diff", "kn10", "hot", "drag_g2", "m25_diff", "drag_g4")
+KNNTUNE_MFP = (0.25, 0.5, 1, 2)
+
+
+def _knntune_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``knntune`` (2026-11-27, paper plan phase A): the kNN wall fit's reference scales swept
+    on the fit lab's diffuse dumps (scratch/fitlab/knn3.py, numpy / scipy -- a GPU slice for
+    its cores and memory): ``C<c_mfp>_<cell>_0.033_<v>`` with c_mfp in :data:`KNNTUNE_MFP`
+    (one job each), cell fraction 1/8, 1/4, 1/2, velocity scale 0.3, 0.5, 0.6 x the thermal
+    spread, k = 32, 64, 128, per case of :data:`KNNTUNE_CASES` (m25_diff and drag_g4 need
+    fitlab4's dumps first: ``ONLY='m25|g4'`` after it).  Output
+    scratch/fitlab/cluster/knn3_<case>_T_cm<c>.json (pulled), scored by scratch/fitlab/tune.py.
+    ``GPU_KIND=rtx``."""
+    del gpus_per_node
+    jobs = {}
+    for case in KNNTUNE_CASES:
+        for cm in KNNTUNE_MFP:
+            metrics = " ".join(f"C{cm:g}_{cc:g}_0.033_{cv:g}" for cc in (0.125, 0.25, 0.5)
+                               for cv in (0.3, 0.5, 0.6))  # fmt: skip
+            jobs[f"tune_{case}_cm{cm:g}"] = (
+                f"python3 scratch/fitlab/knn3.py --case {case} --metrics {metrics} --owns 0 "
+                f"--taus --ks 32 64 128 --tag _T_cm{cm:g} --out-dir scratch/fitlab/cluster"
+            )
+    return jobs
+
+
+SPECLAB_GATES = ("c10_spec", "c25_spec_m2", "c03_spec_m2", "c10_spec_kn2", "c10_spec_kn10",
+                 "c10_spec_dt2", "c10_spec_2dt")  # fmt: skip
+
+
+def _speclab_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``speclab`` (2026-11-27, paper plan phase B): the specular wall's +5-10 % adjoint
+    excess (no single term's scale closes radius and cos 2 theta together:
+    scratch/fitlab/spec_budget.py).  The fit lab's dumps (one seed per job: a fresh process)
+    of c10_spec's neighbours with known radius FDs (fitgate rows, 16 seeds) and their own
+    cos 2 theta FDs (``--fd mode2``): Kn 2 (seeds 0-7) and Kn 10 (0-3) -- the excess grows
+    superlinearly in 1 / Kn -- and dt / 2, 2 dt (0-7) -- the adjoint rises as dt falls while the
+    FD is flat; c10_spec_m2's cos 2 theta FD on seeds 4-15 (only 0-3 exist); and ``slim``
+    (submit after the dumps: ``ONLY='slim'``): every specular dump slimmed WITH the incoming
+    nodes and node_coll (slim.py --incoming, d < 0.3 m) for the reflection-identity and tracer
+    gates.  ``GPU_KIND=rtx_48``."""
+    del gpus_per_node
+    dump = "python3 scratch/fitlab/dump.py"
+    jobs = {}
+    for gate, seeds in (("c10_spec_kn2", 8), ("c10_spec_kn10", 4), ("c10_spec_dt2", 8),
+                        ("c10_spec_2dt", 8)):  # fmt: skip
+        for s in range(seeds):
+            jobs[f"lab_{gate}_s{s}"] = f"{dump} --gate {gate} --seeds {s} {s + 1} --fd mode2"
+    run = "python3 scratch/fitgate/variant_gate.py"
+    for a in (4, 8, 12):
+        jobs[f"fd_c10_spec_m2_s{a}"] = f"{run} --gate c10_spec_m2 --seeds {a} {a + 4} --bases base"
+    jobs["slim"] = (f"python3 scratch/fitlab/slim.py --gates {' '.join(SPECLAB_GATES)} "
+                    "--incoming --d-max 0.3")  # fmt: skip
+    # fitlab4's dumps (M 25 diffuse, grid / 4), slimmed keeping node_coll for the tracer and
+    # order-term gates: ``ONLY='slim_fitlab4'`` after fitlab4
+    jobs["slim_fitlab4"] = ("python3 scratch/fitlab/slim.py --gates c25_diff_m2 c10_diff_m2_g4 "
+                            "--incoming --d-max 0.2")  # fmt: skip
     return jobs
 
 
@@ -1762,6 +1823,8 @@ NEW_GROUPS = {
     "fitlab2": _fitlab2_jobs,
     "fitlab3": _fitlab3_jobs,
     "fitlab4": _fitlab4_jobs,
+    "knntune": _knntune_jobs,
+    "speclab": _speclab_jobs,
     "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
