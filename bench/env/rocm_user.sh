@@ -95,6 +95,15 @@ if [ "${TRIM:-1}" = 1 ]; then
 fi
 echo "[rocm_user] tree: $(du -sh "${ROCM_USER_DIR}" --exclude=rpms | cut -f1)"
 
+# 4b. development symlinks (lib<x>.so -> lib<x>.so.N): XLA dlopens some ROCm libraries by their
+#     unversioned name (libhipblaslt.so: MI100 check job 36500991, 2026-11-27), which only the
+#     -devel RPMs provide
+for f in "${ROOT}"/lib/lib*.so.[0-9]*; do
+  [ -e "${f}" ] || continue
+  base="${f%%.so.*}.so"
+  [ -e "${base}" ] || ln -s "$(basename "${f}")" "${base}"
+done
+
 # 5. checks: hipcc, and every library the JAX plugin links resolves
 export ROCM_PATH="${ROOT}" HIP_PATH="${ROOT}"
 XLIB="${ROCM_USER_DIR}/usr/lib64"

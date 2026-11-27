@@ -20,21 +20,32 @@ source "${HERE}/platforms.sh"
 pf_modules
 NAME="jax-${PLATFORM}${VARIANT:+-${VARIANT}}"
 VENV="${JAX_ENV_DIR}/${NAME}"
-if [ -z "${VARIANT:-}" ] && [ "${JAX_VENV_DEFAULT}" != "${VENV}" ]; then
-  # Alpine NVIDIA: main's existing env is used (platforms.sh); only check it
-  echo "[build_jax] ${PLATFORM} uses ${JAX_VENV_DEFAULT} (VARIANT=<name> builds a separate one)"
-  # shellcheck disable=SC1091
-  source "${JAX_VENV_DEFAULT}/bin/activate"
-  JAX_PLATFORMS=cpu python3 "${HERE}/check_env.py" --import-only
-  exit 0
+# Alpine NVIDIA: ONE env for the four platforms (same wheels): platforms.sh's JAX_VENV_DEFAULT
+# (/projects/$USER/jax-env-313, beside main's jax-env, so main can switch to it too)
+if [ -z "${VARIANT:-}" ] && [ -n "${JAX_VENV_SHARED:-}" ]; then
+  VENV="${JAX_VENV_SHARED}"
+  if [ -x "${VENV}/bin/python3" ] && [ -z "${REBUILD:-}" ]; then
+    echo "[build_jax] ${PLATFORM}: shared env ${VENV} exists ($("${VENV}/bin/python3" -c 'import jax; print("jax", jax.__version__)' 2>/dev/null)); REBUILD=1 rebuilds"
+    exit 0
+  fi
 fi
+# JAX 0.12.1 everywhere except the ROCm flavour (AMD's wheels for the nodes' ROCm 6.4.4 stop
+# at 0.4.35): one JAX version across the NVIDIA platforms and the CPU (2026-11-27 decision)
+if [ "${JAX_FLAVOR}" != rocm ]; then JAX_VERSION="${JAX_VERSION:-0.12.1}"; fi
 PIN="${JAX_VERSION:+==${JAX_VERSION}}"
 echo "[build_jax] ${PLATFORM}: flavor ${JAX_FLAVOR}, jax${PIN:-(latest)} -> ${VENV}"
 if [ -n "${CHECK:-}" ]; then exit 0; fi
-mkdir -p "${JAX_ENV_DIR}"
-python3 -c 'import sys; assert sys.version_info >= (3, 10), sys.version' \
-  || { echo "need python >= 3.10 for jax (module load python / set MODULES)"; exit 1; }
-python3 -m venv "${VENV}"
+mkdir -p "$(dirname "${VENV}")"
+# the interpreter: PYTHON_BIN, else the module's python3 if new enough (JAX >= 0.12: 3.12+;
+# the ROCm 0.4.35 wheels: 3.10/3.12), else a uv-managed 3.13 (get_python.sh)
+NEED="3.12"; [ "${JAX_FLAVOR}" = rocm ] && NEED="3.10"
+PY="${PYTHON_BIN:-python3}"
+if ! "${PY}" -c "import sys; sys.exit(sys.version_info < tuple(map(int, '${NEED}'.split('.'))))" 2> /dev/null; then
+  echo "[build_jax] $("${PY}" -V 2>&1) < ${NEED}: fetching a standalone Python 3.13"
+  PY="$(bash "${HERE}/get_python.sh" | tail -1)"
+fi
+echo "[build_jax] interpreter $("${PY}" -V 2>&1): ${PY}"
+"${PY}" -m venv "${VENV}"
 # shellcheck disable=SC1091
 source "${VENV}/bin/activate"
 pip install --upgrade pip wheel

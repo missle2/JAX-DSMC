@@ -108,7 +108,11 @@ case "${PLATFORM}" in
     else
       MODULES="${MODULES:-python gcc openmpi}"
       BUILD_MODULES="${BUILD_MODULES:-gcc cuda cmake openmpi}"
-      JAX_VENV_DEFAULT="/projects/${USER}/jax-env"
+      # one shared Python 3.13 + JAX 0.12.1 env for the four NVIDIA platforms (build_jax.sh);
+      # main's 3.10 / 0.6.2 jax-env until it exists
+      JAX_VENV_SHARED="/projects/${USER}/jax-env-313"
+      if [ -x "${JAX_VENV_SHARED}/bin/python3" ]; then JAX_VENV_DEFAULT="${JAX_VENV_SHARED}"
+      else JAX_VENV_DEFAULT="/projects/${USER}/jax-env"; fi
       DEVICES_PER_GRES=1
     fi
     GPUS_PER_NODE=$(( GRES_COUNT * DEVICES_PER_GRES ))
@@ -166,6 +170,10 @@ pf_modules() {  # [$1 = module list; default MODULES]
   # login defaults stay and the list loads on top (module load swaps a PrgEnv).
   [ "${SITE:-}" = nersc ] || module purge 2>/dev/null || true
   if [ "${SITE:-}" = curc ]; then
+    # CURC's gcc module adds its MPI directory as $MODULEPATH_ROOT/mpis/gcc/<ver>; a purged job
+    # environment has Lmod's default root (/usr/share/modulefiles) and openmpi is then "not
+    # available" -- no mpicc (Alpine jobs 36500979-96, 2026-11-27)
+    [ -d /curc/sw/alpine-modules ] && export MODULEPATH_ROOT=/curc/sw/alpine-modules
     module load slurm/alpine 2>/dev/null || true
     local d
     for d in /usr/share/modulefiles /curc/sw/alpine-modules/compilers /curc/sw/alpine-modules/idep \
@@ -206,12 +214,19 @@ pf_modules() {  # [$1 = module list; default MODULES]
 #   node    one process per node with all its GPUs (sparta_jax process-per-node variant)
 # -c counts hardware threads: SMT=2 on Perlmutter
 pf_launch() {  # $1 = nodes, $2 = ranks per node, [$3 = bind | nobind | node]
-  local n=$(( $1 * $2 )) c=$(( ${SMT:-1} * CORES_PER_NODE / $2 ))
+  # CPUs per rank: what the ALLOCATION has (SLURM_CPUS_ON_NODE), not the whole node's count.
+  # A single-GPU job (Alpine gpu-normal, NERSC shared) gets a fraction of the node, and a step
+  # asking for more never starts: srun waits until `timeout` kills it (Alpine validate/tune1
+  # jobs 36500992-96, 2026-11-27: "Unable to create step").
+  local avail=$(( ${SMT:-1} * CORES_PER_NODE ))
+  [ -n "${SLURM_CPUS_ON_NODE:-}" ] && avail="${SLURM_CPUS_ON_NODE}"
+  local n=$(( $1 * $2 )) c=$(( avail / $2 ))
+  [ "${c}" -lt 1 ] && c=1
   if [ "${GPUS_PER_NODE}" -gt 0 ]; then
     case "${3:-bind}" in
       bind)   echo "srun -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores --gpus-per-task=1 --gpu-bind=${GPU_BIND:-closest}" ;;
       nobind) echo "srun -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores --gpus-per-node=${GRES_COUNT:-${GPUS_PER_NODE}} --gpu-bind=none" ;;
-      node)   echo "srun -N $1 -n $1 --ntasks-per-node=1 -c $(( ${SMT:-1} * CORES_PER_NODE )) --cpu-bind=cores --gpus-per-node=${GRES_COUNT:-${GPUS_PER_NODE}} --gpu-bind=none" ;;
+      node)   echo "srun -N $1 -n $1 --ntasks-per-node=1 -c ${avail} --cpu-bind=cores --gpus-per-node=${GRES_COUNT:-${GPUS_PER_NODE}} --gpu-bind=none" ;;
     esac
   else
     echo "srun -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores"

@@ -481,14 +481,26 @@ def single_gpu_only(platform):
 DECK_STEPS = {"free": 100, "collide": 100, "sphere": 1000}  # the decks' timed run length
 
 
+# The JAX version the study's sparta_jax rows are for (2026-11-27: 0.12.1; the MI100 is held at
+# AMD's ROCm 6.4.4 build).  Rows of another JAX version do not count as done.
+JAX_HEADLINE = {"alp-mi100": "0.4.35"}
+
+
+def jax_headline(platform):
+    return os.environ.get("BENCH_JAX_VERSION") or JAX_HEADLINE.get(platform, "0.12.1")
+
+
 def done_reps(run: Run, platform, rows):
-    """Rows already recorded for this exact run (code, variant, deck, size, procs, steps)."""
+    """Rows already recorded for this exact run (code, variant, deck, size, procs, steps; for
+    sparta_jax also the JAX version)."""
     steps = run.steps or DECK_STEPS[run.deck]
     procs = run.nodes * run.ranks_per_node
+    jv = jax_headline(platform)
     return sum(
         1
         for r in rows
         if r.get("machine", "").startswith(platform)
+        and (run.code != "jax" or r.get("jax") == jv)
         and r["code"] == run.code
         and r["variant"] == run.variant
         and r["deck"] == run.deck
