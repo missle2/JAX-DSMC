@@ -4,9 +4,9 @@
 #      Blackwell needs >= 12.8)
 #   2. a check that main's JAX env (/projects/$USER/jax-env) imports
 #   3. SPARTA/Kokkos for alp-h200, alp-a100, alp-l40, alp-rtx6000 (default variant)
-#   4. AMD MI100 (after the NVIDIA builds): its JAX env (jax-rocm60 plugin wheels on
-#      rocm/6.1.0), an external Kokkos 4.7 (the bundled Kokkos 5 needs hipcc >= 6.2, Alpine has
-#      6.1), and SPARTA against it (MI100=0 skips this part)
+#   4. AMD MI100 (after the NVIDIA builds), with the system ROCm /opt/rocm-6.4.4: SuiteSparse
+#      for its hipsolver, the JAX env (jax-rocm60 0.5.0 wheels), SPARTA with the bundled
+#      Kokkos 5 (fallback: external Kokkos 4.7).  MI100=0 skips this part.
 #
 #   cd /projects/$USER/JAX-DSMC-sparta && sbatch bench/env/build_alpine.sbatch
 #
@@ -74,23 +74,24 @@ done
 
 # --- 4. AMD MI100 ----------------------------------------------------------------------------------
 if [ "${MI100:-1}" = 1 ]; then
-  echo; echo "[$(date -Iseconds)] ===== MI100: SuiteSparse for rocm/6.1.0's hipsolver ====="
+  echo; echo "[$(date -Iseconds)] ===== MI100: SuiteSparse for ROCm's hipsolver ====="
   XLIB="/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64:/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64/atlas"
   bash bench/env/rocm_extra_libs.sh || echo "rocm_extra_libs.sh: see above"
   echo; echo "[$(date -Iseconds)] ===== MI100: JAX env ====="
   if PLATFORM=alp-mi100 ROCM_EXTRA_LIBS="${XLIB}" bash bench/env/build_jax.sh; then ok+=("alp-mi100/jax-env"); else bad+=("alp-mi100/jax-env"); fi
-  echo; echo "[$(date -Iseconds)] ===== MI100: Kokkos 4.7 (HIP, gfx908) ====="
-  KROOT="/projects/${USER}/sparta-scaling/kokkos/${KOKKOS_VERSION:-4.7.01}-alp-mi100"
-  if PLATFORM=alp-mi100 bash bench/env/build_kokkos.sh; then
-    ok+=("alp-mi100/kokkos")
-    echo; echo "[$(date -Iseconds)] ===== SPARTA alp-mi100 / default (external Kokkos) ====="
-    if PLATFORM=alp-mi100 VARIANT=default KOKKOS_ROOT="${KROOT}" bash bench/env/build_sparta.sh; then
-      ok+=("alp-mi100/default")
-    else
-      bad+=("alp-mi100/default"); echo "SPARTA does not build against Kokkos 4.7 on ROCm 6.1: next is a ROCm >= 6.2 container"
-    fi
+  # SPARTA: bundled Kokkos 5 with ROCm 6.4.4; if that fails, an external Kokkos 4.7
+  echo; echo "[$(date -Iseconds)] ===== SPARTA alp-mi100 / default (bundled Kokkos, ROCm ${ROCM_ROOT:-/opt/rocm-6.4.4}) ====="
+  if PLATFORM=alp-mi100 VARIANT=default bash bench/env/build_sparta.sh; then
+    ok+=("alp-mi100/default")
   else
-    bad+=("alp-mi100/kokkos")
+    echo; echo "[$(date -Iseconds)] ===== MI100 fallback: Kokkos 4.7 (HIP, gfx908) + SPARTA ====="
+    KROOT="/projects/${USER}/sparta-scaling/kokkos/${KOKKOS_VERSION:-4.7.01}-alp-mi100"
+    if PLATFORM=alp-mi100 bash bench/env/build_kokkos.sh \
+       && PLATFORM=alp-mi100 VARIANT=default KOKKOS_ROOT="${KROOT}" bash bench/env/build_sparta.sh; then
+      ok+=("alp-mi100/default(kokkos4.7)")
+    else
+      bad+=("alp-mi100/default")
+    fi
   fi
 fi
 

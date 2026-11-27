@@ -103,7 +103,8 @@ if [ -n "${CHECK:-}" ]; then
   exit 0
 fi
 mkdir -p "${SPARTA_BUILD_DIR}"  # the configure log below lives next to the build (first build: absent)
-cmake -S "${SRC}/cmake" -B "${BUILD}" -C "${SRC}/cmake/presets/${PRESET}.cmake" \
+# --fresh: no cache from an earlier configure (another compiler/ROCm) survives
+cmake --fresh -S "${SRC}/cmake" -B "${BUILD}" -C "${SRC}/cmake/presets/${PRESET}.cmake" \
   -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" "${ARCH[@]}" "${EXTRA[@]}" "${CUDA_ARGS[@]}" \
   2>&1 | tee "${BUILD}.configure.log"
 cmake --build "${BUILD}" -j "${JOBS:-16}" 2>&1 | tail -20

@@ -85,11 +85,13 @@ case "${PLATFORM}" in
     # load no cuda module that could shadow the wheels' libraries; nvcc (cuda module) is only
     # needed to build SPARTA/Kokkos, which links the CUDA runtime statically.
     if [ "${PLATFORM}" = alp-mi100 ]; then
-      # rocm/6.1.0 is Alpine's newest (2026-11-25).  SPARTA's bundled Kokkos 5 needs hipcc
-      # >= 6.2, so the MI100 SPARTA build uses an external Kokkos 4.7 (build_kokkos.sh,
-      # KOKKOS_ROOT); JAX uses the jax-rocm60 plugin wheels on this ROCm.
-      MODULES="${MODULES:-python gcc rocm/6.1.0 openmpi}"
-      BUILD_MODULES="${BUILD_MODULES:-gcc rocm/6.1.0 cmake openmpi}"
+      # ROCm: the system install /opt/rocm-6.4.4 (in the node images; 2026-11-27), not the
+      # rocm/6.1.0 module, whose hipcc is older than Kokkos 5's minimum (6.2) and whose RCCL
+      # lacks ncclCommRegister, which the jax-rocm60 plugin calls.  ROCM_ROOT overrides
+      # (ROCM_ROOT= with MODULES/BUILD_MODULES naming rocm/6.1.0 restores the module).
+      ROCM_ROOT="${ROCM_ROOT-/opt/rocm-6.4.4}"
+      MODULES="${MODULES:-python gcc openmpi}"
+      BUILD_MODULES="${BUILD_MODULES:-gcc cmake openmpi}"
       DEVICES_PER_GRES=1  # one HIP device per MI100 card
     else
       MODULES="${MODULES:-python gcc openmpi}"
@@ -128,6 +130,17 @@ pf_modules() {  # [$1 = module list; default MODULES]
   for m in ${1:-${MODULES}}; do
     module load "${m}" 2>/dev/null || echo "[platforms.sh] module ${m} not available on $(hostname)"
   done
+  # a ROCm install outside the module system (ROCM_ROOT, e.g. /opt/rocm-6.4.4)
+  if [ -n "${ROCM_ROOT:-}" ]; then
+    if [ -x "${ROCM_ROOT}/bin/hipcc" ]; then
+      export ROCM_PATH="${ROCM_ROOT}" HIP_PATH="${ROCM_ROOT}"
+      export PATH="${ROCM_ROOT}/bin:${PATH}"
+      export LD_LIBRARY_PATH="${ROCM_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+      export CMAKE_PREFIX_PATH="${ROCM_ROOT}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
+    else
+      echo "[platforms.sh] WARNING: ROCM_ROOT=${ROCM_ROOT} has no bin/hipcc on $(hostname)"
+    fi
+  fi
   # Alpine's rocm modules put hipcc on PATH but set no ROCM_PATH, which Kokkos' HIP setup and
   # the ROCm JAX plugin look for: derive it (2026-11-27)
   if [ -z "${ROCM_PATH:-}" ] && command -v hipcc > /dev/null 2>&1; then
