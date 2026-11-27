@@ -1,0 +1,28 @@
+[runtime] alp-a100 on c3gpu-c2-u1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/spa
+[2026-11-27T15:10:24-07:00] job 36502986 validate-alp-a100-n1: 1 node(s) c3gpu-c2-u1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-a100/validate-alp-a100-n1.plan: 6 runs
+[2026-11-27T15:10:24-07:00] run 1: timeout 780  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 10K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:24-07:00] run 1 FAILED
+[2026-11-27T15:10:24-07:00] run 1 done in 0 s
+[2026-11-27T15:10:24-07:00] run 2: timeout 780  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 100K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:24-07:00] run 2 FAILED
+[2026-11-27T15:10:24-07:00] run 2 done in 0 s
+[2026-11-27T15:10:24-07:00] run 3: timeout 780  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 10K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:24-07:00] run 3 FAILED
+[2026-11-27T15:10:24-07:00] run 3 done in 0 s
+[2026-11-27T15:10:24-07:00] run 4: timeout 780  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 100K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:24-07:00] run 4 FAILED
+[2026-11-27T15:10:24-07:00] run 4 done in 0 s
+[2026-11-27T15:10:24-07:00] run 5: timeout 783  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 10K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:24-07:00] run 5 FAILED
+[2026-11-27T15:10:24-07:00] run 5 done in 0 s
+[2026-11-27T15:10:24-07:00] run 6: timeout 812  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 100K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:24-07:00] run 6 FAILED
+[2026-11-27T15:10:24-07:00] run 6 done in 0 s
+[2026-11-27T15:10:24-07:00] 6 runs, 6 failed

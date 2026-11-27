@@ -1,0 +1,132 @@
+[runtime] alp-h200 on c3gpu-g5-u1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa
+[2026-11-27T15:10:20-07:00] job 36502983 tune1-alp-h200-n1: 1 node(s) c3gpu-g5-u1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-h200/tune1-alp-h200-n1.plan: 32 runs
+[2026-11-27T15:10:20-07:00] run 1: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 1 FAILED
+[2026-11-27T15:10:20-07:00] run 1 done in 0 s
+[2026-11-27T15:10:20-07:00] run 2: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 2 FAILED
+[2026-11-27T15:10:20-07:00] run 2 done in 0 s
+[2026-11-27T15:10:20-07:00] run 3: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 3 FAILED
+[2026-11-27T15:10:20-07:00] run 3 done in 0 s
+[2026-11-27T15:10:20-07:00] run 4: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 4 FAILED
+[2026-11-27T15:10:20-07:00] run 4 done in 0 s
+[2026-11-27T15:10:20-07:00] run 5: XLA_FLAGS=--xla_gpu_graph_min_graph_size=1 timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cmdbuf_min1 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 5 FAILED
+[2026-11-27T15:10:20-07:00] run 5 done in 0 s
+[2026-11-27T15:10:20-07:00] run 6: XLA_FLAGS=--xla_gpu_graph_min_graph_size=1 timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cmdbuf_min1 --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 6 FAILED
+[2026-11-27T15:10:20-07:00] run 6 done in 0 s
+[2026-11-27T15:10:20-07:00] run 7: XLA_FLAGS=--xla_gpu_autotune_level=0 timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_autotune0 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 7 FAILED
+[2026-11-27T15:10:20-07:00] run 7 done in 0 s
+[2026-11-27T15:10:20-07:00] run 8: XLA_FLAGS=--xla_gpu_autotune_level=0 timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_autotune0 --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 8 FAILED
+[2026-11-27T15:10:20-07:00] run 8 done in 0 s
+[2026-11-27T15:10:20-07:00] run 9: XLA_FLAGS=--xla_gpu_enable_while_loop_unrolling=WHILE_LOOP_UNROLLING_AUTO_UNROLL timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_wlunroll --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 9 FAILED
+[2026-11-27T15:10:20-07:00] run 9 done in 0 s
+[2026-11-27T15:10:20-07:00] run 10: XLA_FLAGS=--xla_gpu_enable_while_loop_unrolling=WHILE_LOOP_UNROLLING_AUTO_UNROLL timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_wlunroll --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 10 FAILED
+[2026-11-27T15:10:20-07:00] run 10 done in 0 s
+[2026-11-27T15:10:20-07:00] run 11: XLA_FLAGS=--xla_gpu_enable_cub_radix_sort=false timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_nocub --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 11 FAILED
+[2026-11-27T15:10:20-07:00] run 11 done in 0 s
+[2026-11-27T15:10:20-07:00] run 12: XLA_FLAGS=--xla_gpu_enable_cub_radix_sort=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_nocub --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 12 FAILED
+[2026-11-27T15:10:20-07:00] run 12 done in 0 s
+[2026-11-27T15:10:20-07:00] run 13: XLA_PYTHON_CLIENT_ALLOCATOR=platform XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_platformalloc --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 13 FAILED
+[2026-11-27T15:10:20-07:00] run 13 done in 0 s
+[2026-11-27T15:10:20-07:00] run 14: XLA_PYTHON_CLIENT_ALLOCATOR=platform XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_platformalloc --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 14 FAILED
+[2026-11-27T15:10:20-07:00] run 14 done in 0 s
+[2026-11-27T15:10:20-07:00] run 15: TF_GPU_ALLOCATOR=cuda_malloc_async XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_mallocasync --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 15 FAILED
+[2026-11-27T15:10:20-07:00] run 15 done in 0 s
+[2026-11-27T15:10:20-07:00] run 16: TF_GPU_ALLOCATOR=cuda_malloc_async XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_mallocasync --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 16 FAILED
+[2026-11-27T15:10:20-07:00] run 16 done in 0 s
+[2026-11-27T15:10:20-07:00] run 17: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_lane2x --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set lane_scale=2
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 17 FAILED
+[2026-11-27T15:10:20-07:00] run 17 done in 0 s
+[2026-11-27T15:10:20-07:00] run 18: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_lane2x --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set lane_scale=2
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 18 FAILED
+[2026-11-27T15:10:20-07:00] run 18 done in 0 s
+[2026-11-27T15:10:20-07:00] run 19: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_lanehalf --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set lane_scale=0.5
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 19 FAILED
+[2026-11-27T15:10:20-07:00] run 19 done in 0 s
+[2026-11-27T15:10:20-07:00] run 20: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_lanehalf --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set lane_scale=0.5
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 20 FAILED
+[2026-11-27T15:10:20-07:00] run 20 done in 0 s
+[2026-11-27T15:10:20-07:00] run 21: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_trials16 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set trials=16
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 21 FAILED
+[2026-11-27T15:10:20-07:00] run 21 done in 0 s
+[2026-11-27T15:10:20-07:00] run 22: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_trials16 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set trials=16
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 22 FAILED
+[2026-11-27T15:10:20-07:00] run 22 done in 0 s
+[2026-11-27T15:10:20-07:00] run 23: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set sort=full
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 23 FAILED
+[2026-11-27T15:10:20-07:00] run 23 done in 0 s
+[2026-11-27T15:10:20-07:00] run 24: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set sort=full
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 24 FAILED
+[2026-11-27T15:10:20-07:00] run 24 done in 0 s
+[2026-11-27T15:10:20-07:00] run 25: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_startsearch --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set starts=search
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 25 FAILED
+[2026-11-27T15:10:20-07:00] run 25 done in 0 s
+[2026-11-27T15:10:20-07:00] run 26: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_startsearch --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set starts=search
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 26 FAILED
+[2026-11-27T15:10:20-07:00] run 26 done in 0 s
+[2026-11-27T15:10:20-07:00] run 27: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cprefix --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 27 FAILED
+[2026-11-27T15:10:20-07:00] run 27 done in 0 s
+[2026-11-27T15:10:20-07:00] run 28: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cprefix --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 28 FAILED
+[2026-11-27T15:10:20-07:00] run 28 done in 0 s
+[2026-11-27T15:10:20-07:00] run 29: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cunroll4 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_unroll=4
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 29 FAILED
+[2026-11-27T15:10:20-07:00] run 29 done in 0 s
+[2026-11-27T15:10:20-07:00] run 30: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cunroll4 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_unroll=4
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:20-07:00] run 30 FAILED
+[2026-11-27T15:10:20-07:00] run 30 done in 0 s
+[2026-11-27T15:10:20-07:00] run 31: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_unroll=8
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:21-07:00] run 31 FAILED
+[2026-11-27T15:10:21-07:00] run 31 done in 1 s
+[2026-11-27T15:10:21-07:00] run 32: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_unroll=8
+srun: fatal: SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually exclusive.
+[2026-11-27T15:10:21-07:00] run 32 FAILED
+[2026-11-27T15:10:21-07:00] run 32 done in 0 s
+[2026-11-27T15:10:21-07:00] 32 runs, 32 failed
