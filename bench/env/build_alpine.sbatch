@@ -74,8 +74,11 @@ done
 
 # --- 4. AMD MI100 ----------------------------------------------------------------------------------
 if [ "${MI100:-1}" = 1 ]; then
+  echo; echo "[$(date -Iseconds)] ===== MI100: SuiteSparse for rocm/6.1.0's hipsolver ====="
+  XLIB="/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64"
+  bash bench/env/rocm_extra_libs.sh || echo "rocm_extra_libs.sh: see above"
   echo; echo "[$(date -Iseconds)] ===== MI100: JAX env ====="
-  if PLATFORM=alp-mi100 bash bench/env/build_jax.sh; then ok+=("alp-mi100/jax-env"); else bad+=("alp-mi100/jax-env"); fi
+  if PLATFORM=alp-mi100 ROCM_EXTRA_LIBS="${XLIB}" bash bench/env/build_jax.sh; then ok+=("alp-mi100/jax-env"); else bad+=("alp-mi100/jax-env"); fi
   echo; echo "[$(date -Iseconds)] ===== MI100: Kokkos 4.7 (HIP, gfx908) ====="
   KROOT="/projects/${USER}/sparta-scaling/kokkos/${KOKKOS_VERSION:-4.7.01}-alp-mi100"
   if PLATFORM=alp-mi100 bash bench/env/build_kokkos.sh; then

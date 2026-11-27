@@ -128,6 +128,12 @@ pf_modules() {  # [$1 = module list; default MODULES]
   for m in ${1:-${MODULES}}; do
     module load "${m}" 2>/dev/null || echo "[platforms.sh] module ${m} not available on $(hostname)"
   done
+  # Alpine's rocm modules put hipcc on PATH but set no ROCM_PATH, which Kokkos' HIP setup and
+  # the ROCm JAX plugin look for: derive it (2026-11-27)
+  if [ -z "${ROCM_PATH:-}" ] && command -v hipcc > /dev/null 2>&1; then
+    ROCM_PATH="$(dirname "$(dirname "$(command -v hipcc)")")"  # <rocm>/bin/hipcc
+    export ROCM_PATH HIP_PATH="${HIP_PATH:-${ROCM_PATH}}"
+  fi
 }
 
 # launch prefix of an MPI/JAX job, $3 = bind (default) | nobind | node:
