@@ -1,0 +1,72 @@
+[2026-11-27T00:16:35-07:00] build_alpine on c3cpu-a2-u32-1: platforms 'alp-h200', variants 'default'
+CUDA toolkit present: Build cuda_12.8.r12.8/compiler.35583870_0
+jax 0.6.2
+JAX env ok
+Lmod has detected the following error: The following module(s) are unknown:
+"gcc"
+
+Please check the spelling or version number. Also try "module spider ..."
+It is also possible your cache file is out-of-date; it may help to try:
+  $ module --ignore_cache load "gcc"
+
+Also make sure that all modulefiles written in TCL start with the string
+#%Module
+
+
+
+Lmod has detected the following error: The following module(s) are unknown:
+"cmake"
+
+Please check the spelling or version number. Also try "module spider ..."
+It is also possible your cache file is out-of-date; it may help to try:
+  $ module --ignore_cache load "cmake"
+
+Also make sure that all modulefiles written in TCL start with the string
+#%Module
+
+
+
+Lmod has detected the following error: The following module(s) are unknown:
+"openmpi"
+
+Please check the spelling or version number. Also try "module spider ..."
+It is also possible your cache file is out-of-date; it may help to try:
+  $ module --ignore_cache load "openmpi"
+
+Also make sure that all modulefiles written in TCL start with the string
+#%Module
+
+
+
+host compiler: g++ (GCC) 8.5.0 20210514 (Red Hat 8.5.0-28)   (CUDA 12.8 supports GCC <= 14)
+
+[2026-11-27T00:16:39-07:00] ===== SPARTA alp-h200 / default =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-h200/default: preset kokkos_cuda, arch 'HOPPER90', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default
+bench/env/build_sparta.sh: line 106: cmake: command not found
+
+[2026-11-27T00:16:39-07:00] ===== MI100: JAX env =====
+[platforms.sh] module python not available on c3cpu-a2-u32-1
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1
+[platforms.sh] module rocm/6.1.0 not available on c3cpu-a2-u32-1
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1
+[build_jax] alp-mi100: flavor rocm, jax(latest) -> /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+AssertionError: 3.6.8 (default, Aug 26 2025, 19:38:32) 
+[GCC 8.5.0 20210514 (Red Hat 8.5.0-28)]
+need python >= 3.10 for jax (module load python / set MODULES)
+
+[2026-11-27T00:16:40-07:00] ===== MI100: Kokkos 4.7 (HIP, gfx908) =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1
+
+[2026-11-27T00:16:40-07:00] built: none
+failed: alp-h200/default alp-mi100/jax-env alp-mi100/kokkos
+lrwxrwxrwx 1 aaja8389 aaja8389grp 84 Nov 25 20:29 /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aaja8389 aaja8389grp 83 Nov 25 20:49 /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aaja8389 aaja8389grp 87 Nov 25 21:07 /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/src/spa_kokkos_cuda

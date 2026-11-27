@@ -1,0 +1,73 @@
+[2026-11-27T00:48:02-07:00] build_alpine on c3cpu-a2-u32-1: platforms 'alp-h200 alp-a100 alp-l40 alp-rtx6000', variants 'default'
+CUDA toolkit present: Build cuda_12.8.r12.8/compiler.35583870_0
+jax 0.6.2
+JAX env ok
+host compiler: g++ (GCC) 14.2.0   (CUDA 12.8 supports GCC <= 14)
+
+[2026-11-27T00:48:04-07:00] ===== SPARTA alp-h200 / default =====
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-h200/default: preset kokkos_cuda, arch 'HOPPER90', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is GNU 14.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 12.8.93)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  HOPPER90
+-- Found CUDAToolkit: /projects/aaja8389/cuda-12.8/targets/x86_64-linux/include (found version "12.8.93")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (15.6s)
+-- Generating done (2.6s)
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default
+slurmstepd: error: *** JOB 36462880 ON c3cpu-a2-u32-1 CANCELLED AT 2026-11-27T00:51:29 ***
