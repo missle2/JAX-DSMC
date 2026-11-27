@@ -1,0 +1,530 @@
+[2026-11-25T19:59:46-07:00] build_alpine on c3cpu-a2-u32-1: platforms 'alp-h200 alp-a100 alp-l40 alp-rtx6000', variants 'default'
+[2026-11-25T19:59:46-07:00] installing the CUDA 12.8 toolkit into /projects/aaja8389/cuda-12.8
+Build cuda_12.8.r12.8/compiler.35583870_0
+jax 0.6.2
+JAX env ok
+host compiler: g++ (GCC) 14.2.0   (CUDA 12.8 supports GCC <= 14)
+
+[2026-11-25T20:09:21-07:00] ===== SPARTA alp-h200 / default =====
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-h200/default: preset kokkos_cuda, arch 'HOPPER90', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default
+tee: /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default.configure.log: No such file or directory
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is GNU 14.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 12.8.93)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  HOPPER90
+-- Found CUDAToolkit: /projects/aaja8389/cuda-12.8/targets/x86_64-linux/include (found version "12.8.93")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (21.1s)
+-- Generating done (2.3s)
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default
+
+[2026-11-25T20:09:45-07:00] ===== SPARTA alp-a100 / default =====
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-a100/default: preset kokkos_cuda, arch 'AMPERE80', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is GNU 14.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 12.8.93)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  AMPERE80
+-- Found CUDAToolkit: /projects/aaja8389/cuda-12.8/targets/x86_64-linux/include (found version "12.8.93")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (17.6s)
+-- Generating done (3.7s)
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default
+/projects/aaja8389/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nvec" was declared but never referenced
+      int index,nvec,nstride;
+                ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/projects/aaja8389/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nstride" was declared but never referenced
+      int index,nvec,nstride;
+                     ^
+
+[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_isurf.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_restart.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_surf.cpp.o
+[ 99%] Linking CXX static library libsparta_kokkos_cuda.a
+[ 99%] Built target sparta_kokkos_cuda
+[100%] Building CXX object src/CMakeFiles/spa_kokkos_cuda.dir/main.cpp.o
+[100%] Linking CXX executable spa_kokkos_cuda
+   text	   data	    bss	    dec	    hex	filename
+39870788	 126308	 349016	40346112	267a200	spa_kokkos_cuda
+[100%] Built target spa_kokkos_cuda
+[build_sparta] /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/src/spa_kokkos_cuda
+
+[2026-11-25T20:29:33-07:00] ===== SPARTA alp-l40 / default =====
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-l40/default: preset kokkos_cuda, arch 'ADA89', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is GNU 14.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 12.8.93)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  ADA89
+-- Found CUDAToolkit: /projects/aaja8389/cuda-12.8/targets/x86_64-linux/include (found version "12.8.93")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (17.0s)
+-- Generating done (2.0s)
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default
+/projects/aaja8389/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nvec" was declared but never referenced
+      int index,nvec,nstride;
+                ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/projects/aaja8389/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nstride" was declared but never referenced
+      int index,nvec,nstride;
+                     ^
+
+[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_isurf.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_restart.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_surf.cpp.o
+[ 99%] Linking CXX static library libsparta_kokkos_cuda.a
+[ 99%] Built target sparta_kokkos_cuda
+[100%] Building CXX object src/CMakeFiles/spa_kokkos_cuda.dir/main.cpp.o
+[100%] Linking CXX executable spa_kokkos_cuda
+   text	   data	    bss	    dec	    hex	filename
+39921508	 126308	 349016	40396832	2686820	spa_kokkos_cuda
+[100%] Built target spa_kokkos_cuda
+[build_sparta] /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/src/spa_kokkos_cuda
+
+[2026-11-25T20:49:29-07:00] ===== SPARTA alp-rtx6000 / default =====
+[build_sparta] nvcc: Build cuda_12.8.r12.8/compiler.35583870_0
+[build_sparta] alp-rtx6000/default: preset kokkos_cuda, arch 'BLACKWELL120', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is GNU 14.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /projects/aaja8389/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 12.8.93)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  BLACKWELL120
+-- Found CUDAToolkit: /projects/aaja8389/cuda-12.8/targets/x86_64-linux/include (found version "12.8.93")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (16.6s)
+-- Generating done (2.1s)
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default
+      int index,nvec,nstride;
+                ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/projects/aaja8389/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nstride" was declared but never referenced
+      int index,nvec,nstride;
+                     ^
+
+[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_grid.cpp.o
+[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_isurf.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_restart.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_surf.cpp.o
+[ 99%] Linking CXX static library libsparta_kokkos_cuda.a
+[ 99%] Built target sparta_kokkos_cuda
+[100%] Building CXX object src/CMakeFiles/spa_kokkos_cuda.dir/main.cpp.o
+[100%] Linking CXX executable spa_kokkos_cuda
+   text	   data	    bss	    dec	    hex	filename
+44010148	 126308	 349016	44485472	2a6cb60	spa_kokkos_cuda
+[100%] Built target spa_kokkos_cuda
+[build_sparta] /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/src/spa_kokkos_cuda
+
+[2026-11-25T21:07:43-07:00] ===== MI100: JAX env =====
+[build_jax] alp-mi100: flavor rocm, jax(latest) -> /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100
+Requirement already satisfied: pip in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (21.2.4)
+Collecting pip
+  Downloading pip-26.3-py3-none-any.whl (2.0 MB)
+Collecting wheel
+  Downloading wheel-0.48.0-py3-none-any.whl (33 kB)
+Collecting packaging>=24.0
+  Downloading packaging-26.4-py3-none-any.whl (140 kB)
+Installing collected packages: packaging, wheel, pip
+  Attempting uninstall: pip
+    Found existing installation: pip 21.2.4
+    Uninstalling pip-21.2.4:
+      Successfully uninstalled pip-21.2.4
+Successfully installed packaging-26.4 pip-26.3 wheel-0.48.0
+6.1.40091-a8dbc0c19Collecting jax-rocm60-plugin
+  Downloading jax_rocm60_plugin-0.5.0-cp310-cp310-manylinux_2_28_x86_64.whl.metadata (574 bytes)
+Collecting jax-rocm60-pjrt
+  Downloading jax_rocm60_pjrt-0.5.0-py3-none-manylinux_2_28_x86_64.whl.metadata (364 bytes)
+Collecting jax
+  Downloading jax-0.6.2-py3-none-any.whl.metadata (13 kB)
+Collecting jaxlib<=0.6.2,>=0.6.2 (from jax)
+  Downloading jaxlib-0.6.2-cp310-cp310-manylinux2014_x86_64.whl.metadata (1.3 kB)
+Collecting ml_dtypes>=0.5.0 (from jax)
+  Downloading ml_dtypes-0.7.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (11 kB)
+Collecting numpy>=1.26 (from jax)
+  Downloading numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (62 kB)
+Collecting opt_einsum (from jax)
+  Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
+Collecting scipy>=1.12 (from jax)
+  Downloading scipy-1.15.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+Downloading jax_rocm60_plugin-0.5.0-cp310-cp310-manylinux_2_28_x86_64.whl (7.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.6/7.6 MB 10.4 MB/s  0:00:00
+Downloading jax_rocm60_pjrt-0.5.0-py3-none-manylinux_2_28_x86_64.whl (122.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 122.9/122.9 MB 10.6 MB/s  0:00:11
+Downloading jax-0.6.2-py3-none-any.whl (2.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.7/2.7 MB 28.3 MB/s  0:00:00
+Downloading jaxlib-0.6.2-cp310-cp310-manylinux2014_x86_64.whl (89.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 89.9/89.9 MB 45.6 MB/s  0:00:01
+Downloading ml_dtypes-0.7.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (467 kB)
+Downloading numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.8/16.8 MB 25.0 MB/s  0:00:00
+Downloading scipy-1.15.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (37.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 37.7/37.7 MB 43.1 MB/s  0:00:00
+Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
+Installing collected packages: jax-rocm60-pjrt, opt_einsum, numpy, jax-rocm60-plugin, scipy, ml_dtypes, jaxlib, jax
+
+Successfully installed jax-0.6.2 jax-rocm60-pjrt-0.5.0 jax-rocm60-plugin-0.5.0 jaxlib-0.6.2 ml_dtypes-0.7.0 numpy-2.2.6 opt_einsum-3.4.0 scipy-1.15.3
+installed: {'jax': '0.6.2', 'jaxlib': '0.6.2'} {'jax-rocm60-plugin': '0.5.0', 'jax-rocm60-pjrt': '0.5.0'}
+Requirement already satisfied: numpy in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (2.2.6)
+Requirement already satisfied: scipy in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (1.15.3)
+Collecting matplotlib
+  Downloading matplotlib-3.10.9-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (52 kB)
+Collecting pytest
+  Downloading pytest-9.2.0-py3-none-any.whl.metadata (7.9 kB)
+Collecting contourpy>=1.0.1 (from matplotlib)
+  Downloading contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.5 kB)
+Collecting cycler>=0.10 (from matplotlib)
+  Downloading cycler-0.12.1-py3-none-any.whl.metadata (3.8 kB)
+Collecting fonttools>=4.22.0 (from matplotlib)
+  Downloading fonttools-4.65.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (125 kB)
+Collecting kiwisolver>=1.3.1 (from matplotlib)
+  Downloading kiwisolver-1.5.1-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl.metadata (5.2 kB)
+Requirement already satisfied: packaging>=20.0 in /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages (from matplotlib) (26.4)
+Collecting pillow>=8 (from matplotlib)
+  Downloading pillow-12.3.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+Collecting pyparsing>=3 (from matplotlib)
+  Downloading pyparsing-3.3.3-py3-none-any.whl.metadata (5.9 kB)
+Collecting python-dateutil>=2.7 (from matplotlib)
+  Downloading python_dateutil-3.0.0-py2.py3-none-any.whl.metadata (8.2 kB)
+Collecting exceptiongroup>=1 (from pytest)
+  Downloading exceptiongroup-1.3.2-py3-none-any.whl.metadata (7.1 kB)
+Collecting iniconfig>=2 (from pytest)
+  Downloading iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+Collecting pluggy<2,>=1.6 (from pytest)
+  Downloading pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
+Collecting pygments>=2.15 (from pytest)
+  Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting tomli>=2 (from pytest)
+  Downloading tomli-2.5.0-py3-none-any.whl.metadata (10 kB)
+Collecting typing-extensions>=4.6.0 (from exceptiongroup>=1->pytest)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting six>=1.6 (from python-dateutil>=2.7->matplotlib)
+  Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting tzdata (from python-dateutil>=2.7->matplotlib)
+  Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+Downloading matplotlib-3.10.9-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (8.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.8/8.8 MB 40.6 MB/s  0:00:00
+Downloading pytest-9.2.0-py3-none-any.whl (411 kB)
+Downloading pluggy-1.7.0-py3-none-any.whl (27 kB)
+Downloading contourpy-1.3.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (325 kB)
+Downloading cycler-0.12.1-py3-none-any.whl (8.3 kB)
+Downloading exceptiongroup-1.3.2-py3-none-any.whl (16 kB)
+Downloading fonttools-4.65.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.3/5.3 MB 30.2 MB/s  0:00:00
+Downloading iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+Downloading kiwisolver-1.5.1-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl (1.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.6/1.6 MB 7.9 MB/s  0:00:00
+Downloading pillow-12.3.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.9/6.9 MB 31.4 MB/s  0:00:00
+Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 4.4 MB/s  0:00:00
+Downloading pyparsing-3.3.3-py3-none-any.whl (126 kB)
+Downloading python_dateutil-3.0.0-py2.py3-none-any.whl (94 kB)
+Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+Downloading tomli-2.5.0-py3-none-any.whl (14 kB)
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+Installing collected packages: tzdata, typing-extensions, tomli, six, pyparsing, pygments, pluggy, pillow, kiwisolver, iniconfig, fonttools, cycler, contourpy, python-dateutil, exceptiongroup, pytest, matplotlib
+
+Successfully installed contourpy-1.3.2 cycler-0.12.1 exceptiongroup-1.3.2 fonttools-4.65.0 iniconfig-2.3.1 kiwisolver-1.5.1 matplotlib-3.10.9 pillow-12.3.0 pluggy-1.7.0 pygments-2.21.0 pyparsing-3.3.3 pytest-9.2.0 python-dateutil-3.0.0 six-1.17.0 tomli-2.5.0 typing-extensions-4.16.0 tzdata-2026.6
+[build_jax] manifest: /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/MANIFEST.txt
+/projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages/jaxlib/plugin_support.py:71: RuntimeWarning: JAX plugin jax_rocm60_plugin version 0.5.0 is installed, but it is not compatible with the installed jaxlib version 0.6.2, so it will not be used.
+  warnings.warn(
+ERROR:2026-11-25 21:09:48,559:jax._src.xla_bridge:444: Jax plugin configuration error: Exception when calling jax_plugins.xla_rocm60.initialize()
+Traceback (most recent call last):
+  File "/projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 442, in discover_pjrt_plugins
+    plugin_module.initialize()
+  File "/projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages/jax_plugins/xla_rocm60/__init__.py", line 137, in initialize
+    c_api = xb.register_plugin(
+  File "/projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 551, in register_plugin
+    c_api = xla_client.load_pjrt_plugin_dynamically(plugin_name, library_path)
+  File "/projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages/jaxlib/xla_client.py", line 111, in load_pjrt_plugin_dynamically
+    return _xla.load_pjrt_plugin(plugin_name, library_path, c_api=None)
+jaxlib._jax.XlaRuntimeError: INTERNAL: Failed to open /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100/lib/python3.10/site-packages/jax_plugins/xla_rocm60/xla_rocm_plugin.so: libsuitesparseconfig.so.4: cannot open shared object file: No such file or directory
+host c3cpu-a2-u32-1 python 3.10.2 jax 0.6.2 jaxlib 0.6.2
+import ok
+
+[2026-11-25T21:09:49-07:00] ===== MI100: Kokkos 4.7 (HIP, gfx908) =====
+Cloning into '/projects/aaja8389/sparta-scaling/src/kokkos-4.7.01'...
+Note: switching to 'b601b82d0f4b4491aeafb7b19cde557e92aa761d'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+Updating files:  13% (203/1484)Updating files:  14% (208/1484)Updating files:  15% (223/1484)Updating files:  16% (238/1484)Updating files:  17% (253/1484)Updating files:  18% (268/1484)Updating files:  19% (282/1484)Updating files:  20% (297/1484)Updating files:  21% (312/1484)Updating files:  22% (327/1484)Updating files:  23% (342/1484)Updating files:  24% (357/1484)Updating files:  25% (371/1484)Updating files:  26% (386/1484)Updating files:  27% (401/1484)Updating files:  28% (416/1484)Updating files:  28% (429/1484)Updating files:  29% (431/1484)Updating files:  30% (446/1484)Updating files:  31% (461/1484)Updating files:  32% (475/1484)Updating files:  33% (490/1484)Updating files:  34% (505/1484)Updating files:  35% (520/1484)Updating files:  36% (535/1484)Updating files:  37% (550/1484)Updating files:  38% (564/1484)Updating files:  39% (579/1484)Updating files:  40% (594/1484)Updating files:  41% (609/1484)Updating files:  42% (624/1484)Updating files:  43% (639/1484)Updating files:  44% (653/1484)Updating files:  45% (668/1484)Updating files:  45% (676/1484)Updating files:  46% (683/1484)Updating files:  47% (698/1484)Updating files:  48% (713/1484)Updating files:  49% (728/1484)Updating files:  50% (742/1484)Updating files:  51% (757/1484)Updating files:  52% (772/1484)Updating files:  53% (787/1484)Updating files:  54% (802/1484)Updating files:  55% (817/1484)Updating files:  56% (832/1484)Updating files:  57% (846/1484)Updating files:  58% (861/1484)Updating files:  59% (876/1484)Updating files:  60% (891/1484)Updating files:  61% (906/1484)Updating files:  62% (921/1484)Updating files:  63% (935/1484)Updating files:  64% (950/1484)Updating files:  65% (965/1484)Updating files:  66% (980/1484)Updating files:  67% (995/1484)Updating files:  68% (1010/1484)Updating files:  69% (1024/1484)Updating files:  70% (1039/1484)Updating files:  71% (1054/1484)Updating files:  72% (1069/1484)Updating files:  73% (1084/1484)Updating files:  74% (1099/1484)Updating files:  75% (1113/1484)Updating files:  75% (1123/1484)Updating files:  76% (1128/1484)Updating files:  77% (1143/1484)Updating files:  78% (1158/1484)Updating files:  79% (1173/1484)Updating files:  80% (1188/1484)Updating files:  81% (1203/1484)Updating files:  82% (1217/1484)Updating files:  83% (1232/1484)Updating files:  84% (1247/1484)Updating files:  85% (1262/1484)Updating files:  86% (1277/1484)Updating files:  87% (1292/1484)Updating files:  88% (1306/1484)Updating files:  89% (1321/1484)Updating files:  90% (1336/1484)Updating files:  90% (1341/1484)Updating files:  91% (1351/1484)Updating files:  92% (1366/1484)Updating files:  93% (1381/1484)Updating files:  94% (1395/1484)Updating files:  95% (1410/1484)Updating files:  96% (1425/1484)Updating files:  97% (1440/1484)Updating files:  98% (1455/1484)Updating files:  99% (1470/1484)Updating files: 100% (1484/1484)Updating files: 100% (1484/1484), done.
+[build_kokkos] Kokkos 4.7.01 for alp-mi100: -D Kokkos_ENABLE_HIP=ON -D CMAKE_CXX_COMPILER=mpicxx -D Kokkos_ARCH_AMD_GFX908=ON -> /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100
+-- Setting default Kokkos CXX standard to 20
+-- The CXX compiler identification is GNU 14.2.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicxx - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Kokkos version: 4.7.1
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Configured git information in /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100.build/generated/Kokkos_Version_Info.cpp
+-- Compiler Version: 14.2.0
+-- Using -std=gnu++20 for C++20 extensions as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::HIP
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  AMD_GFX908
+-- Performing Test Kokkos_ENABLE_IMPL_SKIP_NO_RTTI_FLAG
+-- Performing Test Kokkos_ENABLE_IMPL_SKIP_NO_RTTI_FLAG - Failed
+-- Found TPLLIBDL: /usr/include
+g++: error: unrecognized command-line option ‘--rtlib=compiler-rt’
+CMake Error at /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/FindPackageHandleStandardArgs.cmake:290 (message):
+  Could NOT find TPLROCM (missing: AMD_HIP_LIBRARY HSA_RUNTIME_LIBRARY)
+Call Stack (most recent call first):
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/FindPackageHandleStandardArgs.cmake:654 (_FPHSA_FAILURE_MESSAGE)
+  cmake/Modules/FindTPLROCM.cmake:28 (find_package_handle_standard_args)
+  cmake/kokkos_functions.cmake:260 (find_package)
+  cmake/kokkos_tpls.cmake:89 (kokkos_import_tpl)
+  cmake/kokkos_tribits.cmake:165 (include)
+  CMakeLists.txt:225 (kokkos_setup_build_environment)
+
+
+-- Configuring incomplete, errors occurred!
+
+[2026-11-25T21:10:00-07:00] built: alp-a100/default alp-l40/default alp-rtx6000/default alp-mi100/jax-env
+failed: alp-h200/default alp-mi100/kokkos
+lrwxrwxrwx 1 aaja8389 aaja8389grp 84 Nov 25 20:29 /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aaja8389 aaja8389grp 83 Nov 25 20:49 /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aaja8389 aaja8389grp 87 Nov 25 21:07 /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/src/spa_kokkos_cuda
