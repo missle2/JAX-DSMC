@@ -19,3 +19,4 @@ bench/env/build_sparta.sh: line 107: cmake: command not found
 [2026-11-27T01:20:32-07:00] ===== MI100: user-space ROCm 6.4.4 (toolchain + libraries) =====
 [rocm_user] /opt/rocm-6.4.4 (system runtime) + RPMs -> /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4
 [rocm_user] 21 RPMs, 2.8G
+slurmstepd: error: *** JOB 36464696 ON c3cpu-a2-u32-1 CANCELLED AT 2026-11-27T01:28:31 ***
