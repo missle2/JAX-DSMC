@@ -37,7 +37,9 @@ def main():
     for code, base in (("sparta", "kk_default" if gpu else "mpi128"), ("jax", "jax" if gpu else "jaxcpu_8x16")):
         med = defaultdict(list)
         for r in rows:
-            if r["code"] == code and r["variant"] in tune and r["procs"] == tune[r["variant"]].nodes * tune[r["variant"]].ranks_per_node:
+            want = 1 if matrix.single_gpu_only(a.platform) else tune[r["variant"]].nodes * tune[r["variant"]].ranks_per_node \
+                if r["variant"] in tune else -1
+            if r["code"] == code and r["variant"] in tune and r["procs"] == want:
                 med[(r["variant"], r["deck"])].append(r["mpsps"])
         med = {k: sorted(v)[len(v) // 2] for k, v in med.items()}
         decks = {d for (v, d) in med if v == base}

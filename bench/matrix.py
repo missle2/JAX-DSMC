@@ -436,27 +436,39 @@ def runs_validate(platform):
     return out
 
 
+def single_gpu_only(platform):
+    """Alpine: one GPU per job, never more (2026-11-27: multi-GPU jobs do not get through the
+    gpu-normal queue, and Alpine's role in the study is the single-GPU comparison across
+    architectures; multi-GPU and multi-node scaling is Perlmutter's)."""
+    return PLATFORMS[platform]["site"] == "curc"
+
+
 def build_jobs(phase, platform, nodes, rows, prune_s, codes, big=False):
     cfg = best_config(platform)
     jobs = []
+    one_gpu = single_gpu_only(platform)
     if phase == "check":
-        jobs.append(Job(platform, "check", 1, []))
+        jobs.append(Job(platform, "check", 1, [], shared_gpus=1 if one_gpu else 0))
     elif phase == "validate":
         runs = runs_validate(platform)
         for r in runs:
             estimate(r, platform, rows)
-        jobs.append(Job(platform, "validate", 1, runs))
+        jobs.append(Job(platform, "validate", 1, runs, shared_gpus=1 if PLATFORMS[platform]["gpu"] else 0))
     elif phase == "tune":
         runs = runs_tune(platform, rows, cfg)
         one = [r for r in runs if r.ranks_per_node == 1 and PLATFORMS[platform]["gpu"]]
         node = [r for r in runs if r not in one]
         if one:
             jobs.append(Job(platform, "tune1", 1, one, shared_gpus=1))
-        jobs.append(Job(platform, "tune", 1, node))
+        if not one_gpu:
+            jobs.append(Job(platform, "tune", 1, node))
     elif phase == "single":
         pf = PLATFORMS[platform]
         jobs.append(Job(platform, "single1", 1, runs_single(platform, rows, codes, cfg, True), shared_gpus=1 if pf["gpu"] else 0))
-        jobs.append(Job(platform, "singlenode", 1, runs_single(platform, rows, codes, cfg, False)))
+        if not one_gpu:
+            jobs.append(Job(platform, "singlenode", 1, runs_single(platform, rows, codes, cfg, False)))
+    elif phase in ("strong", "weak") and one_gpu:
+        print(f"{platform}: single-GPU only (no {phase} scaling on Alpine)")
     elif phase in ("strong", "weak"):
         for n in nodes:
             fn = runs_strong if phase == "strong" else runs_weak
@@ -478,7 +490,8 @@ def write_plan(job: Job, plan_dir):
         fh.write(f"# {job.name}: {len(job.runs)} runs, estimate {job.est_s / 60:.1f} min\n")
         if job.phase == "check":
             fh.write("python3 bench/env/check_env.py\n")
-            fh.write(f"NCCL_DEBUG=INFO $(pf_launch 1 {max(1, PLATFORMS[job.platform]['devices'])}) python3 bench/env/check_env.py --distributed\n")
+            if not single_gpu_only(job.platform):
+                fh.write(f"NCCL_DEBUG=INFO $(pf_launch 1 {max(1, PLATFORMS[job.platform]['devices'])}) python3 bench/env/check_env.py --distributed\n")
         for r in job.runs:
             fh.write(f"# est {r.est_s:.0f} s\n{plan_line(r, job.platform)}\n")
     return path
@@ -513,11 +526,8 @@ def main():
     for d in {a.results, os.path.join(a.results, a.platform)}:
         rows += load_rows(d)
     phases = ("check", "validate", "tune", "single", "strong", "weak") if a.phase == "all" else (a.phase,)
-    if a.platform == "pm-gpu" or a.platform == "pm-cpu":
-        pass
-    elif any(ph in ("strong", "weak") for ph in phases) and max(a.nodes) > 1:
-        print(f"note: {a.platform} is single-node in this study; strong/weak limited to 1 node")
-        a.nodes = [1]
+    if single_gpu_only(a.platform) and a.phase == "all":
+        phases = ("check", "validate", "tune", "single")
     jobs = []
     for ph in phases:
         jobs += build_jobs(ph, a.platform, a.nodes, rows, a.prune_seconds, a.codes, big=a.big)

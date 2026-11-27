@@ -235,3 +235,6 @@ examples/sparta_jax/results/profile_*/
 
 # the scaling study's environment scripts (not a virtualenv)
 !bench/env/
+
+# job logs in the repository root (sbatch --output defaults)
+/*.out

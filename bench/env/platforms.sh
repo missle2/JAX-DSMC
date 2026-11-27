@@ -148,6 +148,10 @@ pf_resources_shared() {  # $1 = GPUs
 
 pf_modules() {  # [$1 = module list; default MODULES]
   module purge 2>/dev/null || true
+  # Alpine: the software modules (gcc, cmake, openmpi, python, ...) are reached through
+  # slurm/alpine; a job submitted from a shell that had purged it found none of them
+  # (build job 36461958, 2026-11-27)
+  if [ "${SITE:-}" = curc ]; then module load slurm/alpine 2>/dev/null || true; fi
   local m
   for m in ${1:-${MODULES}}; do
     module load "${m}" 2>/dev/null || echo "[platforms.sh] module ${m} not available on $(hostname)"

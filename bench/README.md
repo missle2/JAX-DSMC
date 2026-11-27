@@ -8,7 +8,7 @@ This directory benchmarks two codes on SPARTA's three benchmark decks, `bench/in
 The platforms are:
 
 * NERSC Perlmutter, with A100 GPU nodes and EPYC CPU nodes, at 1–32 nodes.
-* CURC Alpine, with A100, H200, L40, RTX PRO 6000 Blackwell and MI100 GPUs, at one node each. Alpine has no MI250 or L40S partition (`sinfo`, 2026-11-25).
+* CURC Alpine, with A100, H200, L40, RTX PRO 6000 Blackwell and MI100 GPUs, **one GPU per job**: the single-GPU comparison across architectures (multi-GPU jobs do not get through Alpine's queue; `matrix.py` enforces it). Alpine has no MI250 or L40S partition (`sinfo`, 2026-11-25).
 
 The metric is million particle-steps per second (Mpsps), as on [bench.html](https://sparta.github.io/bench.html). It is computed as particle moves divided by the timed run's loop time, and reported per device, per node, and for strong and weak scaling.
 
