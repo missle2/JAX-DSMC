@@ -51,8 +51,21 @@ case "${JAX_FLAVOR}" in
       # The jax-rocm60 wheels (ROCm 6.0 builds, gfx908 included) run on Alpine's rocm/6.1.0;
       # 0.5.0 is their last release.
       hipconfig --version 2>/dev/null | head -1 || echo "warning: no hipconfig (rocm module not loaded?)"
-      RJ="${ROCM_JAX_VERSION:-0.5.0}"
-      pip install "jax==${RJ}" "jaxlib==${RJ}" "jax-rocm60-plugin==${RJ}" "jax-rocm60-pjrt==${RJ}"
+      # AMD's wheels built FOR the ROCm release in use (repo.radeon.com/rocm/manylinux/
+      # rocm-rel-<ver>; 6.4.4: jax 0.4.35), not PyPI's jax-rocm60 (built for 6.0, linking a
+      # comgr/RCCL ABI that 6.4 changed).  ROCM_JAX_WHEELS=pypi restores the PyPI 0.5.0 set.
+      if [ "${ROCM_JAX_WHEELS:-amd}" = pypi ]; then
+        RJ="${ROCM_JAX_VERSION:-0.5.0}"
+        pip install "jax==${RJ}" "jaxlib==${RJ}" "jax-rocm60-plugin==${RJ}" "jax-rocm60-pjrt==${RJ}"
+      else
+        RJ="${ROCM_JAX_VERSION:-0.4.35}"
+        BASE="${ROCM_JAX_BASE:-https://repo.radeon.com/rocm/manylinux/rocm-rel-6.4.4}"
+        PYT="cp$(python3 -c 'import sys; print(f"{sys.version_info[0]}{sys.version_info[1]}")')"
+        pip install "${BASE}/jax-${RJ}-py3-none-any.whl" \
+                    "${BASE}/jaxlib-${RJ}-${PYT}-${PYT}-manylinux_2_28_x86_64.whl" \
+                    "${BASE}/jax_rocm60_plugin-${RJ}-${PYT}-${PYT}-manylinux_2_28_x86_64.whl" \
+                    "${BASE}/jax_rocm60_pjrt-${RJ}-py3-none-manylinux_2_28_x86_64.whl"
+      fi
       # libraries the plugin needs that the loaded modules do not provide (2026-11-25: the
       # rocm/6.1.0 module's libhipsolver wants SuiteSparse, libsuitesparseconfig.so.4).
       # ROCM_EXTRA_LIBS=<dir> is appended to LD_LIBRARY_PATH by the venv's activate script.

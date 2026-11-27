@@ -32,7 +32,7 @@ pf_sinfo_gres() {
         if (tolower(g[i]) ~ tolower(m) && g[i] !~ /[0-9]g\.[0-9]+gb/) { print $1, $2, $3, g[i]; exit } }'
 }
 
-pf_alpine_gpu() {  # $1 = gres regex; fills PART GRES GRES_COUNT CORES_PER_NODE
+pf_alpine_gpu() {  # $1 = gres regex; fills PART GRES GRES_COUNT CORES_PER_NODE MEM_MB_PER_NODE
   local line p ncpu mem g
   line="$(pf_sinfo_gres "$1" || true)"
   if [ -n "${line}" ]; then
@@ -41,7 +41,9 @@ pf_alpine_gpu() {  # $1 = gres regex; fills PART GRES GRES_COUNT CORES_PER_NODE
     GRES="${GRES_TYPE:-$(echo "${g}" | cut -d: -f2)}"
     GRES_COUNT="${GRES_COUNT:-$(echo "${g}" | cut -d: -f3 | cut -d'(' -f1)}"
     CORES_PER_NODE="${CORES_PER_NODE:-${ncpu}}"
+    MEM_MB_PER_NODE="${MEM_MB_PER_NODE:-${mem}}"
   fi
+  : "${MEM_MB_PER_NODE:=240000}"
   : "${PART:?no partition with a whole-card gres matching '$1' in sinfo: set PART and GRES_TYPE}"
   : "${GRES:=${GRES_TYPE:?set GRES_TYPE}}"
   : "${GRES_COUNT:?set GRES_COUNT (gres per node)}"
@@ -89,7 +91,16 @@ case "${PLATFORM}" in
       # rocm/6.1.0 module, whose hipcc is older than Kokkos 5's minimum (6.2) and whose RCCL
       # lacks ncclCommRegister, which the jax-rocm60 plugin calls.  ROCM_ROOT overrides
       # (ROCM_ROOT= with MODULES/BUILD_MODULES naming rocm/6.1.0 restores the module).
-      ROCM_ROOT="${ROCM_ROOT-/opt/rocm-6.4.4}"
+      # the user-space tree of bench/env/rocm_user.sh (system runtime + toolchain + libraries)
+      # once it exists; the bare system runtime otherwise (enough to run, not to build)
+      _RU="/scratch/alpine/${USER}/rocm-6.4.4-user"
+      if [ -x "${_RU}/opt/rocm-6.4.4/bin/hipcc" ]; then
+        ROCM_ROOT="${ROCM_ROOT-${_RU}/opt/rocm-6.4.4}"
+        _XL="${_RU}/usr/lib64"; [ -d "${_XL}/atlas" ] && _XL="${_XL}:${_XL}/atlas"
+        ROCM_EXTRA_LIBS="${ROCM_EXTRA_LIBS:-${_XL}}"
+      else
+        ROCM_ROOT="${ROCM_ROOT-/opt/rocm-6.4.4}"
+      fi
       MODULES="${MODULES:-python gcc openmpi}"
       BUILD_MODULES="${BUILD_MODULES:-gcc cmake openmpi}"
       DEVICES_PER_GRES=1  # one HIP device per MI100 card
@@ -106,9 +117,20 @@ case "${PLATFORM}" in
 esac
 
 # sbatch resources for N nodes with all GPUs (or cores) of each node
+# Alpine: no --exclusive (a fully idle GPU node is rare: such a job would wait for days); the
+# job asks for the node's GPUs with one task, a per-GPU share of the cores and 90 % of a per-GPU
+# share of the memory each -- what other users' jobs cannot take from it -- and CURC requires
+# --ntasks or --mem on GPU partitions (Error 9, 2026-11-27).  Other users' CPU-only work on the
+# node can still share memory bandwidth: noted in the report.
+pf_alpine_share() {  # $1 = GPUs -> sbatch resource flags for that many GPUs of one node
+  local c=$(( CORES_PER_NODE / GRES_COUNT )) m=$(( MEM_MB_PER_NODE * 9 / 10 / GRES_COUNT ))
+  echo "${SB_ARGS} -N 1 --ntasks=$1 --cpus-per-task=${c} --mem=$(( m * $1 ))M --gres=gpu:${GRES}:$1"
+}
+
 pf_resources() {  # $1 = nodes
   if [ "${SITE}" = curc ]; then
-    echo "${SB_ARGS} -N $1 --gres=gpu:${GRES}:${GRES_COUNT} --exclusive"
+    [ "$1" = 1 ] || { echo "Alpine runs are single-node" >&2; return 1; }
+    pf_alpine_share "${GRES_COUNT}"
   else
     echo "${SB_ARGS} -N $1 --exclusive"
   fi
@@ -118,7 +140,7 @@ pf_resources() {  # $1 = nodes
 # by the GPU fraction; Alpine: a non-exclusive job with G whole cards)
 pf_resources_shared() {  # $1 = GPUs
   if [ "${SITE}" = curc ]; then
-    echo "${SB_ARGS} -N 1 -n $1 --gres=gpu:${GRES}:$1 -c $(( CORES_PER_NODE / GRES_COUNT ))"
+    pf_alpine_share "$1"
   else
     echo "-A ${ACCOUNT} -C ${CONSTRAINT:-gpu} -q shared -N 1 -n $1 -c 32 --gpus-per-task=1"
   fi
@@ -137,6 +159,7 @@ pf_modules() {  # [$1 = module list; default MODULES]
       export PATH="${ROCM_ROOT}/bin:${PATH}"
       export LD_LIBRARY_PATH="${ROCM_ROOT}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
       export CMAKE_PREFIX_PATH="${ROCM_ROOT}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
+      if [ -n "${ROCM_EXTRA_LIBS:-}" ]; then export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${ROCM_EXTRA_LIBS}"; fi
     else
       echo "[platforms.sh] WARNING: ROCM_ROOT=${ROCM_ROOT} has no bin/hipcc on $(hostname)"
     fi

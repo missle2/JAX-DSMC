@@ -4,9 +4,10 @@
 #      Blackwell needs >= 12.8)
 #   2. a check that main's JAX env (/projects/$USER/jax-env) imports
 #   3. SPARTA/Kokkos for alp-h200, alp-a100, alp-l40, alp-rtx6000 (default variant)
-#   4. AMD MI100 (after the NVIDIA builds), with the system ROCm /opt/rocm-6.4.4: SuiteSparse
-#      for its hipsolver, the JAX env (jax-rocm60 0.5.0 wheels), SPARTA with the bundled
-#      Kokkos 5 (fallback: external Kokkos 4.7).  MI100=0 skips this part.
+#   4. AMD MI100 (after the NVIDIA builds): a user-space ROCm 6.4.4 on /scratch (rocm_user.sh:
+#      the nodes' runtime + toolchain + libraries from their own repo), the JAX env (AMD's
+#      ROCm 6.4.4 wheels, jax 0.4.35), SPARTA with the bundled Kokkos 5 (fallback: external
+#      Kokkos 4.7).  MI100=0 skips this part.
 #
 #   cd /projects/$USER/JAX-DSMC-sparta && sbatch bench/env/build_alpine.sbatch
 #
@@ -74,9 +75,10 @@ done
 
 # --- 4. AMD MI100 ----------------------------------------------------------------------------------
 if [ "${MI100:-1}" = 1 ]; then
-  echo; echo "[$(date -Iseconds)] ===== MI100: SuiteSparse for ROCm's hipsolver ====="
-  XLIB="/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64:/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64/atlas"
-  bash bench/env/rocm_extra_libs.sh || echo "rocm_extra_libs.sh: see above"
+  echo; echo "[$(date -Iseconds)] ===== MI100: user-space ROCm 6.4.4 (toolchain + libraries) ====="
+  RU="/scratch/alpine/${USER}/rocm-6.4.4-user"
+  if bash bench/env/rocm_user.sh; then ok+=("alp-mi100/rocm-6.4.4"); else bad+=("alp-mi100/rocm-6.4.4"); fi
+  XLIB="${RU}/usr/lib64:${RU}/usr/lib64/atlas"
   echo; echo "[$(date -Iseconds)] ===== MI100: JAX env ====="
   if PLATFORM=alp-mi100 ROCM_EXTRA_LIBS="${XLIB}" bash bench/env/build_jax.sh; then ok+=("alp-mi100/jax-env"); else bad+=("alp-mi100/jax-env"); fi
   # SPARTA: bundled Kokkos 5 with ROCm 6.4.4; if that fails, an external Kokkos 4.7
