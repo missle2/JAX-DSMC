@@ -11,6 +11,12 @@ set -uo pipefail
 : "${PLAN:?PLAN (plan file) not set}"
 : "${PLATFORM:?PLATFORM not set}"
 cd "${SLURM_SUBMIT_DIR}"
+# A job submitted from inside another allocation (e.g. an acompile shell) inherits that
+# allocation's memory setting (sbatch --export=ALL); with the job's own one srun then refuses
+# every step: "SLURM_MEM_PER_CPU, SLURM_MEM_PER_GPU, and SLURM_MEM_PER_NODE are mutually
+# exclusive" (Alpine jobs 36502982-94, 2026-11-27).  Steps take the job's memory (srun --mem=0
+# in pf_launch), so none of these is needed.
+unset SLURM_MEM_PER_CPU SLURM_MEM_PER_GPU SLURM_MEM_PER_NODE
 # shellcheck disable=SC1091
 source bench/env/runtime.sh
 echo "[$(date -Iseconds)] job ${SLURM_JOB_ID} ${SLURM_JOB_NAME}: ${SLURM_JOB_NUM_NODES} node(s) $(scontrol show hostnames "${SLURM_JOB_NODELIST}" | head -3 | paste -sd, -)..."

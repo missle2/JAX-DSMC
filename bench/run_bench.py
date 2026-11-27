@@ -129,6 +129,7 @@ def run_sparta(a):
     x, y, z = a.xyz or D.size_xyz(a.particles)
     n = 10 * x * y * z
     deckfile = sparta_deck_file(a.deck)
+    failed = 0
     for rep in range(a.reps):
         name = log_name(a.deck, a.machine, a.variant, n, a.procs, rep)
         path = os.path.join(a.out, "logs", name)
@@ -145,10 +146,14 @@ def run_sparta(a):
         if a.dry_run:
             continue
         t0 = time.perf_counter()
-        p = subprocess.run(cmd, cwd=os.path.dirname(deckfile))
+        env = dict(os.environ)
+        if os.environ.get("SPARTA_LIBPATH"):  # e.g. the CUDA toolkit SPARTA was built with (Alpine)
+            env["LD_LIBRARY_PATH"] = os.environ["SPARTA_LIBPATH"] + ":" + env.get("LD_LIBRARY_PATH", "")
+        p = subprocess.run(cmd, cwd=os.path.dirname(deckfile), env=env)
         wall = time.perf_counter() - t0
         if p.returncode != 0:
             print(f"SPARTA failed (exit {p.returncode}); see {path}", flush=True)
+            failed += 1
             continue
         with open(path) as fh:
             res = parse_sparta_log(fh.read())
@@ -175,6 +180,8 @@ def run_sparta(a):
         }
         append_row(a.out, row)
         print(json.dumps({k: row[k] for k in ("deck", "particles", "procs", "loop_time", "mpsps")}), flush=True)
+    if failed:
+        sys.exit(1)  # the job log then counts the run as FAILED
 
 
 # ---------------------------------------------------------------------------------------------

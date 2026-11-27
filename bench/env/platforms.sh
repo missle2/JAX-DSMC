@@ -111,6 +111,11 @@ case "${PLATFORM}" in
       # one shared Python 3.13 + JAX 0.12.1 env for the four NVIDIA platforms (build_jax.sh);
       # main's 3.10 / 0.6.2 jax-env until it exists
       JAX_VENV_SHARED="/projects/${USER}/jax-env-313"
+      # SPARTA/Kokkos links libcudart.so.12 dynamically (ldd in the check jobs, 2026-11-27): the
+      # CUDA 12.8 toolkit it was built with must be on its library path at run time.  Only the
+      # SPARTA runs get it (run_bench.py), not JAX, whose wheels bring their own CUDA.
+      CUDA_ROOT="${CUDA_ROOT:-/projects/${USER}/cuda-12.8}"
+      [ -d "${CUDA_ROOT}/lib64" ] && SPARTA_LIBPATH="${CUDA_ROOT}/lib64"
       if [ -x "${JAX_VENV_SHARED}/bin/python3" ]; then JAX_VENV_DEFAULT="${JAX_VENV_SHARED}"
       else JAX_VENV_DEFAULT="/projects/${USER}/jax-env"; fi
       DEVICES_PER_GRES=1
@@ -224,12 +229,12 @@ pf_launch() {  # $1 = nodes, $2 = ranks per node, [$3 = bind | nobind | node]
   [ "${c}" -lt 1 ] && c=1
   if [ "${GPUS_PER_NODE}" -gt 0 ]; then
     case "${3:-bind}" in
-      bind)   echo "srun -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores --gpus-per-task=1 --gpu-bind=${GPU_BIND:-closest}" ;;
-      nobind) echo "srun -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores --gpus-per-node=${GRES_COUNT:-${GPUS_PER_NODE}} --gpu-bind=none" ;;
-      node)   echo "srun -N $1 -n $1 --ntasks-per-node=1 -c ${avail} --cpu-bind=cores --gpus-per-node=${GRES_COUNT:-${GPUS_PER_NODE}} --gpu-bind=none" ;;
+      bind)   echo "srun --mem=0 -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores --gpus-per-task=1 --gpu-bind=${GPU_BIND:-closest}" ;;
+      nobind) echo "srun --mem=0 -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores --gpus-per-node=${GRES_COUNT:-${GPUS_PER_NODE}} --gpu-bind=none" ;;
+      node)   echo "srun --mem=0 -N $1 -n $1 --ntasks-per-node=1 -c ${avail} --cpu-bind=cores --gpus-per-node=${GRES_COUNT:-${GPUS_PER_NODE}} --gpu-bind=none" ;;
     esac
   else
-    echo "srun -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores"
+    echo "srun --mem=0 -N $1 -n ${n} --ntasks-per-node=$2 -c ${c} --cpu-bind=cores"
   fi
 }
 

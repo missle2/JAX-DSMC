@@ -54,6 +54,7 @@ export OMP_PLACES="${OMP_PLACES:-threads}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 
 # what plan lines use (they run in `bash -c`)
+export SPARTA_LIBPATH
 export PLATFORM MACHINE SITE GPUS_PER_NODE CORES_PER_NODE SMT GRES_COUNT RESULTS_DIR SPARTA_BUILD_DIR JAX_ENV_DIR BENCH_ROOT
 export -f pf_launch
 mkdir -p "${RESULTS_DIR}"
