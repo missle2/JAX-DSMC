@@ -1,0 +1,360 @@
+nohup: ignoring input
+[build_sparta] nvcc: Build cuda_13.2.r13.2/compiler.37668154_0
+[build_sparta] pm-gpu/mallocasync: preset kokkos_cuda, arch 'AMPERE80 ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync
+loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.3.0
+-- The CXX compiler identification is GNU 14.3.0
+-- Cray Programming Environment 2.7.36 C
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Cray Programming Environment 2.7.36 CXX
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /pscratch/sd/a/aajain/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
+-- Found MPI_CXX: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/lib/stubs/libcuda.so (found version "4.1")
+-- Found MPI: TRUE (found version "4.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support enabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 13.2.78)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  ZEN3
+--  AMPERE80
+-- Found CUDAToolkit: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/include (found version "13.2.78")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (19.8s)
+-- Generating done (1.0s)
+-- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync
+[  0%] Built target AlwaysCheckGit
+[  0%] Built target impl_git_version
+[  7%] Built target kokkoscore
+[  8%] Built target kokkossimd
+[  9%] Built target kokkosalgorithms
+[ 10%] Built target kokkoscontainers
+[ 10%] Built target sparta_kokkos_cuda_PRE_BUILD
+[ 39%] Built target pkg_kokkos
+[ 99%] Built target sparta_kokkos_cuda
+[100%] Built target spa_kokkos_cuda
+[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/src/spa_kokkos_cuda
+[build_sparta] nvcc: Build cuda_13.2.r13.2/compiler.37668154_0
+[build_sparta] pm-gpu/march: preset kokkos_cuda, arch 'AMPERE80 ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march
+loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.3.0
+-- The CXX compiler identification is GNU 14.3.0
+-- Cray Programming Environment 2.7.36 C
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Cray Programming Environment 2.7.36 CXX
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /pscratch/sd/a/aajain/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
+-- Found MPI_CXX: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/lib/stubs/libcuda.so (found version "4.1")
+-- Found MPI: TRUE (found version "4.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 13.2.78)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  ZEN3
+--  AMPERE80
+-- Found CUDAToolkit: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/include (found version "13.2.78")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (18.2s)
+-- Generating done (1.0s)
+-- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march
+[  0%] Built target AlwaysCheckGit
+[  0%] Built target impl_git_version
+[  7%] Built target kokkoscore
+[  9%] Built target kokkossimd
+[  9%] Built target kokkosalgorithms
+[ 10%] Built target kokkoscontainers
+[ 10%] Built target sparta_kokkos_cuda_PRE_BUILD
+[ 39%] Built target pkg_kokkos
+[ 99%] Built target sparta_kokkos_cuda
+[100%] Built target spa_kokkos_cuda
+[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/src/spa_kokkos_cuda
+[build_sparta] nvcc: Build cuda_13.2.r13.2/compiler.37668154_0
+[build_sparta] pm-gpu/bigbig: preset kokkos_cuda, arch 'AMPERE80 ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig
+loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
+-- The C compiler identification is GNU 14.3.0
+-- The CXX compiler identification is GNU 14.3.0
+-- Cray Programming Environment 2.7.36 C
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Cray Programming Environment 2.7.36 CXX
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /pscratch/sd/a/aajain/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
+-- Found MPI_CXX: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/lib/stubs/libcuda.so (found version "4.1")
+-- Found MPI: TRUE (found version "4.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 13.2.78)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  ZEN3
+--  AMPERE80
+-- Found CUDAToolkit: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/include (found version "13.2.78")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (18.1s)
+-- Generating done (0.9s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    SPARTA_SIZES
+
+
+-- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig
+[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_isurf.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_restart.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_surf.cpp.o
+/pscratch/sd/a/aajain/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nvec" was declared but never referenced
+      int index,nvec,nstride;
+                ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/pscratch/sd/a/aajain/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nstride" was declared but never referenced
+      int index,nvec,nstride;
+                     ^
+
+[ 99%] Linking CXX static library libsparta_kokkos_cuda.a
+[ 99%] Built target sparta_kokkos_cuda
+[100%] Building CXX object src/CMakeFiles/spa_kokkos_cuda.dir/main.cpp.o
+[100%] Linking CXX executable spa_kokkos_cuda
+   text	   data	    bss	    dec	    hex	filename
+28230668	 126212	 381624	28738504	1b683c8	spa_kokkos_cuda
+[100%] Built target spa_kokkos_cuda
+[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/src/spa_kokkos_cuda
+[build_sparta] pm-cpu/mpi_march: preset mpi, arch 'ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_march
+loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/mpi.cmake
+-- The C compiler identification is GNU 14.3.0
+-- The CXX compiler identification is GNU 14.3.0
+-- Cray Programming Environment 2.7.36 C
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Cray Programming Environment 2.7.36 CXX
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /opt/cray/pe/craype/2.7.36/bin/CC - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
+-- Found MPI_CXX: /opt/cray/pe/craype/2.7.36/bin/CC (found version "4.1")
+-- Found MPI: TRUE (found version "4.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: mpi
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- Configuring done (3.7s)
+-- Generating done (0.2s)
+-- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_march
+[  0%] Built target sparta_mpi_PRE_BUILD
+[ 99%] Built target sparta_mpi
+[100%] Built target spa_mpi
+[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_march/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_march/src/spa_mpi
+
+Lmod is automatically replacing "gcc-native/14" with "cce/21.0.0".
+
+
+Lmod is automatically replacing "PrgEnv-gnu/8.7.0" with "PrgEnv-cray/8.7.0".
+
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) cray-libsci/26.03.0     2) cray-mpich/9.1.0
+
+[build_sparta] PrgEnv-cray: Cray clang version 21.0.0  (99bfd3022cb16f3dae6a1dfb3c073aec2551133b)
+[build_sparta] pm-cpu/mpi_cce: preset mpi, arch 'ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_cce
+loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/mpi.cmake
+-- The C compiler identification is CrayClang 21.0.0
+-- The CXX compiler identification is CrayClang 21.0.0
+-- Cray Programming Environment 2.7.36 C
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Cray Programming Environment 2.7.36 CXX
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /opt/cray/pe/craype/2.7.36/bin/CC - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
+-- Found MPI_CXX: /opt/cray/pe/craype/2.7.36/bin/CC (found version "4.1")
+-- Found MPI: TRUE (found version "4.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: mpi
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- Configuring done (6.8s)
+-- Generating done (0.2s)
+-- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_cce
+[  0%] Built target sparta_mpi_PRE_BUILD
+[ 99%] Built target sparta_mpi
+[100%] Built target spa_mpi
+[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_cce/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_cce/src/spa_mpi
+lrwxrwxrwx 1 aajain aajain 87 Nov 27 14:04 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp/src/spa_kokkos_omp
+lrwxrwxrwx 1 aajain aajain 95 Nov 27 14:05 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial/src/spa_kokkos_mpi_only
+lrwxrwxrwx 1 aajain aajain 77 Nov 27 14:16 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_cce/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_cce/src/spa_mpi
+lrwxrwxrwx 1 aajain aajain 79 Nov 27 14:16 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_march/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi_march/src/spa_mpi
+lrwxrwxrwx 1 aajain aajain 73 Nov 27 14:03 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/src/spa_mpi
+lrwxrwxrwx 1 aajain aajain 84 Nov 27 14:15 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aajain aajain 85 Nov 27 13:37 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aajain aajain 89 Nov 27 14:07 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/src/spa_kokkos_cuda
+lrwxrwxrwx 1 aajain aajain 83 Nov 27 14:08 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/src/spa_kokkos_cuda
