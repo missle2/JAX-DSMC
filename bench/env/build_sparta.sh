@@ -63,7 +63,9 @@ case "${VARIANT}" in
   mallocasync) EXTRA+=(-D Kokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=ON) ;;
   march) CXX_FLAGS="-O3 -march=native" ;;
   multikernel) EXTRA+=(-D Kokkos_ENABLE_HIP_MULTIPLE_KERNEL_INSTANTIATIONS=ON) ;;
-  bigbig) EXTRA+=(-D SPARTA_SIZES=bigbig) ;;
+  # SPARTA has no size option: its mpi_big preset appends -DSPARTA_BIGBIG to
+  # SPARTA_CXX_COMPILE_FLAGS (a -D SPARTA_SIZES was ignored: Perlmutter build 2026-11-27)
+  bigbig) SPARTA_FLAGS_APPEND="-DSPARTA_BIGBIG" ;;
   mpi) PRESET=mpi ;;
   mpi_march) PRESET=mpi; CXX_FLAGS="-O3 -march=native" ;;
   # Cray compiler (CCE) through PrgEnv-cray; jobs run these binaries under the same PrgEnv
@@ -120,8 +122,20 @@ if [ -n "${CHECK:-}" ]; then
   exit 0
 fi
 mkdir -p "${SPARTA_BUILD_DIR}"  # the configure log below lives next to the build (first build: absent)
+# the preset, or a wrapper that includes it and appends to SPARTA_CXX_COMPILE_FLAGS (the presets
+# accumulate that list -- e.g. Kokkos' MPI C++ skip flags -- so it is extended, not replaced)
+PRESET_FILE="${SRC}/cmake/presets/${PRESET}.cmake"
+if [ -n "${SPARTA_FLAGS_APPEND:-}" ]; then
+  mkdir -p "${SPARTA_BUILD_DIR}"
+  PRESET_FILE="${BUILD}.preset.cmake"
+  cat > "${PRESET_FILE}" <<PRESET_EOF
+include(${SRC}/cmake/presets/${PRESET}.cmake)
+set(SPARTA_CXX_COMPILE_FLAGS \${SPARTA_CXX_COMPILE_FLAGS} ${SPARTA_FLAGS_APPEND}
+    CACHE STRING "Compiler flags use when building .o files for spa_*" FORCE)
+PRESET_EOF
+fi
 # --fresh: no cache from an earlier configure (another compiler/ROCm) survives
-cmake --fresh -S "${SRC}/cmake" -B "${BUILD}" -C "${SRC}/cmake/presets/${PRESET}.cmake" \
+cmake --fresh -S "${SRC}/cmake" -B "${BUILD}" -C "${PRESET_FILE}" \
   -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" "${ARCH[@]}" "${EXTRA[@]}" "${CUDA_ARGS[@]}" \
   2>&1 | tee "${BUILD}.configure.log"
 cmake --build "${BUILD}" -j "${JOBS:-16}" 2>&1 | tail -20
