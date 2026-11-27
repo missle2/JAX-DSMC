@@ -75,7 +75,7 @@ done
 # --- 4. AMD MI100 ----------------------------------------------------------------------------------
 if [ "${MI100:-1}" = 1 ]; then
   echo; echo "[$(date -Iseconds)] ===== MI100: SuiteSparse for rocm/6.1.0's hipsolver ====="
-  XLIB="/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64"
+  XLIB="/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64:/projects/${USER}/sparta-scaling/rocm-extra/usr/lib64/atlas"
   bash bench/env/rocm_extra_libs.sh || echo "rocm_extra_libs.sh: see above"
   echo; echo "[$(date -Iseconds)] ===== MI100: JAX env ====="
   if PLATFORM=alp-mi100 ROCM_EXTRA_LIBS="${XLIB}" bash bench/env/build_jax.sh; then ok+=("alp-mi100/jax-env"); else bad+=("alp-mi100/jax-env"); fi
