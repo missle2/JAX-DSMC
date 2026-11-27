@@ -147,14 +147,27 @@ pf_resources_shared() {  # $1 = GPUs
 }
 
 pf_modules() {  # [$1 = module list; default MODULES]
-  module purge 2>/dev/null || true
-  # Alpine: the software modules (gcc, cmake, openmpi, python, ...) are reached through
-  # slurm/alpine; a job submitted from a shell that had purged it found none of them
-  # (build job 36461958, 2026-11-27)
-  if [ "${SITE:-}" = curc ]; then module load slurm/alpine 2>/dev/null || true; fi
+  # A job inherits the submitting shell's module state (sbatch --export=ALL).  Submitted from a
+  # shell that had run `module purge`, it found no gcc/cmake/openmpi/python at all, even after
+  # `module load slurm/alpine` (build jobs 36461958 and the next, 2026-11-27).  So: make sure
+  # Lmod is initialised, then `module reset` (the site defaults and MODULEPATH, which purge
+  # does not restore), then slurm/alpine, then the list.
+  if ! type module > /dev/null 2>&1; then
+    local f
+    for f in /etc/profile.d/z00_lmod.sh /etc/profile.d/lmod.sh /usr/share/lmod/lmod/init/bash; do
+      # shellcheck disable=SC1090
+      [ -f "${f}" ] && { source "${f}"; break; }
+    done
+  fi
+  if [ "${SITE:-}" = curc ]; then
+    module reset > /dev/null 2>&1 || module purge 2>/dev/null || true
+    module load slurm/alpine 2>/dev/null || true
+  else
+    module purge 2>/dev/null || true
+  fi
   local m
   for m in ${1:-${MODULES}}; do
-    module load "${m}" 2>/dev/null || echo "[platforms.sh] module ${m} not available on $(hostname)"
+    module load "${m}" 2>/dev/null || echo "[platforms.sh] module ${m} not available on $(hostname) (MODULEPATH=${MODULEPATH:-unset})"
   done
   # a ROCm install outside the module system (ROCM_ROOT, e.g. /opt/rocm-6.4.4)
   if [ -n "${ROCM_ROOT:-}" ]; then

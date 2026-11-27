@@ -25,7 +25,9 @@ cd "${SLURM_SUBMIT_DIR}"
 CUDA_ROOT="${CUDA_ROOT:-/projects/${USER}/cuda-12.8}"
 CUDA_RUN="cuda_12.8.1_570.124.06_linux.run"
 CUDA_URL="https://developer.download.nvidia.com/compute/cuda/12.8.1/local_installers/${CUDA_RUN}"
-PLATFORMS="${PLATFORMS:-alp-h200 alp-a100 alp-l40 alp-rtx6000}"
+# PLATFORMS= (empty) skips every NVIDIA build; unset means all four.  A platform whose spa
+# exists is skipped unless REBUILD=1.
+PLATFORMS="${PLATFORMS-alp-h200 alp-a100 alp-l40 alp-rtx6000}"
 VARIANTS="${VARIANTS:-default}"
 export BUILD_MODULES="${BUILD_MODULES:-gcc cmake openmpi}"
 export JOBS=4
@@ -49,8 +51,8 @@ else
 fi
 
 # --- 2. the JAX env (main's) ---------------------------------------------------------------------
-module purge 2>/dev/null || true
-module load python 2>/dev/null || true
+PLATFORM=alp-a100 source bench/env/platforms.sh > /dev/null  # for pf_modules
+pf_modules "python"
 if /projects/"${USER}"/jax-env/bin/python3 -c 'import jax, scipy; print("jax", jax.__version__)'; then
   echo "JAX env ok"
 else
@@ -58,12 +60,14 @@ else
 fi
 
 # --- 3. SPARTA/Kokkos per platform ---------------------------------------------------------------
-module purge 2>/dev/null || true
-for m in ${BUILD_MODULES}; do module load "${m}"; done
+pf_modules "${BUILD_MODULES}"
 echo "host compiler: $(g++ --version | head -1)   (CUDA 12.8 supports GCC <= 14)"
 ok=(); bad=()
 for P in ${PLATFORMS}; do
   for V in ${VARIANTS}; do
+    if [ -x "/projects/${USER}/sparta-scaling/builds/sparta-${P}-${V}/spa" ] && [ "${REBUILD:-0}" != 1 ]; then
+      echo "[$(date -Iseconds)] SPARTA ${P}/${V}: already built (REBUILD=1 rebuilds)"; ok+=("${P}/${V}"); continue
+    fi
     echo; echo "[$(date -Iseconds)] ===== SPARTA ${P} / ${V} ====="
     if PLATFORM="${P}" VARIANT="${V}" CUDA_ROOT="${CUDA_ROOT}" bash bench/env/build_sparta.sh; then
       ok+=("${P}/${V}")
