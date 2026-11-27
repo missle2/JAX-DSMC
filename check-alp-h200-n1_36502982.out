@@ -1,0 +1,4 @@
+[runtime] alp-h200 on c3gpu-g5-u1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa
+[2026-11-27T15:09:52-07:00] job 36502982 check-alp-h200-n1: 1 node(s) c3gpu-g5-u1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-h200/check-alp-h200-n1.plan: 3 runs
+[2026-11-27T15:09:52-07:00] run 1: python3 bench/env/check_env.py

@@ -31,3 +31,6 @@ srun: Job step's --cpus-per-task value exceeds that of job (64 > 21). Job step m
 srun: Job 36500992 step creation temporarily disabled, retrying (Requested nodes are busy)
 srun: Job 36500992 step creation still disabled, retrying (Requested nodes are busy)
 srun: Job 36500992 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500992 step creation still disabled, retrying (Requested nodes are busy)
+slurmstepd: error: *** JOB 36500992 ON c3gpu-c2-u1 CANCELLED AT 2026-11-27T14:36:03 DUE TO TIME LIMIT ***
+srun: error: Unable to create step for job 36500992: Job/step already completing or completed

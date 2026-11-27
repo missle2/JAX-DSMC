@@ -29,3 +29,30 @@ srun: Job 36500995 step creation still disabled, retrying (Requested nodes are b
 srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
 srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
 srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Cancelled pending job step with signal 15
+srun: error: Unable to create step for job 36500995: Job/step already completing or completed
+[2026-11-27T14:40:08-07:00] run 2 FAILED
+[2026-11-27T14:40:08-07:00] run 2 done in 1920 s
+[2026-11-27T14:40:08-07:00] run 3: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 899 $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+srun: Job step's --cpus-per-task value exceeds that of job (64 > 21). Job step may never run.
+srun: Job 36500995 step creation temporarily disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Cancelled pending job step with signal 15
+srun: error: Unable to create step for job 36500995: Job/step already completing or completed
+[2026-11-27T14:55:07-07:00] run 3 FAILED
+[2026-11-27T14:55:07-07:00] run 3 done in 899 s
+[2026-11-27T14:55:07-07:00] run 4: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 1920 $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+srun: Job step's --cpus-per-task value exceeds that of job (64 > 21). Job step may never run.
+srun: Job 36500995 step creation temporarily disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+srun: Job 36500995 step creation still disabled, retrying (Requested nodes are busy)
+slurmstepd: error: *** JOB 36500995 ON c3gpu-a9-u15-1 CANCELLED AT 2026-11-27T15:02:00 ***
+srun: error: Unable to create step for job 36500995: Job/step already completing or completed
