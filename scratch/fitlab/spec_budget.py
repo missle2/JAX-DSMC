@@ -4,7 +4,7 @@ shared +5-10 % specular excess?
 Per specular case (spec = M 10, m03_spec = M 0.32, m25_spec = M 25; all Kn 0.5, circle_long)
 and per control with FDs (radius, mode2), the seed means of every adjoint term under each
 production variant the dump carries (``meta["production"][c]["terms"][variant]``) and of
-pathwise_x under the kNN fits (``out/knn3_<case>_C.json``: the chosen C1 and its neighbours),
+pathwise_x under the kNN fits (``out/knn3_<case>_S.json``: the tuned C0.5 and the old C1),
 against the FD mean.  The excess (adjoint - FD) is set beside each term's mean and seed spread:
 a term whose variation across fits or cases tracks the excess is the suspect.
 
@@ -20,7 +20,7 @@ import numpy as np
 sys.path.insert(0, "scratch/fitlab")
 import lab  # noqa: E402
 
-KNN = ("k3_C1_0.25_0.033_0.3_o0", "k3_C0.5_0.25_0.033_0.6_o0", "k3_C2_0.25_0.033_0.6_o0")
+KNN = ("k3_C0.5_0.25_0.033_0.3_o0", "k3_C1_0.25_0.033_0.3_o0")  # tuned (knntune), old
 CONTROLS = ("radius", "mode2")
 
 
@@ -33,7 +33,7 @@ def budget(case):
     files = lab.seed_files(lab.CASES[case])
     metas = {s: json.loads(p.with_suffix(".json").read_text()) for s, p in files}
     fds = lab.finite_differences(case)
-    knn_path = lab.OUT / f"knn3_{case}_C.json"
+    knn_path = lab.OUT / f"knn3_{case}_S.json"
     knn = ({r["seed"]: r for r in json.loads(knn_path.read_text())["rows"]}
            if knn_path.exists() else {})  # fmt: skip
     variants = metas[files[0][0]]["variants"]
@@ -84,7 +84,8 @@ def budget(case):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cases", nargs="+", default=["spec", "m03_spec", "m25_spec"])
+    ap.add_argument("--cases", nargs="+", default=["spec", "m03_spec", "m25_spec", "spec_kn2", "spec_kn10",
+                             "spec_dt2", "spec_2dt"])
     args = ap.parse_args()
     res = {case: budget(case) for case in args.cases}
     path = lab.OUT / "spec_budget.json"

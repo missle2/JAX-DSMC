@@ -56,6 +56,11 @@ CASES = {
     "spec_kn10": "c10_spec_kn10",
     "spec_dt2": "c10_spec_dt2",
     "spec_2dt": "c10_spec_2dt",
+    # speclab2: dt at c10_spec's physical capture (own FDs in the dumps), and c10_spec's own
+    # forward captured over 1000 steps (its FDs: c10_spec / c10_spec_m2, the same forwards)
+    "spec_dt2_h600": "c10_spec_dt2_h600",
+    "spec_2dt_h150": "c10_spec_2dt_h150",
+    "spec_h1000": "c10_spec_h1000",
 }
 BASE_VARIANT = "cell_along_pool_plane"
 # circle_long's cells (60 x 20 of 0.5 m from (-10, 0)): the angle of each centre about the body
@@ -320,12 +325,15 @@ def finite_differences(case):
         # the transfer cases: each seed's dump carries its own central differences (the
         # specular labs' radius: their fitgate rows, more seeds)
         out = {"mode2s": {"symmetry": 0.0}}
-        if case.startswith("spec_"):
+        if case == "spec_h1000":
+            out.update(radius=_gate_fd("c10_spec"), mode2=_gate_fd("c10_spec_m2"))
+            return out
+        if case in ("spec_kn2", "spec_kn10", "spec_dt2", "spec_2dt"):
             out["radius"] = _gate_fd(CASES[case])
         for seed, path in seed_files(CASES[case]):
             meta = json.loads(path.with_suffix(".json").read_text())
             for par, value in meta.get("fd", {}).items():
-                if not (case.startswith("spec_") and par == "radius"):
+                if not ("radius" in out and par == "radius"):
                     out.setdefault(par, {})[seed] = value
     return out
 

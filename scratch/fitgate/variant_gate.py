@@ -200,6 +200,14 @@ NEW_GATES = {
                      [0.1, 0.05]),
     "c10_spec_2dt": ({**CIRCLE_M10, **COMMON, "dt": 5e-5, "warmup": 1400,
                       "membership_band": 0.1}, "radius", [0.1, 0.05]),
+    # dt at a FIXED physical capture (2026-11-27, speclab2): c10_spec_dt2 / _2dt kept 300
+    # captured steps, so their horizon (3.75 / 15 ms against 7.5) moved with dt -- the specular
+    # excess fell from dt / 2 to 2 dt (kNN radius 1.15 / 1.10 / 1.00).  Here the capture (7.5 ms,
+    # window the last 5 ms) and the whole forward (77.5 ms) are c10_spec's at dt / 2 and 2 dt
+    "c10_spec_dt2_h600": ({**CIRCLE_M10, **COMMON, "dt": 1.25e-5, "warmup": 5600, "steps": 600,
+                           "window": 400}, "radius", [0.1, 0.05]),
+    "c10_spec_2dt_h150": ({**CIRCLE_M10, **COMMON, "dt": 5e-5, "warmup": 1400, "steps": 150,
+                           "window": 100}, "radius", [0.1, 0.05]),
     # 2026-11-03 production check of the diffuse wall (the dlh3d objective's three pieces, per-cell
     # fits): drag and the body's total heat rate (dlh3d's heat_patch lattice) under the cos 2
     # theta elongation, and J = D - L (drag_lift, lift_weight 1) under its sin 2 theta inclination

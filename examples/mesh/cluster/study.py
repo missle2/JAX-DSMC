@@ -1567,6 +1567,28 @@ def _speclab_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _speclab2_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``speclab2`` (2026-11-27): speclab's dt dumps kept 300 captured steps, so the captured
+    horizon moved with dt and the specular excess fell with it (kNN radius 1.15 / 1.10 / 1.00 at
+    dt / 2, dt, 2 dt; pathwise_v the moving term, the same under the kNN velocity fit --
+    scratch/fitlab/spec_gv.py).  Separate dt from horizon: dt / 2 and 2 dt at c10_spec's
+    physical capture (``c10_spec_dt2_h600``, ``c10_spec_2dt_h150``: 7.5 ms captured, 5 ms
+    window; own radius and cos 2 theta FDs), and c10_spec's own forward captured over 1000
+    steps (``c10_spec_h1000``, 25 ms; FDs reused from c10_spec / c10_spec_m2), one seed per
+    job, seeds 0-7, then ``slim2`` (``ONLY='slim2'``).  ``GPU_KIND=rtx_48``: speclab's
+    300-step specular dumps peaked at ~10 GB, so ~20 GB at 600 steps and ~33 GB at 1000."""
+    del gpus_per_node
+    dump = "python3 scratch/fitlab/dump.py"
+    jobs = {}
+    for gate, fd in (("c10_spec_dt2_h600", " --fd radius mode2"),
+                     ("c10_spec_2dt_h150", " --fd radius mode2"), ("c10_spec_h1000", "")):  # fmt: skip
+        for s in range(8):
+            jobs[f"lab_{gate}_s{s}"] = f"{dump} --gate {gate} --seeds {s} {s + 1}{fd}"
+    jobs["slim2"] = ("python3 scratch/fitlab/slim.py --gates c10_spec_dt2_h600 c10_spec_2dt_h150 "
+                     "c10_spec_h1000 --incoming --d-max 0.3")  # fmt: skip
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1825,6 +1847,7 @@ NEW_GROUPS = {
     "fitlab4": _fitlab4_jobs,
     "knntune": _knntune_jobs,
     "speclab": _speclab_jobs,
+    "speclab2": _speclab2_jobs,
     "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
