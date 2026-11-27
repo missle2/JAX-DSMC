@@ -21,7 +21,10 @@
 #   march            + -march=native (host code; CPU builds and the host side of GPU builds)
 #   multikernel      -D Kokkos_ENABLE_HIP_MULTIPLE_KERNEL_INSTANTIATIONS=ON (HIP)
 #   bigbig           -D SPARTA_SIZES=bigbig (64-bit ids/cells)
+#   mallocasync      -D Kokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=ON (CUDA; Kokkos 5 default is OFF)
 #   mpi              no Kokkos (SPARTA's own CPU code), MPI           [CPU platforms]
+#   mpi_march        mpi with -march=native                            [CPU platforms]
+#   mpi_cce          mpi with the Cray compiler (PrgEnv-cray)          [NERSC CPU]
 #   kokkos_omp       Kokkos OpenMP backend                             [CPU platforms]
 #   kokkos_serial    Kokkos Serial backend (one rank per core)         [CPU platforms]
 #   clang / cce      another compiler: CXX for host/MPI builds (cce = Cray CC wrapper on NERSC)
@@ -56,17 +59,27 @@ CXX_FLAGS="-O3"
 case "${VARIANT}" in
   default) ;;
   nomallocasync) EXTRA+=(-D Kokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=OFF) ;;
+  # Kokkos 5's default is OFF ("CUDA malloc async support disabled" in the build logs)
+  mallocasync) EXTRA+=(-D Kokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=ON) ;;
   march) CXX_FLAGS="-O3 -march=native" ;;
   multikernel) EXTRA+=(-D Kokkos_ENABLE_HIP_MULTIPLE_KERNEL_INSTANTIATIONS=ON) ;;
   bigbig) EXTRA+=(-D SPARTA_SIZES=bigbig) ;;
   mpi) PRESET=mpi ;;
+  mpi_march) PRESET=mpi; CXX_FLAGS="-O3 -march=native" ;;
+  # Cray compiler (CCE) through PrgEnv-cray; jobs run these binaries under the same PrgEnv
+  # (bench/env/with_modules.sh PrgEnv-cray -- ...)
+  mpi_cce) PRESET=mpi; PRGENV=cray ;;
   kokkos_omp) PRESET=kokkos_omp ;;
   kokkos_serial) PRESET=kokkos_mpi_only ;;
   clang) export CXX="${CXX:-clang++}" ;;
-  cce) export CXX=CC ;;
+  cce) PRGENV=cray ;;
   *) echo "unknown VARIANT ${VARIANT}"; exit 1 ;;
 esac
 
+if [ -n "${PRGENV:-}" ]; then
+  module load "PrgEnv-${PRGENV}" || { echo "cannot load PrgEnv-${PRGENV}"; exit 1; }
+  echo "[build_sparta] PrgEnv-${PRGENV}: $(CC --version 2>&1 | head -1)"
+fi
 # Kokkos architecture flags: KOKKOS_ARCH="AMPERE80 ZEN3" -> -D Kokkos_ARCH_AMPERE80=ON ...;
 # the presets switch HOPPER90 / VEGA90A on, which we switch off unless asked for
 ARCH=()
@@ -77,11 +90,12 @@ fi
 # NERSC: the Cray wrappers are the MPI compilers; GPU-aware Cray MPICH needs the GTL library
 if [ "${SITE}" = nersc ]; then
   export MPICH_GPU_SUPPORT_ENABLED=1
-  [ "${PRESET}" = mpi ] && EXTRA+=(-D CMAKE_CXX_COMPILER="${CXX:-CC}")
-  [ "${PRESET}" = kokkos_omp ] && EXTRA+=(-D CMAKE_CXX_COMPILER="${CXX:-CC}")
+  # the Cray wrapper CC is the MPI C++ compiler (gcc of PrgEnv-gnu + cray-mpich + target flags)
   if [ "${PRESET}" = kokkos_cuda ]; then
     export NVCC_WRAPPER_DEFAULT_COMPILER="${CXX:-CC}"
     EXTRA+=(-D MPI_CXX_COMPILER=CC)
+  else
+    EXTRA+=(-D CMAKE_CXX_COMPILER="${CXX:-CC}" -D CMAKE_C_COMPILER="${CC:-cc}")
   fi
 fi
 if [ "${PRESET}" = kokkos_hip ]; then

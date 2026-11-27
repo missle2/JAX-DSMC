@@ -53,7 +53,8 @@ case "${PLATFORM}" in
   pm-gpu)
     SITE=nersc
     GPUS_PER_NODE=4; CORES_PER_NODE=64; SMT=2
-    : "${ACCOUNT:?set ACCOUNT (NERSC project, e.g. m1234)}"
+    # GPU node-hours are charged to the project's GPU account: ACCOUNT=m1234_g
+    : "${ACCOUNT:?set ACCOUNT (NERSC GPU account, e.g. m1234_g)}"
     SB_ARGS="-A ${ACCOUNT} -C ${CONSTRAINT:-gpu} -q ${QOS:-regular} --gpus-per-node=4"
     MODULES="${MODULES:-PrgEnv-gnu cudatoolkit craype-accel-nvidia80 cray-mpich cmake python}"
     KOKKOS_PRESET=kokkos_cuda; KOKKOS_ARCH="${KOKKOS_ARCH:-AMPERE80 ZEN3}"
@@ -160,7 +161,10 @@ pf_modules() {  # [$1 = module list; default MODULES]
       [ -f "${f}" ] && { source "${f}"; break; }
     done
   fi
-  module purge 2>/dev/null || true
+  # NERSC (Cray): no purge -- it also drops craype-x86-milan / craype-network-ofi, which
+  # PrgEnv-gnu does not bring back (wrong CPU target, MPI without the Slingshot network); the
+  # login defaults stay and the list loads on top (module load swaps a PrgEnv).
+  [ "${SITE:-}" = nersc ] || module purge 2>/dev/null || true
   if [ "${SITE:-}" = curc ]; then
     module load slurm/alpine 2>/dev/null || true
     local d

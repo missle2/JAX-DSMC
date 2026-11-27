@@ -83,6 +83,7 @@ class Run:
     steps: int | None = None
     sparta_build: str = "default"
     threads: int = 1  # OpenMP threads per rank (SPARTA Kokkos-OMP) / host devices per process (JAX CPU)
+    wrap: str = ""  # command prefix: bench/env/with_mps.sh <nodes> --, bench/env/with_modules.sh <mods> --
     est_s: float = 0.0
 
 
@@ -212,11 +213,11 @@ def plan_line(run: Run, platform):
         exe = f'"${{SPARTA_BUILD_DIR}}/sparta-${{PLATFORM}}-{run.sparta_build}/spa"'
         procs = run.nodes * run.ranks_per_node
         line = (
-            f"{env} timeout {tmo} python3 bench/run_bench.py sparta --exe {exe} {common} --procs {procs} "
+            f"{env} timeout {tmo} {run.wrap} python3 bench/run_bench.py sparta --exe {exe} {common} --procs {procs} "
             f"--launch \"{launch}\" --accel {shlex.quote(accel)}"
         )
     else:
-        line = f"{env} timeout {tmo} {launch} python3 bench/run_bench.py jax {common} {run.extra}"
+        line = f"{env} timeout {tmo} {run.wrap} {launch} python3 bench/run_bench.py jax {common} {run.extra}"
         if not PLATFORMS[platform]["gpu"]:
             line += " --platform cpu"
     return line.strip()
@@ -303,16 +304,21 @@ def mk_run(platform, code, deck, n, nodes, rpn, cfg):
 def _mk_run(platform, code, deck, n, nodes, rpn, cfg):
     pf = PLATFORMS[platform]
     if code == "sparta":
+        sc = cfg.get("sparta", {})
+        # tuned: ranks per GPU (MPS) on multi-GPU runs, and a wrapper (MPS daemon / PrgEnv)
+        if pf["gpu"] and rpn > 1:
+            rpn = rpn * int(sc.get("ranks_per_device", 1))
         return Run(
             code="sparta",
             deck=deck,
             particles=n,
             nodes=nodes,
             ranks_per_node=rpn,
-            variant=cfg.get("sparta", {}).get("tag", "kk" if pf["gpu"] else "mpi"),
+            variant=sc.get("tag", "kk" if pf["gpu"] else "mpi"),
             accel=default_accel(platform, cfg),
-            sparta_build=cfg.get("sparta", {}).get("build", "default" if pf["gpu"] else "mpi"),
-            env=dict(cfg.get("sparta", {}).get("env", {})),
+            sparta_build=sc.get("build", "default" if pf["gpu"] else "mpi"),
+            env=dict(sc.get("env", {})),
+            wrap=sc.get("wrap", "").replace("{nodes}", str(nodes)),
         )
     jc = cfg.get("jax", {})
     if pf["gpu"]:
@@ -336,22 +342,37 @@ def runs_tune(platform, rows, cfg):
     rpn = pf["devices"] if pf["gpu"] else pf["cores"]
     decks = ("collide", "sphere")
     if pf["gpu"]:
-        # --- SPARTA/Kokkos: runtime switches (1 GPU and the full node).  Only the default build:
-        # Kokkos 5's default already disables CUDA malloc-async ("KOKKOS: CUDA malloc async
-        # support disabled", Alpine build logs 2026-11-25), so a "nomallocasync" build is the same
-        # binary.  The comm / gpu-aware switches act between MPI ranks only: on one GPU they
-        # repeat the baseline, so single-GPU platforms skip SPARTA tuning (the sweep has it).
-        for build in (() if single_gpu_only(platform) else ("default",)):
-            for tag, accel in (
-                ("kk", f"-k on g {pf['devices']} -sf kk"),
-                ("kk_commserial", f"-k on g {pf['devices']} -sf kk -pk kokkos comm serial"),
-                ("kk_noaware", f"-k on g {pf['devices']} -sf kk -pk kokkos gpu/aware no"),
+        # --- SPARTA/Kokkos.  (a) build variants, baseline switches, 1 GPU and the full node:
+        #   default      Kokkos 5 defaults (CUDA malloc-async OFF: "CUDA malloc async support
+        #                disabled" in the build logs)
+        #   mallocasync  Kokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=ON
+        #   march        host code -march=native
+        #   bigbig       SPARTA_SIZES=bigbig (64-bit ids)
+        # (b) runtime, default build: comm serial, gpu/aware no (between ranks: node only),
+        #     particle/reorder 10 and 100 (a deck setting: a labelled variant), 2 ranks per GPU
+        #     under MPS (node).  Single-GPU platforms (Alpine) skip it: the sweep has the baseline.
+        if not single_gpu_only(platform):
+            dev = pf["devices"]
+            base = f"-k on g {dev} -sf kk"
+            for build in ("default", "mallocasync", "march", "bigbig"):
+                for deck in DECKS:
+                    for r_ in (1, rpn):
+                        out.append(Run("sparta", deck, n_dev * r_, 1, r_, variant=f"kk_{build}", accel=base,
+                                       sparta_build=build, reps=2))
+            for tag, accel, gpus in (
+                ("kk_commserial_default", base + " -pk kokkos comm serial", (rpn,)),
+                ("kk_noaware_default", base + " -pk kokkos gpu/aware no", (rpn,)),
+                ("kk_reorder10_default", base + " -v reorder 10", (1, rpn)),
+                ("kk_reorder100_default", base + " -v reorder 100", (1, rpn)),
             ):
-                for deck in decks:
-                    for nodes_rpn in (1, rpn):
-                        r = Run("sparta", deck, n_dev * nodes_rpn, 1, nodes_rpn, variant=f"{tag}_{build}", accel=accel, sparta_build=build, reps=2)
-                        estimate(r, platform, rows)
-                        out.append(r)
+                for deck in DECKS:
+                    for r_ in gpus:
+                        out.append(Run("sparta", deck, n_dev * r_, 1, r_, variant=tag, accel=accel, reps=2))
+            for deck in DECKS:
+                out.append(Run("sparta", deck, n_dev * rpn, 1, 2 * rpn, variant="kk_mps2_default", accel=base,
+                               reps=2, wrap="bash bench/env/with_mps.sh 1 --"))
+            for r in out:
+                estimate(r, platform, rows)
         # --- sparta_jax: XLA flags, allocator, sort, lanes (1 GPU), then process layout (node)
         xla = {
             "jax": "",
@@ -395,18 +416,22 @@ def runs_tune(platform, rows, cfg):
     else:
         n = 32_000_000
         # --- SPARTA CPU: MPI-only vs Kokkos OMP layouts vs Kokkos serial, with/without SMT
-        for build, tag, ranks, threads, accel in (
-            ("mpi", "mpi128", 128, 1, ""),
-            ("mpi", "mpi256smt", 256, 1, ""),
-            ("kokkos_serial", "kkser128", 128, 1, "-k on -sf kk"),
-            ("kokkos_omp", "kkomp64x2", 64, 2, "-k on t 2 -sf kk"),
-            ("kokkos_omp", "kkomp32x4", 32, 4, "-k on t 4 -sf kk"),
-            ("kokkos_omp", "kkomp16x8", 16, 8, "-k on t 8 -sf kk"),
-            ("kokkos_omp", "kkomp8x16", 8, 16, "-k on t 16 -sf kk"),
+        cce = "bash bench/env/with_modules.sh PrgEnv-cray --"
+        for build, tag, ranks, threads, accel, wrap in (
+            ("mpi", "mpi128", 128, 1, "", ""),
+            ("mpi", "mpi256smt", 256, 1, "", ""),
+            ("mpi_march", "mpi128_march", 128, 1, "", ""),
+            ("mpi_cce", "mpi128_cce", 128, 1, "", cce),
+            ("mpi", "mpi128_reorder100", 128, 1, "-v reorder 100", ""),
+            ("kokkos_serial", "kkser128", 128, 1, "-k on -sf kk", ""),
+            ("kokkos_omp", "kkomp64x2", 64, 2, "-k on t 2 -sf kk", ""),
+            ("kokkos_omp", "kkomp32x4", 32, 4, "-k on t 4 -sf kk", ""),
+            ("kokkos_omp", "kkomp16x8", 16, 8, "-k on t 8 -sf kk", ""),
+            ("kokkos_omp", "kkomp8x16", 8, 16, "-k on t 16 -sf kk", ""),
         ):
-            for deck in decks:
+            for deck in DECKS:
                 r = Run("sparta", deck, n, 1, ranks, variant=tag, accel=accel, sparta_build=build, reps=2, threads=threads,
-                        env={"OMP_NUM_THREADS": threads})
+                        env={"OMP_NUM_THREADS": threads}, wrap=wrap)
                 estimate(r, platform, rows)
                 out.append(r)
         # --- sparta_jax CPU: processes x host devices per process, XLA:CPU flags
@@ -589,6 +614,7 @@ def main():
     p.add_argument("--big", action="store_true", help="add the 512M strong / 128M-per-node weak GPU series")
     p.add_argument("--redo", action="store_true", help="also run what the results already hold")
     p.add_argument("--after", default="", help="sbatch --dependency=afterok:<jobid>[:<jobid>...]")
+    p.add_argument("--only", default="", help="regex: keep only the jobs whose name matches (e.g. '^tune-')")
     p.add_argument("--submit", action="store_true")
     p.add_argument("--list", action="store_true", help="print every run")
     a = p.parse_args()
@@ -603,6 +629,8 @@ def main():
         jobs += build_jobs(ph, a.platform, a.nodes, rows, a.prune_seconds, a.codes, big=a.big)
     if not a.redo:
         jobs = dedupe(jobs, a.platform, rows)
+    if a.only:
+        jobs = [j for j in jobs if re.search(a.only, j.name)]
     total = 0.0
     print(f"{'job':34s} {'nodes':>5s} {'runs':>5s} {'est':>8s} {'limit':>8s} {'node-h':>8s}")
     for j in jobs:
