@@ -46,21 +46,29 @@ case "${JAX_FLAVOR}" in
     if [ -n "${ROCM_JAX_SIF:-}" ]; then
       echo "ROCm via the Apptainer image ${ROCM_JAX_SIF}: nothing to pip-install (jobs run 'apptainer exec --rocm')"
     else
-      # The plugin wheels pin their jaxlib; installing plugin + pjrt + jax in ONE pip call lets
-      # the resolver pick a matching jax (installing jax first and the plugin after leaves a
-      # newer jax over an older jaxlib).  ROCM_JAX_WHEELS: jax-rocm60-* (built for ROCm 6.0)
-      # run on the ROCm 6.x user space of the module (Alpine: rocm/6.1.0; MI100 = gfx908).
+      # jax, jaxlib and the ROCm plugin + pjrt wheels must be the SAME version: JAX ignores a
+      # plugin built for another jaxlib (2026-11-25: pip paired jax 0.6.2 with plugin 0.5.0).
+      # The jax-rocm60 wheels (ROCm 6.0 builds, gfx908 included) run on Alpine's rocm/6.1.0;
+      # 0.5.0 is their last release.
       hipconfig --version 2>/dev/null | head -1 || echo "warning: no hipconfig (rocm module not loaded?)"
-      W="${ROCM_JAX_WHEELS:-jax-rocm60-plugin jax-rocm60-pjrt}"
-      if [ -n "${PIN}" ]; then W="$(for w in ${W}; do printf '%s%s ' "${w}" "${PIN}"; done)"; fi
-      # shellcheck disable=SC2086
-      pip install ${W} "jax${PIN}"
-      python3 - <<'PY'
-import importlib.metadata as md
-v = {p: md.version(p) for p in ("jax", "jaxlib") }
-plug = [d.metadata["Name"] for d in md.distributions() if "rocm" in d.metadata["Name"]]
-print("installed:", v, {p: md.version(p) for p in plug})
-PY
+      RJ="${ROCM_JAX_VERSION:-0.5.0}"
+      pip install "jax==${RJ}" "jaxlib==${RJ}" "jax-rocm60-plugin==${RJ}" "jax-rocm60-pjrt==${RJ}"
+      # libraries the plugin needs that the loaded modules do not provide (2026-11-25: the
+      # rocm/6.1.0 module's libhipsolver wants SuiteSparse, libsuitesparseconfig.so.4).
+      # ROCM_EXTRA_LIBS=<dir> is appended to LD_LIBRARY_PATH by the venv's activate script.
+      SP="$(python3 -c 'import jax_plugins.xla_rocm60 as m, os; print(os.path.dirname(m.__file__))')"
+      MISSING="$(ldd "${SP}/xla_rocm_plugin.so" | awk '/not found/ {print $1}' | sort -u | tr '\n' ' ')"
+      if [ -n "${ROCM_EXTRA_LIBS:-}" ]; then
+        echo "export LD_LIBRARY_PATH=\"${ROCM_EXTRA_LIBS}\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}\"" >> "${VENV}/bin/activate"
+        export LD_LIBRARY_PATH="${ROCM_EXTRA_LIBS}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+        MISSING="$(ldd "${SP}/xla_rocm_plugin.so" | awk '/not found/ {print $1}' | sort -u | tr '\n' ' ')"
+      fi
+      if [ -n "${MISSING}" ]; then
+        echo "[build_jax] ROCm plugin: libraries NOT FOUND: ${MISSING}"
+        echo "            provide them and rebuild with ROCM_EXTRA_LIBS=<dir> (see bench/README.md, MI100)"
+      else
+        echo "[build_jax] ROCm plugin: every shared library resolves"
+      fi
     fi
     ;;
   cpu)

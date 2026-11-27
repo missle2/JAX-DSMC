@@ -17,7 +17,8 @@ PREFIX="${BENCH_ROOT}/kokkos/${V}-${PLATFORM}"
 ARCH=()
 for a in ${KOKKOS_ARCH}; do ARCH+=(-D "Kokkos_ARCH_${a}=ON"); done
 case "${KOKKOS_PRESET}" in
-  kokkos_hip)  BACKEND=(-D Kokkos_ENABLE_HIP=ON -D CMAKE_CXX_COMPILER="${CXX:-hipcc}") ;;
+  # hipcc explicitly: the openmpi module exports CXX=mpicxx (g++)
+  kokkos_hip)  BACKEND=(-D Kokkos_ENABLE_HIP=ON -D CMAKE_CXX_COMPILER="${HIPCXX:-$(command -v hipcc)}") ;;
   kokkos_cuda) BACKEND=(-D Kokkos_ENABLE_CUDA=ON -D CMAKE_CXX_COMPILER="${SRC}/bin/nvcc_wrapper") ;;
   kokkos_omp)  BACKEND=(-D Kokkos_ENABLE_OPENMP=ON) ;;
   *)           BACKEND=() ;;
