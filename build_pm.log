@@ -1,245 +1,74 @@
 nohup: ignoring input
 [build_jax] pm-gpu: flavor cuda12, jax(latest) -> /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu
-Requirement already satisfied: pip in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (26.2.2)
-Collecting pip
-  Downloading pip-26.3-py3-none-any.whl.metadata (4.6 kB)
-Collecting wheel
-  Downloading wheel-0.48.0-py3-none-any.whl.metadata (2.3 kB)
-Collecting packaging>=24.0 (from wheel)
-  Downloading packaging-26.4-py3-none-any.whl.metadata (3.5 kB)
-Downloading pip-26.3-py3-none-any.whl (2.0 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 29.9 MB/s  0:00:00
-Downloading wheel-0.48.0-py3-none-any.whl (33 kB)
-Downloading packaging-26.4-py3-none-any.whl (140 kB)
-Installing collected packages: pip, packaging, wheel
-  Attempting uninstall: pip
-    Found existing installation: pip 26.2.2
-    Uninstalling pip-26.2.2:
-      Successfully uninstalled pip-26.2.2
-
-Successfully installed packaging-26.4 pip-26.3 wheel-0.48.0
-Collecting jax[cuda12]
-  Downloading jax-0.12.1-py3-none-any.whl.metadata (24 kB)
-Collecting jaxlib<=0.12.1,>=0.12.1 (from jax[cuda12])
-  Downloading jaxlib-0.12.1-cp313-cp313-manylinux_2_27_x86_64.whl.metadata (1.3 kB)
-Collecting ml_dtypes>=0.5.0 (from jax[cuda12])
-  Downloading ml_dtypes-0.7.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (11 kB)
-Collecting numpy>=2.2 (from jax[cuda12])
-  Downloading numpy-2.5.5-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
-Collecting opt_einsum (from jax[cuda12])
-  Downloading opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
-Collecting scipy>=1.15 (from jax[cuda12])
-  Downloading scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
-Collecting jax-cuda12-plugin<=0.12.1,>=0.12.1 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading jax_cuda12_plugin-0.12.1-cp313-cp313-manylinux_2_27_x86_64.whl.metadata (2.0 kB)
-Collecting jax-cuda12-pjrt==0.12.1 (from jax-cuda12-plugin<=0.12.1,>=0.12.1->jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading jax_cuda12_pjrt-0.12.1-py3-none-manylinux_2_27_x86_64.whl.metadata (580 bytes)
-Collecting nvidia-cublas-cu12>=12.1.3.1 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cublas_cu12-12.9.3.13-py3-none-manylinux_2_27_x86_64.whl.metadata (1.8 kB)
-Collecting nvidia-cuda-cupti-cu12>=12.1.105 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cuda_cupti_cu12-12.9.79-py3-none-manylinux_2_25_x86_64.whl.metadata (1.8 kB)
-Collecting nvidia-cuda-nvcc-cu12>=12.6.85 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cuda_nvcc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl.metadata (1.7 kB)
-Collecting nvidia-cuda-runtime-cu12>=12.1.105 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.7 kB)
-Collecting nvidia-cudnn-cu12<10.0,>=9.10.2.21 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cudnn_cu12-9.28.1.4-py3-none-manylinux_2_27_x86_64.whl.metadata (1.9 kB)
-Collecting nvidia-cufft-cu12>=11.0.2.54 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cufft_cu12-11.4.1.4-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.8 kB)
-Collecting nvidia-cusolver-cu12>=11.4.5.107 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cusolver_cu12-11.7.5.82-py3-none-manylinux_2_27_x86_64.whl.metadata (1.9 kB)
-Collecting nvidia-cusparse-cu12>=12.1.0.106 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cusparse_cu12-12.5.10.65-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.8 kB)
-Collecting nvidia-nccl-cu12>=2.18.1 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_nccl_cu12-2.32.6-py3-none-manylinux_2_27_x86_64.whl.metadata (2.1 kB)
-Collecting nvidia-nvjitlink-cu12>=12.1.105 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_nvjitlink_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl.metadata (1.7 kB)
-Collecting nvidia-cuda-nvrtc-cu12>=12.1.55 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cuda_nvrtc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl.metadata (1.7 kB)
-Collecting nvidia-nvshmem-cu12>=3.2.5 (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_nvshmem_cu12-3.8.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.2 kB)
-Collecting nvidia-cuda-cccl-cu12 (from nvidia-nvshmem-cu12>=3.2.5->jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12])
-  Downloading nvidia_cuda_cccl_cu12-12.9.27-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.7 kB)
-Downloading jax-0.12.1-py3-none-any.whl (3.7 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.7/3.7 MB 48.7 MB/s  0:00:00
-Downloading jax_cuda12_plugin-0.12.1-cp313-cp313-manylinux_2_27_x86_64.whl (11.8 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.8/11.8 MB 66.8 MB/s  0:00:00
-Downloading jax_cuda12_pjrt-0.12.1-py3-none-manylinux_2_27_x86_64.whl (190.1 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 190.1/190.1 MB 56.7 MB/s  0:00:03
-Downloading jaxlib-0.12.1-cp313-cp313-manylinux_2_27_x86_64.whl (83.4 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 83.4/83.4 MB 94.6 MB/s  0:00:00
-Downloading nvidia_cudnn_cu12-9.28.1.4-py3-none-manylinux_2_27_x86_64.whl (716.6 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 716.6/716.6 MB 50.6 MB/s  0:00:12
-Downloading ml_dtypes-0.7.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (463 kB)
-Downloading numpy-2.5.5-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (15.7 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 15.7/15.7 MB 212.5 MB/s  0:00:00
-Downloading nvidia_cublas_cu12-12.9.3.13-py3-none-manylinux_2_27_x86_64.whl (581.2 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 581.2/581.2 MB 50.4 MB/s  0:00:10
-Downloading nvidia_cuda_cupti_cu12-12.9.79-py3-none-manylinux_2_25_x86_64.whl (10.8 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.8/10.8 MB 66.6 MB/s  0:00:00
-Downloading nvidia_cuda_nvcc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (40.5 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.5/40.5 MB 115.1 MB/s  0:00:00
-Downloading nvidia_cuda_nvrtc_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (89.6 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 89.6/89.6 MB 67.1 MB/s  0:00:01
-Downloading nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (3.5 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.5/3.5 MB 99.3 MB/s  0:00:00
-Downloading nvidia_cufft_cu12-11.4.1.4-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (200.9 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 200.9/200.9 MB 67.6 MB/s  0:00:02
-Downloading nvidia_cusolver_cu12-11.7.5.82-py3-none-manylinux_2_27_x86_64.whl (338.1 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 338.1/338.1 MB 57.4 MB/s  0:00:05
-Downloading nvidia_cusparse_cu12-12.5.10.65-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (366.5 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 366.5/366.5 MB 59.0 MB/s  0:00:07
-Downloading nvidia_nccl_cu12-2.32.6-py3-none-manylinux_2_27_x86_64.whl (336.5 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 336.5/336.5 MB 100.8 MB/s  0:00:03
-Downloading nvidia_nvjitlink_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (39.7 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 39.7/39.7 MB 192.7 MB/s  0:00:00
-Downloading nvidia_nvshmem_cu12-3.8.0-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (280.8 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 280.8/280.8 MB 54.2 MB/s  0:00:05
-Downloading scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 203.1 MB/s  0:00:00
-Downloading nvidia_cuda_cccl_cu12-12.9.27-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (3.2 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 89.4 MB/s  0:00:00
-Downloading opt_einsum-3.4.0-py3-none-any.whl (71 kB)
-Installing collected packages: jax-cuda12-pjrt, opt_einsum, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-nvcc-cu12, nvidia-cuda-cupti-cu12, nvidia-cuda-cccl-cu12, numpy, jax-cuda12-plugin, scipy, nvidia-nvshmem-cu12, nvidia-cusparse-cu12, nvidia-cufft-cu12, nvidia-cublas-cu12, ml_dtypes, nvidia-cusolver-cu12, nvidia-cudnn-cu12, jaxlib, jax
-
-Successfully installed jax-0.12.1 jax-cuda12-pjrt-0.12.1 jax-cuda12-plugin-0.12.1 jaxlib-0.12.1 ml_dtypes-0.7.0 numpy-2.5.5 nvidia-cublas-cu12-12.9.3.13 nvidia-cuda-cccl-cu12-12.9.27 nvidia-cuda-cupti-cu12-12.9.79 nvidia-cuda-nvcc-cu12-12.9.86 nvidia-cuda-nvrtc-cu12-12.9.86 nvidia-cuda-runtime-cu12-12.9.79 nvidia-cudnn-cu12-9.28.1.4 nvidia-cufft-cu12-11.4.1.4 nvidia-cusolver-cu12-11.7.5.82 nvidia-cusparse-cu12-12.5.10.65 nvidia-nccl-cu12-2.32.6 nvidia-nvjitlink-cu12-12.9.86 nvidia-nvshmem-cu12-3.8.0 opt_einsum-3.4.0 scipy-1.18.1
+Requirement already satisfied: pip in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (26.3)
+Requirement already satisfied: wheel in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (0.48.0)
+Requirement already satisfied: packaging>=24.0 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from wheel) (26.4)
+Requirement already satisfied: jax[cuda12] in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (0.12.1)
+Requirement already satisfied: jaxlib<=0.12.1,>=0.12.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax[cuda12]) (0.12.1)
+Requirement already satisfied: ml_dtypes>=0.5.0 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax[cuda12]) (0.7.0)
+Requirement already satisfied: numpy>=2.2 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax[cuda12]) (2.5.5)
+Requirement already satisfied: opt_einsum in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax[cuda12]) (3.4.0)
+Requirement already satisfied: scipy>=1.15 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax[cuda12]) (1.18.1)
+Requirement already satisfied: jax-cuda12-plugin<=0.12.1,>=0.12.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (0.12.1)
+Requirement already satisfied: jax-cuda12-pjrt==0.12.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin<=0.12.1,>=0.12.1->jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (0.12.1)
+Requirement already satisfied: nvidia-cublas-cu12>=12.1.3.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.9.3.13)
+Requirement already satisfied: nvidia-cuda-cupti-cu12>=12.1.105 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.9.79)
+Requirement already satisfied: nvidia-cuda-nvcc-cu12>=12.6.85 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.9.86)
+Requirement already satisfied: nvidia-cuda-runtime-cu12>=12.1.105 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.9.79)
+Requirement already satisfied: nvidia-cudnn-cu12<10.0,>=9.10.2.21 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (9.28.1.4)
+Requirement already satisfied: nvidia-cufft-cu12>=11.0.2.54 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (11.4.1.4)
+Requirement already satisfied: nvidia-cusolver-cu12>=11.4.5.107 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (11.7.5.82)
+Requirement already satisfied: nvidia-cusparse-cu12>=12.1.0.106 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.5.10.65)
+Requirement already satisfied: nvidia-nccl-cu12>=2.18.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (2.32.6)
+Requirement already satisfied: nvidia-nvjitlink-cu12>=12.1.105 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.9.86)
+Requirement already satisfied: nvidia-cuda-nvrtc-cu12>=12.1.55 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.9.86)
+Requirement already satisfied: nvidia-nvshmem-cu12>=3.2.5 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (3.8.0)
+Requirement already satisfied: nvidia-cuda-cccl-cu12 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from nvidia-nvshmem-cu12>=3.2.5->jax-cuda12-plugin[with-cuda]<=0.12.1,>=0.12.1; extra == "cuda12"->jax[cuda12]) (12.9.27)
 Requirement already satisfied: numpy in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (2.5.5)
 Requirement already satisfied: scipy in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (1.18.1)
-Collecting matplotlib
-  Downloading matplotlib-3.11.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (80 kB)
-Collecting pytest
-  Downloading pytest-9.2.0-py3-none-any.whl.metadata (7.9 kB)
-Collecting contourpy>=1.0.1 (from matplotlib)
-  Downloading contourpy-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
-Collecting cycler>=0.10 (from matplotlib)
-  Downloading cycler-0.12.1-py3-none-any.whl.metadata (3.8 kB)
-Collecting fonttools>=4.28.2 (from matplotlib)
-  Downloading fonttools-4.69.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (147 kB)
-Collecting kiwisolver>=1.3.1 (from matplotlib)
-  Downloading kiwisolver-1.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.2 kB)
+Requirement already satisfied: matplotlib in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (3.11.2)
+Requirement already satisfied: pytest in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (9.2.0)
+Requirement already satisfied: contourpy>=1.0.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (1.4.0)
+Requirement already satisfied: cycler>=0.10 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (0.12.1)
+Requirement already satisfied: fonttools>=4.28.2 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (4.69.1)
+Requirement already satisfied: kiwisolver>=1.3.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (1.5.1)
 Requirement already satisfied: packaging>=20.0 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (26.4)
-Collecting pillow>=9 (from matplotlib)
-  Downloading pillow-13.0.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
-Collecting pyparsing>=3 (from matplotlib)
-  Downloading pyparsing-3.3.3-py3-none-any.whl.metadata (5.9 kB)
-Collecting python-dateutil>=2.7 (from matplotlib)
-  Downloading python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
-Collecting iniconfig>=2 (from pytest)
-  Downloading iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
-Collecting pluggy<2,>=1.6 (from pytest)
-  Downloading pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
-Collecting pygments>=2.15 (from pytest)
-  Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
-Collecting tzdata (from python-dateutil>=2.7->matplotlib)
-  Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
-Downloading matplotlib-3.11.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (9.9 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.9/9.9 MB 102.2 MB/s  0:00:00
-Downloading pytest-9.2.0-py3-none-any.whl (411 kB)
-Downloading pluggy-1.7.0-py3-none-any.whl (27 kB)
-Downloading contourpy-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (384 kB)
-Downloading cycler-0.12.1-py3-none-any.whl (8.3 kB)
-Downloading fonttools-4.69.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (6.7 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.7/6.7 MB 29.2 MB/s  0:00:00
-Downloading iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
-Downloading kiwisolver-1.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.5 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.5/1.5 MB 89.4 MB/s  0:00:00
-Downloading pillow-13.0.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.1 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.1/7.1 MB 180.1 MB/s  0:00:00
-Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 106.3 MB/s  0:00:00
-Downloading pyparsing-3.3.3-py3-none-any.whl (126 kB)
-Downloading python_dateutil-4.0.0-py3-none-any.whl (92 kB)
-Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
-Installing collected packages: tzdata, pyparsing, pygments, pluggy, pillow, kiwisolver, iniconfig, fonttools, cycler, contourpy, python-dateutil, pytest, matplotlib
-
-Successfully installed contourpy-1.4.0 cycler-0.12.1 fonttools-4.69.1 iniconfig-2.3.1 kiwisolver-1.5.1 matplotlib-3.11.2 pillow-13.0.0 pluggy-1.7.0 pygments-2.21.0 pyparsing-3.3.3 pytest-9.2.0 python-dateutil-4.0.0 tzdata-2026.6
+Requirement already satisfied: pillow>=9 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (13.0.0)
+Requirement already satisfied: pyparsing>=3 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (3.3.3)
+Requirement already satisfied: python-dateutil>=2.7 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from matplotlib) (4.0.0)
+Requirement already satisfied: iniconfig>=2 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: pluggy<2,>=1.6 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: tzdata in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages (from python-dateutil>=2.7->matplotlib) (2026.6)
 [build_jax] manifest: /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/MANIFEST.txt
 host login26 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
 import ok
 [build_jax] pm-cpu: flavor cpu, jax(latest) -> /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu
-Requirement already satisfied: pip in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (26.2.2)
-Collecting pip
-  Using cached pip-26.3-py3-none-any.whl.metadata (4.6 kB)
-Collecting wheel
-  Using cached wheel-0.48.0-py3-none-any.whl.metadata (2.3 kB)
-Collecting packaging>=24.0 (from wheel)
-  Using cached packaging-26.4-py3-none-any.whl.metadata (3.5 kB)
-Using cached pip-26.3-py3-none-any.whl (2.0 MB)
-Using cached wheel-0.48.0-py3-none-any.whl (33 kB)
-Using cached packaging-26.4-py3-none-any.whl (140 kB)
-Installing collected packages: pip, packaging, wheel
-  Attempting uninstall: pip
-    Found existing installation: pip 26.2.2
-    Uninstalling pip-26.2.2:
-      Successfully uninstalled pip-26.2.2
-
-Successfully installed packaging-26.4 pip-26.3 wheel-0.48.0
-Collecting jax
-  Using cached jax-0.12.1-py3-none-any.whl.metadata (24 kB)
-Collecting jaxlib<=0.12.1,>=0.12.1 (from jax)
-  Using cached jaxlib-0.12.1-cp313-cp313-manylinux_2_27_x86_64.whl.metadata (1.3 kB)
-Collecting ml_dtypes>=0.5.0 (from jax)
-  Using cached ml_dtypes-0.7.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (11 kB)
-Collecting numpy>=2.2 (from jax)
-  Using cached numpy-2.5.5-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
-Collecting opt_einsum (from jax)
-  Using cached opt_einsum-3.4.0-py3-none-any.whl.metadata (6.3 kB)
-Collecting scipy>=1.15 (from jax)
-  Using cached scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
-Using cached jax-0.12.1-py3-none-any.whl (3.7 MB)
-Using cached jaxlib-0.12.1-cp313-cp313-manylinux_2_27_x86_64.whl (83.4 MB)
-Using cached ml_dtypes-0.7.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (463 kB)
-Using cached numpy-2.5.5-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (15.7 MB)
-Using cached scipy-1.18.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
-Using cached opt_einsum-3.4.0-py3-none-any.whl (71 kB)
-Installing collected packages: opt_einsum, numpy, scipy, ml_dtypes, jaxlib, jax
-
-Successfully installed jax-0.12.1 jaxlib-0.12.1 ml_dtypes-0.7.0 numpy-2.5.5 opt_einsum-3.4.0 scipy-1.18.1
+Requirement already satisfied: pip in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (26.3)
+Requirement already satisfied: wheel in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (0.48.0)
+Requirement already satisfied: packaging>=24.0 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from wheel) (26.4)
+Requirement already satisfied: jax in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (0.12.1)
+Requirement already satisfied: jaxlib<=0.12.1,>=0.12.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from jax) (0.12.1)
+Requirement already satisfied: ml_dtypes>=0.5.0 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from jax) (0.7.0)
+Requirement already satisfied: numpy>=2.2 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from jax) (2.5.5)
+Requirement already satisfied: opt_einsum in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from jax) (3.4.0)
+Requirement already satisfied: scipy>=1.15 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from jax) (1.18.1)
 Requirement already satisfied: numpy in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (2.5.5)
 Requirement already satisfied: scipy in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (1.18.1)
-Collecting matplotlib
-  Using cached matplotlib-3.11.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (80 kB)
-Collecting pytest
-  Using cached pytest-9.2.0-py3-none-any.whl.metadata (7.9 kB)
-Collecting contourpy>=1.0.1 (from matplotlib)
-  Using cached contourpy-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
-Collecting cycler>=0.10 (from matplotlib)
-  Using cached cycler-0.12.1-py3-none-any.whl.metadata (3.8 kB)
-Collecting fonttools>=4.28.2 (from matplotlib)
-  Using cached fonttools-4.69.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (147 kB)
-Collecting kiwisolver>=1.3.1 (from matplotlib)
-  Using cached kiwisolver-1.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (5.2 kB)
+Requirement already satisfied: matplotlib in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (3.11.2)
+Requirement already satisfied: pytest in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (9.2.0)
+Requirement already satisfied: contourpy>=1.0.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (1.4.0)
+Requirement already satisfied: cycler>=0.10 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (0.12.1)
+Requirement already satisfied: fonttools>=4.28.2 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (4.69.1)
+Requirement already satisfied: kiwisolver>=1.3.1 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (1.5.1)
 Requirement already satisfied: packaging>=20.0 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (26.4)
-Collecting pillow>=9 (from matplotlib)
-  Using cached pillow-13.0.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
-Collecting pyparsing>=3 (from matplotlib)
-  Using cached pyparsing-3.3.3-py3-none-any.whl.metadata (5.9 kB)
-Collecting python-dateutil>=2.7 (from matplotlib)
-  Using cached python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
-Collecting iniconfig>=2 (from pytest)
-  Using cached iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
-Collecting pluggy<2,>=1.6 (from pytest)
-  Using cached pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
-Collecting pygments>=2.15 (from pytest)
-  Using cached pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
-Collecting tzdata (from python-dateutil>=2.7->matplotlib)
-  Using cached tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
-Using cached matplotlib-3.11.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (9.9 MB)
-Using cached pytest-9.2.0-py3-none-any.whl (411 kB)
-Using cached pluggy-1.7.0-py3-none-any.whl (27 kB)
-Using cached contourpy-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (384 kB)
-Using cached cycler-0.12.1-py3-none-any.whl (8.3 kB)
-Using cached fonttools-4.69.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (6.7 MB)
-Using cached iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
-Using cached kiwisolver-1.5.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.5 MB)
-Using cached pillow-13.0.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.1 MB)
-Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
-Using cached pyparsing-3.3.3-py3-none-any.whl (126 kB)
-Using cached python_dateutil-4.0.0-py3-none-any.whl (92 kB)
-Using cached tzdata-2026.6-py2.py3-none-any.whl (348 kB)
-Installing collected packages: tzdata, pyparsing, pygments, pluggy, pillow, kiwisolver, iniconfig, fonttools, cycler, contourpy, python-dateutil, pytest, matplotlib
-
-Successfully installed contourpy-1.4.0 cycler-0.12.1 fonttools-4.69.1 iniconfig-2.3.1 kiwisolver-1.5.1 matplotlib-3.11.2 pillow-13.0.0 pluggy-1.7.0 pygments-2.21.0 pyparsing-3.3.3 pytest-9.2.0 python-dateutil-4.0.0 tzdata-2026.6
+Requirement already satisfied: pillow>=9 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (13.0.0)
+Requirement already satisfied: pyparsing>=3 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (3.3.3)
+Requirement already satisfied: python-dateutil>=2.7 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from matplotlib) (4.0.0)
+Requirement already satisfied: iniconfig>=2 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from pytest) (2.3.1)
+Requirement already satisfied: pluggy<2,>=1.6 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from pytest) (1.7.0)
+Requirement already satisfied: pygments>=2.15 in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from pytest) (2.21.0)
+Requirement already satisfied: tzdata in /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages (from python-dateutil>=2.7->matplotlib) (2026.6)
 [build_jax] manifest: /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/MANIFEST.txt
 host login26 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
 import ok
@@ -308,32 +137,23 @@ loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake
 -- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
 -- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
 -- Kokkos Backends: SERIAL;CUDA
--- Configuring done (19.8s)
+-- Configuring done (18.4s)
 -- Generating done (0.8s)
 -- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default
-[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_isurf.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_restart.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_surf.cpp.o
-/pscratch/sd/a/aajain/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nvec" was declared but never referenced
-      int index,nvec,nstride;
-                ^
-
-Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
-
-/pscratch/sd/a/aajain/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nstride" was declared but never referenced
-      int index,nvec,nstride;
-                     ^
-
-[ 99%] Linking CXX static library libsparta_kokkos_cuda.a
+[  0%] Built target AlwaysCheckGit
+[  0%] Built target impl_git_version
+[  7%] Built target kokkoscore
+[  8%] Built target kokkossimd
+[  9%] Built target kokkosalgorithms
+[ 10%] Built target kokkoscontainers
+[ 10%] Built target sparta_kokkos_cuda_PRE_BUILD
+[ 39%] Built target pkg_kokkos
 [ 99%] Built target sparta_kokkos_cuda
-[100%] Building CXX object src/CMakeFiles/spa_kokkos_cuda.dir/main.cpp.o
-[100%] Linking CXX executable spa_kokkos_cuda
-   text	   data	    bss	    dec	    hex	filename
-28230668	 126212	 381624	28738504	1b683c8	spa_kokkos_cuda
 [100%] Built target spa_kokkos_cuda
 [build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/src/spa_kokkos_cuda
-[build_sparta] pm-cpu/mpi: preset mpi, arch 'ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi
-loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/mpi.cmake
+[build_sparta] nvcc: Build cuda_13.2.r13.2/compiler.37668154_0
+[build_sparta] pm-gpu/mallocasync: preset kokkos_cuda, arch 'AMPERE80 ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync
+loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/kokkos_cuda.cmake
 -- The C compiler identification is GNU 14.3.0
 -- The CXX compiler identification is GNU 14.3.0
 -- Cray Programming Environment 2.7.36 C
@@ -345,72 +165,12 @@ loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake
 -- Cray Programming Environment 2.7.36 CXX
 -- Detecting CXX compiler ABI info
 -- Detecting CXX compiler ABI info - done
--- Check for working CXX compiler: /opt/cray/pe/craype/2.7.36/bin/CC - skipped
+-- Check for working CXX compiler: /pscratch/sd/a/aajain/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
 -- Detecting CXX compile features
 -- Detecting CXX compile features - done
 -- Setting policy CMP0074 to use <TPL>_ROOT variables
 -- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
--- Found MPI_CXX: /opt/cray/pe/craype/2.7.36/bin/CC (found version "4.1")
--- Found MPI: TRUE (found version "4.1")
--- 
--- ****************** Begin SPARTA Settings ******************
--- Enabled packages
--- 
--- Enabled TPLs
---   BUILD_MPI
--- 
--- Enabled extra options
---   SPARTA_MACHINE: mpi
--- 
--- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DSPARTA_GZIP
--- SPARTA_CXX_COMPILE_FLAGS: -fPIC
--- Checking for old sparta build artifacts
--- Checking for old sparta build artifacts - done
--- ****************** End   SPARTA Settings ******************
--- 
--- Configuring done (4.1s)
--- Generating done (0.2s)
--- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi
-[ 90%] Building CXX object src/CMakeFiles/sparta_mpi.dir/surf_react.cpp.o
-[ 91%] Building CXX object src/CMakeFiles/sparta_mpi.dir/surf_react_adsorb.cpp.o
-[ 92%] Building CXX object src/CMakeFiles/sparta_mpi.dir/surf_react_global.cpp.o
-[ 92%] Building CXX object src/CMakeFiles/sparta_mpi.dir/surf_react_prob.cpp.o
-[ 93%] Building CXX object src/CMakeFiles/sparta_mpi.dir/timer.cpp.o
-[ 93%] Building CXX object src/CMakeFiles/sparta_mpi.dir/universe.cpp.o
-[ 94%] Building CXX object src/CMakeFiles/sparta_mpi.dir/update.cpp.o
-[ 95%] Building CXX object src/CMakeFiles/sparta_mpi.dir/variable.cpp.o
-[ 95%] Building CXX object src/CMakeFiles/sparta_mpi.dir/utils.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_mpi.dir/write_grid.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_mpi.dir/write_isurf.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_mpi.dir/write_restart.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_mpi.dir/write_surf.cpp.o
-[ 99%] Linking CXX static library libsparta_mpi.a
-[ 99%] Built target sparta_mpi
-[ 99%] Building CXX object src/CMakeFiles/spa_mpi.dir/main.cpp.o
-[100%] Linking CXX executable spa_mpi
-   text	   data	    bss	    dec	    hex	filename
-2145203	  96152	    120	2241475	 2233c3	spa_mpi
-[100%] Built target spa_mpi
-[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/src/spa_mpi
-[build_sparta] pm-cpu/kokkos_omp: preset kokkos_omp, arch 'ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp
-loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/kokkos_omp.cmake
--- The C compiler identification is GNU 14.3.0
--- The CXX compiler identification is GNU 14.3.0
--- Cray Programming Environment 2.7.36 C
--- Detecting C compiler ABI info
--- Detecting C compiler ABI info - done
--- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
--- Detecting C compile features
--- Detecting C compile features - done
--- Cray Programming Environment 2.7.36 CXX
--- Detecting CXX compiler ABI info
--- Detecting CXX compiler ABI info - done
--- Check for working CXX compiler: /opt/cray/pe/craype/2.7.36/bin/CC - skipped
--- Detecting CXX compile features
--- Detecting CXX compile features - done
--- Setting policy CMP0074 to use <TPL>_ROOT variables
--- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
--- Found MPI_CXX: /opt/cray/pe/craype/2.7.36/bin/CC (found version "4.1")
+-- Found MPI_CXX: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/lib/stubs/libcuda.so (found version "4.1")
 -- Found MPI: TRUE (found version "4.1")
 -- 
 -- ****************** Begin SPARTA Settings ******************
@@ -422,7 +182,7 @@ loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake
 --   BUILD_KOKKOS
 -- 
 -- Enabled extra options
---   SPARTA_MACHINE: kokkos_omp
+--   SPARTA_MACHINE: kokkos_cuda
 -- 
 -- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
 -- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
@@ -430,136 +190,32 @@ loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake
 -- Checking for old sparta build artifacts - done
 -- ****************** End   SPARTA Settings ******************
 -- 
+-- KOKKOS: CUDA malloc async support enabled
 -- Setting default Kokkos CXX standard to 20
 -- Kokkos version: 5.0.2
 -- The project name is: Kokkos
 -- Using internal gtest for testing
--- Kokkos is configured for CMake languages CXX compilation (using GNU version 14.3.0)
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 13.2.78)
 -- Using -std=c++20 for C++20 standard as feature
 -- Built-in Execution Spaces:
---     Device Parallel: NoTypeDefined
---     Host Parallel: Kokkos::OpenMP
---       Host Serial: NONE
--- 
--- Architectures:
---  ZEN3
--- Found OpenMP_CXX: -fopenmp (found suitable version "4.5", minimum required is "3.0")
--- Found OpenMP: TRUE (found suitable version "4.5", minimum required is "3.0") found components: CXX
--- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
--- Performing Test KOKKOS_LINK_OPTIONS_CHECK
--- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
--- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
--- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
--- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
--- Kokkos Backends: OPENMP
--- Configuring done (7.3s)
--- Generating done (0.8s)
--- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp
-[ 94%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/surf_react.cpp.o
-[ 94%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/surf_react_adsorb.cpp.o
-[ 94%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/surf_react_global.cpp.o
-[ 95%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/surf_react_prob.cpp.o
-[ 95%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/timer.cpp.o
-[ 95%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/universe.cpp.o
-[ 96%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/update.cpp.o
-[ 96%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/utils.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/variable.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/write_grid.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/write_isurf.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/write_restart.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_omp.dir/write_surf.cpp.o
-[ 99%] Linking CXX static library libsparta_kokkos_omp.a
-[ 99%] Built target sparta_kokkos_omp
-[ 99%] Building CXX object src/CMakeFiles/spa_kokkos_omp.dir/main.cpp.o
-[100%] Linking CXX executable spa_kokkos_omp
-   text	   data	    bss	    dec	    hex	filename
-8058016	 116056	 306288	8480360	 816668	spa_kokkos_omp
-[100%] Built target spa_kokkos_omp
-[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp/src/spa_kokkos_omp
-[build_sparta] pm-cpu/kokkos_serial: preset kokkos_mpi_only, arch 'ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial
-loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/src/sparta/cmake/presets/kokkos_mpi_only.cmake
--- The C compiler identification is GNU 14.3.0
--- The CXX compiler identification is GNU 14.3.0
--- Cray Programming Environment 2.7.36 C
--- Detecting C compiler ABI info
--- Detecting C compiler ABI info - done
--- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
--- Detecting C compile features
--- Detecting C compile features - done
--- Cray Programming Environment 2.7.36 CXX
--- Detecting CXX compiler ABI info
--- Detecting CXX compiler ABI info - done
--- Check for working CXX compiler: /opt/cray/pe/craype/2.7.36/bin/CC - skipped
--- Detecting CXX compile features
--- Detecting CXX compile features - done
--- Setting policy CMP0074 to use <TPL>_ROOT variables
--- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
--- Found MPI_CXX: /opt/cray/pe/craype/2.7.36/bin/CC (found version "4.1")
--- Found MPI: TRUE (found version "4.1")
--- 
--- ****************** Begin SPARTA Settings ******************
--- Enabled packages
---   PKG_KOKKOS
--- 
--- Enabled TPLs
---   BUILD_MPI
---   BUILD_KOKKOS
--- 
--- Enabled extra options
---   SPARTA_MACHINE: kokkos_mpi_only
--- 
--- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
--- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
--- Checking for old sparta build artifacts
--- Checking for old sparta build artifacts - done
--- ****************** End   SPARTA Settings ******************
--- 
--- Setting default Kokkos CXX standard to 20
--- Kokkos version: 5.0.2
--- The project name is: Kokkos
--- Using internal gtest for testing
--- Kokkos is configured for CMake languages CXX compilation (using GNU version 14.3.0)
--- SERIAL backend is being turned on to ensure there is at least one Host space. To change this, you must enable another host execution space and configure with -DKokkos_ENABLE_SERIAL=OFF.
--- Using -std=c++20 for C++20 standard as feature
--- Built-in Execution Spaces:
---     Device Parallel: NoTypeDefined
+--     Device Parallel: Kokkos::Cuda
 --     Host Parallel: NoTypeDefined
 --       Host Serial: SERIAL
 -- 
 -- Architectures:
 --  ZEN3
+--  AMPERE80
+-- Found CUDAToolkit: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/include (found version "13.2.78")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
 -- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
 -- Performing Test KOKKOS_LINK_OPTIONS_CHECK
 -- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
 -- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
 -- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
 -- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
--- Kokkos Backends: SERIAL
--- Configuring done (5.6s)
--- Generating done (0.7s)
--- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial
-[ 95%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/surf_react.cpp.o
-[ 95%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/surf_react_adsorb.cpp.o
-[ 95%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/surf_react_global.cpp.o
-[ 96%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/surf_react_prob.cpp.o
-[ 96%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/timer.cpp.o
-[ 96%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/universe.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/update.cpp.o
-[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/utils.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/variable.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/write_grid.cpp.o
-[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/write_isurf.cpp.o
-[ 99%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/write_restart.cpp.o
-[ 99%] Building CXX object src/CMakeFiles/sparta_kokkos_mpi_only.dir/write_surf.cpp.o
-[100%] Linking CXX static library libsparta_kokkos_mpi_only.a
-[100%] Built target sparta_kokkos_mpi_only
-[100%] Building CXX object src/CMakeFiles/spa_kokkos_mpi_only.dir/main.cpp.o
-[100%] Linking CXX executable spa_kokkos_mpi_only
-   text	   data	    bss	    dec	    hex	filename
-7512273	 116084	 301888	7930245	 790185	spa_kokkos_mpi_only
-[100%] Built target spa_kokkos_mpi_only
-[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial/src/spa_kokkos_mpi_only
-lrwxrwxrwx 1 aajain aajain 87 Nov 27 13:31 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_omp/src/spa_kokkos_omp
-lrwxrwxrwx 1 aajain aajain 95 Nov 27 13:32 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-kokkos_serial/src/spa_kokkos_mpi_only
-lrwxrwxrwx 1 aajain aajain 73 Nov 27 13:29 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/src/spa_mpi
-lrwxrwxrwx 1 aajain aajain 85 Nov 27 13:28 /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/src/spa_kokkos_cuda
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (19.0s)
+-- Generating done (0.8s)
+-- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync
