@@ -147,11 +147,12 @@ pf_resources_shared() {  # $1 = GPUs
 }
 
 pf_modules() {  # [$1 = module list; default MODULES]
-  # A job inherits the submitting shell's module state (sbatch --export=ALL).  Submitted from a
-  # shell that had run `module purge`, it found no gcc/cmake/openmpi/python at all, even after
-  # `module load slurm/alpine` (build jobs 36461958 and the next, 2026-11-27).  So: make sure
-  # Lmod is initialised, then `module reset` (the site defaults and MODULEPATH, which purge
-  # does not restore), then slurm/alpine, then the list.
+  # Alpine: a purge (and `module reset`) drops /curc/sw/alpine-modules/{compilers,idep,...}
+  # from MODULEPATH -- where gcc, python and cmake live -- and reloading slurm/alpine does not
+  # bring them back: every module then "is not available" (job logs 36464318, 36464696,
+  # 2026-11-27; `module reset` says so).  So purge, then put those directories back
+  # explicitly (the login shell's MODULEPATH), then slurm/alpine, then the list (openmpi
+  # appears once gcc is loaded).
   if ! type module > /dev/null 2>&1; then
     local f
     for f in /etc/profile.d/z00_lmod.sh /etc/profile.d/lmod.sh /usr/share/lmod/lmod/init/bash; do
@@ -159,11 +160,14 @@ pf_modules() {  # [$1 = module list; default MODULES]
       [ -f "${f}" ] && { source "${f}"; break; }
     done
   fi
+  module purge 2>/dev/null || true
   if [ "${SITE:-}" = curc ]; then
-    module reset > /dev/null 2>&1 || module purge 2>/dev/null || true
     module load slurm/alpine 2>/dev/null || true
-  else
-    module purge 2>/dev/null || true
+    local d
+    for d in /usr/share/modulefiles /curc/sw/alpine-modules/compilers /curc/sw/alpine-modules/idep \
+             /curc/sw/alpine-modules/cu_licensed; do
+      [ -d "${d}" ] && module use --append "${d}"
+    done
   fi
   local m
   for m in ${1:-${MODULES}}; do
