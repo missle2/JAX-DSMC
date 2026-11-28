@@ -1,0 +1,29 @@
+[runtime] pm-cpu on nid006356: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-default/spa
+[2026-11-27T22:05:29-08:00] job 62133654 check-pm-cpu-n1: 1 node(s) nid006356...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-cpu/check-pm-cpu-n1.plan: 4 runs
+[2026-11-27T22:05:29-08:00] run 1: python3 bench/env/check_env.py
+host nid006356 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend cpu processes 1 devices 1: cpu
+SLURM_GPUS_ON_NODE=None CUDA_VISIBLE_DEVICES=None ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+collide 8x8x8 on 1 device(s): np 5120 ncoll 6990 overflow 0 compile 0.6s total 1.6s
+check ok
+[2026-11-27T22:05:33-08:00] run 1 done in 4 s
+[2026-11-27T22:05:33-08:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-mpi/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+	libmpi_gnu.so.12 => /opt/cray/pe/lib64/libmpi_gnu.so.12 (0x00007f96c4c06000)
+	libmpi_gtl_cuda.so.0 => /opt/cray/pe/lib64/libmpi_gtl_cuda.so.0 (0x00007f96c4bb0000)
+	libstdc++.so.6 => /usr/lib64/libstdc++.so.6 (0x00007f96c485b000)
+	libmpi_gnu_123.so.12 => /opt/cray/pe/lib64/libmpi_gnu_123.so.12 (0x00007f96c34c0000)
+[2026-11-27T22:05:33-08:00] run 2 done in 0 s
+[2026-11-27T22:05:33-08:00] run 3: python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-mpi/spa" --deck collide --particles 10K --steps 20 --reps 1 --machine "${MACHINE}" --variant check --out "${RESULTS_DIR}/check" --launch "$(pf_launch 1 4)" --procs 4
++ srun --mem=0 -N 1 -n 4 --ntasks-per-node=4 -c 64 --cpu-bind=cores /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-cpu/check/logs/log.27Nov26.collide.pm-cpu_check.10K.4 -screen none -v x 10 -v y 10 -v z 10 -v steps 20 -v seed 12345
+{"deck": "collide", "particles": 10000, "procs": 4, "loop_time": 0.00254877, "mpsps": 78.46922240924053}
+[2026-11-27T22:05:36-08:00] run 3 done in 3 s
+[2026-11-27T22:05:36-08:00] run 4: NCCL_DEBUG=INFO $(pf_launch 1 1) python3 bench/env/check_env.py --distributed
+host nid006356 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend cpu processes 1 devices 1: cpu
+SLURM_GPUS_ON_NODE=None CUDA_VISIBLE_DEVICES=None ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+collide 8x8x8 on 1 device(s): np 5120 ncoll 6990 overflow 0 compile 0.6s total 1.5s
+check ok
+[2026-11-27T22:05:39-08:00] run 4 done in 3 s
+[2026-11-27T22:05:39-08:00] 4 runs, 0 failed

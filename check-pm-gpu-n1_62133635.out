@@ -1,0 +1,222 @@
+[runtime] pm-gpu on nid001176: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa
+[2026-11-27T21:49:32-08:00] job 62133635 check-pm-gpu-n1: 1 node(s) nid001176...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-gpu/check-pm-gpu-n1.plan: 4 runs
+[2026-11-27T21:49:32-08:00] run 1: python3 bench/env/check_env.py
+host nid001176 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend gpu processes 1 devices 4: NVIDIA A100-SXM4-40GB
+SLURM_GPUS_ON_NODE=4 CUDA_VISIBLE_DEVICES=0,1,2,3 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:28: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(30))) * M1
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:29: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(27))) * M2
+collide 16x8x8 on 4 device(s): np 10240 ncoll 13988 overflow 0 compile 1.3s total 8.5s
+check ok
+[2026-11-27T21:49:48-08:00] run 1 done in 16 s
+[2026-11-27T21:49:48-08:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+	libmpi_gnu.so.12 => /opt/cray/pe/lib64/libmpi_gnu.so.12 (0x00007f0d62880000)
+	libmpi_gtl_cuda.so.0 => /opt/cray/pe/lib64/libmpi_gtl_cuda.so.0 (0x00007f0d6282a000)
+	libstdc++.so.6 => /usr/lib64/libstdc++.so.6 (0x00007f0d5f99a000)
+	libmpi_gnu_123.so.12 => /opt/cray/pe/lib64/libmpi_gnu_123.so.12 (0x00007f0d5e637000)
+[2026-11-27T21:49:49-08:00] run 2 done in 1 s
+[2026-11-27T21:49:49-08:00] run 3: python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 10K --steps 20 --reps 1 --machine "${MACHINE}" --variant check --out "${RESULTS_DIR}/check" --launch "$(pf_launch 1 1 bind)" --accel "-k on g 1 -sf kk"
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 128 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/check/logs/log.27Nov26.collide.pm-gpu_check.10K.1 -screen none -v x 10 -v y 10 -v z 10 -v steps 20 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.00733313, "mpsps": 27.273483492042278}
+[2026-11-27T21:49:56-08:00] run 3 done in 7 s
+[2026-11-27T21:49:56-08:00] run 4: NCCL_DEBUG=INFO $(pf_launch 1 4) python3 bench/env/check_env.py --distributed
+E1127 21:49:59.980356 1729939 platform_util.cc:281] Failed to create stream executor for device CUDA:1: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal
+Traceback (most recent call last):
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 851, in backends
+    backend = _init_backend(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 935, in _init_backend
+    backend = registration.factory()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 598, in make_pjrt_c_api_client
+    return xla_client.make_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        SORT_DEVICES_BY_PROCESS_INDEX.value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jaxlib/xla_client.py", line 160, in make_c_api_client
+    return _xla.get_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        sort_devices_by_process_index,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+jax.errors.JaxRuntimeError: INTERNAL: no supported devices found for platform CUDA: Device 1: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 76, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 37, in main
+    me = jax.process_index()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 1139, in process_index
+    return get_backend(backend).process_index()
+           ~~~~~~~~~~~^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 983, in get_backend
+    return _get_backend_uncached(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 962, in _get_backend_uncached
+    bs = backends()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 867, in backends
+    raise RuntimeError(err_msg)
+RuntimeError: Unable to initialize backend 'cuda': INTERNAL: no supported devices found for platform CUDA: Device 1: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal (set JAX_PLATFORMS='' to automatically choose an available backend)
+E1127 21:50:00.122564 1729943 platform_util.cc:281] Failed to create stream executor for device CUDA:3: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal
+Traceback (most recent call last):
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 851, in backends
+    backend = _init_backend(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 935, in _init_backend
+    backend = registration.factory()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 598, in make_pjrt_c_api_client
+    return xla_client.make_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        SORT_DEVICES_BY_PROCESS_INDEX.value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jaxlib/xla_client.py", line 160, in make_c_api_client
+    return _xla.get_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        sort_devices_by_process_index,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+jax.errors.JaxRuntimeError: INTERNAL: no supported devices found for platform CUDA: Device 3: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 76, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 37, in main
+    me = jax.process_index()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 1139, in process_index
+    return get_backend(backend).process_index()
+           ~~~~~~~~~~~^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 983, in get_backend
+    return _get_backend_uncached(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 962, in _get_backend_uncached
+    bs = backends()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 867, in backends
+    raise RuntimeError(err_msg)
+RuntimeError: Unable to initialize backend 'cuda': INTERNAL: no supported devices found for platform CUDA: Device 3: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal (set JAX_PLATFORMS='' to automatically choose an available backend)
+E1127 21:50:00.697165 1729941 platform_util.cc:281] Failed to create stream executor for device CUDA:2: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal
+Traceback (most recent call last):
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 851, in backends
+    backend = _init_backend(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 935, in _init_backend
+    backend = registration.factory()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 598, in make_pjrt_c_api_client
+    return xla_client.make_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        SORT_DEVICES_BY_PROCESS_INDEX.value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jaxlib/xla_client.py", line 160, in make_c_api_client
+    return _xla.get_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        sort_devices_by_process_index,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+jax.errors.JaxRuntimeError: INTERNAL: no supported devices found for platform CUDA: Device 2: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 76, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 37, in main
+    me = jax.process_index()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 1139, in process_index
+    return get_backend(backend).process_index()
+           ~~~~~~~~~~~^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 983, in get_backend
+    return _get_backend_uncached(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 962, in _get_backend_uncached
+    bs = backends()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 867, in backends
+    raise RuntimeError(err_msg)
+RuntimeError: Unable to initialize backend 'cuda': INTERNAL: no supported devices found for platform CUDA: Device 2: CUDA error: Failed call to cuDeviceGet: CUDA_ERROR_INVALID_DEVICE: invalid device ordinal (set JAX_PLATFORMS='' to automatically choose an available backend)
+Traceback (most recent call last):
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 851, in backends
+    backend = _init_backend(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 935, in _init_backend
+    backend = registration.factory()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 598, in make_pjrt_c_api_client
+    return xla_client.make_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        SORT_DEVICES_BY_PROCESS_INDEX.value,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jaxlib/xla_client.py", line 160, in make_c_api_client
+    return _xla.get_c_api_client(
+           ~~~~~~~~~~~~~~~~~~~~~^
+        plugin_name,
+        ^^^^^^^^^^^^
+    ...<4 lines>...
+        sort_devices_by_process_index,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+jax.errors.JaxRuntimeError: INTERNAL: Getting local topologies failed: Error 1: GetKeyValue() timed out with key: cuda:local_topology/cuda/1 and duration: 2m
+
+Error 2: GetKeyValue() timed out with key: cuda:local_topology/cuda/2 and duration: 2m
+
+Error 3: GetKeyValue() timed out with key: cuda:local_topology/cuda/3 and duration: 2m
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 76, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 37, in main
+    me = jax.process_index()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 1139, in process_index
+    return get_backend(backend).process_index()
+           ~~~~~~~~~~~^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 983, in get_backend
+    return _get_backend_uncached(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 962, in _get_backend_uncached
+    bs = backends()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 867, in backends
+    raise RuntimeError(err_msg)
+RuntimeError: Unable to initialize backend 'cuda': INTERNAL: Getting local topologies failed: Error 1: GetKeyValue() timed out with key: cuda:local_topology/cuda/1 and duration: 2m
+
+Error 2: GetKeyValue() timed out with key: cuda:local_topology/cuda/2 and duration: 2m
+
+Error 3: GetKeyValue() timed out with key: cuda:local_topology/cuda/3 and duration: 2m (set JAX_PLATFORMS='' to automatically choose an available backend)
+srun: error: nid001176: tasks 0-3: Exited with exit code 1
+srun: Terminating StepId=62133635.1
+[2026-11-27T21:52:04-08:00] run 4 FAILED
+[2026-11-27T21:52:04-08:00] run 4 done in 128 s
+[2026-11-27T21:52:04-08:00] 4 runs, 1 failed
