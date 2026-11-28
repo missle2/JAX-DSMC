@@ -1,0 +1,68 @@
+[runtime] alp-rtx6000 on c3gpu-g7-u9: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa
+[2026-11-28T13:08:20-07:00] job 36550543 profile-alp-rtx6000-4M: 1 node(s) c3gpu-g7-u9...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-rtx6000/profile-alp-rtx6000-4M.plan: 13 runs
+[2026-11-28T13:08:20-07:00] run 1: mkdir -p "${RESULTS_DIR}/profile"; bash ${PWD}/bench/env/nsys.sh --version
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+[2026-11-28T13:08:20-07:00] run 1 FAILED
+[2026-11-28T13:08:20-07:00] run 1 done in 0 s
+[2026-11-28T13:08:20-07:00] run 2: timeout 2100  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck free --particles 4M --machine "${MACHINE}" --variant prof_kk --nodes 1 --reps 1 --steps 200 --stats 100 --out "${RESULTS_DIR}/profile" --procs 1 --launch "$(pf_launch 1 1 bind) bash ${PWD}/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o ${RESULTS_DIR}/profile/sparta_free_4M" --accel '-k on g 1 -sf kk -v reorder 10'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest bash /projects/aaja8389/JAX-DSMC-sparta/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/sparta_free_4M /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.free -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/logs/log.28Nov26.free.alp-rtx6000_prof_kk.4M.1 -screen none -v x 50 -v y 80 -v z 100 -v steps 200 -v statsevery 100 -v seed 12345 -k on g 1 -sf kk -v reorder 10
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+srun: error: c3gpu-g7-u9: task 0: Exited with exit code 127
+SPARTA failed (exit 127); see /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/logs/log.28Nov26.free.alp-rtx6000_prof_kk.4M.1
+[2026-11-28T13:08:26-07:00] run 2 FAILED
+[2026-11-28T13:08:26-07:00] run 2 done in 6 s
+[2026-11-28T13:08:26-07:00] run 3: bash ${PWD}/bench/env/nsys.sh stats --force-export=true --report cuda_gpu_kern_sum,cuda_gpu_mem_time_sum --format csv --output ${RESULTS_DIR}/profile/sparta_free_4M ${RESULTS_DIR}/profile/sparta_free_4M.nsys-rep > /dev/null && ls ${RESULTS_DIR}/profile/sparta_free_4M_*.csv
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+[2026-11-28T13:08:26-07:00] run 3 FAILED
+[2026-11-28T13:08:26-07:00] run 3 done in 0 s
+[2026-11-28T13:08:26-07:00] run 4: timeout 2100  $(pf_launch 1 1 bind) bash ${PWD}/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o ${RESULTS_DIR}/profile/jax_free_4M python3 bench/run_bench.py jax --deck free --particles 4M --machine "${MACHINE}" --variant prof_jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 1 --steps 200 --stats 100 --out "${RESULTS_DIR}/profile" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+srun: error: c3gpu-g7-u9: task 0: Exited with exit code 127
+[2026-11-28T13:08:32-07:00] run 4 FAILED
+[2026-11-28T13:08:32-07:00] run 4 done in 6 s
+[2026-11-28T13:08:32-07:00] run 5: bash ${PWD}/bench/env/nsys.sh stats --force-export=true --report cuda_gpu_kern_sum,cuda_gpu_mem_time_sum --format csv --output ${RESULTS_DIR}/profile/jax_free_4M ${RESULTS_DIR}/profile/jax_free_4M.nsys-rep > /dev/null && ls ${RESULTS_DIR}/profile/jax_free_4M_*.csv
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+[2026-11-28T13:08:32-07:00] run 5 FAILED
+[2026-11-28T13:08:32-07:00] run 5 done in 0 s
+[2026-11-28T13:08:32-07:00] run 6: timeout 2100  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 4M --machine "${MACHINE}" --variant prof_kk --nodes 1 --reps 1 --steps 200 --stats 100 --out "${RESULTS_DIR}/profile" --procs 1 --launch "$(pf_launch 1 1 bind) bash ${PWD}/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o ${RESULTS_DIR}/profile/sparta_collide_4M" --accel '-k on g 1 -sf kk -v reorder 10'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest bash /projects/aaja8389/JAX-DSMC-sparta/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/sparta_collide_4M /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.collide -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/logs/log.28Nov26.collide.alp-rtx6000_prof_kk.4M.1 -screen none -v x 50 -v y 80 -v z 100 -v steps 200 -v statsevery 100 -v seed 12345 -k on g 1 -sf kk -v reorder 10
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+srun: error: c3gpu-g7-u9: task 0: Exited with exit code 127
+SPARTA failed (exit 127); see /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/logs/log.28Nov26.collide.alp-rtx6000_prof_kk.4M.1
+[2026-11-28T13:08:35-07:00] run 6 FAILED
+[2026-11-28T13:08:35-07:00] run 6 done in 3 s
+[2026-11-28T13:08:35-07:00] run 7: bash ${PWD}/bench/env/nsys.sh stats --force-export=true --report cuda_gpu_kern_sum,cuda_gpu_mem_time_sum --format csv --output ${RESULTS_DIR}/profile/sparta_collide_4M ${RESULTS_DIR}/profile/sparta_collide_4M.nsys-rep > /dev/null && ls ${RESULTS_DIR}/profile/sparta_collide_4M_*.csv
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+[2026-11-28T13:08:35-07:00] run 7 FAILED
+[2026-11-28T13:08:35-07:00] run 7 done in 0 s
+[2026-11-28T13:08:35-07:00] run 8: timeout 2100  $(pf_launch 1 1 bind) bash ${PWD}/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o ${RESULTS_DIR}/profile/jax_collide_4M python3 bench/run_bench.py jax --deck collide --particles 4M --machine "${MACHINE}" --variant prof_jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 1 --steps 200 --stats 100 --out "${RESULTS_DIR}/profile" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+srun: error: c3gpu-g7-u9: task 0: Exited with exit code 127
+[2026-11-28T13:08:41-07:00] run 8 FAILED
+[2026-11-28T13:08:41-07:00] run 8 done in 6 s
+[2026-11-28T13:08:41-07:00] run 9: bash ${PWD}/bench/env/nsys.sh stats --force-export=true --report cuda_gpu_kern_sum,cuda_gpu_mem_time_sum --format csv --output ${RESULTS_DIR}/profile/jax_collide_4M ${RESULTS_DIR}/profile/jax_collide_4M.nsys-rep > /dev/null && ls ${RESULTS_DIR}/profile/jax_collide_4M_*.csv
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+[2026-11-28T13:08:41-07:00] run 9 FAILED
+[2026-11-28T13:08:41-07:00] run 9 done in 0 s
+[2026-11-28T13:08:41-07:00] run 10: timeout 2100  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck sphere --particles 4M --machine "${MACHINE}" --variant prof_kk --nodes 1 --reps 1 --steps 200 --stats 100 --out "${RESULTS_DIR}/profile" --procs 1 --launch "$(pf_launch 1 1 bind) bash ${PWD}/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o ${RESULTS_DIR}/profile/sparta_sphere_4M" --accel '-k on g 1 -sf kk -v reorder 10'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest bash /projects/aaja8389/JAX-DSMC-sparta/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/sparta_sphere_4M /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.sphere -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/logs/log.28Nov26.sphere.alp-rtx6000_prof_kk.4M.1 -screen none -v x 50 -v y 80 -v z 100 -v steps 200 -v statsevery 100 -v seed 12345 -k on g 1 -sf kk -v reorder 10
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+srun: error: c3gpu-g7-u9: task 0: Exited with exit code 127
+SPARTA failed (exit 127); see /projects/aaja8389/sparta-scaling/results/alp-rtx6000/profile/logs/log.28Nov26.sphere.alp-rtx6000_prof_kk.4M.1
+[2026-11-28T13:08:44-07:00] run 10 FAILED
+[2026-11-28T13:08:44-07:00] run 10 done in 3 s
+[2026-11-28T13:08:44-07:00] run 11: bash ${PWD}/bench/env/nsys.sh stats --force-export=true --report cuda_gpu_kern_sum,cuda_gpu_mem_time_sum --format csv --output ${RESULTS_DIR}/profile/sparta_sphere_4M ${RESULTS_DIR}/profile/sparta_sphere_4M.nsys-rep > /dev/null && ls ${RESULTS_DIR}/profile/sparta_sphere_4M_*.csv
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+[2026-11-28T13:08:44-07:00] run 11 FAILED
+[2026-11-28T13:08:44-07:00] run 11 done in 0 s
+[2026-11-28T13:08:44-07:00] run 12: timeout 2100  $(pf_launch 1 1 bind) bash ${PWD}/bench/env/nsys.sh profile -t cuda,nvtx --force-overwrite true -o ${RESULTS_DIR}/profile/jax_sphere_4M python3 bench/run_bench.py jax --deck sphere --particles 4M --machine "${MACHINE}" --variant prof_jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 1 --steps 200 --stats 100 --out "${RESULTS_DIR}/profile" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+srun: error: c3gpu-g7-u9: task 0: Exited with exit code 127
+[2026-11-28T13:08:48-07:00] run 12 FAILED
+[2026-11-28T13:08:48-07:00] run 12 done in 4 s
+[2026-11-28T13:08:48-07:00] run 13: bash ${PWD}/bench/env/nsys.sh stats --force-export=true --report cuda_gpu_kern_sum,cuda_gpu_mem_time_sum --format csv --output ${RESULTS_DIR}/profile/jax_sphere_4M ${RESULTS_DIR}/profile/jax_sphere_4M.nsys-rep > /dev/null && ls ${RESULTS_DIR}/profile/jax_sphere_4M_*.csv
+nsys not found (set NSYS=/path/to/nsys; Alpine: the CUDA 12.8 runfile's nsight-systems)
+[2026-11-28T13:08:48-07:00] run 13 FAILED
+[2026-11-28T13:08:48-07:00] run 13 done in 0 s
+[2026-11-28T13:08:48-07:00] 13 runs, 13 failed
