@@ -1,0 +1,26 @@
+[runtime] pm-gpu on nid008453: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa
+[2026-11-27T20:59:09-08:00] job 62131028 check-pm-gpu-n1: 1 node(s) nid008453...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-gpu/check-pm-gpu-n1.plan: 4 runs
+[2026-11-27T20:59:09-08:00] run 1: python3 bench/env/check_env.py
+host nid008453 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend gpu processes 1 devices 4: NVIDIA A100-SXM4-80GB
+SLURM_GPUS_ON_NODE=4 CUDA_VISIBLE_DEVICES=0,1,2,3 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:28: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(30))) * M1
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:29: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(27))) * M2
+collide 16x8x8 on 4 device(s): np 10240 ncoll 13988 overflow 0 compile 1.3s total 9.3s
+check ok
+[2026-11-27T20:59:29-08:00] run 1 done in 20 s
+[2026-11-27T20:59:29-08:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+	libmpi_gnu.so.12 => /opt/cray/pe/lib64/libmpi_gnu.so.12 (0x00007fca34e8e000)
+	libmpi_gtl_cuda.so.0 => /opt/cray/pe/lib64/libmpi_gtl_cuda.so.0 (0x00007fca34e38000)
+	libstdc++.so.6 => /usr/lib64/libstdc++.so.6 (0x00007fca31f9a000)
+	libmpi_gnu_123.so.12 => /opt/cray/pe/lib64/libmpi_gnu_123.so.12 (0x00007fca30c37000)
+[2026-11-27T20:59:30-08:00] run 2 done in 1 s
+[2026-11-27T20:59:30-08:00] run 3: python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 10K --steps 20 --reps 1 --machine "${MACHINE}" --variant check --out "${RESULTS_DIR}/check" --launch "$(pf_launch 1 1 bind)" --accel "-k on g 1 -sf kk"
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 128 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/check/logs/log.27Nov26.collide.pm-gpu_check.10K.1 -screen none -v x 10 -v y 10 -v z 10 -v steps 20 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.00747186, "mpsps": 26.767096813912467}
+[2026-11-27T20:59:40-08:00] run 3 done in 10 s
+[2026-11-27T20:59:40-08:00] 3 runs, 0 failed

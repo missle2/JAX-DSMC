@@ -1,0 +1,50 @@
+[runtime] pm-cpu on nid006327: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-default/spa
+[2026-11-27T21:05:35-08:00] job 62131098 check-pm-cpu-n1: 1 node(s) nid006327...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-cpu/check-pm-cpu-n1.plan: 3 runs
+[2026-11-27T21:05:35-08:00] run 1: python3 bench/env/check_env.py
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 76, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 37, in main
+    me = jax.process_index()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 1139, in process_index
+    return get_backend(backend).process_index()
+           ~~~~~~~~~~~^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 983, in get_backend
+    return _get_backend_uncached(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 962, in _get_backend_uncached
+    bs = backends()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 869, in backends
+    assert _default_backend is not None
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+[2026-11-27T21:05:39-08:00] run 1 FAILED
+[2026-11-27T21:05:39-08:00] run 1 done in 4 s
+[2026-11-27T21:05:39-08:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+ldd: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-default/spa: No such file or directory
+[2026-11-27T21:05:40-08:00] run 2 done in 1 s
+[2026-11-27T21:05:40-08:00] run 3: NCCL_DEBUG=INFO $(pf_launch 1 1) python3 bench/env/check_env.py --distributed
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 76, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 37, in main
+    me = jax.process_index()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 1139, in process_index
+    return get_backend(backend).process_index()
+           ~~~~~~~~~~~^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 983, in get_backend
+    return _get_backend_uncached(platform)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 962, in _get_backend_uncached
+    bs = backends()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu/lib/python3.13/site-packages/jax/_src/xla_bridge.py", line 869, in backends
+    assert _default_backend is not None
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+srun: error: nid006327: task 0: Exited with exit code 1
+srun: Terminating StepId=62131098.0
+[2026-11-27T21:05:47-08:00] run 3 FAILED
+[2026-11-27T21:05:47-08:00] run 3 done in 7 s
+[2026-11-27T21:05:47-08:00] 3 runs, 2 failed
