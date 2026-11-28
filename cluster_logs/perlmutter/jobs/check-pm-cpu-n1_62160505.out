@@ -1,0 +1,33 @@
+[runtime] pm-cpu on nid004203: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-cpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-default/spa
+[2026-11-28T09:19:47-08:00] job 62160505 check-pm-cpu-n1: 1 node(s) nid004203...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-cpu/check-pm-cpu-n1.plan: 4 runs
+[2026-11-28T09:19:47-08:00] run 1: python3 bench/env/check_env.py
+host nid004203 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend cpu processes 1 devices 1: cpu
+SLURM_GPUS_ON_NODE=None CUDA_VISIBLE_DEVICES=None ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+collide 8x8x8 on 1 device(s): np 5120 ncoll 6990 overflow 0 compile 0.6s total 1.6s
+check ok
+[2026-11-28T09:19:51-08:00] run 1 done in 4 s
+[2026-11-28T09:19:51-08:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-mpi/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+	libmpi_gnu.so.12 => /opt/cray/pe/lib64/libmpi_gnu.so.12 (0x00007ff801a93000)
+	libmpi_gtl_cuda.so.0 => /opt/cray/pe/lib64/libmpi_gtl_cuda.so.0 (0x00007ff801a3d000)
+	libstdc++.so.6 => /usr/lib64/libstdc++.so.6 (0x00007ff8016e8000)
+	libmpi_gnu_123.so.12 => /opt/cray/pe/lib64/libmpi_gnu_123.so.12 (0x00007ff80034d000)
+[2026-11-28T09:19:51-08:00] run 2 done in 0 s
+[2026-11-28T09:19:51-08:00] run 3: python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-mpi/spa" --deck collide --particles 10K --steps 20 --reps 1 --machine "${MACHINE}" --variant check --out "${RESULTS_DIR}/check" --launch "$(pf_launch 1 4)" --procs 4
++ srun --mem=0 -N 1 -n 4 --ntasks-per-node=4 -c 64 --cpu-bind=cores /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-cpu-mpi/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-cpu/check/logs/log.28Nov26.collide.pm-cpu_check.10K.4 -screen none -v x 10 -v y 10 -v z 10 -v steps 20 -v seed 12345
+{"deck": "collide", "particles": 10000, "procs": 4, "loop_time": 0.00258045, "mpsps": 77.50586138076692}
+[2026-11-28T09:19:54-08:00] run 3 done in 3 s
+[2026-11-28T09:19:54-08:00] run 4: XLA_FLAGS=--xla_force_host_platform_device_count=2 $(pf_launch 1 2) python3 bench/env/check_env.py --distributed
+host nid004203 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend cpu processes 2 devices 4: cpu
+SLURM_GPUS_ON_NODE=None CUDA_VISIBLE_DEVICES=None ROCR_VISIBLE_DEVICES=None XLA_FLAGS='--xla_force_host_platform_device_count=2'
+[Gloo] Rank 1 is connected to 3 peer ranks. Expected number of connected peer ranks is : 3
+[Gloo] Rank 0 is connected to 3 peer ranks. Expected number of connected peer ranks is : 3
+[Gloo] Rank 3 is connected to [Gloo] Rank 2 is connected to 3 peer ranks. Expected number of connected peer ranks is : 33 peer ranks. Expected number of connected peer ranks is : 3
+
+collide 16x8x8 on 4 device(s): np 10240 ncoll 13988 overflow 0 compile 1.0s total 2.9s
+check ok
+[2026-11-28T09:19:59-08:00] run 4 done in 5 s
+[2026-11-28T09:19:59-08:00] 4 runs, 0 failed

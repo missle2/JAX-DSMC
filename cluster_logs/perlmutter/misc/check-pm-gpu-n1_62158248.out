@@ -1,0 +1,141 @@
+[runtime] pm-gpu on nid008669: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa
+[2026-11-28T08:54:50-08:00] job 62158248 check-pm-gpu-n1: 1 node(s) nid008669...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-gpu/check-pm-gpu-n1.plan: 4 runs
+[2026-11-28T08:54:50-08:00] run 1: python3 bench/env/check_env.py
+host nid008669 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend gpu processes 1 devices 4: NVIDIA A100-SXM4-80GB
+SLURM_GPUS_ON_NODE=4 CUDA_VISIBLE_DEVICES=0,1,2,3 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+collide 16x8x8 on 4 device(s): np 10240 ncoll 13988 overflow 0 compile 0.3s total 7.7s
+check ok
+[2026-11-28T08:55:05-08:00] run 1 done in 15 s
+[2026-11-28T08:55:05-08:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+	libmpi_gnu.so.12 => /opt/cray/pe/lib64/libmpi_gnu.so.12 (0x00007fa5032bd000)
+	libmpi_gtl_cuda.so.0 => /opt/cray/pe/lib64/libmpi_gtl_cuda.so.0 (0x00007fa503267000)
+	libstdc++.so.6 => /usr/lib64/libstdc++.so.6 (0x00007fa50039a000)
+	libmpi_gnu_123.so.12 => /opt/cray/pe/lib64/libmpi_gnu_123.so.12 (0x00007fa4ff037000)
+[2026-11-28T08:55:06-08:00] run 2 done in 1 s
+[2026-11-28T08:55:06-08:00] run 3: python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 10K --steps 20 --reps 1 --machine "${MACHINE}" --variant check --out "${RESULTS_DIR}/check" --launch "$(pf_launch 1 1 bind)" --accel "-k on g 1 -sf kk"
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 128 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/check/logs/log.28Nov26.collide.pm-gpu_check.10K.1 -screen none -v x 10 -v y 10 -v z 10 -v steps 20 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.00737448, "mpsps": 27.120556296850758}
+[2026-11-28T08:55:13-08:00] run 3 done in 7 s
+[2026-11-28T08:55:13-08:00] run 4: NCCL_DEBUG=WARN $(pf_launch 1 4 nobind) python3 bench/env/check_env.py --distributed
+host nid008669 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend gpu processes 4 devices 4: NVIDIA A100-SXM4-80GB
+SLURM_GPUS_ON_NODE=4 CUDA_VISIBLE_DEVICES=0,1,2,3 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+NCCL version 2.32.6+cuda12.9
+
+[2026-11-28 08:55:21] nid008669:143237:143858 [1] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+
+[2026-11-28 08:55:21] nid008669:143236:143861 [0] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+
+[2026-11-28 08:55:21] nid008669:143241:143860 [3] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+
+[2026-11-28 08:55:21] nid008669:143239:143859 [2] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 104, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 238, in run_deck_decomposed
+    per_rank = {k: np.concatenate([np.asarray(getattr(st, k)) for st in chunks]) for k in S.Stats._fields}
+                                   ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 662, in _value
+    raise RuntimeError(
+    ...<5 lines>...
+    )
+RuntimeError: Fetching value for `jax.Array` that spans non-addressable (non process local) devices is not possible. You can use `jax.experimental.multihost_utils.process_allgather` to print the global array or use `.addressable_shards` method of jax.Array to inspect the addressable (process local) shards.
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 104, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 238, in run_deck_decomposed
+    per_rank = {k: np.concatenate([np.asarray(getattr(st, k)) for st in chunks]) for k in S.Stats._fields}
+                                   ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 662, in _value
+    raise RuntimeError(
+    ...<5 lines>...
+    )
+RuntimeError: Fetching value for `jax.Array` that spans non-addressable (non process local) devices is not possible. You can use `jax.experimental.multihost_utils.process_allgather` to print the global array or use `.addressable_shards` method of jax.Array to inspect the addressable (process local) shards.
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 104, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 238, in run_deck_decomposed
+    per_rank = {k: np.concatenate([np.asarray(getattr(st, k)) for st in chunks]) for k in S.Stats._fields}
+                                   ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 662, in _value
+    raise RuntimeError(
+    ...<5 lines>...
+    )
+RuntimeError: Fetching value for `jax.Array` that spans non-addressable (non process local) devices is not possible. You can use `jax.experimental.multihost_utils.process_allgather` to print the global array or use `.addressable_shards` method of jax.Array to inspect the addressable (process local) shards.
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 104, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 238, in run_deck_decomposed
+    per_rank = {k: np.concatenate([np.asarray(getattr(st, k)) for st in chunks]) for k in S.Stats._fields}
+                                   ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 662, in _value
+    raise RuntimeError(
+    ...<5 lines>...
+    )
+RuntimeError: Fetching value for `jax.Array` that spans non-addressable (non process local) devices is not possible. You can use `jax.experimental.multihost_utils.process_allgather` to print the global array or use `.addressable_shards` method of jax.Array to inspect the addressable (process local) shards.
+W1128 08:55:22.217904  143524 pjrt_client.cc:1720] WatchTasksAsync failed for task 0: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+=== Source Location Trace: === 
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+W1128 08:55:22.218033  143585 pjrt_client.cc:1720] WatchTasksAsync failed for task 2: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+=== Source Location Trace: === 
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+W1128 08:55:22.218138  143583 pjrt_client.cc:1720] WatchTasksAsync failed for task 1: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+=== Source Location Trace: === 
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+W1128 08:55:22.218120  143579 pjrt_client.cc:1720] WatchTasksAsync failed for task 3: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.83.108:62888: Failed to connect to remote host: Connection refused
+=== Source Location Trace: ===
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+srun: error: nid008669: tasks 1-3: Exited with exit code 1
+srun: Terminating StepId=62158248.1
+[2026-11-28T16:55:25.432] error: *** STEP 62158248.1 ON nid008669 CANCELLED AT 2026-11-28T16:55:25 DUE TO TASK FAILURE ***
+srun: error: nid008669: task 0: Exited with exit code 1
+[2026-11-28T08:55:25-08:00] run 4 FAILED
+[2026-11-28T08:55:25-08:00] run 4 done in 12 s
+[2026-11-28T08:55:25-08:00] 4 runs, 1 failed

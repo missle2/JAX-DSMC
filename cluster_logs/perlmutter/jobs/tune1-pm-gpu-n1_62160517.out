@@ -1,0 +1,258 @@
+[runtime] pm-gpu on nid003728: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa
+[2026-11-28T09:24:05-08:00] job 62160517 tune1-pm-gpu-n1: 1 node(s) nid003728...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-gpu/tune1-pm-gpu-n1.plan: 55 runs
+[2026-11-28T09:24:05-08:00] run 1: timeout 489  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 16384K --machine "${MACHINE}" --variant kk_default --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 27.2398, "mpsps": 601.4728448813869}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 34.1981, "mpsps": 479.09094364891627}
+[2026-11-28T09:25:32-08:00] run 1 done in 87 s
+[2026-11-28T09:25:32-08:00] run 2: timeout 755  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck sphere --particles 16384K --machine "${MACHINE}" --variant kk_default --nodes 1 --reps 2 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12345 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 47.5204, "mpsps": 342.0677053433893}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12346 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 47.4165, "mpsps": 342.82076732782895}
+[2026-11-28T09:29:02-08:00] run 2 done in 210 s
+[2026-11-28T09:29:02-08:00] run 3: timeout 501  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-mallocasync/spa" --deck free --particles 16384K --machine "${MACHINE}" --variant kk_mallocasync --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_mallocasync.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 22.6785, "mpsps": 722.4463699098266}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_mallocasync.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 22.5204, "mpsps": 727.518161311522}
+[2026-11-28T09:30:11-08:00] run 3 done in 69 s
+[2026-11-28T09:30:11-08:00] run 4: timeout 489  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-mallocasync/spa" --deck collide --particles 16384K --machine "${MACHINE}" --variant kk_mallocasync --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_mallocasync.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 27.1839, "mpsps": 602.7096921339469}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_mallocasync.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 27.2203, "mpsps": 601.9037262631198}
+[2026-11-28T09:31:28-08:00] run 4 done in 77 s
+[2026-11-28T09:31:29-08:00] run 5: timeout 755  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-mallocasync/spa" --deck sphere --particles 16384K --machine "${MACHINE}" --variant kk_mallocasync --nodes 1 --reps 2 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_mallocasync.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12345 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 46.9917, "mpsps": 345.9331985222922}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-mallocasync/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_mallocasync.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12346 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 47.0355, "mpsps": 345.59404715587164}
+[2026-11-28T09:34:56-08:00] run 5 done in 207 s
+[2026-11-28T09:34:56-08:00] run 6: timeout 501  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-march/spa" --deck free --particles 16384K --machine "${MACHINE}" --variant kk_march --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_march.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 22.678, "mpsps": 722.4622982626333}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_march.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 22.4793, "mpsps": 728.8483182305499}
+[2026-11-28T09:36:05-08:00] run 6 done in 69 s
+[2026-11-28T09:36:05-08:00] run 7: timeout 489  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-march/spa" --deck collide --particles 16384K --machine "${MACHINE}" --variant kk_march --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_march.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 26.9651, "mpsps": 607.6001943252575}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_march.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 27.0044, "mpsps": 606.7159425871339}
+[2026-11-28T09:37:22-08:00] run 7 done in 77 s
+[2026-11-28T09:37:22-08:00] run 8: timeout 755  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-march/spa" --deck sphere --particles 16384K --machine "${MACHINE}" --variant kk_march --nodes 1 --reps 2 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_march.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12345 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 47.7481, "mpsps": 340.44827498895245}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-march/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_march.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12346 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 47.3807, "mpsps": 343.07347706977737}
+[2026-11-28T09:40:53-08:00] run 8 done in 211 s
+[2026-11-28T09:40:53-08:00] run 9: timeout 501  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-bigbig/spa" --deck free --particles 16384K --machine "${MACHINE}" --variant kk_bigbig --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_bigbig.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 23.2256, "mpsps": 705.428492697713}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_bigbig.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 23.3115, "mpsps": 702.8290757780495}
+[2026-11-28T09:42:03-08:00] run 9 done in 70 s
+[2026-11-28T09:42:03-08:00] run 10: timeout 489  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-bigbig/spa" --deck collide --particles 16384K --machine "${MACHINE}" --variant kk_bigbig --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_bigbig.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 27.8182, "mpsps": 588.9669353157285}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_bigbig.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 27.7016, "mpsps": 591.4459814595547}
+[2026-11-28T09:43:22-08:00] run 10 done in 79 s
+[2026-11-28T09:43:22-08:00] run 11: timeout 755  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-bigbig/spa" --deck sphere --particles 16384K --machine "${MACHINE}" --variant kk_bigbig --nodes 1 --reps 2 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_bigbig.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12345 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 48.3086, "mpsps": 336.4887162534207}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_bigbig.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12346 -k on g 1 -sf kk
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 48.2069, "mpsps": 337.19279897690996}
+[2026-11-28T09:46:56-08:00] run 11 done in 214 s
+[2026-11-28T09:46:56-08:00] run 12: timeout 501  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck free --particles 16384K --machine "${MACHINE}" --variant kk_reorder10_default --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk -v reorder 10'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_reorder10_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk -v reorder 10
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 20.5404, "mpsps": 797.6475628517458}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_reorder10_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk -v reorder 10
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 20.5323, "mpsps": 797.9622351124814}
+[2026-11-28T09:47:59-08:00] run 12 done in 63 s
+[2026-11-28T09:47:59-08:00] run 13: timeout 489  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 16384K --machine "${MACHINE}" --variant kk_reorder10_default --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk -v reorder 10'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_reorder10_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk -v reorder 10
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 25.0054, "mpsps": 655.218472809873}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_reorder10_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk -v reorder 10
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 23.7134, "mpsps": 690.9173716126747}
+[2026-11-28T09:49:10-08:00] run 13 done in 71 s
+[2026-11-28T09:49:10-08:00] run 14: timeout 755  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck sphere --particles 16384K --machine "${MACHINE}" --variant kk_reorder10_default --nodes 1 --reps 2 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk -v reorder 10'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_reorder10_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12345 -k on g 1 -sf kk -v reorder 10
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 47.0801, "mpsps": 345.2744019660111}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_reorder10_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12346 -k on g 1 -sf kk -v reorder 10
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 47.1146, "mpsps": 345.0231399820862}
+[2026-11-28T09:52:39-08:00] run 14 done in 209 s
+[2026-11-28T09:52:39-08:00] run 15: timeout 501  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck free --particles 16384K --machine "${MACHINE}" --variant kk_reorder100_default --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk -v reorder 100'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_reorder100_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk -v reorder 100
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 21.7075, "mpsps": 754.762178970402}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.free.pm-gpu_kk_reorder100_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk -v reorder 100
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 21.6328, "mpsps": 757.3684405162531}
+[2026-11-28T09:53:44-08:00] run 15 done in 65 s
+[2026-11-28T09:53:44-08:00] run 16: timeout 489  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 16384K --machine "${MACHINE}" --variant kk_reorder100_default --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk -v reorder 100'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_reorder100_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk -v reorder 100
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 24.8809, "mpsps": 658.4970800895466}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.collide.pm-gpu_kk_reorder100_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk -v reorder 100
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 25.0201, "mpsps": 654.8335138548607}
+[2026-11-28T09:54:56-08:00] run 16 done in 72 s
+[2026-11-28T09:54:56-08:00] run 17: timeout 755  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck sphere --particles 16384K --machine "${MACHINE}" --variant kk_reorder100_default --nodes 1 --reps 2 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk -v reorder 100'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_reorder100_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12345 -k on g 1 -sf kk -v reorder 100
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 46.8013, "mpsps": 347.32787749485595}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.sphere -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.28Nov26.sphere.pm-gpu_kk_reorder100_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v seed 12346 -k on g 1 -sf kk -v reorder 100
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 46.9126, "mpsps": 346.5145230066123}
+[2026-11-28T09:58:24-08:00] run 17 done in 208 s
+[2026-11-28T09:58:24-08:00] run 18: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.648474490037188, "mpsps": 1118.4782423004654, "compile_s": 0.7505460979882628}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.699468604056165, "mpsps": 1114.5981151644492, "compile_s": 0.0}
+[2026-11-28T09:59:07-08:00] run 18 done in 43 s
+[2026-11-28T09:59:07-08:00] run 19: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.776502366992645, "mpsps": 281.33930958212983, "compile_s": 3.6852229279465973}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.159428210929036, "mpsps": 279.5340067828411, "compile_s": 0.0}
+[2026-11-28T10:03:01-08:00] run 19 done in 234 s
+[2026-11-28T10:03:01-08:00] run 20: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.862665291060694, "mpsps": 1102.3594812334454, "compile_s": 0.690598490065895}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.916031230939552, "mpsps": 1098.4155065333675, "compile_s": 0.0}
+[2026-11-28T10:03:42-08:00] run 20 done in 41 s
+[2026-11-28T10:03:42-08:00] run 21: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.780508995987475, "mpsps": 276.5338640927658, "compile_s": 3.3926373360445723}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 59.19482298695948, "mpsps": 274.644591868811, "compile_s": 0.0}
+[2026-11-28T10:07:39-08:00] run 21 done in 237 s
+[2026-11-28T10:07:39-08:00] run 22: XLA_FLAGS=--xla_gpu_graph_min_graph_size=1 timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cmdbuf_min1 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.64701962901745, "mpsps": 1118.589338648894, "compile_s": 0.6838278769282624}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.699940914986655, "mpsps": 1114.5623029883366, "compile_s": 0.0}
+[2026-11-28T10:08:21-08:00] run 22 done in 42 s
+[2026-11-28T10:08:21-08:00] run 23: XLA_FLAGS=--xla_gpu_graph_min_graph_size=1 timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cmdbuf_min1 --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.473521284991875, "mpsps": 282.8224358378514, "compile_s": 3.4758533680578694}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.873444860917516, "mpsps": 280.9153323958925, "compile_s": 0.0}
+[2026-11-28T10:12:13-08:00] run 23 done in 232 s
+[2026-11-28T10:12:13-08:00] run 24: XLA_FLAGS=--xla_gpu_autotune_level=0 timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_autotune0 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.653053760994226, "mpsps": 1118.128703220449, "compile_s": 0.7010226129787043}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.705033947015181, "mpsps": 1114.1762786155018, "compile_s": 0.0}
+[2026-11-28T10:12:54-08:00] run 24 done in 41 s
+[2026-11-28T10:12:54-08:00] run 25: XLA_FLAGS=--xla_gpu_autotune_level=0 timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_autotune0 --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.79295362497214, "mpsps": 281.2592239441515, "compile_s": 3.3341305080102757}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.16609354899265, "mpsps": 279.50197457057106, "compile_s": 0.0}
+[2026-11-28T10:16:48-08:00] run 25 done in 234 s
+[2026-11-28T10:16:48-08:00] run 26: XLA_FLAGS=--xla_gpu_enable_while_loop_unrolling=WHILE_LOOP_UNROLLING_AUTO_UNROLL timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_wlunroll --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.651523525943048, "mpsps": 1118.2454828666318, "compile_s": 0.6861976319923997}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.703002786962315, "mpsps": 1114.3301975381712, "compile_s": 0.0}
+[2026-11-28T10:17:30-08:00] run 26 done in 42 s
+[2026-11-28T10:17:30-08:00] run 27: XLA_FLAGS=--xla_gpu_enable_while_loop_unrolling=WHILE_LOOP_UNROLLING_AUTO_UNROLL timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_wlunroll --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.758305190945975, "mpsps": 281.4279475871473, "compile_s": 3.38304036995396}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.142459885100834, "mpsps": 279.6155861332251, "compile_s": 0.0}
+[2026-11-28T10:21:24-08:00] run 27 done in 234 s
+[2026-11-28T10:21:24-08:00] run 28: XLA_FLAGS=--xla_gpu_enable_cub_radix_sort=false timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_nocub --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 38.66591304691974, "mpsps": 423.7323965457271, "compile_s": 0.729569750954397}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 38.692119659041055, "mpsps": 423.445397780672, "compile_s": 0.0}
+[2026-11-28T10:22:55-08:00] run 28 done in 91 s
+[2026-11-28T10:22:55-08:00] run 29: XLA_FLAGS=--xla_gpu_enable_cub_radix_sort=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_nocub --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 89.0373344370164, "mpsps": 182.56163427150202, "compile_s": 3.4493471920723096}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 89.42216634505894, "mpsps": 181.806577322965, "compile_s": 0.0}
+[2026-11-28T10:28:54-08:00] run 29 done in 359 s
+[2026-11-28T10:28:54-08:00] run 30: XLA_PYTHON_CLIENT_ALLOCATOR=platform XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_platformalloc --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 15.536961915087886, "mpsps": 1054.5176135168072, "compile_s": 0.14610751497093588}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 15.52141336502973, "mpsps": 1055.5739747846487, "compile_s": 0.0}
+[2026-11-28T10:29:38-08:00] run 30 done in 44 s
+[2026-11-28T10:29:38-08:00] run 31: XLA_PYTHON_CLIENT_ALLOCATOR=platform XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_platformalloc --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.790668513975106, "mpsps": 281.27034526463757, "compile_s": 0.9038570319535211}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.15960527397692, "mpsps": 279.53315576015973, "compile_s": 0.0}
+[2026-11-28T10:33:27-08:00] run 31 done in 229 s
+[2026-11-28T10:33:27-08:00] run 32: TF_GPU_ALLOCATOR=cuda_malloc_async XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_mallocasync --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.620136018958874, "mpsps": 1120.6462086777995, "compile_s": 0.14047824102453887}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.65038023807574, "mpsps": 1118.332748621681, "compile_s": 0.0}
+[2026-11-28T10:34:06-08:00] run 32 done in 39 s
+[2026-11-28T10:34:06-08:00] run 33: TF_GPU_ALLOCATOR=cuda_malloc_async XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_mallocasync --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.624323131050915, "mpsps": 282.0822944684809, "compile_s": 0.895465011941269}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.99422353494447, "mpsps": 280.3302985892036, "compile_s": 0.0}
+[2026-11-28T10:37:54-08:00] run 33 done in 228 s
+[2026-11-28T10:37:54-08:00] run 34: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_lane2x --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set lane_scale=2
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.651709387078881, "mpsps": 1118.2312976019575, "compile_s": 0.1395186090376228}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.70001842500642, "mpsps": 1114.5564261422242, "compile_s": 0.0}
+[2026-11-28T10:38:34-08:00] run 34 done in 40 s
+[2026-11-28T10:38:34-08:00] run 35: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_lane2x --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set lane_scale=2
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.347373878001235, "mpsps": 278.5866818956965, "compile_s": 3.933584161917679}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.69122959394008, "mpsps": 277.00114842505536, "compile_s": 0.0}
+[2026-11-28T10:42:29-08:00] run 35 done in 235 s
+[2026-11-28T10:42:29-08:00] run 36: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_lanehalf --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set lane_scale=0.5
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.646151553024538, "mpsps": 1118.655637331336, "compile_s": 0.1429474870674312}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.699991318047978, "mpsps": 1114.5584813975008, "compile_s": 0.0}
+[2026-11-28T10:43:09-08:00] run 36 done in 40 s
+[2026-11-28T10:43:09-08:00] run 37: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_lanehalf --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set lane_scale=0.5
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.42605364799965, "mpsps": 283.0562132239817, "compile_s": 3.5031740290578455}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.83966666995548, "mpsps": 281.0793861031169, "compile_s": 0.0}
+[2026-11-28T10:47:00-08:00] run 37 done in 231 s
+[2026-11-28T10:47:00-08:00] run 38: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_trials16 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set trials=16
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.65054192894604, "mpsps": 1118.320406129759, "compile_s": 0.140554811921902}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.702509960974567, "mpsps": 1114.3675497237327, "compile_s": 0.0}
+[2026-11-28T10:47:40-08:00] run 38 done in 40 s
+[2026-11-28T10:47:40-08:00] run 39: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_trials16 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set trials=16
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.79735884000547, "mpsps": 281.2377868510654, "compile_s": 3.497950110002421}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 58.18363824207336, "mpsps": 279.4176935508986, "compile_s": 0.0}
+[2026-11-28T10:51:32-08:00] run 39 done in 232 s
+[2026-11-28T10:51:32-08:00] run 40: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set sort=full
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 13.590886770980433, "mpsps": 1205.5136854633713, "compile_s": 0.7189259600127116}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 13.615082742995583, "mpsps": 1203.3713132172418, "compile_s": 0.0}
+[2026-11-28T10:52:09-08:00] run 40 done in 37 s
+[2026-11-28T10:52:09-08:00] run 41: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set sort=full
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 56.43080974195618, "mpsps": 288.0483438095093, "compile_s": 3.4500477319816127}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 56.71468099509366, "mpsps": 286.65484341534824, "compile_s": 0.0}
+[2026-11-28T10:55:55-08:00] run 41 done in 226 s
+[2026-11-28T10:55:55-08:00] run 42: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_startsearch --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set starts=search
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 15.600408614962362, "mpsps": 1050.2289013305776, "compile_s": 0.714924369007349}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 15.665539301000535, "mpsps": 1045.8624937957659, "compile_s": 0.0}
+[2026-11-28T10:56:37-08:00] run 42 done in 42 s
+[2026-11-28T10:56:37-08:00] run 43: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_startsearch --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set starts=search
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 55.64392649696674, "mpsps": 292.1217518121422, "compile_s": 3.4265415909467265}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 56.02374067599885, "mpsps": 290.19015517050076, "compile_s": 0.0}
+[2026-11-28T11:00:20-08:00] run 43 done in 223 s
+[2026-11-28T11:00:20-08:00] run 44: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cprefix --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 12.259098303038627, "mpsps": 1336.4767615852259, "compile_s": 2.2595758779207245}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 12.269751901971176, "mpsps": 1335.3163235002214, "compile_s": 0.0}
+[2026-11-28T11:00:54-08:00] run 44 done in 34 s
+[2026-11-28T11:00:54-08:00] run 45: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cprefix --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 16.650821888935752, "mpsps": 976.2161528375424, "compile_s": 4.958467239048332}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 16.93018798402045, "mpsps": 960.2691957906593, "compile_s": 0.0}
+[2026-11-28T11:02:10-08:00] run 45 done in 76 s
+[2026-11-28T11:02:10-08:00] run 46: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cunroll4 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_unroll=4
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.468464627978392, "mpsps": 1132.3938248649717, "compile_s": 1.45336759602651}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.524947177036665, "mpsps": 1127.990332791187, "compile_s": 0.0}
+[2026-11-28T11:02:50-08:00] run 46 done in 40 s
+[2026-11-28T11:02:50-08:00] run 47: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cunroll4 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_unroll=4
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.58161282399669, "mpsps": 282.29152482554184, "compile_s": 4.776490987977013}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.93859434896149, "mpsps": 280.59945503823576, "compile_s": 0.0}
+[2026-11-28T11:06:42-08:00] run 47 done in 232 s
+[2026-11-28T11:06:42-08:00] run 48: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_unroll=8
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.201860668021254, "mpsps": 1153.651650511706, "compile_s": 2.346394617925398}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 14.221543797990307, "mpsps": 1152.0549549842315, "compile_s": 0.0}
+[2026-11-28T11:07:22-08:00] run 48 done in 40 s
+[2026-11-28T11:07:22-08:00] run 49: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_unroll=8
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.57276321796235, "mpsps": 282.3349163294737, "compile_s": 6.33851507504005}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 57.93739579000976, "mpsps": 280.6052598381254, "compile_s": 0.0}
+[2026-11-28T11:11:16-08:00] run 49 done in 234 s
+[2026-11-28T11:11:16-08:00] run 50: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 11.165922219050117, "mpsps": 1467.3217024606665, "compile_s": 2.1586693439166993}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 11.184724923921749, "mpsps": 1464.8549795764854, "compile_s": 0.0}
+[2026-11-28T11:11:49-08:00] run 50 done in 33 s
+[2026-11-28T11:11:49-08:00] run 51: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 15.306468797032721, "mpsps": 1061.9563206603943, "compile_s": 4.930885975947604}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 15.559881984023377, "mpsps": 1044.8368449511997, "compile_s": 0.0}
+[2026-11-28T11:12:59-08:00] run 51 done in 70 s
+[2026-11-28T11:12:59-08:00] run 52: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 9.583557771984488, "mpsps": 1709.5947444377257, "compile_s": 14.302160440944135}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 9.577805340057239, "mpsps": 1710.6215274053677, "compile_s": 0.0}
+[2026-11-28T11:13:41-08:00] run 52 done in 42 s
+[2026-11-28T11:13:41-08:00] run 53: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 16.863599968026392, "mpsps": 963.8986525308545, "compile_s": 17.249513591988944}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 17.166075375978835, "mpsps": 947.0736696606735, "compile_s": 0.0}
+[2026-11-28T11:15:11-08:00] run 53 done in 90 s
+[2026-11-28T11:15:11-08:00] run 54: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 13.100315143004991, "mpsps": 1250.6569361996117, "compile_s": 2.3425826400052756}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 13.128601545002311, "mpsps": 1247.9623167660934, "compile_s": 0.0}
+[2026-11-28T11:15:48-08:00] run 54 done in 37 s
+[2026-11-28T11:15:48-08:00] run 55: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 56.26122411398683, "mpsps": 288.91659472370014, "compile_s": 6.246751767001115}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 56.618106047972105, "mpsps": 287.14379789082153, "compile_s": 0.0}
+[2026-11-28T11:19:37-08:00] run 55 done in 229 s
+[2026-11-28T11:19:37-08:00] 55 runs, 0 failed

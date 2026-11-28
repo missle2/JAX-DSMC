@@ -1,0 +1,303 @@
+SPARTA (24 Sep 2025)
+KOKKOS mode is enabled (/pscratch/sd/a/aajain/sparta-scaling/src/sparta/src/KOKKOS/kokkos.cpp:50)
+  requested 1 GPU(s) per node
+  requested 1 thread(s) per MPI task
+Running on 1 MPI task(s)
+package kokkos
+# SPARTA bench/in.free, unchanged except: the seed and the timed (last) run's length are
+# index variables with the original values as defaults (-v seed N, -v steps N), as SPARTA's
+# own *.gpu.steps decks parametrise the run length.  `-v reorder N` sets global particle/reorder
+# (default 0: off, SPARTA's default) -- a tuning variant, never in headline runs.
+# advect particles via free molecular flow on a uniform grid
+# particles reflect off global box boundaries
+
+variable            x index 10
+variable            y index 10
+variable            z index 10
+
+variable            lx equal $x*1.0e-5
+variable            lx equal 100*1.0e-5
+variable            ly equal $y*1.0e-5
+variable            ly equal 128*1.0e-5
+variable            lz equal $z*1.0e-5
+variable            lz equal 128*1.0e-5
+
+variable            n equal 10*$x*$y*$z
+variable            n equal 10*100*$y*$z
+variable            n equal 10*100*128*$z
+variable            n equal 10*100*128*128
+
+variable            seed index 12345
+variable            steps index 100
+seed                ${seed}
+seed                12346
+variable            reorder index 0
+global              particle/reorder ${reorder}
+global              particle/reorder 10
+dimension   	    3
+global              gridcut 1.0e-5
+
+boundary	    rr rr rr
+
+create_box  	    0 ${lx} 0 ${ly} 0 ${lz}
+create_box  	    0 0.001 0 ${ly} 0 ${lz}
+create_box  	    0 0.001 0 0.00128 0 ${lz}
+create_box  	    0 0.001 0 0.00128 0 0.00128
+Created orthogonal box = (0 0 0) to (0.001 0.00128 0.00128)
+create_grid 	    $x $y $z
+create_grid 	    100 $y $z
+create_grid 	    100 128 $z
+create_grid 	    100 128 128
+Created 1638400 child grid cells
+  CPU time = 0.523592 secs
+  create/ghost percent = 40.7641 59.2359
+
+balance_grid        rcb part
+Balance grid migrated 0 cells
+  CPU time = 0.319878 secs
+  reassign/sort/migrate/ghost percent = 22.3246 2.18047 12.0652 63.4297
+
+species		    ar.species Ar
+mixture		    air Ar vstream 0.0 0.0 0.0 temp 273.15
+
+global              nrho 7.07043E22
+global              fnum 7.07043E6
+
+create_particles    air n $n
+create_particles    air n 16384000
+Created 16384000 particles
+  CPU time = 5.90886 secs
+
+stats		    10
+compute             temp temp
+stats_style	    step cpu np nattempt ncoll c_temp
+
+# equilibrate with large timestep to unsort particles
+# then benchmark with normal timestep
+
+timestep 	    7.00E-8
+run                 30
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1667.45 1667.45 1667.45
+  grid      (ave,min,max) = 300.076 300.076 300.076
+  surf      (ave,min,max) = 0 0 0
+  modify    (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 1967.53 1967.53 1967.53
+Step CPU Np Natt Ncoll c_temp 
+       0            0 16384000        0        0    273.12222 
+      10   0.42449005 16384000        0        0    273.12222 
+      20    0.8185426 16384000        0        0    273.12222 
+      30    1.2112107 16384000        0        0    273.12222 
+Loop time of 1.21122 on 1 procs for 30 steps with 16384000 particles
+Performance: 24.768 timesteps/s, 405.805 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 0.77723    | 0.77723    | 0.77723    |   0.0 | 64.17
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0.039087   | 0.039087   | 0.039087   |   0.0 |  3.23
+Comm    | 0.0013753  | 0.0013753  | 0.0013753  |   0.0 |  0.11
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0.39327    | 0.39327    | 0.39327    |   0.0 | 32.47
+MPI Sync| 0.00024497 | 0.00024497 | 0.00024497 |   0.0 |  0.02
+Other   |            | 1.037e-05  |            |       |  0.00
+
+Particle moves    = 491520000 (492M)
+Cells touched     = 2438814697 (2.44B)
+Particle comms    = 0 (0K)
+Boundary collides = 16770325 (16.8M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 4.05805e+08
+Particle-moves/step: 1.6384e+07
+Cell-touches/particle/step: 4.96178
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.0341193
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 1.6384e+07 ave 1.6384e+07 max 1.6384e+07 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1.6384e+06 ave 1.6384e+06 max 1.6384e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+timestep 	    7.00E-9
+run                 ${steps}
+run                 1000
+Memory usage per proc in Mbytes:
+  particles (ave,min,max) = 1667.45 1667.45 1667.45
+  grid      (ave,min,max) = 300.076 300.076 300.076
+  surf      (ave,min,max) = 0 0 0
+  modify    (ave,min,max) = 0 0 0
+  total     (ave,min,max) = 1967.53 1967.53 1967.53
+Step CPU Np Natt Ncoll c_temp 
+      30            0 16384000        0        0    273.12222 
+      40   0.21986103 16384000        0        0    273.12222 
+      50   0.42518496 16384000        0        0    273.12222 
+      60   0.63041218 16384000        0        0    273.12222 
+      70   0.83475452 16384000        0        0    273.12222 
+      80    1.0396205 16384000        0        0    273.12222 
+      90     1.244529 16384000        0        0    273.12222 
+     100      1.44902 16384000        0        0    273.12222 
+     110    1.6536956 16384000        0        0    273.12222 
+     120     1.858792 16384000        0        0    273.12222 
+     130    2.0651022 16384000        0        0    273.12222 
+     140    2.2708732 16384000        0        0    273.12222 
+     150    2.4764265 16384000        0        0    273.12222 
+     160    2.6811241 16384000        0        0    273.12222 
+     170    2.8864382 16384000        0        0    273.12222 
+     180    3.0909849 16384000        0        0    273.12222 
+     190    3.2965486 16384000        0        0    273.12222 
+     200    3.5013509 16384000        0        0    273.12222 
+     210    3.7063543 16384000        0        0    273.12222 
+     220    3.9118283 16384000        0        0    273.12222 
+     230    4.1175184 16384000        0        0    273.12222 
+     240    4.3231551 16384000        0        0    273.12222 
+     250     4.527831 16384000        0        0    273.12222 
+     260    4.7332885 16384000        0        0    273.12222 
+     270    4.9381785 16384000        0        0    273.12222 
+     280    5.1435586 16384000        0        0    273.12222 
+     290    5.3491368 16384000        0        0    273.12222 
+     300    5.5547584 16384000        0        0    273.12222 
+     310    5.7594033 16384000        0        0    273.12222 
+     320    5.9651906 16384000        0        0    273.12222 
+     330    6.1703696 16384000        0        0    273.12222 
+     340    6.3755061 16384000        0        0    273.12222 
+     350    6.5809099 16384000        0        0    273.12222 
+     360     6.785931 16384000        0        0    273.12222 
+     370    6.9916356 16384000        0        0    273.12222 
+     380    7.1970108 16384000        0        0    273.12222 
+     390    7.4022172 16384000        0        0    273.12222 
+     400     7.606596 16384000        0        0    273.12222 
+     410    7.8121035 16384000        0        0    273.12222 
+     420     8.017239 16384000        0        0    273.12222 
+     430    8.2219953 16384000        0        0    273.12222 
+     440      8.42713 16384000        0        0    273.12222 
+     450    8.6317583 16384000        0        0    273.12222 
+     460    8.8369294 16384000        0        0    273.12222 
+     470    9.0415895 16384000        0        0    273.12222 
+     480     9.247094 16384000        0        0    273.12222 
+     490    9.4526658 16384000        0        0    273.12222 
+     500    9.6583651 16384000        0        0    273.12222 
+     510    9.8633598 16384000        0        0    273.12222 
+     520    10.067898 16384000        0        0    273.12222 
+     530    10.273391 16384000        0        0    273.12222 
+     540    10.478179 16384000        0        0    273.12222 
+     550    10.683646 16384000        0        0    273.12222 
+     560     10.88885 16384000        0        0    273.12222 
+     570    11.093786 16384000        0        0    273.12222 
+     580    11.298556 16384000        0        0    273.12222 
+     590    11.503575 16384000        0        0    273.12222 
+     600     11.70874 16384000        0        0    273.12222 
+     610    11.914029 16384000        0        0    273.12222 
+     620    12.119708 16384000        0        0    273.12222 
+     630     12.32438 16384000        0        0    273.12222 
+     640    12.529569 16384000        0        0    273.12222 
+     650    12.733761 16384000        0        0    273.12222 
+     660    12.939354 16384000        0        0    273.12222 
+     670    13.143778 16384000        0        0    273.12222 
+     680    13.349508 16384000        0        0    273.12222 
+     690    13.554741 16384000        0        0    273.12222 
+     700    13.759704 16384000        0        0    273.12222 
+     710    13.964809 16384000        0        0    273.12222 
+     720     14.16929 16384000        0        0    273.12222 
+     730    14.375043 16384000        0        0    273.12222 
+     740    14.580431 16384000        0        0    273.12222 
+     750    14.786001 16384000        0        0    273.12222 
+     760    14.990809 16384000        0        0    273.12222 
+     770    15.196539 16384000        0        0    273.12222 
+     780    15.401278 16384000        0        0    273.12222 
+     790    15.606304 16384000        0        0    273.12222 
+     800    15.811118 16384000        0        0    273.12222 
+     810    16.016287 16384000        0        0    273.12222 
+     820    16.220763 16384000        0        0    273.12222 
+     830    16.425459 16384000        0        0    273.12222 
+     840    16.630555 16384000        0        0    273.12222 
+     850    16.835949 16384000        0        0    273.12222 
+     860    17.041408 16384000        0        0    273.12222 
+     870    17.246964 16384000        0        0    273.12222 
+     880    17.452223 16384000        0        0    273.12222 
+     890    17.657703 16384000        0        0    273.12222 
+     900    17.863268 16384000        0        0    273.12222 
+     910    18.070304 16384000        0        0    273.12222 
+     920    18.275537 16384000        0        0    273.12222 
+     930    18.480876 16384000        0        0    273.12222 
+     940    18.685984 16384000        0        0    273.12222 
+     950     18.89132 16384000        0        0    273.12222 
+     960    19.095715 16384000        0        0    273.12222 
+     970    19.300877 16384000        0        0    273.12222 
+     980    19.505758 16384000        0        0    273.12222 
+     990    19.710983 16384000        0        0    273.12222 
+    1000    19.916632 16384000        0        0    273.12222 
+    1010    20.121886 16384000        0        0    273.12222 
+    1020    20.327534 16384000        0        0    273.12222 
+    1030    20.532317 16384000        0        0    273.12222 
+Loop time of 20.5323 on 1 procs for 1000 steps with 16384000 particles
+Performance: 48.704 timesteps/s, 797.961 Mparticle-step/s
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Move    | 6.6607     | 6.6607     | 6.6607     |   0.0 | 32.44
+Coll    | 0          | 0          | 0          |   0.0 |  0.00
+Sort    | 0.82347    | 0.82347    | 0.82347    |   0.0 |  4.01
+Comm    | 0.026467   | 0.026467   | 0.026467   |   0.0 |  0.13
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 13.015     | 13.015     | 13.015     |   0.0 | 63.39
+MPI Sync| 0.0067603  | 0.0067603  | 0.0067603  |   0.0 |  0.03
+Other   |            | 7.899e-05  |            |       |  0.00
+
+Particle moves    = 16384000000 (16.4B)
+Cells touched     = 22874959948 (22.9B)
+Particle comms    = 0 (0K)
+Boundary collides = 55922047 (55.9M)
+Boundary exits    = 0 (0K)
+SurfColl checks   = 0 (0K)
+SurfColl occurs   = 0 (0K)
+Surf reactions    = 0 (0K)
+Collide attempts  = 0 (0K)
+Collide occurs    = 0 (0K)
+Reactions         = 0 (0K)
+Particles stuck   = 0
+Axisymm bad moves = 0
+
+Particle-moves/CPUsec/proc: 7.97961e+08
+Particle-moves/step: 1.6384e+07
+Cell-touches/particle/step: 1.39618
+Particle comm iterations/step: 1
+Particle fraction communicated: 0
+Particle fraction colliding with boundary: 0.00341321
+Particle fraction exiting boundary: 0
+Surface-checks/particle/step: 0
+Surface-collisions/particle/step: 0
+Surf-reactions/particle/step: 0
+Collision-attempts/particle/step: 0
+Collisions/particle/step: 0
+Reactions/particle/step: 0
+
+Particles: 1.6384e+07 ave 1.6384e+07 max 1.6384e+07 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Cells:      1.6384e+06 ave 1.6384e+06 max 1.6384e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+GhostCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+EmptyCell: 0 ave 0 max 0 min
+Histogram: 1 0 0 0 0 0 0 0 0 0

@@ -1,0 +1,28 @@
+SPARTA build pm-cpu/kokkos_serial 2026-11-27T14:05:12-08:00 on login26
+source /pscratch/sd/a/aajain/sparta-scaling/src/sparta commit af66be394ef31c63a76781ae6c5dd7854a3b5d1d
+preset kokkos_mpi_only arch 'ZEN3' flags '-O3' extra '-D CMAKE_CXX_COMPILER=CC -D CMAKE_C_COMPILER=cc'
+modules:
+  craype-x86-milan
+  libfabric/2.3.1
+  craype-network-ofi
+  xpmem/2.11.5-1.3_g73ade43320bc
+  gcc-native/14
+  perftools-base/26.03.0
+  cpe/26.03
+  gpu/1.0
+  sqs/2.0
+  darshan/default
+  cudatoolkit/13.2
+  craype-accel-nvidia80
+  nccl/2.29.2-cu13
+  craype/2.7.36
+  cray-dsmml/0.3.1
+  cray-libsci/26.03.0
+  PrgEnv-gnu/8.7.0
+  cray-mpich/9.1.0
+  cmake/3.30.2
+  conda/Miniforge3-26.9.4-1
+  python/3.13-26.11.0
+c++ (SUSE Linux) 7.5.0
+Cuda compilation tools, release 13.2, V13.2.78
+Build cuda_13.2.r13.2/compiler.37668154_0
