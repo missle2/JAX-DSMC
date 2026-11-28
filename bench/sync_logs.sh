@@ -9,6 +9,8 @@
 #   jobs/      Slurm output of FINISHED jobs from joblogs/ (running jobs are skipped: their file
 #              is still growing; the next sync picks it up)
 #   results/   ${BENCH_ROOT}/results: every platform's rows.jsonl and the SPARTA-format run logs
+#   misc/      untracked *.log / *.out of the repository root (build logs, hand-submitted jobs)
+#   builds/    each SPARTA build's BUILD_INFO.txt
 # Jobs only ever write to joblogs/ (git-ignored) and ${BENCH_ROOT}, never to cluster_logs/, so a
 # pull can no longer cut a running job's log short (tune-pm-cpu-n1_62133655.out, 2026-11-28).
 #
@@ -36,6 +38,24 @@ for f in joblogs/*.out; do
   if ! cmp -s "${f}" "${DEST}/jobs/${f##*/}"; then cp -p "${f}" "${DEST}/jobs/"; nj=$((nj + 1)); fi
 done
 echo "[sync_logs] ${SITE}: ${nj} job log(s) new/updated, ${nskip} running job(s) skipped"
+
+# 1b. untracked *.log / *.out in the repository root: build logs (build_k47.log, ...) and jobs
+#     sbatch'ed by hand (their output lands in the submit directory, not joblogs/)
+nm=0
+for f in *.log *.out; do
+  [ -e "${f}" ] || continue
+  git ls-files --error-unmatch "${f}" > /dev/null 2>&1 && continue  # already tracked (old logs)
+  id="${f##*_}"; id="${id%.out}"
+  [[ "${f}" == *.out && "${running}" == *" ${id} "* ]] && continue
+  mkdir -p "${DEST}/misc"
+  if ! cmp -s "${f}" "${DEST}/misc/${f}"; then cp -p "${f}" "${DEST}/misc/"; nm=$((nm + 1)); fi
+done
+# build records of every SPARTA build (flags, compilers, Kokkos) -- small
+for b in "${BENCH_ROOT}"/builds/*/BUILD_INFO.txt; do
+  [ -e "${b}" ] || continue
+  d="${b%/BUILD_INFO.txt}"; mkdir -p "${DEST}/builds"; cp -p "${b}" "${DEST}/builds/${d##*/}.txt"
+done
+echo "[sync_logs] ${nm} root log(s) new/updated"
 
 # 2. results (rows + run logs), additive
 if [ -d "${BENCH_ROOT}/results" ]; then

@@ -65,6 +65,9 @@ case "${VARIANT}" in
   mallocasync) EXTRA+=(-D Kokkos_ENABLE_IMPL_CUDA_MALLOC_ASYNC=ON) ;;
   march) CXX_FLAGS="-O3 -march=native" ;;
   multikernel) EXTRA+=(-D Kokkos_ENABLE_HIP_MULTIPLE_KERNEL_INSTANTIATIONS=ON) ;;
+  # HIP diagnosis (MI100 sphere: device-side "Surf_collide tsurf <= 0.0" abort, job 36514785):
+  # a -O3 miscompile shows as o1 running where default aborts
+  o1) CXX_FLAGS="-O1" ;;
   # SPARTA has no size option: its mpi_big preset appends -DSPARTA_BIGBIG to
   # SPARTA_CXX_COMPILE_FLAGS (a -D SPARTA_SIZES was ignored: Perlmutter build 2026-11-27)
   bigbig) SPARTA_FLAGS_APPEND="-DSPARTA_BIGBIG" ;;
@@ -106,6 +109,10 @@ if [ "${PRESET}" = kokkos_hip ]; then
   # hipcc explicitly: the openmpi module exports CXX=mpicxx (g++), which cannot compile HIP
   # (2026-11-25 build log); MPI is found by CMake.  KISS FFT: the decks use no FFT.
   EXTRA+=(-D CMAKE_CXX_COMPILER="${HIPCXX:-$(command -v hipcc)}" -D FFT_KOKKOS=KISS)
+  # the GPU target, explicitly: hip-config otherwise probes the build host's GPU (none on
+  # acompile: "amdgpu-arch failed ... the default architecture gfx906 will be used")
+  HIP_ARCH="${HIP_ARCH:-$(echo "${KOKKOS_ARCH}" | sed -n 's/.*AMD_GFX\([0-9A-Fa-f]*\).*/gfx\1/p' | tr 'A-F' 'a-f')}"
+  [ -n "${HIP_ARCH}" ] && EXTRA+=(-D GPU_TARGETS="${HIP_ARCH}" -D AMDGPU_TARGETS="${HIP_ARCH}")
   # hipcc (clang) takes the C++ standard library of the OS's GCC 8.5 unless told otherwise:
   # no C++20 <concepts> (2026-11-27 build log).  Point it at the loaded gcc module's toolchain.
   CXX_FLAGS="${CXX_FLAGS} --gcc-toolchain=$(dirname "$(dirname "$(command -v gcc)")")"

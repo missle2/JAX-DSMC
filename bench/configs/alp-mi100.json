@@ -1,0 +1,19 @@
+{
+ "jax": {
+  "tag": "jax_sortpairs_cunroll8",
+  "env": {},
+  "extra": "--set sort=full --set collide_unroll=8",
+  "decks": {
+   "collide": {
+    "tag": "jax_sortpairs_cunroll8",
+    "env": {},
+    "extra": "--set sort=full --set collide_unroll=8"
+   },
+   "sphere": {
+    "tag": "jax_sortpairs_cunroll8",
+    "env": {},
+    "extra": "--set sort=full --set collide_unroll=8"
+   }
+  }
+ }
+}
