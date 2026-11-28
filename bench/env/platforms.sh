@@ -114,7 +114,7 @@ case "${PLATFORM}" in
       # SPARTA/Kokkos links libcudart.so.12 dynamically (ldd in the check jobs, 2026-11-27): the
       # CUDA 12.8 toolkit it was built with must be on its library path at run time.  Only the
       # SPARTA runs get it (run_bench.py), not JAX, whose wheels bring their own CUDA.
-      CUDA_ROOT="${CUDA_ROOT:-/projects/${USER}/cuda-12.8}"
+      export CUDA_ROOT="${CUDA_ROOT:-/projects/${USER}/cuda-12.8}"  # exported: bench/env/nsys.sh
       [ -d "${CUDA_ROOT}/lib64" ] && SPARTA_LIBPATH="${CUDA_ROOT}/lib64"
       if [ -x "${JAX_VENV_SHARED}/bin/python3" ]; then JAX_VENV_DEFAULT="${JAX_VENV_SHARED}"
       else JAX_VENV_DEFAULT="/projects/${USER}/jax-env"; fi

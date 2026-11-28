@@ -14,9 +14,8 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 REPO="$PWD"
 mkdir -p joblogs bench/plans/alp-mi100
-B=$(PLATFORMS= MI100_VARIANTS="default:tgt o1:o1 multikernel:mk" \
-  sbatch --parsable --job-name=build_mi100_diag --time=04:00:00 --output="${REPO}/build_mi100_diag_%j.out" \
-  bench/env/build_alpine.sbatch)
+B=$(sbatch --parsable --job-name=build_mi100_diag --time=04:00:00 --output="${REPO}/build_mi100_diag_%j.out" \
+  bench/env/build_alpine.sbatch PLATFORMS= MI100_VARIANTS="default:tgt o1:o1 multikernel:mk")
 echo "build job ${B}"
 PLAN="${REPO}/bench/plans/alp-mi100/sphtest.plan"
 for b in default tgt o1 mk; do

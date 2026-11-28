@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 # Build everything the Alpine NVIDIA runs need, on acompile (4 tasks, 6 h):
 #   1. a CUDA 12.8 toolkit in /projects/$USER/cuda-12.8 (once; Alpine's newest module is 12.1.1,
 #      Blackwell needs >= 12.8)
@@ -12,7 +12,13 @@
 #   cd /projects/$USER/JAX-DSMC-sparta && sbatch bench/env/build_alpine.sbatch
 #
 # A failed platform is reported and the next one is built.  Log: build_alpine_<jobid>.out
-# Overrides: PLATFORMS="alp-h200 ..." VARIANTS="default nomallocasync" BUILD_MODULES="gcc/... cmake openmpi"
+# Overrides are ARGUMENTS (VAR=value), not the environment:
+#   sbatch bench/env/build_alpine.sbatch PLATFORMS= MI100_VARIANTS="default:tgt o1:o1"
+#   (PLATFORMS="alp-h200 ..." VARIANTS="default nomallocasync" BUILD_MODULES="gcc/... cmake openmpi")
+# Environment: --export=NONE + a login shell (bash -l) = what an interactive acompile shell has, on
+# the compile node itself.  Jobs that inherited a LOGIN-node environment (--export=ALL, submitted
+# from a login shell) could not load gcc/cmake/openmpi on the compile node -- builds 36547906,
+# 36550537, 2026-11-28 -- while the same script submitted from inside acompile could (36503353).
 #SBATCH --job-name=build_alpine
 #SBATCH --partition=acompile
 #SBATCH --qos=compile
@@ -20,7 +26,12 @@
 #SBATCH --ntasks=4
 #SBATCH --time=06:00:00
 #SBATCH --output=build_alpine_%j.out
+#SBATCH --export=NONE
 set -uo pipefail
+for kv in "$@"; do  # VAR=value overrides (the environment is not inherited)
+  case "${kv}" in *=*) export "${kv?}" ;; *) echo "ignoring argument '${kv}' (want VAR=value)" ;; esac
+done
+echo "[$(date -Iseconds)] environment: login shell on $(hostname); module: $(type -t module || echo none)"
 cd "${SLURM_SUBMIT_DIR}"
 CUDA_ROOT="${CUDA_ROOT:-/projects/${USER}/cuda-12.8}"
 CUDA_RUN="cuda_12.8.1_570.124.06_linux.run"
