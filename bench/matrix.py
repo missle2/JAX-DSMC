@@ -400,6 +400,12 @@ def runs_tune(platform, rows, cfg):
             ("jax_cprefix", {}, "--set collide_mode=prefix"),
             ("jax_cunroll4", {}, "--set collide_unroll=4"),
             ("jax_cunroll8", {}, "--set collide_unroll=8"),
+            # combinations of the round-1 winners (2026-11-28 Alpine tune1: prefix 1.4-2.8x on
+            # NVIDIA, mostly sphere; full sort 1.05-1.19x, MI100's best) -- pick_best keeps one
+            # setting per platform, so the combinations must be measured, not assumed
+            ("jax_cprefix_sortpairs", {}, "--set collide_mode=prefix --set sort=full"),
+            ("jax_cprefix_sortpairs_cunroll8", {}, "--set collide_mode=prefix --set sort=full --set collide_unroll=8"),
+            ("jax_sortpairs_cunroll8", {}, "--set sort=full --set collide_unroll=8"),
         ):
             for deck in decks:
                 r = Run("jax", deck, n_dev, 1, 1, variant=tag, env=env, extra=extra, reps=2)

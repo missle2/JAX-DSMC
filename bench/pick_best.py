@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn a platform's tuning rows into bench/configs/<platform>.json (read by matrix.py).
 
-    python3 bench/pick_best.py --platform pm-gpu --rows $RESULTS_DIR/rows.jsonl
+    python3 bench/pick_best.py --platform pm-gpu        # rows found as matrix.py finds them
 
 Per code, the variant with the best geometric-mean speed-up over the decks it ran (relative to
 the baseline variant: SPARTA "kk_default" / "mpi128", JAX "jax" / "jaxcpu_8x16"), among
@@ -27,10 +27,19 @@ import matrix  # noqa: E402
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--platform", required=True)
-    p.add_argument("--rows", required=True)
+    p.add_argument("--results", default=matrix.default_results(),
+                   help="results root (rows in <root>/<platform>/rows.jsonl) or a platform's results dir")
+    p.add_argument("--rows", help="(old) a rows.jsonl file: its directory is used as --results")
     p.add_argument("--min-gain", type=float, default=0.03)
     a = p.parse_args()
-    rows = matrix.load_rows(os.path.dirname(a.rows))
+    root = os.path.dirname(a.rows) if a.rows else a.results
+    rows = []
+    for d in {root, os.path.join(root, a.platform)}:  # (2026-11-28: a root path silently found nothing)
+        rows += matrix.load_rows(d)
+    rows = [r for r in rows if r.get("machine", "").startswith(a.platform)]
+    print(f"{len(rows)} {a.platform} rows under {root}")
+    if not rows:
+        sys.exit(f"no rows for {a.platform}: pass --results <dir holding {a.platform}/rows.jsonl>")
     gpu = matrix.PLATFORMS[a.platform]["gpu"]
     tune = {r.variant: r for r in matrix.runs_tune(a.platform, [], {})}
     out = os.path.join(HERE, "configs", f"{a.platform}.json")
