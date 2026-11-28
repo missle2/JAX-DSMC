@@ -1,0 +1,54 @@
+[runtime] alp-a100 on c3gpu-c2-u3: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/spa
+[2026-11-28T05:50:21-07:00] job 36514794 validate-alp-a100-n1: 1 node(s) c3gpu-c2-u3...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-a100/validate-alp-a100-n1.plan: 5 runs
+[2026-11-28T05:50:21-07:00] run 1: timeout 781  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 100K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.007491942495107651, "mpsps": 1334.7673192273096, "compile_s": 0.8749670619145036}
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.007559910416603088, "mpsps": 1322.766997084778, "compile_s": 0.0}
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.0075249141082167625, "mpsps": 1328.9188230176062, "compile_s": 0.0}
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.007531327195465565, "mpsps": 1327.7872200295274, "compile_s": 0.0}
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.00754902046173811, "mpsps": 1324.6751748368647, "compile_s": 0.0}
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.007553599774837494, "mpsps": 1323.872100466845, "compile_s": 0.0}
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.007513351738452911, "mpsps": 1330.963909066118, "compile_s": 0.0}
+{"deck": "free", "particles": 100000, "procs": 1, "loop_time": 0.007468388415873051, "mpsps": 1338.9769576989795, "compile_s": 0.0}
+[2026-11-28T05:50:33-07:00] run 1 done in 12 s
+[2026-11-28T05:50:33-07:00] run 2: timeout 780  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 10K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.06936788558959961, "mpsps": 14.41589276507991, "compile_s": 0.8115645796060562}
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.057034038938581944, "mpsps": 17.533389158654302, "compile_s": 0.0}
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.048550344072282314, "mpsps": 20.59717637657085, "compile_s": 0.0}
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.0446992302313447, "mpsps": 22.371749912121846, "compile_s": 0.0}
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.04254606552422047, "mpsps": 23.50393597336806, "compile_s": 0.0}
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.042168065905570984, "mpsps": 23.714628084658877, "compile_s": 0.0}
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.042144231498241425, "mpsps": 23.728039744697384, "compile_s": 0.0}
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.04237193986773491, "mpsps": 23.60052438291769, "compile_s": 0.0}
+[2026-11-28T05:50:43-07:00] run 2 done in 10 s
+[2026-11-28T05:50:43-07:00] run 3: timeout 780  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 100K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.07679757103323936, "mpsps": 130.21245158485314, "compile_s": 1.2617342108860612}
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.060923945158720016, "mpsps": 164.1390749392188, "compile_s": 0.0}
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.050804998725652695, "mpsps": 196.83102550597553, "compile_s": 0.0}
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.05222780164331198, "mpsps": 191.46890516845158, "compile_s": 0.0}
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.053573038429021835, "mpsps": 186.66105737588245, "compile_s": 0.0}
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.05151441227644682, "mpsps": 194.1204326730163, "compile_s": 0.0}
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.05087858624756336, "mpsps": 196.54634174271916, "compile_s": 0.0}
+{"deck": "collide", "particles": 100000, "procs": 1, "loop_time": 0.05155657045543194, "mpsps": 193.96169899711418, "compile_s": 0.0}
+[2026-11-28T05:50:54-07:00] run 3 done in 11 s
+[2026-11-28T05:50:54-07:00] run 4: timeout 783  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 10K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.9304056027904153, "mpsps": 10.806322500472774, "compile_s": 3.673544429242611}
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.8908250788226724, "mpsps": 11.284112042832357, "compile_s": 0.0}
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.934320998378098, "mpsps": 10.82770056282741, "compile_s": 0.0}
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.917457883246243, "mpsps": 10.91250637530668, "compile_s": 0.0}
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.9220816288143396, "mpsps": 10.906316410328213, "compile_s": 0.0}
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.8902726201340556, "mpsps": 11.28933404521258, "compile_s": 0.0}
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.9176768753677607, "mpsps": 10.908608758380495, "compile_s": 0.0}
+{"deck": "sphere", "particles": 10000, "procs": 1, "loop_time": 0.8881993163377047, "mpsps": 11.310863243425723, "compile_s": 0.0}
+[2026-11-28T05:51:25-07:00] run 4 done in 31 s
+[2026-11-28T05:51:25-07:00] run 5: timeout 812  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 100K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.2977363038808107, "mpsps": 76.69271615687262, "compile_s": 3.7577397357672453}
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.3179706213995814, "mpsps": 75.5214087354251, "compile_s": 0.0}
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.335075519979, "mpsps": 74.44197089432309, "compile_s": 0.0}
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.3094279551878572, "mpsps": 76.05250568040071, "compile_s": 0.0}
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.330799507908523, "mpsps": 74.83901099161366, "compile_s": 0.0}
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.2959044743329287, "mpsps": 77.05131896500221, "compile_s": 0.0}
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.3218022678047419, "mpsps": 75.26455917285202, "compile_s": 0.0}
+{"deck": "sphere", "particles": 100000, "procs": 1, "loop_time": 1.335210382938385, "mpsps": 74.58517943879377, "compile_s": 0.0}
+[2026-11-28T05:52:02-07:00] run 5 done in 37 s
+[2026-11-28T05:52:02-07:00] 5 runs, 0 failed

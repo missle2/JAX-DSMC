@@ -1,0 +1,128 @@
+[runtime] alp-h200 on c3gpu-g5-u1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa
+[2026-11-27T22:57:28-07:00] job 36514777 tune1-alp-h200-n1: 1 node(s) c3gpu-g5-u1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-h200/tune1-alp-h200-n1.plan: 31 runs
+[2026-11-27T22:57:28-07:00] run 1: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.836219790158793, "mpsps": 629.1633510252041, "compile_s": 2.5654043129179627}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.571757179917768, "mpsps": 635.7669136154484, "compile_s": 0.0}
+[2026-11-27T22:59:18-07:00] run 1 done in 110 s
+[2026-11-27T22:59:18-07:00] run 2: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.773861170979217, "mpsps": 2418.709150726743, "compile_s": 0.6339244379196316}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.789574922993779, "mpsps": 2413.1113045845404, "compile_s": 0.0}
+[2026-11-27T22:59:42-07:00] run 2 done in 24 s
+[2026-11-27T22:59:42-07:00] run 3: XLA_FLAGS=--xla_gpu_enable_command_buffer= timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_nocmdbuf --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 26.028233994031325, "mpsps": 624.5219181880557, "compile_s": 2.147391648031771}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.77084650285542, "mpsps": 630.8553790112654, "compile_s": 0.0}
+[2026-11-27T23:01:33-07:00] run 3 done in 111 s
+[2026-11-27T23:01:33-07:00] run 4: XLA_FLAGS=--xla_gpu_graph_min_graph_size=1 timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cmdbuf_min1 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.73220816696994, "mpsps": 2433.6740031873046, "compile_s": 0.4465648769401014}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.727360037853941, "mpsps": 2435.427851015771, "compile_s": 0.0}
+[2026-11-27T23:01:58-07:00] run 4 done in 25 s
+[2026-11-27T23:01:58-07:00] run 5: XLA_FLAGS=--xla_gpu_graph_min_graph_size=1 timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cmdbuf_min1 --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.76176033890806, "mpsps": 630.9818276063115, "compile_s": 2.0882160698529333}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.493613845901564, "mpsps": 637.7156740613939, "compile_s": 0.0}
+[2026-11-27T23:03:47-07:00] run 5 done in 109 s
+[2026-11-27T23:03:47-07:00] run 6: XLA_FLAGS=--xla_gpu_autotune_level=0 timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_autotune0 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.728682326152921, "mpsps": 2434.9492524441175, "compile_s": 0.42347277887165546}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.743131154915318, "mpsps": 2429.7317705376527, "compile_s": 0.0}
+[2026-11-27T23:04:13-07:00] run 6 done in 26 s
+[2026-11-27T23:04:13-07:00] run 7: XLA_FLAGS=--xla_gpu_autotune_level=0 timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_autotune0 --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.862124057020992, "mpsps": 628.5331624409664, "compile_s": 2.030037024989724}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.564855178818107, "mpsps": 635.9385580040516, "compile_s": 0.0}
+[2026-11-27T23:06:03-07:00] run 7 done in 110 s
+[2026-11-27T23:06:03-07:00] run 8: XLA_FLAGS=--xla_gpu_enable_while_loop_unrolling=WHILE_LOOP_UNROLLING_AUTO_UNROLL timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_wlunroll --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.725926127051935, "mpsps": 2435.9470637215177, "compile_s": 0.4486345308832824}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.72397105419077, "mpsps": 2436.6553436883905, "compile_s": 0.0}
+[2026-11-27T23:06:25-07:00] run 8 done in 22 s
+[2026-11-27T23:06:25-07:00] run 9: XLA_FLAGS=--xla_gpu_enable_while_loop_unrolling=WHILE_LOOP_UNROLLING_AUTO_UNROLL timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_wlunroll --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.863134840968996, "mpsps": 628.5085980857447, "compile_s": 2.1049120279494673}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.58623145497404, "mpsps": 635.4072566962361, "compile_s": 0.0}
+[2026-11-27T23:08:15-07:00] run 9 done in 110 s
+[2026-11-27T23:08:15-07:00] run 10: XLA_FLAGS=--xla_gpu_enable_cub_radix_sort=false timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_nocub --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 18.568584884982556, "mpsps": 882.350491514873, "compile_s": 0.4850517010781914}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 18.605055920081213, "mpsps": 880.6208414733151, "compile_s": 0.0}
+[2026-11-27T23:09:05-07:00] run 10 done in 50 s
+[2026-11-27T23:09:05-07:00] run 11: XLA_FLAGS=--xla_gpu_enable_cub_radix_sort=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_nocub --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 41.845178933115676, "mpsps": 388.460583403931, "compile_s": 2.146431759931147}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 41.59408948686905, "mpsps": 390.8650805574775, "compile_s": 0.0}
+[2026-11-27T23:12:02-07:00] run 11 done in 177 s
+[2026-11-27T23:12:02-07:00] run 12: XLA_PYTHON_CLIENT_ALLOCATOR=platform XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_platformalloc --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.89186629303731, "mpsps": 2377.295104600675, "compile_s": 0.0666742930188775}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.899193539051339, "mpsps": 2374.7703129738334, "compile_s": 0.0}
+[2026-11-27T23:12:27-07:00] run 12 done in 25 s
+[2026-11-27T23:12:27-07:00] run 13: XLA_PYTHON_CLIENT_ALLOCATOR=platform XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_platformalloc --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.850144590018317, "mpsps": 628.8244371088248, "compile_s": 0.42755133914761245}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.576215793844312, "mpsps": 635.6560825512311, "compile_s": 0.0}
+[2026-11-27T23:14:17-07:00] run 13 done in 110 s
+[2026-11-27T23:14:17-07:00] run 14: TF_GPU_ALLOCATOR=cuda_malloc_async XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_mallocasync --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.701381005812436, "mpsps": 2444.8691972280567, "compile_s": 0.06560203502885997}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.710482737980783, "mpsps": 2441.5531102208042, "compile_s": 0.0}
+[2026-11-27T23:14:42-07:00] run 14 done in 25 s
+[2026-11-27T23:14:42-07:00] run 15: TF_GPU_ALLOCATOR=cuda_malloc_async XLA_PYTHON_CLIENT_PREALLOCATE=false timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_mallocasync --nodes 1 --reps 2 --out "${RESULTS_DIR}"
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.763884079176933, "mpsps": 630.9298152035194, "compile_s": 0.42977585387416184}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.490874918876216, "mpsps": 637.7841949222798, "compile_s": 0.0}
+[2026-11-27T23:16:28-07:00] run 15 done in 106 s
+[2026-11-27T23:16:28-07:00] run 16: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_lane2x --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set lane_scale=2
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.72575695393607, "mpsps": 2436.008335152774, "compile_s": 0.06534797488711774}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.737463895929977, "mpsps": 2431.775554284956, "compile_s": 0.0}
+[2026-11-27T23:16:50-07:00] run 16 done in 22 s
+[2026-11-27T23:16:50-07:00] run 17: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_lane2x --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set lane_scale=2
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 26.264640380162746, "mpsps": 618.9006354443478, "compile_s": 2.2994104351382703}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.968614354962483, "mpsps": 626.0510058709865, "compile_s": 0.0}
+[2026-11-27T23:18:43-07:00] run 17 done in 113 s
+[2026-11-27T23:18:43-07:00] run 18: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_lanehalf --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set lane_scale=0.5
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.73174863983877, "mpsps": 2433.8401322709533, "compile_s": 0.0673449570313096}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.74133602110669, "mpsps": 2430.37877784207, "compile_s": 0.0}
+[2026-11-27T23:19:05-07:00] run 18 done in 22 s
+[2026-11-27T23:19:05-07:00] run 19: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_lanehalf --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set lane_scale=0.5
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.690197312971577, "mpsps": 632.7395007119065, "compile_s": 2.230823384830728}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.441993576008826, "mpsps": 639.0095606867296, "compile_s": 0.0}
+[2026-11-27T23:20:53-07:00] run 19 done in 108 s
+[2026-11-27T23:20:53-07:00] run 20: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_trials16 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set trials=16
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.7292149951681495, "mpsps": 2434.7565075219586, "compile_s": 0.06488416180945933}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.747665718197823, "mpsps": 2428.0989432855104, "compile_s": 0.0}
+[2026-11-27T23:21:17-07:00] run 20 done in 24 s
+[2026-11-27T23:21:17-07:00] run 21: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_trials16 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set trials=16
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.91109198704362, "mpsps": 627.3453326138523, "compile_s": 2.1782288257963955}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.6322454798501, "mpsps": 634.2665979373679, "compile_s": 0.0}
+[2026-11-27T23:23:07-07:00] run 21 done in 110 s
+[2026-11-27T23:23:07-07:00] run 22: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set sort=full
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 5.969534790841863, "mpsps": 2744.60248144218, "compile_s": 0.4751296238973737}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 5.990832562791184, "mpsps": 2734.8452536898385, "compile_s": 0.0}
+[2026-11-27T23:23:30-07:00] run 22 done in 23 s
+[2026-11-27T23:23:30-07:00] run 23: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set sort=full
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 24.89855387317948, "mpsps": 652.8572986124295, "compile_s": 2.113839326892048}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 24.636770645156503, "mpsps": 659.8948121959402, "compile_s": 0.0}
+[2026-11-27T23:25:17-07:00] run 23 done in 107 s
+[2026-11-27T23:25:17-07:00] run 24: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_startsearch --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set starts=search
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 7.161859088111669, "mpsps": 2287.67416370934, "compile_s": 0.46516396082006395}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 7.175202313810587, "mpsps": 2283.4199348587886, "compile_s": 0.0}
+[2026-11-27T23:25:43-07:00] run 24 done in 26 s
+[2026-11-27T23:25:43-07:00] run 25: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_startsearch --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set starts=search
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 23.78079186892137, "mpsps": 683.54337023754, "compile_s": 2.1192512528505176}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 23.514215803006664, "mpsps": 691.3978026824607, "compile_s": 0.0}
+[2026-11-27T23:27:25-07:00] run 25 done in 102 s
+[2026-11-27T23:27:25-07:00] run 26: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cprefix --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 7.6646611308678985, "mpsps": 2137.602657215555, "compile_s": 1.4003384709358215}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 7.658128730021417, "mpsps": 2139.4260370384477, "compile_s": 0.0}
+[2026-11-27T23:27:53-07:00] run 26 done in 28 s
+[2026-11-27T23:27:53-07:00] run 27: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cprefix --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 11.100069932173938, "mpsps": 1464.4234424040637, "compile_s": 3.0617003669030964}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 11.075168220093474, "mpsps": 1467.9395215418938, "compile_s": 0.0}
+[2026-11-27T23:28:46-07:00] run 27 done in 53 s
+[2026-11-27T23:28:46-07:00] run 28: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cunroll4 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_unroll=4
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.681771314004436, "mpsps": 2452.044410089358, "compile_s": 0.9516267601866275}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.695278716040775, "mpsps": 2447.0975287028245, "compile_s": 0.0}
+[2026-11-27T23:29:09-07:00] run 28 done in 23 s
+[2026-11-27T23:29:09-07:00] run 29: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cunroll4 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_unroll=4
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.7768287952058, "mpsps": 630.6129722219082, "compile_s": 2.6824213671498}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.493954200996086, "mpsps": 637.7071602868413, "compile_s": 0.0}
+[2026-11-27T23:31:00-07:00] run 29 done in 111 s
+[2026-11-27T23:31:00-07:00] run 30: timeout 651  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_unroll=8
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.498587173875421, "mpsps": 2521.163379305633, "compile_s": 1.4627740809228271}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.522289003012702, "mpsps": 2512.0015369500015, "compile_s": 0.0}
+[2026-11-27T23:31:24-07:00] run 30 done in 24 s
+[2026-11-27T23:31:24-07:00] run 31: timeout 1920  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_unroll=8
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 26.137648839969188, "mpsps": 621.9076061708679, "compile_s": 4.344531303038821}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 25.88677703286521, "mpsps": 628.0301760763673, "compile_s": 0.0}
+[2026-11-27T23:33:19-07:00] run 31 done in 115 s
+[2026-11-27T23:33:19-07:00] 31 runs, 0 failed
