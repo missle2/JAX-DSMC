@@ -84,6 +84,7 @@ class Run:
     sparta_build: str = "default"
     threads: int = 1  # OpenMP threads per rank (SPARTA Kokkos-OMP) / host devices per process (JAX CPU)
     wrap: str = ""  # command prefix: bench/env/with_mps.sh <nodes> --, bench/env/with_modules.sh <mods> --
+    stats: int | None = None  # stats period (None: the deck's own)
     est_s: float = 0.0
 
 
@@ -196,7 +197,7 @@ def default_accel(platform, cfg):
 def plan_line(run: Run, platform):
     out = '"${RESULTS_DIR}"'
     env = " ".join(f"{k}={shlex.quote(str(v))}" for k, v in run.env.items())
-    steps = "" if run.steps is None else f" --steps {run.steps}"
+    steps = ("" if run.steps is None else f" --steps {run.steps}") + ("" if run.stats is None else f" --stats {run.stats}")
     common = (
         f"--deck {run.deck} --particles {label(run.particles)} --machine \"${{MACHINE}}\" "
         f"--variant {shlex.quote(run.variant)} --nodes {run.nodes} --reps {run.reps}{steps} --out {out}"
@@ -300,6 +301,7 @@ def mk_run(platform, code, deck, n, nodes, rpn, cfg):
     r = _mk_run(platform, code, deck, n, nodes, rpn, cfg)
     if PLATFORMS[platform]["gpu"]:
         r.steps = GPU_STEPS[deck]
+        gpu_protocol(r)
     return r
 
 
@@ -481,6 +483,7 @@ def runs_tune(platform, rows, cfg):
     if pf["gpu"]:
         for r in out:
             r.steps = GPU_STEPS[r.deck]
+            gpu_protocol(r)
             estimate(r, platform, rows)
     return out
 
@@ -503,6 +506,25 @@ def single_gpu_only(platform):
 
 
 DECK_STEPS = {"free": 100, "collide": 100, "sphere": 1000}  # the decks' timed run length
+DECK_STATS = {"free": 10, "collide": 10, "sphere": 100}  # the decks' stats period
+
+# GPU runs follow SPARTA's own GPU benchmark protocol, the bench/in.*.gpu.steps decks of
+# sparta.github.io/bench.html (in.free.steps, in.collide.gpu.steps, in.sphere.gpu.steps): the
+# same physics as in.free/in.collide/in.sphere, with stats every 100 steps and, for collide and
+# sphere, global particle/reorder 10.  With in.*'s stats 10, Kokkos copies every particle to
+# the host every 10 steps (update_kokkos.cpp: particle_kk->sync(Host) before each output):
+# 35-45 % of SPARTA's free/collide loop on H200/RTX PRO 6000 (2026-11-28) vs 9.7 % in the
+# developers' P100 log.  Both codes use the protocol's stats period; reorder is SPARTA's own
+# (sparta_jax sorts fully every step).  CPU runs keep the CPU decks (in.*) unchanged.
+GPU_PROTOCOL = {"stats": 100, "reorder": {"collide": 10, "sphere": 10}}
+
+
+def gpu_protocol(run: "Run"):
+    run.stats = GPU_PROTOCOL["stats"]
+    ro = GPU_PROTOCOL["reorder"].get(run.deck)
+    if run.code == "sparta" and ro and "reorder" not in run.accel:
+        run.accel = f"{run.accel} -v reorder {ro}".strip()
+    return run
 
 
 # The JAX version the study's sparta_jax rows are for (2026-11-27: 0.12.1; the MI100 is held at
@@ -531,7 +553,21 @@ def done_reps(run: Run, platform, rows):
         and r["particles"] == run.particles
         and r["procs"] == procs
         and r["steps"] == steps
+        and r.get("stats_every", DECK_STATS[r["deck"]]) == (run.stats or DECK_STATS[run.deck])
+        and _row_reorder(r) == (_reorder(run.accel) if run.code == "sparta" else 0)
     )
+
+
+def _reorder(accel):
+    m = re.search(r"-v\s+reorder\s+(\d+)", accel or "")
+    return int(m.group(1)) if m else 0
+
+
+def _row_reorder(r):
+    """A row's particle/reorder period (rows before 2026-11-28 have none: from the command)."""
+    if "reorder" in r:
+        return r["reorder"]
+    return _reorder(r.get("command", "")) if r["code"] == "sparta" else 0
 
 
 def dedupe(jobs, platform, rows):

@@ -123,6 +123,15 @@ def parse_sparta_log(text):
             "totals": sparta_totals(text)}
 
 
+STATS_DEFAULT = {"free": 10, "collide": 10, "sphere": 100}  # the decks' own stats periods
+
+
+def reorder_of(accel):
+    """global particle/reorder period of a SPARTA run (deck default 0 = off)."""
+    m = re.search(r"-v\s+reorder\s+(\d+)", accel or "")
+    return int(m.group(1)) if m else 0
+
+
 def run_sparta(a):
     from sparta_jax import decks as D
 
@@ -135,6 +144,7 @@ def run_sparta(a):
         path = os.path.join(a.out, "logs", name)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         steps = [] if a.steps is None else ["-v", "steps", str(a.steps)]
+        steps += [] if a.stats is None else ["-v", "statsevery", str(a.stats)]
         cmd = (
             shlex.split(a.launch)
             + [a.exe, "-in", deckfile, "-log", path, "-screen", "none", "-v", "x", str(x), "-v", "y", str(y), "-v", "z", str(z)]
@@ -167,6 +177,8 @@ def run_sparta(a):
             "nodes": a.nodes,
             "procs": res["procs"],
             "steps": res["steps"],
+            "stats_every": a.stats or STATS_DEFAULT[a.deck],
+            "reorder": reorder_of(a.accel),
             "loop_time": res["loop_time"],
             "particle_moves": res["particle_moves"],
             "mpsps": (res["particle_moves"] or n * res["steps"]) / res["loop_time"] / 1e6,
@@ -243,6 +255,8 @@ def run_jax(a):
 
     x, y, z = a.xyz or D.size_xyz(a.particles)
     deck = D.make(a.deck, x, y, z, steps=a.steps)
+    if a.stats:
+        deck = dataclasses.replace(deck, stats_every=a.stats)
     n = deck.n_particles
     nrank = a.ranks or len(jax.devices())
     overrides = {}
@@ -279,6 +293,8 @@ def run_jax(a):
             "procs": nrank,
             "processes": jax.process_count(),
             "steps": timed["nsteps"],
+            "stats_every": deck.stats_every,
+            "reorder": 0,
             "loop_time": timed["loop_time"],
             "particle_moves": timed["particle_moves"],
             "mpsps": res["mpsps"],
@@ -322,6 +338,7 @@ def main(argv=None):
     g.add_argument("--particles", type=parse_size, help="nominal count, e.g. 8M")
     g.add_argument("--xyz", type=int, nargs=3)
     p.add_argument("--steps", type=int, default=None, help="timed run length (default: the deck's)")
+    p.add_argument("--stats", type=int, default=None, help="stats period in steps (default: the deck's)")
     p.add_argument("--reps", type=int, default=3)
     p.add_argument("--machine", required=True, help="platform tag, e.g. pm-gpu, alp-h200")
     p.add_argument("--variant", default="default", help="build/runtime variant tag")
