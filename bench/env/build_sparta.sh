@@ -147,7 +147,18 @@ fi
 cmake --fresh -S "${SRC}/cmake" -B "${BUILD}" -C "${PRESET_FILE}" \
   -D CMAKE_BUILD_TYPE=Release -D CMAKE_CXX_FLAGS="${CXX_FLAGS}" "${ARCH[@]}" "${EXTRA[@]}" "${CUDA_ARGS[@]}" \
   2>&1 | tee "${BUILD}.configure.log"
-cmake --build "${BUILD}" -j "${JOBS:-16}" 2>&1 | tail -20
+# Parallelism: the CPUs of this allocation (acompile: 4), not a fixed 16 -- 16 hipcc processes in
+# a 4-task acompile allocation died without a compiler message (MI100 k47 build, 2026-11-28).
+# The whole build output goes to ${BUILD}.build.log; on failure its first errors are printed
+# (a `| tail -20` alone had cut them off).
+JOBS="${JOBS:-${SLURM_CPUS_ON_NODE:-$(nproc)}}"
+if ! cmake --build "${BUILD}" -j "${JOBS}" > "${BUILD}.build.log" 2>&1; then
+  echo "[build_sparta] BUILD FAILED (-j ${JOBS}); first errors from ${BUILD}.build.log:"
+  grep -n -m 5 -A 12 -E "error:|Error [0-9]|Killed|killed|signal|No space" "${BUILD}.build.log" | head -80
+  tail -n 5 "${BUILD}.build.log"
+  exit 1
+fi
+tail -n 3 "${BUILD}.build.log"
 EXE="$(find "${BUILD}" -maxdepth 2 -type f -perm -u+x -name 'spa_*' | head -1)"
 [ -x "${EXE}" ] || { echo "no spa_* executable under ${BUILD}"; exit 1; }
 ln -sfn "${EXE}" "${BUILD}/spa"
