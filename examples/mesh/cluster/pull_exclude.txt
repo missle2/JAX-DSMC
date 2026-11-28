@@ -1,0 +1,3 @@
+# Not pulled back (pull_results.sh --exclude-from): trimmed locally 2026-11-28, kept on the
+# cluster.  Delete a line to pull it again.
+/scratch/fitlab/cache_slim/c10_diff_heat_m2*

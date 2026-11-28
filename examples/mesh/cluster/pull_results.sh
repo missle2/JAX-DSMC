@@ -42,6 +42,10 @@ RSYNC=(rsync -aP --update --relative --info=stats1,progress2 --exclude .git/
        --exclude __pycache__/ -e "${SSH[*]}")
 [ -n "${DRY:-}" ] && RSYNC+=(--dry-run --itemize-changes)
 [ -z "${WARM:-}" ] && RSYNC+=(--exclude 'warm/seed*.npz')
+# data trimmed locally to save disk (2026-11-28) stays on the cluster and is not pulled back:
+# one rsync pattern per line in pull_exclude.txt (anchored at the checkout root: /examples/...)
+EXCLUDE_FILE="$LOCAL_DIR/examples/mesh/cluster/pull_exclude.txt"
+[ -f "$EXCLUDE_FILE" ] && RSYNC+=(--exclude-from="$EXCLUDE_FILE")
 # scratch: only the probes' cluster outputs (the scripts come by git)
 # and the fit lab's dumps (scratch/fitlab/dump.py writes scratch/fitlab/cache/, 2026-11-04;
 # the other scratch/*/cache/ dirs are local figure caches and stay out)

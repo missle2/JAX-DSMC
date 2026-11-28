@@ -1627,6 +1627,22 @@ def _knnlong_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+def _splitfd_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``splitfd`` (2026-11-28): c10_spec's radius adjoint is +11 % against FD where every
+    shape-changing control closes (cos 2 theta 0.989 at h1000), free of the fits, the horizon,
+    dt and the membership term.  scratch/fitgate/split_fd.py splits the FD into the wall's
+    part (body moved, collision volumes frozen at the nominal body) and the volumes' (body
+    fixed, the cut cells' volumes moved with the geometry's own pattern), each against the
+    adjoint's (total - volume) and volume; the total FD again for additivity.  Six forwards
+    per seed: radius seeds 0-31 (the gate's FD seeds), cos 2 theta 0-15 (the control that
+    closes).  ``GPU_KIND=rtx`` (c10_spec's forward fits a 24 GB slice)."""
+    del gpus_per_node
+    run = "python3 scratch/fitgate/split_fd.py"
+    jobs = {f"splitfd_spec_s{a}": f"{run} --gate c10_spec --seeds {a} {a + 8}" for a in range(0, 32, 8)}
+    jobs |= {f"splitfd_m2_s{a}": f"{run} --gate c10_spec_m2 --seeds {a} {a + 8}" for a in (0, 8)}
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1887,6 +1903,7 @@ NEW_GROUPS = {
     "speclab": _speclab_jobs,
     "speclab2": _speclab2_jobs,
     "knnlong": _knnlong_jobs,
+    "splitfd": _splitfd_jobs,
     "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,
