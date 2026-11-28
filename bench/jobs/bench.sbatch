@@ -17,6 +17,18 @@ cd "${SLURM_SUBMIT_DIR}"
 # exclusive" (Alpine jobs 36502982-94, 2026-11-27).  Steps take the job's memory (srun --mem=0
 # in pf_launch), so none of these is needed.
 unset SLURM_MEM_PER_CPU SLURM_MEM_PER_GPU SLURM_MEM_PER_NODE
+# Likewise whatever runtime.sh exported in the submitting shell for ANOTHER platform: a pm-cpu
+# job submitted after `source runtime.sh` for pm-gpu kept JAX_PLATFORMS=cuda, and a CPU-only
+# jaxlib then has no backend at all ("assert _default_backend is not None", job 62131098,
+# 2026-11-27).  runtime.sh below sets each of these again for ${PLATFORM}.
+unset JAX_PLATFORMS JAX_VENV XLA_FLAGS XLA_PYTHON_CLIENT_PREALLOCATE XLA_PYTHON_CLIENT_MEM_FRACTION \
+  JAX_COMPILATION_CACHE_DIR MACHINE SITE GPUS_PER_NODE CORES_PER_NODE SMT GRES_COUNT RESULTS_DIR \
+  SPARTA_LIBPATH OMP_NUM_THREADS OMP_PLACES OMP_PROC_BIND MPICH_GPU_SUPPORT_ENABLED \
+  NCCL_SOCKET_IFNAME NCCL_NET_GDR_LEVEL NCCL_CROSS_NIC FI_PROVIDER FI_MR_CACHE_MONITOR \
+  FI_CXI_DISABLE_HOST_REGISTER KOKKOS_ARCH JAX_FLAVOR MODULES QOS CONSTRAINT
+if [ -n "${VIRTUAL_ENV:-}" ]; then  # the submitting shell's venv off PATH
+  PATH="$(echo "${PATH}" | tr ':' '\n' | grep -vxF "${VIRTUAL_ENV}/bin" | paste -sd: -)"; unset VIRTUAL_ENV
+fi
 # shellcheck disable=SC1091
 source bench/env/runtime.sh
 echo "[$(date -Iseconds)] job ${SLURM_JOB_ID} ${SLURM_JOB_NAME}: ${SLURM_JOB_NUM_NODES} node(s) $(scontrol show hostnames "${SLURM_JOB_NODELIST}" | head -3 | paste -sd, -)..."
@@ -36,3 +48,5 @@ while IFS= read -r line || [ -n "${line}" ]; do
   echo "[$(date -Iseconds)] run ${n} done in $(( $(date +%s) - t0 )) s"
 done < "${PLAN}"
 echo "[$(date -Iseconds)] ${n} runs, ${fail} failed"
+# a check job is the gate of the jobs submitted --after it (afterok): any failed line fails it
+case "${SLURM_JOB_NAME}" in check-*) [ "${fail}" = 0 ] || exit 1 ;; esac

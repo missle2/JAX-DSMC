@@ -574,14 +574,16 @@ def write_plan(job: Job, plan_dir):
         if job.phase == "check":
             fh.write("python3 bench/env/check_env.py\n")
             # SPARTA: the binary finds its libraries (gcc/openmpi modules) and runs on the GPU
-            spa = '"${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa"'
+            # (CPU nodes have no "default" build: the MPI-only one is the CPU baseline)
+            gpu = PLATFORMS[job.platform]["gpu"]
+            spa = f'"${{SPARTA_BUILD_DIR}}/sparta-${{PLATFORM}}-{"default" if gpu else "mpi"}/spa"'
             fh.write(f'echo "ldd spa:"; ldd {spa} | grep -E "not found|libmpi|libstdc" || true\n')
-            if PLATFORMS[job.platform]["gpu"]:
-                fh.write(
-                    f'python3 bench/run_bench.py sparta --exe {spa} --deck collide --particles 10K --steps 20 --reps 1 '
-                    f'--machine "${{MACHINE}}" --variant check --out "${{RESULTS_DIR}}/check" '
-                    f'--launch "$(pf_launch 1 1 bind)" --accel "-k on g 1 -sf kk"\n'
-                )
+            launch, accel = ("$(pf_launch 1 1 bind)", ' --accel "-k on g 1 -sf kk"') if gpu else ("$(pf_launch 1 4)", "")
+            fh.write(
+                f'python3 bench/run_bench.py sparta --exe {spa} --deck collide --particles 10K --steps 20 --reps 1 '
+                f'--machine "${{MACHINE}}" --variant check --out "${{RESULTS_DIR}}/check" '
+                f'--launch "{launch}"{accel}' + ("" if gpu else " --procs 4") + "\n"
+            )
             if not single_gpu_only(job.platform):
                 fh.write(f"NCCL_DEBUG=INFO $(pf_launch 1 {max(1, PLATFORMS[job.platform]['devices'])}) python3 bench/env/check_env.py --distributed\n")
         for r in job.runs:
