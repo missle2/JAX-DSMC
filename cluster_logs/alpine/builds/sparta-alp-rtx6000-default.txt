@@ -1,0 +1,10 @@
+SPARTA build alp-rtx6000/default 2026-11-25T21:07:43-07:00 on c3cpu-a2-u32-1
+source /projects/aaja8389/sparta-scaling/src/sparta commit af66be394ef31c63a76781ae6c5dd7854a3b5d1d
+preset kokkos_cuda arch 'BLACKWELL120' flags '-O3' extra ''
+modules:
+  gcc/14.2.0
+  cmake/4.2.3
+  openmpi/5.0.6
+g++ (GCC) 14.2.0
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0

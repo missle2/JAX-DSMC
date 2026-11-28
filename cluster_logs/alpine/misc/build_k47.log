@@ -1,0 +1,788 @@
+[build_kokkos] Kokkos 4.7.01 for alp-mi100: -D Kokkos_ENABLE_HIP=ON -D CMAKE_CXX_COMPILER=/scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/bin/hipcc -D Kokkos_ARCH_AMD_GFX908=ON flags '-O3 --gcc-toolchain=/curc/sw/install/gcc/14.2.0' -> /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 4.7.1
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Compiler Version: 6.4.43484
+-- Using -std=gnu++20 for C++20 extensions as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::HIP
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  AMD_GFX908
+CMake Warning (dev) at /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/hip/hip-config-amd.cmake:98 (message):
+   GPU_TARGETS was not set, and system GPU detection was unsuccsesful.
+   
+   The amdgpu-arch tool failed:
+   Error: 'Failed to get device count'
+   Output: ''
+   
+   As a result, --offload-arch will not be set for subsuqent
+   compilations, and the default architecture
+   (gfx906 for dynamic build / gfx942 for static build) will be used
+
+Call Stack (most recent call first):
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/hip/hip-config.cmake:149 (include)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/rocprim/rocprim-config.cmake:90 (find_dependency)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/rocthrust/rocthrust-config.cmake:90 (find_dependency)
+  cmake/Modules/FindTPLROCTHRUST.cmake:11 (find_package)
+  cmake/kokkos_functions.cmake:260 (find_package)
+  cmake/kokkos_tpls.cmake:93 (kokkos_import_tpl)
+  cmake/kokkos_tribits.cmake:165 (include)
+  CMakeLists.txt:225 (kokkos_setup_build_environment)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Using internal desul_atomics copy
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Experimental mdspan support is enabled
+-- Using internal mdspan directory /projects/aaja8389/sparta-scaling/src/kokkos-4.7.01/tpls/mdspan/include
+-- Kokkos Backends: SERIAL;HIP
+-- Configuring done (12.8s)
+-- Generating done (3.6s)
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100.build
+[  5%] Built target kokkossimd
+[  5%] Built target AlwaysCheckGit
+[ 11%] Built target impl_git_version
+[ 88%] Built target kokkoscore
+[ 94%] Built target kokkosalgorithms
+[100%] Built target kokkoscontainers
+-- Install configuration: "Release"
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_AnonymousSpace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_ScratchSpace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Printf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelReduce_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_DeepCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_Macros.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelFor_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_Parallel.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_Instance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_Parallel_Common.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelFor_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_FunctorAdapter.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_Error.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelFor_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_Reducer.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelScan_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelScan_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_Abort.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelReduce_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTargetSpace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMPTarget/Kokkos_OpenMPTarget_ParallelReduce_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_MemoryPool.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_ReductionIdentity.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_AcquireUniqueTokenImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Crs.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_HostSpace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Profiling_ScopedRegion.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_ExecutionSpaceTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_LaunchBoundsTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_WorkItemPropertyTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_IndexTypeTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_PolicyTraitAdaptor.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_PolicyTraitMatcher.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_GraphKernelTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_Traits_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_OccupancyControlTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_IterationPatternTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_WorkTagTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/traits/Kokkos_ScheduleTrait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Parallel_Reduce.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Macros.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_TaskScheduler.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_BitManipulation.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HPX
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HPX/Kokkos_HPX_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HPX/Kokkos_HPX_WorkGraphPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HPX/Kokkos_HPX.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HPX/Kokkos_HPX_Task.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_TaskScheduler_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Pair.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Atomics_Desul_Wrapper.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_SERIAL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_OPENMPTARGET.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_OPENMP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_OPENACC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_CUDA.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_HPX.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/fwd/Kokkos_Fwd_THREADS.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_ExecPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_MathematicalSpecialFunctions.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_PointerOwnership.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Rank.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_WorkGraphPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_Parallel_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_Parallel_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_ZeroMemset.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_Task.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Serial/Kokkos_Serial_Parallel_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_WorkGraphPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Graph.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_MathematicalFunctions.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Array.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Vectorization.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_GraphNode.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_OPENMP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_OPENMPTARGET.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_HPX.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_CUDA.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_SERIAL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_OPENACC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_THREADS.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/decl/Kokkos_Declare_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_CopyViews.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_TypeInfo.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Core.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Timer.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/KokkosExp_InterOp.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_Parallel_Reduce.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_WorkGraphPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_Parallel_Scan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_Task.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_Parallel_For.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenMP/Kokkos_OpenMP_Instance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_DetectionIdiom.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Layout.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Profiling_ProfileSection.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/MDSpan
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/MDSpan/Kokkos_MDSpan_Extents.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/MDSpan/Kokkos_MDSpan_Accessor.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/MDSpan/Kokkos_MDSpan_Header.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/MDSpan/Kokkos_MDSpan_Layout.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewAtomic.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewTraits.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewAlloc.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewUniformType.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewTracker.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_BasicView.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewDataAnalysis.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Hooks
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Hooks/Kokkos_ViewHooks.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewCtor.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewAccessPreconditionsCheck.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewLegacy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewCommonType.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/View/Kokkos_ViewMapping.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_GraphNodeKernel.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Parallel_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Error.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_BlockSize_Deduction.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Half_Impl_Type.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Parallel_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Instance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Task.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_abort.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Graph_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_CudaSpace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_ZeroMemset.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Parallel_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_KernelLaunch.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_ReduceScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_WorkGraphPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Half_MathematicalFunctions.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Half_Conversion.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_Vectorization.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_View.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Cuda/Kokkos_Cuda_GraphNode_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_NumericTraits.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_MinMax.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_View.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Half_Impl_Type.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Space.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ParallelFor_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Half_MathematicalFunctions.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ParallelReduce_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_GraphNodeKernel.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Half_Conversion.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ParallelReduce_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ParallelScan_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_TeamPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ParallelFor_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Instance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ParallelReduce_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_GraphNode_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_DeepCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Abort.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_Graph_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_WorkgroupReduction.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ZeroMemset.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/SYCL/Kokkos_SYCL_ParallelFor_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_Instance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_DeepCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ParallelScan_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ParallelReduce_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_Traits.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_Macros.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ParallelReduce_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACCSpace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ParallelFor_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ScheduleType.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ParallelFor_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ParallelFor_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_ParallelReduce_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_SharedAllocationRecord.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_FunctorAdapter.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/OpenACC/Kokkos_OpenACC_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Assert.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_ParallelReduce_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_WorkGraphPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_ParallelFor_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_ParallelFor_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_ParallelReduce_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_ParallelScan_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_ParallelReduce_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_Spinwait.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_Instance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_State.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Threads/Kokkos_Threads_ParallelFor_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Future.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_MathematicalConstants.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Concepts.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Swap.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_hwloc.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/KokkosExp_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Clamp.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Atomic.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Parallel.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_MemoryTraits.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Half.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Tuners.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/setup
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/setup/Kokkos_Setup_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/setup/Kokkos_Setup_Cuda.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/setup/Kokkos_Setup_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Extents.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Core_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Graph_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Error.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Default_Graph_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_ZeroMemset_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_GraphNodeThenImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_OptionalRef.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_ParseCommandLineArgumentsAndEnvironmentVariables.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Profiling.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Default_Graph_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Profiling_DeviceInfo.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Tools_Generic.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Utilities.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_DeviceManagement.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Command_Line_Parsing.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskNode.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_CheckedIntegerOps.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_AnalyzePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskQueueMultiple_impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/KokkosExp_IterateTileGPU.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskQueueMultiple.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Half_FloatingPointWrapper.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_MultipleTaskQueue.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Default_GraphNodeKernel.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Traits.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_GraphNodeCustomization.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Tools.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_ConcurrentBitset.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_FunctorAnalysis.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_GraphImpl_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_ChaseLev.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskResult.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_EBO.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_NvidiaGpuArchitectures.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/KokkosExp_Host_IterateTile.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_LIFO.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Volatile_Load.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Stacktrace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskTeamMember.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_SharedAlloc.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskBase.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Half_MathematicalFunctions.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_LinkedListNode.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_SingleTaskQueue.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_GraphNodeImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_SimpleTaskScheduler.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Profiling_C_Interface.h
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskQueueCommon.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_HostSharedPtr.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_HostBarrier.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_InitializationSettings.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_QuadPrecisionMath.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_HostSpace_deepcopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskQueue.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_HostSpace_ZeroMemset.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_ClockTic.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_ExecSpaceManager.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_SharedAlloc_timpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Profiling_Interface.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskQueueMemoryManager.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_StringManipulation.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Combined_Reducer.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Half_NumericTraits.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskPolicyData.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_VLAEmulation.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_DesulAtomicsConfig.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_HostThreadTeam.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_CPUDiscovery.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Default_GraphNode_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TaskQueue_impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_GraphImpl_Utilities.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_TeamMDPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_GraphImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Abort.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_KernelLaunch.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Half_Conversion.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_SharedAllocationRecord.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_GraphNode_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Shuffle_Reduce.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ReduceScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Graph_Impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ParallelFor_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Vectorization.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ZeroMemset.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_TeamPolicyInternal.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_MDRangePolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ParallelReduce_MDRange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_BlockSize_Deduction.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Abort.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_DeepCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Half_Impl_Type.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ParallelFor_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_IsXnack.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_GraphNodeKernel.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Space.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_UniqueToken.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_WorkGraphPolicy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ParallelFor_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ParallelReduce_Team.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ParallelScan_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_ParallelReduce_Range.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Error.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/HIP/Kokkos_HIP_Instance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Complex.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Array_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Based_Fetch_Op_CUDA.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_CUDA.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Adapt_GCC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_GCC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Based_Fetch_Op_Host.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_OpenACC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_OpenACC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_Generic.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Atomic_Ref.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Based_Fetch_Op_OpenACC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Array.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_GCC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_OpenMP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_ScopeCaller.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Free_Fetch_Op.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_MSVC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_OpenMP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/openmp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/openmp/OpenMP_40.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/openmp/OpenMP_40_op.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_OpenMP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_memorder.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_atomic_fetch_op.inc_predicate
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/CUDA_asm.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_exchange_memorder.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_atomic_fetch_op.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_exchange_op.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_atomic_fetch_op.inc_isglobal
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/CUDA_asm_exchange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_atomic_op.inc_isglobal
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_atomic_op.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_atomic_op.inc_predicate
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/cuda/cuda_cc7_asm_exchange.inc
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Based_Fetch_Op.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Array_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Array_CUDA.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Adapt_CXX.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Common.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_ScopeCaller.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Adapt_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_GCC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Based_Fetch_Op_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Lock_Based_Fetch_Op_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_CUDA.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Operator_Function_Objects.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Fetch_Op_OpenACC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Generic.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_MSVC.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_SYCL.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Compare_Exchange_CUDA.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Adapt_HIP.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Thread_Fence_ScopeCaller.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Macros.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/desul/atomics/Config.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/libkokkoscore.a
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/mdspan
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/mdspan/mdspan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/mdspan/mdarray.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2389_bits
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2389_bits/dims.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/layout_left.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/dynamic_extent.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/config.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/default_accessor.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/utility.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/mdspan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/layout_stride.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/extents.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/no_unique_address.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/compressed_pair.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/layout_right.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/full_extent_t.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/type_list.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/trait_backports.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p0009_bits/macros.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2642_bits
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2642_bits/layout_padded.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2642_bits/layout_padded_fwd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2630_bits
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2630_bits/strided_slice.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2630_bits/submdspan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2630_bits/submdspan_mapping.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p2630_bits/submdspan_extents.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p1684_bits
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/experimental/__p1684_bits/mdarray.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_ErrorReporter.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Bitset.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_ScatterView.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Functional.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_OffsetView.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_DualView.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Vector.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_DynRankView.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_UnorderedMap.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_StaticCrsGraph.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_DynamicView.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Functional_impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Bitset_impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_StaticCrsGraph_factory.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_UnorderedMap_impl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/libkokkoscontainers.a
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_StdAlgorithms.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Random.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_NestedSort.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_Sort.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/Kokkos_BinSortPublicAPI.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/Kokkos_NestedSortPublicAPI.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/Kokkos_SortByKeyPublicAPI.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/Kokkos_BinOpsPublicAPI.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/Kokkos_SortPublicAPI.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/impl
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/impl/Kokkos_CopyOpsForBinSortImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/impl/Kokkos_NestedSortImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/impl/Kokkos_SortByKeyImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/sorting/impl/Kokkos_SortImpl.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_CopyIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ShiftRight.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ReplaceCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_SearchN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_FindFirstOf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_TransformReduce.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_RemoveCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_TransformExclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_TransformInclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Mismatch.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_CopyN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Rotate.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_FindIfNot.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_IsSortedUntil.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_MaxElement.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_CopyBackward.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_AllOf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_AnyOf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_FindIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Reduce.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ForEachN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_BeginEnd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_RotateCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_MinMaxElement.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Equal.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Remove.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_SwapRanges.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_RemoveIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_GenerateN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Move.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_RemoveCopyIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_IterSwap.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ReverseCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ShiftLeft.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_IsPartitioned.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Distance.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_PartitionPoint.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Fill.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Unique.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_FindEnd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Transform.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_IsSorted.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_CountIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ExclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ReplaceIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_InclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Copy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_MinElement.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Replace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Search.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ReplaceCopyIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_UniqueCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_AdjacentDifference.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_NoneOf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_ForEach.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_MoveBackward.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_AdjacentFind.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Count.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_FillN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Find.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_LexicographicalCompare.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_CopyIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_IdentityReferenceUnaryFunctor.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ShiftRight.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ReplaceCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_CountCountIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_SearchN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_RandomAccessIterator.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_GenerateGenerateN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_FindIfOrNot.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_FindFirstOf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_TransformReduce.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_CopyCopyN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_AllOfAnyOfNoneOf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_TransformExclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_TransformInclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Mismatch.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Rotate.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_FillFillN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_IsSortedUntil.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ReducerWithArbitraryJoinerNoNeutralElement.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_FunctorsForExclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_MinMaxMinmaxElement.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ValueWrapperForNoNeutralElement.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_CopyBackward.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Reduce.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_RotateCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Equal.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_SwapRanges.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Move.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ReverseCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ShiftLeft.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_RemoveAllVariants.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_IsPartitioned.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_PartitionPoint.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Unique.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_FindEnd.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Transform.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_IsSorted.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ExclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ReplaceIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_InclusiveScan.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_HelperPredicates.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Replace.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Search.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ReplaceCopyIf.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_UniqueCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_AdjacentDifference.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Constraints.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_MoveBackward.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_AdjacentFind.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_LexicographicalCompare.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_MustUseKokkosSingleInTeam.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_PartitionCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_ForEachForEachN.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/impl/Kokkos_Reverse.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_PartitionCopy.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Generate.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/std_algorithms/Kokkos_Reverse.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/libkokkosalgorithms.a
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD_AVX2.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD_Scalar.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD_AVX512.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD_NEON.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD_SVE.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD_Common.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/impl/Kokkos_Neon_SVE_bridge.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/Kokkos_SIMD_Common_Math.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/libkokkossimd.a
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/cmake/Kokkos/KokkosConfig.cmake
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/cmake/Kokkos/KokkosConfigCommon.cmake
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/cmake/Kokkos/KokkosConfigVersion.cmake
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/cmake/Kokkos/KokkosTargets.cmake
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/cmake/Kokkos/KokkosTargets-release.cmake
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/KokkosCore_config.h
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/bin/nvcc_wrapper
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/bin/hpcbind
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/bin/kokkos_launch_compiler
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/KokkosCore_config.h
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/KokkosCore_Config_FwdBackend.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/KokkosCore_Config_SetupBackend.hpp
+-- Up-to-date: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/include/KokkosCore_Config_DeclareBackend.hpp
+[build_kokkos] installed: /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100  (KOKKOS_ROOT=/projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100)
+[build_sparta] alp-mi100/default: preset kokkos_hip, arch 'AMD_GFX908', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_hip.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is Clang 19.0.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/bin/hipcc - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+CMake Warning (dev) at /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/hip/hip-config-amd.cmake:98 (message):
+   GPU_TARGETS was not set, and system GPU detection was unsuccsesful.
+   
+   The amdgpu-arch tool failed:
+   Error: 'Failed to get device count'
+   Output: ''
+   
+   As a result, --offload-arch will not be set for subsuqent
+   compilations, and the default architecture
+   (gfx906 for dynamic build / gfx942 for static build) will be used
+
+Call Stack (most recent call first):
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/hip/hip-config.cmake:149 (include)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/rocprim/rocprim-config.cmake:90 (find_dependency)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)
+  /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/lib/cmake/rocthrust/rocthrust-config.cmake:90 (find_dependency)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)
+  /curc/sw/install/cmake/4.2.3/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)
+  /projects/aaja8389/sparta-scaling/kokkos/4.7.01-alp-mi100/lib64/cmake/Kokkos/KokkosConfig.cmake:42 (FIND_DEPENDENCY)
+  common/process/sparta_build_options.cmake:226 (find_package)
+  CMakeLists.txt:206 (include)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Performing Test HIP_CLANG_SUPPORTS_PARALLEL_JOBS
+-- Performing Test HIP_CLANG_SUPPORTS_PARALLEL_JOBS - Success
+-- Enabled Kokkos devices: SERIAL;HIP
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_hip
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- Enabled Kokkos devices: SERIAL;HIP
+-- Configuring done (21.8s)
+-- Generating done (0.7s)
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47
+In file included from /projects/aaja8389/sparta-scaling/src/sparta/src/KOKKOS/modify_kokkos.cpp:23:
+In file included from /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47/src/include/style_fix.h:38:
+/projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47/src/include/fix_temp_rescale_kokkos.h:77:8: warning: 'end_of_step_no_average' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+   77 |   void end_of_step_no_average(double);
+      |        ^
+/projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47/src/include/fix_temp_rescale.h:46:16: note: overridden virtual function is here
+   46 |   virtual void end_of_step_no_average(double);
+      |                ^
+In file included from /projects/aaja8389/sparta-scaling/src/sparta/src/KOKKOS/modify_kokkos.cpp:23:
+In file included from /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47/src/include/style_fix.h:38:
+/projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47/src/include/fix_temp_rescale_kokkos.h:78:8: warning: 'end_of_step_average' overrides a member function but is not marked 'override' [-Winconsistent-missing-override]
+   78 |   void end_of_step_average(double);
+      |        ^
+/projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-k47/src/include/fix_temp_rescale.h:47:16: note: overridden virtual function is here
+   47 |   virtual void end_of_step_average(double);
+      |                ^
+10 warnings generated when compiling for host.
+5 warnings generated when compiling for host.
+gmake[1]: *** [CMakeFiles/Makefile2:368: src/KOKKOS/CMakeFiles/pkg_kokkos.dir/all] Error 2
+gmake: *** [Makefile:136: all] Error 2

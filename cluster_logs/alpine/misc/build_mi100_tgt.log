@@ -1,0 +1,70 @@
+[build_sparta] alp-mi100/default: preset kokkos_hip, arch 'AMD_GFX908', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-tgt
+loading initial cache file /projects/aaja8389/sparta-scaling/src/sparta/cmake/presets/kokkos_hip.cmake
+-- The C compiler identification is GNU 14.2.0
+-- The CXX compiler identification is Clang 19.0.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /scratch/alpine/aaja8389/rocm-6.4.4-user/opt/rocm-6.4.4/bin/hipcc - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/bin/mpicc (found version "3.1")
+-- Found MPI_CXX: /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so (found version "3.1")
+-- Found MPI: TRUE (found version "3.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_hip
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using HIPCC version 6.4.43484)
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Performing Test HIP_CLANG_SUPPORTS_PARALLEL_JOBS
+-- Performing Test HIP_CLANG_SUPPORTS_PARALLEL_JOBS - Success
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::HIP
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  AMD_GFX908
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;HIP
+-- Configuring done (27.9s)
+-- Generating done (3.3s)
+CMake Warning:
+  Manually-specified variables were not used by the project:
+
+    AMDGPU_TARGETS
+
+
+-- Build files have been written to: /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-tgt
