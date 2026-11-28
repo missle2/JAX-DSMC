@@ -2,7 +2,7 @@
 """sparta_jax against SPARTA on the three bench decks: per-move event rates over seeds.
 
     # SPARTA's side (any CPU; serial SPARTA, seconds to minutes) -- done once, committed as
-    # bench/validation/sparta_serial_rows.jsonl (SPARTA af66be39, 10K and 100K, 8 seeds):
+    # bench/validation/sparta_serial_rows.jsonl (SPARTA af66be39, 10K and 100K, 32 seeds):
     python3 bench/validate.py sparta --exe /path/to/spa_serial --out bench/results/validate
     # sparta_jax's side (a GPU job: `python3 bench/matrix.py validate --platform ...`, or local):
     python3 bench/validate.py jax --out bench/results/validate
@@ -30,6 +30,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SIZES = ("10K", "100K")
 DECKS = ("free", "collide", "sphere")
 SEEDS = 8
+# SPARTA's side: 32 serial seeds (cheap).  The 8-seed reference was unlucky on collide 100K
+# nbound (mean low and spread 2.6x below the 32-seed one) and failed sparta_jax at z = 3.4 on
+# A100 and MI100 alike; against 32 seeds the same rows give z = 1.5 (2026-11-28).
+SPARTA_SEEDS = 32
 RATES = ("nattempt", "ncoll", "nscheck", "nscoll", "nexit", "nbound")
 
 
@@ -37,7 +41,7 @@ def run_side(code, a):
     for deck in DECKS:
         for n in SIZES:
             cmd = [sys.executable, os.path.join(HERE, "run_bench.py"), code, "--deck", deck, "--particles", n,
-                   "--machine", a.machine, "--variant", "validate", "--reps", str(SEEDS), "--out", a.out]
+                   "--machine", a.machine, "--variant", "validate", "--reps", str(SPARTA_SEEDS if code == "sparta" else SEEDS), "--out", a.out]
             if code == "sparta":
                 cmd += ["--exe", a.exe]
             print("+", " ".join(cmd), flush=True)
