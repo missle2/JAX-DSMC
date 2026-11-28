@@ -1,0 +1,170 @@
+[runtime] alp-rtx6000 on c3gpu-g7-u5: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa
+[2026-11-28T11:07:41-07:00] job 36547450 single1-alp-rtx6000-n1: 1 node(s) c3gpu-g7-u5...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-rtx6000/single1-alp-rtx6000-n1.plan: 40 runs
+[2026-11-28T11:07:41-07:00] run 1: timeout 910  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck free --particles 131072K --machine "${MACHINE}" --variant kk --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.free -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/logs/log.28Nov26.free.alp-rtx6000_kk.131072K.1 -screen none -v x 200 -v y 256 -v z 256 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "free", "particles": 131072000, "procs": 1, "loop_time": 90.6987, "mpsps": 1445.1364793541693}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.free -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/logs/log.28Nov26.free.alp-rtx6000_kk.131072K.1.r1 -screen none -v x 200 -v y 256 -v z 256 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "free", "particles": 131072000, "procs": 1, "loop_time": 90.3438, "mpsps": 1450.8134481834945}
+[2026-11-28T11:12:18-07:00] run 1 done in 277 s
+[2026-11-28T11:12:18-07:00] run 2: timeout 1460  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck free --particles 262144K --machine "${MACHINE}" --variant kk --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.free -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/logs/log.28Nov26.free.alp-rtx6000_kk.262144K.1 -screen none -v x 256 -v y 320 -v z 320 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "free", "particles": 262144000, "procs": 1, "loop_time": 180.285, "mpsps": 1454.053304490113}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.free -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/logs/log.28Nov26.free.alp-rtx6000_kk.262144K.1.r1 -screen none -v x 256 -v y 320 -v z 320 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "free", "particles": 262144000, "procs": 1, "loop_time": 181.071, "mpsps": 1447.7414936682296}
+[2026-11-28T11:21:21-07:00] run 2 done in 543 s
+[2026-11-28T11:21:21-07:00] run 3: timeout 2080  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 262144K --machine "${MACHINE}" --variant kk --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.collide -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/logs/log.28Nov26.collide.alp-rtx6000_kk.262144K.1 -screen none -v x 256 -v y 320 -v z 320 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 262144000, "procs": 1, "loop_time": 288.868, "mpsps": 907.4871567636429}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.collide -log /projects/aaja8389/sparta-scaling/results/alp-rtx6000/logs/log.28Nov26.collide.alp-rtx6000_kk.262144K.1.r1 -screen none -v x 256 -v y 320 -v z 320 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "collide", "particles": 262144000, "procs": 1, "loop_time": 289.472, "mpsps": 905.5936325447711}
+[2026-11-28T11:34:24-07:00] run 3 done in 783 s
+[2026-11-28T11:34:24-07:00] run 4: timeout 600  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 32K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 32000, "procs": 1, "loop_time": 0.07450982928276062, "mpsps": 429.47353802894645, "compile_s": 0.5190718239173293}
+{"deck": "free", "particles": 32000, "procs": 1, "loop_time": 0.07441654987633228, "mpsps": 430.0118730736454, "compile_s": 0.0}
+[2026-11-28T11:34:30-07:00] run 4 done in 6 s
+[2026-11-28T11:34:30-07:00] run 5: timeout 600  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 64K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 64000, "procs": 1, "loop_time": 0.07660793699324131, "mpsps": 835.4225751523156, "compile_s": 0.5033815745264292}
+{"deck": "free", "particles": 64000, "procs": 1, "loop_time": 0.07660757657140493, "mpsps": 835.4265056321998, "compile_s": 0.0}
+[2026-11-28T11:34:38-07:00] run 5 done in 8 s
+[2026-11-28T11:34:38-07:00] run 6: timeout 600  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 128K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 128000, "procs": 1, "loop_time": 0.07489267643541098, "mpsps": 1709.1123737631394, "compile_s": 0.5054216338321567}
+{"deck": "free", "particles": 128000, "procs": 1, "loop_time": 0.07491159159690142, "mpsps": 1708.6808232398373, "compile_s": 0.0}
+[2026-11-28T11:34:48-07:00] run 6 done in 10 s
+[2026-11-28T11:34:48-07:00] run 7: timeout 600  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 256K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 256000, "procs": 1, "loop_time": 0.10161018371582031, "mpsps": 2519.432508024703, "compile_s": 0.6302094431594014}
+{"deck": "free", "particles": 256000, "procs": 1, "loop_time": 0.10154900141060352, "mpsps": 2520.9504420913886, "compile_s": 0.0}
+[2026-11-28T11:34:57-07:00] run 7 done in 9 s
+[2026-11-28T11:34:57-07:00] run 8: timeout 601  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 512K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 512000, "procs": 1, "loop_time": 0.09210297744721174, "mpsps": 5558.995096477198, "compile_s": 0.3323016604408622}
+{"deck": "free", "particles": 512000, "procs": 1, "loop_time": 0.09221233706921339, "mpsps": 5552.402382077134, "compile_s": 0.0}
+[2026-11-28T11:35:05-07:00] run 8 done in 8 s
+[2026-11-28T11:35:05-07:00] run 9: timeout 603  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 1024K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 1024000, "procs": 1, "loop_time": 0.17451851908117533, "mpsps": 5867.572137279585, "compile_s": 0.25042560137808323}
+{"deck": "free", "particles": 1024000, "procs": 1, "loop_time": 0.1745509523898363, "mpsps": 5866.481883828582, "compile_s": 0.0}
+[2026-11-28T11:35:13-07:00] run 9 done in 8 s
+[2026-11-28T11:35:13-07:00] run 10: timeout 607  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 2048K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 2048000, "procs": 1, "loop_time": 0.27015076484531164, "mpsps": 7580.952070125306, "compile_s": 0.25236758403480053}
+{"deck": "free", "particles": 2048000, "procs": 1, "loop_time": 0.27008748706430197, "mpsps": 7582.728182858822, "compile_s": 0.0}
+[2026-11-28T11:35:21-07:00] run 10 done in 8 s
+[2026-11-28T11:35:21-07:00] run 11: timeout 615  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 4096K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 4096000, "procs": 1, "loop_time": 0.6261425353586674, "mpsps": 6541.641509235156, "compile_s": 0.2208765735849738}
+{"deck": "free", "particles": 4096000, "procs": 1, "loop_time": 0.6263961540535092, "mpsps": 6538.992893704937, "compile_s": 0.0}
+[2026-11-28T11:35:30-07:00] run 11 done in 9 s
+[2026-11-28T11:35:30-07:00] run 12: timeout 630  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 8192K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 8192000, "procs": 1, "loop_time": 1.1263218224048615, "mpsps": 7273.232070127953, "compile_s": 0.27658318914473057}
+{"deck": "free", "particles": 8192000, "procs": 1, "loop_time": 1.1262412620708346, "mpsps": 7273.752326333047, "compile_s": 0.0}
+[2026-11-28T11:35:40-07:00] run 12 done in 10 s
+[2026-11-28T11:35:40-07:00] run 13: timeout 660  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 2.1775310561060905, "mpsps": 7524.117717658748, "compile_s": 0.2754215281456709}
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 2.1784129999578, "mpsps": 7521.071532495165, "compile_s": 0.0}
+[2026-11-28T11:35:53-07:00] run 13 done in 13 s
+[2026-11-28T11:35:53-07:00] run 14: timeout 720  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 32768K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 32768000, "procs": 1, "loop_time": 4.512664274312556, "mpsps": 7261.342304262545, "compile_s": 0.300315379165113}
+{"deck": "free", "particles": 32768000, "procs": 1, "loop_time": 4.512260917574167, "mpsps": 7261.991404880101, "compile_s": 0.0}
+[2026-11-28T11:36:10-07:00] run 14 done in 17 s
+[2026-11-28T11:36:10-07:00] run 15: timeout 841  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 65536K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 65536000, "procs": 1, "loop_time": 8.9975407673046, "mpsps": 7283.7680533936245, "compile_s": 0.2773911412805319}
+{"deck": "free", "particles": 65536000, "procs": 1, "loop_time": 8.999177139252424, "mpsps": 7282.443604109806, "compile_s": 0.0}
+[2026-11-28T11:36:36-07:00] run 15 done in 26 s
+[2026-11-28T11:36:36-07:00] run 16: timeout 1083  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 131072K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 131072000, "procs": 1, "loop_time": 16.80014258623123, "mpsps": 7801.838545550305, "compile_s": 0.2460659295320511}
+{"deck": "free", "particles": 131072000, "procs": 1, "loop_time": 16.467586637474597, "mpsps": 7959.393375937974, "compile_s": 0.0}
+[2026-11-28T11:37:21-07:00] run 16 done in 45 s
+[2026-11-28T11:37:21-07:00] run 17: timeout 1567  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 262144K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "free", "particles": 262144000, "procs": 1, "loop_time": 34.742255604825914, "mpsps": 7545.393798886984, "compile_s": 0.25813219230622053}
+{"deck": "free", "particles": 262144000, "procs": 1, "loop_time": 34.53358646389097, "mpsps": 7590.986828839894, "compile_s": 0.0}
+[2026-11-28T11:38:44-07:00] run 17 done in 83 s
+[2026-11-28T11:38:44-07:00] run 18: timeout 600  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 32K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 32000, "procs": 1, "loop_time": 0.5195645866915584, "mpsps": 61.5900329230809, "compile_s": 3.078251540660858}
+{"deck": "collide", "particles": 32000, "procs": 1, "loop_time": 0.5168990176171064, "mpsps": 61.90764329079077, "compile_s": 0.0}
+[2026-11-28T11:38:56-07:00] run 18 done in 12 s
+[2026-11-28T11:38:56-07:00] run 19: timeout 600  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 64K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 64000, "procs": 1, "loop_time": 0.5647569987922907, "mpsps": 113.32307547646391, "compile_s": 4.549705469980836}
+{"deck": "collide", "particles": 64000, "procs": 1, "loop_time": 0.557453884743154, "mpsps": 114.80770293580049, "compile_s": 0.0}
+[2026-11-28T11:39:10-07:00] run 19 done in 14 s
+[2026-11-28T11:39:10-07:00] run 20: timeout 600  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 128K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 128000, "procs": 1, "loop_time": 0.6415363634005189, "mpsps": 199.52103622236618, "compile_s": 5.172772596590221}
+{"deck": "collide", "particles": 128000, "procs": 1, "loop_time": 0.641178909689188, "mpsps": 199.63226810134492, "compile_s": 0.0}
+[2026-11-28T11:39:22-07:00] run 20 done in 12 s
+[2026-11-28T11:39:22-07:00] run 21: timeout 601  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 256K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 256000, "procs": 1, "loop_time": 0.747325861826539, "mpsps": 342.5547181979096, "compile_s": 6.813047204166651}
+{"deck": "collide", "particles": 256000, "procs": 1, "loop_time": 0.7489781156182289, "mpsps": 341.7990387992711, "compile_s": 0.0}
+[2026-11-28T11:39:39-07:00] run 21 done in 17 s
+[2026-11-28T11:39:39-07:00] run 22: timeout 602  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 512K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 512000, "procs": 1, "loop_time": 0.8274508900940418, "mpsps": 618.7678400367785, "compile_s": 7.0221867030486465}
+{"deck": "collide", "particles": 512000, "procs": 1, "loop_time": 0.8361515179276466, "mpsps": 612.3292118980571, "compile_s": 0.0}
+[2026-11-28T11:39:55-07:00] run 22 done in 16 s
+[2026-11-28T11:39:55-07:00] run 23: timeout 605  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 1024K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 1024000, "procs": 1, "loop_time": 0.9215843724086881, "mpsps": 1111.1299525659647, "compile_s": 8.476836898364127}
+{"deck": "collide", "particles": 1024000, "procs": 1, "loop_time": 0.9243615968152881, "mpsps": 1107.7915866777644, "compile_s": 0.0}
+[2026-11-28T11:40:14-07:00] run 23 done in 19 s
+[2026-11-28T11:40:14-07:00] run 24: timeout 611  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 2048K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 2048000, "procs": 1, "loop_time": 1.362973895855248, "mpsps": 1502.596642700121, "compile_s": 8.405952831730247}
+{"deck": "collide", "particles": 2048000, "procs": 1, "loop_time": 1.3699281383305788, "mpsps": 1494.96892771013, "compile_s": 0.0}
+[2026-11-28T11:40:29-07:00] run 24 done in 15 s
+[2026-11-28T11:40:29-07:00] run 25: timeout 623  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 4096K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 4096000, "procs": 1, "loop_time": 2.0720312083140016, "mpsps": 1976.804202352188, "compile_s": 9.91169948875904}
+{"deck": "collide", "particles": 4096000, "procs": 1, "loop_time": 2.0699047511443496, "mpsps": 1978.8350153481801, "compile_s": 0.0}
+[2026-11-28T11:40:51-07:00] run 25 done in 22 s
+[2026-11-28T11:40:51-07:00] run 26: timeout 647  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 8192K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 8192000, "procs": 1, "loop_time": 3.771737133152783, "mpsps": 2171.9435132406306, "compile_s": 9.72151471953839}
+{"deck": "collide", "particles": 8192000, "procs": 1, "loop_time": 3.7731586303561926, "mpsps": 2171.125256725997, "compile_s": 0.0}
+[2026-11-28T11:41:18-07:00] run 26 done in 27 s
+[2026-11-28T11:41:18-07:00] run 27: timeout 790  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 32768K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 32768000, "procs": 1, "loop_time": 14.553624204359949, "mpsps": 2251.535393512732, "compile_s": 11.513506681658328}
+{"deck": "collide", "particles": 32768000, "procs": 1, "loop_time": 14.560396398417652, "mpsps": 2250.488180635045, "compile_s": 0.0}
+[2026-11-28T11:42:13-07:00] run 27 done in 55 s
+[2026-11-28T11:42:13-07:00] run 28: timeout 980  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 65536K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 65536000, "procs": 1, "loop_time": 28.887920753099024, "mpsps": 2268.6298733691124, "compile_s": 12.768217474222183}
+{"deck": "collide", "particles": 65536000, "procs": 1, "loop_time": 28.743688837625086, "mpsps": 2280.0135490687016, "compile_s": 0.0}
+[2026-11-28T11:43:42-07:00] run 28 done in 89 s
+[2026-11-28T11:43:42-07:00] run 29: timeout 1361  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 131072K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 131072000, "procs": 1, "loop_time": 56.77384307049215, "mpsps": 2308.668797306129, "compile_s": 13.098355886526406}
+{"deck": "collide", "particles": 131072000, "procs": 1, "loop_time": 56.38868338055909, "mpsps": 2324.4380280244172, "compile_s": 0.0}
+[2026-11-28T11:46:19-07:00] run 29 done in 157 s
+[2026-11-28T11:46:19-07:00] run 30: timeout 2123  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 262144K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 262144000, "procs": 1, "loop_time": 116.48197155073285, "mpsps": 2250.5113581961064, "compile_s": 14.265735471621156}
+{"deck": "collide", "particles": 262144000, "procs": 1, "loop_time": 115.87779246363789, "mpsps": 2262.24537442979, "compile_s": 0.0}
+[2026-11-28T11:51:18-07:00] run 30 done in 299 s
+[2026-11-28T11:51:18-07:00] run 31: timeout 601  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 32K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 32000, "procs": 1, "loop_time": 0.9535293709486723, "mpsps": 33.57268058575954, "compile_s": 5.216594717465341}
+{"deck": "sphere", "particles": 32000, "procs": 1, "loop_time": 0.9605904705822468, "mpsps": 33.1774101201343, "compile_s": 0.0}
+[2026-11-28T11:51:37-07:00] run 31 done in 19 s
+[2026-11-28T11:51:37-07:00] run 32: timeout 602  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 64K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 64000, "procs": 1, "loop_time": 1.4614534927532077, "mpsps": 43.627455349184295, "compile_s": 6.683299728669226}
+{"deck": "sphere", "particles": 64000, "procs": 1, "loop_time": 1.453883453272283, "mpsps": 43.838886711687074, "compile_s": 0.0}
+[2026-11-28T11:51:56-07:00] run 32 done in 19 s
+[2026-11-28T11:51:56-07:00] run 33: timeout 605  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 128K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 128000, "procs": 1, "loop_time": 1.3473709281533957, "mpsps": 94.40247547445901, "compile_s": 6.885173810645938}
+{"deck": "sphere", "particles": 128000, "procs": 1, "loop_time": 1.3474242510274053, "mpsps": 94.46385865695035, "compile_s": 0.0}
+[2026-11-28T11:52:18-07:00] run 33 done in 22 s
+[2026-11-28T11:52:18-07:00] run 34: timeout 610  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 256K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 256000, "procs": 1, "loop_time": 1.7365592196583748, "mpsps": 146.5836161061508, "compile_s": 8.662698968313634}
+{"deck": "sphere", "particles": 256000, "procs": 1, "loop_time": 1.7213946348056197, "mpsps": 147.83268627343884, "compile_s": 0.0}
+[2026-11-28T11:52:40-07:00] run 34 done in 22 s
+[2026-11-28T11:52:40-07:00] run 35: timeout 620  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 512K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 512000, "procs": 1, "loop_time": 2.0230701230466366, "mpsps": 251.49749393450512, "compile_s": 9.04578428901732}
+{"deck": "sphere", "particles": 512000, "procs": 1, "loop_time": 2.0488497894257307, "mpsps": 248.47794388220782, "compile_s": 0.0}
+[2026-11-28T11:53:05-07:00] run 35 done in 25 s
+[2026-11-28T11:53:05-07:00] run 36: timeout 640  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 1024K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 1024000, "procs": 1, "loop_time": 2.637686316855252, "mpsps": 385.780134088568, "compile_s": 10.310099309310317}
+{"deck": "sphere", "particles": 1024000, "procs": 1, "loop_time": 2.6093727936968207, "mpsps": 389.7834987230936, "compile_s": 0.0}
+[2026-11-28T11:53:36-07:00] run 36 done in 31 s
+[2026-11-28T11:53:36-07:00] run 37: timeout 680  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 2048K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 2048000, "procs": 1, "loop_time": 3.807848546653986, "mpsps": 534.2371638671304, "compile_s": 10.406099583953619}
+{"deck": "sphere", "particles": 2048000, "procs": 1, "loop_time": 3.8029776718467474, "mpsps": 534.7488437954604, "compile_s": 0.0}
+[2026-11-28T11:54:08-07:00] run 37 done in 32 s
+[2026-11-28T11:54:08-07:00] run 38: timeout 761  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 4096K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 4096000, "procs": 1, "loop_time": 5.369714487344027, "mpsps": 757.5482798177651, "compile_s": 11.642870429903269}
+{"deck": "sphere", "particles": 4096000, "procs": 1, "loop_time": 5.380301300436258, "mpsps": 755.7652027164893, "compile_s": 0.0}
+[2026-11-28T11:54:51-07:00] run 38 done in 43 s
+[2026-11-28T11:54:51-07:00] run 39: timeout 922  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 8192K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 8192000, "procs": 1, "loop_time": 7.857117468491197, "mpsps": 1034.7583793425513, "compile_s": 12.107214434072375}
+{"deck": "sphere", "particles": 8192000, "procs": 1, "loop_time": 7.907532184384763, "mpsps": 1028.0971160704196, "compile_s": 0.0}
+[2026-11-28T11:55:44-07:00] run 39 done in 53 s
+[2026-11-28T11:55:44-07:00] run 40: timeout 1890  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 32768K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 32768000, "procs": 1, "loop_time": 25.369051855057478, "mpsps": 1281.2958889718961, "compile_s": 13.567636055871844}
+{"deck": "sphere", "particles": 32768000, "procs": 1, "loop_time": 25.309767340309918, "mpsps": 1284.2746226762424, "compile_s": 0.0}
+[2026-11-28T11:57:55-07:00] run 40 done in 131 s
+[2026-11-28T11:57:55-07:00] 40 runs, 0 failed

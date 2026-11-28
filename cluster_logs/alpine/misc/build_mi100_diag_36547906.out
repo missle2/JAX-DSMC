@@ -1,0 +1,24 @@
+
+===== tgt (2026-11-28T11:43:46-07:00) =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[build_sparta] alp-mi100/default: preset kokkos_hip, arch 'AMD_GFX908', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-tgt
+bench/env/build_sparta.sh: line 147: cmake: command not found
+===== tgt FAILED
+
+===== o1 (2026-11-28T11:43:48-07:00) =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[build_sparta] alp-mi100/o1: preset kokkos_hip, arch 'AMD_GFX908', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-o1
+bench/env/build_sparta.sh: line 147: cmake: command not found
+===== o1 FAILED
+
+===== mk (2026-11-28T11:43:49-07:00) =====
+[platforms.sh] module gcc not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[platforms.sh] module cmake not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[platforms.sh] module openmpi not available on c3cpu-a2-u32-1 (MODULEPATH=/etc/scl/modulefiles:/curc/sw/modules/slurm:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/share/modulefiles:/curc/sw/alpine-modules/compilers:/curc/sw/alpine-modules/idep:/curc/sw/alpine-modules/cu_licensed)
+[build_sparta] alp-mi100/multikernel: preset kokkos_hip, arch 'AMD_GFX908', /projects/aaja8389/sparta-scaling/src/sparta -> /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-mk
+bench/env/build_sparta.sh: line 147: cmake: command not found
+===== mk FAILED
