@@ -1,0 +1,89 @@
+[build_sparta] nvcc: Build cuda_13.2.r13.2/compiler.37668154_0
+[build_sparta] pm-gpu/bigbig: preset kokkos_cuda, arch 'AMPERE80 ZEN3', /pscratch/sd/a/aajain/sparta-scaling/src/sparta -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig
+loading initial cache file /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig.preset.cmake
+-- The C compiler identification is GNU 14.3.0
+-- The CXX compiler identification is GNU 14.3.0
+-- Cray Programming Environment 2.7.36 C
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /opt/cray/pe/craype/2.7.36/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Cray Programming Environment 2.7.36 CXX
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /pscratch/sd/a/aajain/sparta-scaling/src/sparta/lib/kokkos/bin/nvcc_wrapper - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Setting policy CMP0074 to use <TPL>_ROOT variables
+-- Found MPI_C: /opt/cray/pe/craype/2.7.36/bin/cc (found version "4.1")
+-- Found MPI_CXX: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/lib/stubs/libcuda.so (found version "4.1")
+-- Found MPI: TRUE (found version "4.1")
+-- 
+-- ****************** Begin SPARTA Settings ******************
+-- Enabled packages
+--   PKG_KOKKOS
+-- 
+-- Enabled TPLs
+--   BUILD_MPI
+--   BUILD_KOKKOS
+-- 
+-- Enabled extra options
+--   SPARTA_MACHINE: kokkos_cuda
+-- 
+-- SPARTA_DEFAULT_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_BIGBIG;-DSPARTA_KOKKOS;-DSPARTA_GZIP
+-- SPARTA_CXX_COMPILE_FLAGS: -fPIC;-DMPICH_SKIP_MPICXX;-DOMPI_SKIP_MPICXX=1;-DSPARTA_BIGBIG
+-- Checking for old sparta build artifacts
+-- Checking for old sparta build artifacts - done
+-- ****************** End   SPARTA Settings ******************
+-- 
+-- KOKKOS: CUDA malloc async support disabled
+-- Setting default Kokkos CXX standard to 20
+-- Kokkos version: 5.0.2
+-- The project name is: Kokkos
+-- Using internal gtest for testing
+-- Kokkos is configured for CMake languages CXX compilation (using NVIDIA version 13.2.78)
+-- Using -std=c++20 for C++20 standard as feature
+-- Built-in Execution Spaces:
+--     Device Parallel: Kokkos::Cuda
+--     Host Parallel: NoTypeDefined
+--       Host Serial: SERIAL
+-- 
+-- Architectures:
+--  ZEN3
+--  AMPERE80
+-- Found CUDAToolkit: /opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2/targets/x86_64-linux/include (found version "13.2.78")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- Using bundled desul_atomics copy (desul/desul@79f928075837ffb5d302aae188e0ec7b7a79ae94)
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK
+-- Performing Test KOKKOS_LINK_OPTIONS_CHECK - Success
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK
+-- Performing Test KOKKOS_COMPILE_OPTIONS_CHECK - Success
+-- Using bundled mdspan copy (kokkos/mdspan@5d4eb209c77f4744980c0b0c2af44636cc81b08b)
+-- Kokkos Backends: SERIAL;CUDA
+-- Configuring done (16.7s)
+-- Generating done (0.8s)
+-- Build files have been written to: /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig
+[ 97%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_isurf.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_restart.cpp.o
+[ 98%] Building CXX object src/CMakeFiles/sparta_kokkos_cuda.dir/write_surf.cpp.o
+/pscratch/sd/a/aajain/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nvec" was declared but never referenced
+      int index,nvec,nstride;
+                ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/pscratch/sd/a/aajain/sparta-scaling/src/sparta/src/variable.cpp(3936): warning #177-D: variable "nstride" was declared but never referenced
+      int index,nvec,nstride;
+                     ^
+
+[ 99%] Linking CXX static library libsparta_kokkos_cuda.a
+[ 99%] Built target sparta_kokkos_cuda
+[100%] Building CXX object src/CMakeFiles/spa_kokkos_cuda.dir/main.cpp.o
+[100%] Linking CXX executable spa_kokkos_cuda
+   text	   data	    bss	    dec	    hex	filename
+28468608	 126212	 382456	28977276	1ba287c	spa_kokkos_cuda
+[100%] Built target spa_kokkos_cuda
+[build_sparta] /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/spa -> /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-bigbig/src/spa_kokkos_cuda

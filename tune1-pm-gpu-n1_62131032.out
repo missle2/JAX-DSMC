@@ -1,0 +1,10 @@
+[runtime] pm-gpu on nid001357: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa
+[2026-11-27T21:15:32-08:00] job 62131032 tune1-pm-gpu-n1: 1 node(s) nid001357...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-gpu/tune1-pm-gpu-n1.plan: 50 runs
+[2026-11-27T21:15:33-08:00] run 1: timeout 396  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck free --particles 16384K --machine "${MACHINE}" --variant kk_default --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.27Nov26.free.pm-gpu_kk_default.16384K.1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 22.5693, "mpsps": 725.9418767972422}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.free -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/logs/log.27Nov26.free.pm-gpu_kk_default.16384K.1.r1 -screen none -v x 100 -v y 128 -v z 128 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "free", "particles": 16384000, "procs": 1, "loop_time": 22.7026, "mpsps": 721.6794552165832}
+[2026-11-27T21:16:45-08:00] run 1 done in 72 s
+[2026-11-27T21:16:45-08:00] 1 runs, 0 failed
