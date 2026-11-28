@@ -27,7 +27,10 @@ while IFS= read -r line || [ -n "${line}" ]; do
   n=$((n + 1))
   echo "[$(date -Iseconds)] run ${n}: ${line}"
   t0=$(date +%s)
-  if ! bash -c "${line}"; then
+  # </dev/null: srun (inside the line) forwards the job's stdin to its tasks and so reads the
+  # rest of the plan file -- every job stopped after run 1 with "1 runs, 0 failed" (Alpine
+  # jobs 36503311-60, 2026-11-27)
+  if ! bash -c "${line}" < /dev/null; then
     fail=$((fail + 1)); echo "[$(date -Iseconds)] run ${n} FAILED"
   fi
   echo "[$(date -Iseconds)] run ${n} done in $(( $(date +%s) - t0 )) s"
