@@ -609,8 +609,12 @@ def write_plan(job: Job, plan_dir):
                 f'--launch "{launch}"{accel}' + ("" if gpu else " --procs 4") + "\n"
             )
             if not single_gpu_only(job.platform):
-                fh.write(f"NCCL_DEBUG=WARN $(pf_launch 1 {max(1, PLATFORMS[job.platform]['devices'])}{' nobind' if gpu else ''}) "
-                         "python3 bench/env/check_env.py --distributed\n")
+                if gpu:
+                    fh.write(f"NCCL_DEBUG=WARN $(pf_launch 1 {PLATFORMS[job.platform]['devices']} nobind) "
+                             "python3 bench/env/check_env.py --distributed\n")
+                else:  # 2 processes x 2 host devices: gloo + the cross-process stats gather
+                    fh.write("XLA_FLAGS=--xla_force_host_platform_device_count=2 $(pf_launch 1 2) "
+                             "python3 bench/env/check_env.py --distributed\n")
         for r in job.runs:
             fh.write(f"# est {r.est_s:.0f} s\n{plan_line(r, job.platform)}\n")
     return path
