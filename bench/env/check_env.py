@@ -21,6 +21,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 
 
+def visible_gpu_ids():
+    """The GPUs this process may use, as JAX ordinals, or None (no GPU restriction set).
+
+    jax.distributed.initialize() under Slurm otherwise picks local_device_ids = [local rank]:
+    with `srun --gpus-per-task=1 --gpu-bind=closest` every task sees only ITS GPU as ordinal 0,
+    so ranks 1-3 asked for devices 1-3 ("CUDA_ERROR_INVALID_DEVICE: invalid device ordinal",
+    Perlmutter check 62133635, 2026-11-27); and one process per node would get one GPU of four.
+    """
+    for var in ("CUDA_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES"):
+        v = os.environ.get(var, "").strip()
+        if v:
+            return list(range(len(v.split(","))))
+    return None
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--import-only", action="store_true")
@@ -31,7 +46,8 @@ def main():
     if a.distributed:
         if os.environ.get("JAX_PLATFORMS", "") == "cpu":
             jax.config.update("jax_cpu_collectives_implementation", "gloo")
-        jax.distributed.initialize()
+        cpu = os.environ.get("JAX_PLATFORMS", "") == "cpu"
+        jax.distributed.initialize(local_device_ids=None if cpu else visible_gpu_ids())
     import jaxlib
 
     me = jax.process_index()

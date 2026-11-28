@@ -189,6 +189,21 @@ def run_sparta(a):
 # ---------------------------------------------------------------------------------------------
 
 
+def visible_gpu_ids():
+    """The GPUs this process may use, as JAX ordinals, or None (no GPU restriction set).
+
+    jax.distributed.initialize() under Slurm otherwise picks local_device_ids = [local rank]:
+    with `srun --gpus-per-task=1 --gpu-bind=closest` every task sees only ITS GPU as ordinal 0,
+    so ranks 1-3 asked for devices 1-3 ("CUDA_ERROR_INVALID_DEVICE: invalid device ordinal",
+    Perlmutter check 62133635, 2026-11-27); and one process per node would get one GPU of four.
+    """
+    for var in ("CUDA_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES"):
+        v = os.environ.get(var, "").strip()
+        if v:
+            return list(range(len(v.split(","))))
+    return None
+
+
 def init_jax(a):
     """jax.distributed when launched as several processes (srun); CPU collectives on CPU."""
     import jax
@@ -197,7 +212,8 @@ def init_jax(a):
     if a.platform == "cpu" and nproc > 1:
         jax.config.update("jax_cpu_collectives_implementation", a.cpu_collectives)
     if nproc > 1:
-        jax.distributed.initialize()
+        ids = None if a.platform == "cpu" else visible_gpu_ids()
+        jax.distributed.initialize(local_device_ids=ids)
     if a.cache:
         jax.config.update("jax_compilation_cache_dir", a.cache)
         jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
