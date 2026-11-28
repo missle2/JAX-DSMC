@@ -1,0 +1,14 @@
+[runtime] alp-a100 on c3gpu-c2-u1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-a100-default/spa
+[2026-11-27T15:21:00-07:00] job 36503314 validate-alp-a100-n1: 1 node(s) c3gpu-c2-u1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-a100/validate-alp-a100-n1.plan: 6 runs
+[2026-11-27T15:21:00-07:00] run 1: timeout 780  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck free --particles 10K --machine "${MACHINE}" --variant validate --nodes 1 --reps 8 --out "${RESULTS_DIR}"
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.005430767312645912, "mpsps": 184.13604237313422, "compile_s": 0.31051742751151323}
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.005361273884773254, "mpsps": 186.52283421672146, "compile_s": 0.0}
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.005372169427573681, "mpsps": 186.1445387160185, "compile_s": 0.0}
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.005443267524242401, "mpsps": 183.71318248576821, "compile_s": 0.0}
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.005423852242529392, "mpsps": 184.3708042337182, "compile_s": 0.0}
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.005182339809834957, "mpsps": 192.9630315060037, "compile_s": 0.0}
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.005858896300196648, "mpsps": 170.68061094824907, "compile_s": 0.0}
+{"deck": "free", "particles": 10000, "procs": 1, "loop_time": 0.0054297177121043205, "mpsps": 184.17163709463708, "compile_s": 0.0}
+[2026-11-27T15:21:09-07:00] run 1 done in 9 s
+[2026-11-27T15:21:09-07:00] 1 runs, 0 failed

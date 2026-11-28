@@ -1,0 +1,8 @@
+[runtime] alp-mi100 on c3gpu-c2-u23: jax env /projects/aaja8389/sparta-scaling/envs/jax-alp-mi100 (0.4.35), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-mi100-default/spa
+[2026-11-27T15:35:25-07:00] job 36503356 tune1-alp-mi100-n1: 1 node(s) c3gpu-c2-u23...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-mi100/tune1-alp-mi100-n1.plan: 32 runs
+[2026-11-27T15:35:25-07:00] run 1: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 58.86335388943553, "mpsps": 278.3395596311836, "compile_s": 2.517809996381402}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 58.94905390404165, "mpsps": 277.93491014580445, "compile_s": 0.0}
+[2026-11-27T15:38:49-07:00] run 1 done in 204 s
+[2026-11-27T15:38:49-07:00] 1 runs, 0 failed

@@ -1,0 +1,21 @@
+[runtime] alp-l40 on c3gpu-a9-u15-1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa
+[2026-11-27T15:33:51-07:00] job 36503317 check-alp-l40-n1: 1 node(s) c3gpu-a9-u15-1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-l40/check-alp-l40-n1.plan: 3 runs
+[2026-11-27T15:33:51-07:00] run 1: python3 bench/env/check_env.py
+host c3gpu-a9-u15-1 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend gpu processes 1 devices 1: NVIDIA L40
+SLURM_GPUS_ON_NODE=1 CUDA_VISIBLE_DEVICES=0 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+collide 8x8x8 on 1 device(s): np 5120 ncoll 6990 overflow 0 compile 0.9s total 2.6s
+check ok
+[2026-11-27T15:34:00-07:00] run 1 done in 9 s
+[2026-11-27T15:34:00-07:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+	libmpi.so.40 => /curc/sw/install/openmpi/5.0.6/gcc/14.2.0/lib/libmpi.so.40 (0x0000151230ec3000)
+	libcudart.so.12 => not found
+	libstdc++.so.6 => /curc/sw/install/gcc/14.2.0/lib64/libstdc++.so.6 (0x000015122a58a000)
+[2026-11-27T15:34:01-07:00] run 2 done in 1 s
+[2026-11-27T15:34:01-07:00] run 3: python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 10K --steps 20 --reps 1 --machine "${MACHINE}" --variant check --out "${RESULTS_DIR}/check" --launch "$(pf_launch 1 1 bind)" --accel "-k on g 1 -sf kk"
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 21 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.collide -log /projects/aaja8389/sparta-scaling/results/alp-l40/check/logs/log.27Nov26.collide.alp-l40_check.10K.1 -screen none -v x 10 -v y 10 -v z 10 -v steps 20 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.00554599, "mpsps": 36.06209170950543}
+[2026-11-27T15:34:05-07:00] run 3 done in 4 s
+[2026-11-27T15:34:05-07:00] 3 runs, 0 failed

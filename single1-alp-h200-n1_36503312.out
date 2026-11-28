@@ -1,0 +1,10 @@
+[runtime] alp-h200 on c3gpu-g5-u1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa
+[2026-11-27T15:20:59-07:00] job 36503312 single1-alp-h200-n1: 1 node(s) c3gpu-g5-u1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-h200/single1-alp-h200-n1.plan: 40 runs
+[2026-11-27T15:20:59-07:00] run 1: timeout 360  python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck free --particles 32K --machine "${MACHINE}" --variant kk --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --procs 1 --launch "$(pf_launch 1 1 bind)" --accel '-k on g 1 -sf kk'
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.free -log /projects/aaja8389/sparta-scaling/results/alp-h200/logs/log.27Nov26.free.alp-h200_kk.32K.1 -screen none -v x 10 -v y 16 -v z 20 -v steps 1000 -v seed 12345 -k on g 1 -sf kk
+{"deck": "free", "particles": 32000, "procs": 1, "loop_time": 0.105196, "mpsps": 304.1940758203734}
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 32 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa -in /projects/aaja8389/JAX-DSMC-sparta/bench/decks/in.free -log /projects/aaja8389/sparta-scaling/results/alp-h200/logs/log.27Nov26.free.alp-h200_kk.32K.1.r1 -screen none -v x 10 -v y 16 -v z 20 -v steps 1000 -v seed 12346 -k on g 1 -sf kk
+{"deck": "free", "particles": 32000, "procs": 1, "loop_time": 0.10487, "mpsps": 305.1396967674263}
+[2026-11-27T15:21:11-07:00] run 1 done in 12 s
+[2026-11-27T15:21:11-07:00] 1 runs, 0 failed

@@ -1,0 +1,8 @@
+[runtime] alp-rtx6000 on c3gpu-g7-u5: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-rtx6000-default/spa
+[2026-11-27T15:21:00-07:00] job 36503321 tune1-alp-rtx6000-n1: 1 node(s) c3gpu-g7-u5...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-rtx6000/tune1-alp-rtx6000-n1.plan: 32 runs
+[2026-11-27T15:21:00-07:00] run 1: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 13.816356722265482, "mpsps": 1185.8408355653326, "compile_s": 0.5510272793471813}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 13.855802703648806, "mpsps": 1182.464874134316, "compile_s": 0.0}
+[2026-11-27T15:21:42-07:00] run 1 done in 42 s
+[2026-11-27T15:21:42-07:00] 1 runs, 0 failed

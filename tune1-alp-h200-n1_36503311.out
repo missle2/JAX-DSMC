@@ -1,0 +1,8 @@
+[runtime] alp-h200 on c3gpu-g5-u1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-h200-default/spa
+[2026-11-27T15:20:59-07:00] job 36503311 tune1-alp-h200-n1: 1 node(s) c3gpu-g5-u1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-h200/tune1-alp-h200-n1.plan: 32 runs
+[2026-11-27T15:20:59-07:00] run 1: timeout 899  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}"
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.7381147590931505, "mpsps": 2431.5406587413245, "compile_s": 0.6529076180886477}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 6.747223353013396, "mpsps": 2428.2581356496366, "compile_s": 0.0}
+[2026-11-27T15:21:26-07:00] run 1 done in 27 s
+[2026-11-27T15:21:26-07:00] 1 runs, 0 failed
