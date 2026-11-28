@@ -29,6 +29,8 @@
 #   kokkos_serial    Kokkos Serial backend (one rank per core)         [CPU platforms]
 #   clang / cce      another compiler: CXX for host/MPI builds (cce = Cray CC wrapper on NERSC)
 # KOKKOS_ROOT=<install>  use an external Kokkos (bench/env/build_kokkos.sh) instead of lib/kokkos
+# BUILD_TAG=<name>       build directory sparta-${PLATFORM}-<name> instead of -${VARIANT}
+#                        (e.g. VARIANT=default KOKKOS_ROOT=... BUILD_TAG=k47: same flags, other Kokkos)
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
@@ -50,7 +52,7 @@ if [ "${KOKKOS_PRESET}" = kokkos_cuda ] && command -v nvcc > /dev/null; then
 fi
 VARIANT="${VARIANT:-default}"
 SRC="${SPARTA_SRC}"
-BUILD="${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-${VARIANT}"
+BUILD="${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-${BUILD_TAG:-${VARIANT}}"
 [ -f "${SRC}/cmake/CMakeLists.txt" ] || { echo "no SPARTA source at ${SRC} (set SPARTA_SRC)"; exit 1; }
 
 PRESET="${KOKKOS_PRESET}"

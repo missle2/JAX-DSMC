@@ -22,18 +22,30 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
 
 
 def visible_gpu_ids():
-    """The GPUs this process may use, as JAX ordinals, or None (no GPU restriction set).
+    """This process's GPUs, as JAX ordinals among the ones it can see, or None (not restricted).
 
-    jax.distributed.initialize() under Slurm otherwise picks local_device_ids = [local rank]:
-    with `srun --gpus-per-task=1 --gpu-bind=closest` every task sees only ITS GPU as ordinal 0,
-    so ranks 1-3 asked for devices 1-3 ("CUDA_ERROR_INVALID_DEVICE: invalid device ordinal",
-    Perlmutter check 62133635, 2026-11-27); and one process per node would get one GPU of four.
+    jax.distributed.initialize() under Slurm otherwise takes [local rank]: wrong whenever a
+    task sees only its own GPU (`--gpu-bind=closest`: ordinal 0 for every task, "invalid device
+    ordinal", Perlmutter check 62133635) or one process drives the node's GPUs.  Multi-GPU JAX
+    runs see all GPUs of the node (`pf_launch ... nobind`): NCCL's P2P/CUMEM transport cannot
+    reach a peer GPU hidden by CUDA_VISIBLE_DEVICES (ncclGroupEnd "invalid device ordinal",
+    check 62134414, 2026-11-28), so each of the node's k tasks takes its 1/k share of them.
     """
+    vis = None
     for var in ("CUDA_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES"):
         v = os.environ.get(var, "").strip()
         if v:
-            return list(range(len(v.split(","))))
-    return None
+            vis = len(v.split(","))
+            break
+    if vis is None:
+        return None
+    ntask = int(os.environ.get("SLURM_NTASKS_PER_NODE", "0").split("(")[0] or 0)
+    if ntask <= 0:
+        ntask = max(1, int(os.environ.get("SLURM_NTASKS", "1")) // max(1, int(os.environ.get("SLURM_NNODES", "1"))))
+    if vis < ntask or ntask == 1:  # bound per task, or one process per node: all it sees
+        return list(range(vis))
+    per, me = vis // ntask, int(os.environ.get("SLURM_LOCALID", "0"))
+    return list(range(me * per, (me + 1) * per))
 
 
 def main():

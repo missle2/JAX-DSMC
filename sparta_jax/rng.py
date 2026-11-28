@@ -25,8 +25,9 @@ TWO_M53 = 1.0 / float(2**53)
 
 
 def mix64(z):
-    z = (z ^ (z >> np.uint64(30))) * M1
-    z = (z ^ (z >> np.uint64(27))) * M2
+    with np.errstate(over="ignore"):  # uint64 wrap-around is the point (host seeding warned)
+        z = (z ^ (z >> np.uint64(30))) * M1
+        z = (z ^ (z >> np.uint64(27))) * M2
     return z ^ (z >> np.uint64(31))
 
 

@@ -203,7 +203,9 @@ def plan_line(run: Run, platform):
     )
     tmo = int(run.est_s * 3 + 300)
     gpu = PLATFORMS[platform]["gpu"]
-    bind = "nobind" if (run.code == "sparta" and gpu) else ("node" if "_pernode" in run.variant else "bind")
+    # GPU ranks see all GPUs of their node (nobind): Kokkos picks one by local rank, JAX by
+    # run_bench.visible_gpu_ids (NCCL needs its peers visible); one rank on one GPU binds below
+    bind = "node" if "_pernode" in run.variant else ("nobind" if gpu else "bind")
     accel = run.accel
     if gpu and run.ranks_per_node == 1:  # one GPU (possibly a shared-QOS fraction of a node)
         bind = "bind"
@@ -585,7 +587,8 @@ def write_plan(job: Job, plan_dir):
                 f'--launch "{launch}"{accel}' + ("" if gpu else " --procs 4") + "\n"
             )
             if not single_gpu_only(job.platform):
-                fh.write(f"NCCL_DEBUG=INFO $(pf_launch 1 {max(1, PLATFORMS[job.platform]['devices'])}) python3 bench/env/check_env.py --distributed\n")
+                fh.write(f"NCCL_DEBUG=WARN $(pf_launch 1 {max(1, PLATFORMS[job.platform]['devices'])}{' nobind' if gpu else ''}) "
+                         "python3 bench/env/check_env.py --distributed\n")
         for r in job.runs:
             fh.write(f"# est {r.est_s:.0f} s\n{plan_line(r, job.platform)}\n")
     return path

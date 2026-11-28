@@ -29,6 +29,9 @@ unset JAX_PLATFORMS JAX_VENV XLA_FLAGS XLA_PYTHON_CLIENT_PREALLOCATE XLA_PYTHON_
 if [ -n "${VIRTUAL_ENV:-}" ]; then  # the submitting shell's venv off PATH
   PATH="$(echo "${PATH}" | tr ':' '\n' | grep -vxF "${VIRTUAL_ENV}/bin" | paste -sd: -)"; unset VIRTUAL_ENV
 fi
+# no core files: an aborting run (MI100 SPARTA sphere, job 36514785) wrote one per rep into the
+# submit directory, GBs each
+ulimit -c 0
 # shellcheck disable=SC1091
 source bench/env/runtime.sh
 echo "[$(date -Iseconds)] job ${SLURM_JOB_ID} ${SLURM_JOB_NAME}: ${SLURM_JOB_NUM_NODES} node(s) $(scontrol show hostnames "${SLURM_JOB_NODELIST}" | head -3 | paste -sd, -)..."
