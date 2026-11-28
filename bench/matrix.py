@@ -432,13 +432,19 @@ def runs_tune(platform, rows, cfg):
                 estimate(r, platform, rows)
                 out.append(r)
         # multi-GPU on one node: NCCL settings and the latency-hiding scheduler
+        # on top of each deck's tuned single-GPU settings (configs/<platform>.json), so the layout
+        # is chosen for the configuration the scaling runs use
         for tag, env in (
             ("jax_node", {}),
             ("jax_node_lhs", {"XLA_FLAGS": "--xla_gpu_enable_latency_hiding_scheduler=true"}),
             ("jax_node_pernode", {}),  # one process driving every GPU of the node
         ):
             for deck in decks:
-                r = Run("jax", deck, n_dev * rpn, 1, rpn, variant=tag, env=env, reps=2)
+                dc = deck_cfg(cfg, "jax", deck)
+                e = dict(dc.get("env", {}))
+                for k, v in env.items():
+                    e[k] = f"{e[k]} {v}".strip() if k == "XLA_FLAGS" and k in e else v
+                r = Run("jax", deck, n_dev * rpn, 1, rpn, variant=tag, env=e, extra=dc.get("extra", ""), reps=2)
                 estimate(r, platform, rows)
                 out.append(r)
     else:
@@ -470,6 +476,17 @@ def runs_tune(platform, rows, cfg):
                 env = {"XLA_FLAGS": f"--xla_force_host_platform_device_count={dpp}"}
                 size = nj if ppn * dpp > 1 else 1_000_000
                 r = Run("jax", deck, size, 1, ppn, variant=f"jaxcpu_{ppn}x{dpp}", env=env, reps=1, threads=dpp)
+                estimate(r, platform, rows)
+                out.append(r)
+        # sparta_jax's own algorithm settings, as tuned on the GPUs (prefix collide 1.2-4.9x there)
+        for tag, extra in (
+            ("jaxcpu_cprefix", "--set collide_mode=prefix"),
+            ("jaxcpu_sortpairs", "--set sort=full"),
+            ("jaxcpu_cprefix_sortpairs", "--set collide_mode=prefix --set sort=full"),
+        ):
+            for deck in decks:
+                env = {"XLA_FLAGS": "--xla_force_host_platform_device_count=16"}
+                r = Run("jax", deck, nj, 1, 8, variant=tag, env=env, extra=extra, reps=1, threads=16)
                 estimate(r, platform, rows)
                 out.append(r)
         for tag, flags in (
