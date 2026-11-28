@@ -1,0 +1,20 @@
+{
+ "jax": {
+  "tag": "jax_cprefix_sortpairs_cunroll8",
+  "env": {},
+  "extra": "--set collide_mode=prefix --set sort=full --set collide_unroll=8",
+  "decks": {
+   "collide": {
+    "tag": "jax_cprefix_sortpairs_cunroll8",
+    "env": {},
+    "extra": "--set collide_mode=prefix --set sort=full --set collide_unroll=8"
+   },
+   "sphere": {
+    "tag": "jax_cprefix_sortpairs",
+    "env": {},
+    "extra": "--set collide_mode=prefix --set sort=full"
+   }
+  }
+ },
+ "_note": "JAX picks from pm-gpu tuning (A100 SXM 80GB, incl. combinations, 2026-11-28); same architecture as Alpine's A100 40GB"
+}

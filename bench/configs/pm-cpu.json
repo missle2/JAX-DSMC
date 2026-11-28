@@ -1,0 +1,45 @@
+{
+ "sparta": {
+  "tag": "kkomp16x8",
+  "env": {
+   "OMP_NUM_THREADS": 8
+  },
+  "extra": "",
+  "accel": "-k on t 8 -sf kk",
+  "build": "kokkos_omp",
+  "ranks_per_node": 16,
+  "decks": {
+   "collide": {
+    "tag": "mpi256smt",
+    "env": {
+     "OMP_NUM_THREADS": 1
+    },
+    "extra": "",
+    "accel": "",
+    "build": "mpi",
+    "ranks_per_node": 256
+   },
+   "free": {
+    "tag": "kkomp16x8",
+    "env": {
+     "OMP_NUM_THREADS": 8
+    },
+    "extra": "",
+    "accel": "-k on t 8 -sf kk",
+    "build": "kokkos_omp",
+    "ranks_per_node": 16
+   },
+   "sphere": {
+    "tag": "kkomp32x4",
+    "env": {
+     "OMP_NUM_THREADS": 4
+    },
+    "extra": "",
+    "accel": "-k on t 4 -sf kk",
+    "build": "kokkos_omp",
+    "ranks_per_node": 32
+   }
+  }
+ },
+ "cpu_ranks_per_node": 16
+}

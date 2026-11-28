@@ -98,9 +98,9 @@ def main():
         return e
 
     for code, base in (("sparta", "kk_default" if gpu else "mpi128"), ("jax", "jax" if gpu else "jaxcpu_8x16")):
-        # deck-level knobs (global particle/reorder) are measured as labelled variants only: the
-        # headline runs keep SPARTA's decks unchanged, so they are never picked
-        cands = {v for v, r in tune.items() if r.code == code and "reorder" not in v}
+        # global particle/reorder competes like any setting: SPARTA's own GPU decks use it, and it
+        # changes only the particles' memory order (2026-11-28; earlier excluded as a deck edit)
+        cands = {v for v, r in tune.items() if r.code == code}
         node_level = set()
         if code == "jax" and gpu:  # device-level knobs vs the 1-GPU baseline; layout vs jax_node
             node_level = {v for v in cands if tune[v].ranks_per_node > 1}

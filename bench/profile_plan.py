@@ -61,14 +61,15 @@ def main():
                          f"--format csv --output {rep} {rep}.nsys-rep > /dev/null && ls {rep}_*.csv")
     plan_dir = os.path.join(matrix.ROOT, "bench", "plans", a.platform)
     os.makedirs(plan_dir, exist_ok=True)
-    plan = os.path.join(plan_dir, f"profile-{a.platform}.plan")
+    name = f"profile-{a.platform}-{a.particles}"
+    plan = os.path.join(plan_dir, f"{name}.plan")
     with open(plan, "w") as fh:
         fh.write("\n".join(lines) + "\n")
     print(f"plan {plan}: {len(a.decks) * 2} profiled runs")
     if a.submit:
         res = matrix.sbatch_args(a.platform, 1, 1)
         os.makedirs(os.path.join(matrix.ROOT, "joblogs"), exist_ok=True)
-        cmd = ["sbatch", *shlex.split(res), "--time=00:45:00", f"--job-name=profile-{a.platform}",
+        cmd = ["sbatch", *shlex.split(res), "--time=00:45:00", f"--job-name={name}",
                f"--output={os.path.join(matrix.ROOT, 'joblogs', '%x_%j.out')}",
                f"--export=ALL,PLATFORM={a.platform},PLAN={plan}", os.path.join(HERE, "jobs", "bench.sbatch")]
         print("+", " ".join(shlex.quote(c) for c in cmd))

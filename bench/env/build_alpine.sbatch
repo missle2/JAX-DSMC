@@ -78,6 +78,19 @@ for P in ${PLATFORMS}; do
 done
 
 # --- 4. AMD MI100 ----------------------------------------------------------------------------------
+# MI100_VARIANTS="default:tgt o1:o1 multikernel:mk": only these SPARTA builds (VARIANT:BUILD_TAG,
+# next to the existing default), no ROCm/JAX steps -- the sphere-abort diagnosis.  (A `sbatch
+# --wrap` job -- /bin/sh -- found no gcc/cmake/openmpi modules, 2026-11-28; this bash job does.)
+if [ -n "${MI100_VARIANTS:-}" ]; then
+  pf_modules "${BUILD_MODULES}"
+  for VT in ${MI100_VARIANTS}; do
+    V="${VT%%:*}"; T="${VT##*:}"
+    echo; echo "[$(date -Iseconds)] ===== SPARTA alp-mi100 / ${V} -> ${T} ====="
+    if PLATFORM=alp-mi100 VARIANT="${V}" BUILD_TAG="${T}" bash bench/env/build_sparta.sh; then
+      ok+=("alp-mi100/${T}"); else bad+=("alp-mi100/${T}"); fi
+  done
+  MI100=0
+fi
 if [ "${MI100:-1}" = 1 ]; then
   echo; echo "[$(date -Iseconds)] ===== MI100: user-space ROCm 6.4.4 (toolchain + libraries) ====="
   RU="/scratch/alpine/${USER}/rocm-6.4.4-user"

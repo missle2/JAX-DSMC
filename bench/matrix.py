@@ -382,7 +382,9 @@ def runs_tune(platform, rows, cfg):
             for tag, accel, gpus in (
                 ("kk_commserial_default", base + " -pk kokkos comm serial", (rpn,)),
                 ("kk_noaware_default", base + " -pk kokkos gpu/aware no", (rpn,)),
-                ("kk_reorder10_default", base + " -v reorder 10", (1, rpn)),
+                # the protocol's reorder is 10 (GPU_PROTOCOL); other periods compete with it
+                ("kk_reorder5_default", base + " -v reorder 5", (1, rpn)),
+                ("kk_reorder20_default", base + " -v reorder 20", (1, rpn)),
                 ("kk_reorder100_default", base + " -v reorder 100", (1, rpn)),
             ):
                 for deck in DECKS:
@@ -448,6 +450,7 @@ def runs_tune(platform, rows, cfg):
             ("mpi", "mpi256smt", 256, 1, "", ""),
             ("mpi_march", "mpi128_march", 128, 1, "", ""),
             ("mpi_cce", "mpi128_cce", 128, 1, "", cce),
+            ("mpi", "mpi128_reorder10", 128, 1, "-v reorder 10", ""),
             ("mpi", "mpi128_reorder100", 128, 1, "-v reorder 100", ""),
             ("kokkos_serial", "kkser128", 128, 1, "-k on -sf kk", ""),
             ("kokkos_omp", "kkomp64x2", 64, 2, "-k on t 2 -sf kk", ""),
@@ -515,8 +518,11 @@ DECK_STATS = {"free": 10, "collide": 10, "sphere": 100}  # the decks' stats peri
 # the host every 10 steps (update_kokkos.cpp: particle_kk->sync(Host) before each output):
 # 35-45 % of SPARTA's free/collide loop on H200/RTX PRO 6000 (2026-11-28) vs 9.7 % in the
 # developers' P100 log.  Both codes use the protocol's stats period; reorder is SPARTA's own
-# (sparta_jax sorts fully every step).  CPU runs keep the CPU decks (in.*) unchanged.
-GPU_PROTOCOL = {"stats": 100, "reorder": {"collide": 10, "sphere": 10}}
+# (sparta_jax sorts fully every step).  CPU runs keep the CPU decks' stats; reorder is tuned.
+# 2026-11-28 Perlmutter A100 (16.4M, output time removed): reorder 10 +27 % free, +31 % collide,
+# +1 % sphere over no reorder; reorder 100 +10-16 %.  A memory-order setting, no physics: free
+# gets it too (SPARTA's in.free.steps does not set it), and tuning tries 5/20/100.
+GPU_PROTOCOL = {"stats": 100, "reorder": {"free": 10, "collide": 10, "sphere": 10}}
 
 
 def gpu_protocol(run: "Run"):
@@ -598,7 +604,7 @@ def build_jobs(phase, platform, nodes, rows, prune_s, codes, big=False):
             estimate(r, platform, rows)
         jobs.append(Job(platform, "validate", 1, runs, shared_gpus=1 if PLATFORMS[platform]["gpu"] else 0))
     elif phase == "tune":
-        runs = runs_tune(platform, rows, cfg)
+        runs = [r for r in runs_tune(platform, rows, cfg) if r.code in codes]
         one = [r for r in runs if r.ranks_per_node == 1 and PLATFORMS[platform]["gpu"]]
         node = [r for r in runs if r not in one]
         if one:
