@@ -303,10 +303,20 @@ def mk_run(platform, code, deck, n, nodes, rpn, cfg):
     return r
 
 
+def deck_cfg(cfg, code, deck):
+    """The tuned settings of `code` for `deck`: per-deck pick over the overall one (pick_best)."""
+    c = dict(cfg.get(code, {}))
+    c.update(c.pop("decks", {}).get(deck, {}))
+    return c
+
+
 def _mk_run(platform, code, deck, n, nodes, rpn, cfg):
     pf = PLATFORMS[platform]
     if code == "sparta":
-        sc = cfg.get("sparta", {})
+        sc = deck_cfg(cfg, "sparta", deck)
+        # CPU node runs: the deck's tuned ranks per node (per-core runs keep rpn = 1)
+        if not pf["gpu"] and rpn == cfg.get("cpu_ranks_per_node", pf["cores"]) and "ranks_per_node" in sc:
+            rpn = sc["ranks_per_node"]
         # tuned: ranks per GPU (MPS) on multi-GPU runs, and a wrapper (MPS daemon / PrgEnv)
         if pf["gpu"] and rpn > 1:
             rpn = rpn * int(sc.get("ranks_per_device", 1))
@@ -322,10 +332,16 @@ def _mk_run(platform, code, deck, n, nodes, rpn, cfg):
             env=dict(sc.get("env", {})),
             wrap=sc.get("wrap", "").replace("{nodes}", str(nodes)),
         )
-    jc = cfg.get("jax", {})
+    jc = deck_cfg(cfg, "jax", deck)
     if pf["gpu"]:
-        return Run(code="jax", deck=deck, particles=n, nodes=nodes, ranks_per_node=rpn, variant=jc.get("tag", "jax"),
-                   env=dict(jc.get("env", {})), extra=jc.get("extra", ""))
+        tag, env = jc.get("tag", "jax"), dict(jc.get("env", {}))
+        node = jc.get("node")
+        if node and nodes * rpn > 1:  # multi-GPU layout pick on top (e.g. _pernode, _lhs)
+            tag += node["suffix"]
+            for k, v in node.get("env", {}).items():
+                env[k] = f"{env[k]} {v}".strip() if k == "XLA_FLAGS" and k in env else v
+        return Run(code="jax", deck=deck, particles=n, nodes=nodes, ranks_per_node=rpn, variant=tag,
+                   env=env, extra=jc.get("extra", ""))
     # CPU: processes per node x host devices per process (the tuned layout)
     ppn, dpp = jc.get("cpu_layout", [8, 16])
     env = dict(jc.get("env", {}))
@@ -668,7 +684,13 @@ def main():
             plan = write_plan(j, os.path.join(a.plans, a.platform))
             res = sbatch_args(a.platform, j.nodes, j.shared_gpus)
             dep = [f"--dependency=afterok:{a.after}"] if a.after else []
-            cmd = ["sbatch", *shlex.split(res), *dep, f"--time={hms(j.walltime_s)}", f"--job-name={j.name}",
+            # job output in joblogs/ (git-ignored): a tracked .out that a `git pull` rewrites while
+            # the job runs loses everything after (the job keeps writing to the replaced file:
+            # tune-pm-cpu-n1_62133655.out stopped at 19 lines, 2026-11-28).  Copy finished ones
+            # to the repository root to commit them.
+            os.makedirs(os.path.join(ROOT, "joblogs"), exist_ok=True)
+            cmd = ["sbatch", *shlex.split(res), *dep, f"--output={os.path.join(ROOT, 'joblogs', '%x_%j.out')}",
+                   f"--time={hms(j.walltime_s)}", f"--job-name={j.name}",
                    f"--export=ALL,PLATFORM={a.platform},PLAN={plan}", os.path.join(HERE, "jobs", "bench.sbatch")]
             print("+", " ".join(shlex.quote(c) for c in cmd))
             subprocess.run(cmd, check=True)

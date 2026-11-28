@@ -235,3 +235,6 @@ examples/sparta_jax/results/profile_*/
 # the scaling study's environment scripts (not a virtualenv)
 !bench/env/
 
+
+# Slurm job output while jobs run (bench/matrix.py --output); copy finished logs out to commit
+joblogs/
