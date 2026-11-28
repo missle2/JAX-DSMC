@@ -1,0 +1,579 @@
+[runtime] pm-gpu on nid001288: jax env /pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu (0.12.1), spa /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa
+[2026-11-27T22:29:10-08:00] job 62134414 check-pm-gpu-n1: 1 node(s) nid001288...
+plan /global/u1/a/aajain/JAX-DSMC-sparta/bench/plans/pm-gpu/check-pm-gpu-n1.plan: 4 runs
+[2026-11-27T22:29:10-08:00] run 1: python3 bench/env/check_env.py
+host nid001288 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend gpu processes 1 devices 4: NVIDIA A100-SXM4-40GB
+SLURM_GPUS_ON_NODE=4 CUDA_VISIBLE_DEVICES=0,1,2,3 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:28: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(30))) * M1
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:29: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(27))) * M2
+collide 16x8x8 on 4 device(s): np 10240 ncoll 13988 overflow 0 compile 0.3s total 7.0s
+check ok
+[2026-11-27T22:29:24-08:00] run 1 done in 14 s
+[2026-11-27T22:29:24-08:00] run 2: echo "ldd spa:"; ldd "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" | grep -E "not found|libmpi|libstdc" || true
+ldd spa:
+	libmpi_gnu.so.12 => /opt/cray/pe/lib64/libmpi_gnu.so.12 (0x00007fc1c99b9000)
+	libmpi_gtl_cuda.so.0 => /opt/cray/pe/lib64/libmpi_gtl_cuda.so.0 (0x00007fc1c9963000)
+	libstdc++.so.6 => /usr/lib64/libstdc++.so.6 (0x00007fc1c6ab0000)
+	libmpi_gnu_123.so.12 => /opt/cray/pe/lib64/libmpi_gnu_123.so.12 (0x00007fc1c574d000)
+[2026-11-27T22:29:24-08:00] run 2 done in 0 s
+[2026-11-27T22:29:24-08:00] run 3: python3 bench/run_bench.py sparta --exe "${SPARTA_BUILD_DIR}/sparta-${PLATFORM}-default/spa" --deck collide --particles 10K --steps 20 --reps 1 --machine "${MACHINE}" --variant check --out "${RESULTS_DIR}/check" --launch "$(pf_launch 1 1 bind)" --accel "-k on g 1 -sf kk"
++ srun --mem=0 -N 1 -n 1 --ntasks-per-node=1 -c 128 --cpu-bind=cores --gpus-per-task=1 --gpu-bind=closest /pscratch/sd/a/aajain/sparta-scaling/builds/sparta-pm-gpu-default/spa -in /global/u1/a/aajain/JAX-DSMC-sparta/bench/decks/in.collide -log /pscratch/sd/a/aajain/sparta-scaling/results/pm-gpu/check/logs/log.27Nov26.collide.pm-gpu_check.10K.1 -screen none -v x 10 -v y 10 -v z 10 -v steps 20 -v seed 12345 -k on g 1 -sf kk
+{"deck": "collide", "particles": 10000, "procs": 1, "loop_time": 0.00724564, "mpsps": 27.60280665338051}
+[2026-11-27T22:29:31-08:00] run 3 done in 7 s
+[2026-11-27T22:29:31-08:00] run 4: NCCL_DEBUG=INFO $(pf_launch 1 4) python3 bench/env/check_env.py --distributed
+host nid001288 python 3.13.18 jax 0.12.1 jaxlib 0.12.1
+backend gpu processes 4 devices 4: NVIDIA A100-SXM4-40GB
+SLURM_GPUS_ON_NODE=4 CUDA_VISIBLE_DEVICES=0 ROCR_VISIBLE_DEVICES=None XLA_FLAGS=''
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:28: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(30))) * M1
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:29: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(27))) * M2
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:28: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(30))) * M1
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:29: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(27))) * M2
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:28: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(30))) * M1
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:29: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(27))) * M2
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:28: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(30))) * M1
+/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/rng.py:29: RuntimeWarning: overflow encountered in scalar multiply
+  z = (z ^ (z >> np.uint64(27))) * M2
+nid001288:1320256:1320256 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+nid001288:1320256:1320256 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to hsn
+nid001288:1320256:1320256 [0] NCCL INFO Bootstrap: Using hsn0:10.249.6.43<0>
+nid001288:1320256:1320869 [0] NCCL INFO Socket handshake magic 0x564ab9f2fc4b9d6c (built-in default)
+nid001288:1320256:1320872 [0] NCCL INFO cudaDriverVersion 13020
+nid001288:1320256:1320872 [0] NCCL INFO NCCL version 2.32.6+cuda12.9
+nid001288:1320256:1320872 [0] NCCL INFO NCCL git version unknown unknown
+nid001288:1320257:1320870 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+nid001288:1320257:1320870 [0] NCCL INFO cudaDriverVersion 13020
+nid001288:1320257:1320870 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to hsn
+nid001288:1320259:1320871 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+nid001288:1320259:1320871 [0] NCCL INFO cudaDriverVersion 13020
+nid001288:1320256:1320872 [0] NCCL INFO Comm config Blocking set to 1
+nid001288:1320256:1320872 [0] NCCL INFO Comm config Split share set to 1
+nid001288:1320259:1320871 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to hsn
+nid001288:1320257:1320870 [0] NCCL INFO Bootstrap: Using hsn0:10.249.6.43<0>
+nid001288:1320257:1320870 [0] NCCL INFO NCCL version 2.32.6+cuda12.9
+nid001288:1320257:1320870 [0] NCCL INFO NCCL git version unknown unknown
+nid001288:1320259:1320871 [0] NCCL INFO Bootstrap: Using hsn0:10.249.6.43<0>
+nid001288:1320259:1320871 [0] NCCL INFO NCCL version 2.32.6+cuda12.9
+nid001288:1320259:1320871 [0] NCCL INFO NCCL git version unknown unknown
+nid001288:1320261:1320874 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+nid001288:1320261:1320874 [0] NCCL INFO cudaDriverVersion 13020
+nid001288:1320261:1320874 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to hsn
+nid001288:1320261:1320874 [0] NCCL INFO Bootstrap: Using hsn0:10.249.6.43<0>
+nid001288:1320261:1320874 [0] NCCL INFO NCCL version 2.32.6+cuda12.9
+nid001288:1320261:1320874 [0] NCCL INFO NCCL git version unknown unknown
+nid001288:1320257:1320870 [0] NCCL INFO Comm config Blocking set to 1
+nid001288:1320257:1320870 [0] NCCL INFO Comm config Split share set to 1
+nid001288:1320259:1320871 [0] NCCL INFO Comm config Blocking set to 1
+nid001288:1320259:1320871 [0] NCCL INFO Comm config Split share set to 1
+nid001288:1320261:1320874 [0] NCCL INFO Comm config Blocking set to 1
+nid001288:1320261:1320874 [0] NCCL INFO Comm config Split share set to 1
+nid001288:1320257:1320870 [0] NCCL INFO NET/Plugin: Loaded net plugin AWS Libfabric (v6)
+nid001288:1320257:1320870 [0] NCCL INFO Successfully loaded external network plugin /global/common/software/nersc9/nccl/2.29.2-cu13/plugin/lib/libnccl-net.so
+nid001288:1320257:1320870 [0] NCCL INFO NET/OFI Using aws-ofi-nccl 1.6.0
+nid001288:1320256:1320872 [0] NCCL INFO NET/Plugin: Loaded net plugin AWS Libfabric (v6)
+nid001288:1320256:1320872 [0] NCCL INFO Successfully loaded external network plugin /global/common/software/nersc9/nccl/2.29.2-cu13/plugin/lib/libnccl-net.so
+nid001288:1320256:1320872 [0] NCCL INFO NET/OFI Using aws-ofi-nccl 1.6.0
+nid001288:1320259:1320871 [0] NCCL INFO NET/Plugin: Loaded net plugin AWS Libfabric (v6)
+nid001288:1320259:1320871 [0] NCCL INFO Successfully loaded external network plugin /global/common/software/nersc9/nccl/2.29.2-cu13/plugin/lib/libnccl-net.so
+nid001288:1320259:1320871 [0] NCCL INFO NET/OFI Using aws-ofi-nccl 1.6.0
+nid001288:1320261:1320874 [0] NCCL INFO NET/Plugin: Loaded net plugin AWS Libfabric (v6)
+nid001288:1320261:1320874 [0] NCCL INFO Successfully loaded external network plugin /global/common/software/nersc9/nccl/2.29.2-cu13/plugin/lib/libnccl-net.so
+nid001288:1320261:1320874 [0] NCCL INFO NET/OFI Using aws-ofi-nccl 1.6.0
+nid001288:1320257:1320870 [0] NCCL INFO NET/OFI Selected Provider is cxi (found 4 nics)
+nid001288:1320257:1320870 [0] NCCL INFO Initialized NET plugin AWS Libfabric
+nid001288:1320257:1320870 [0] NCCL INFO Assigned NET plugin AWS Libfabric to comm
+nid001288:1320257:1320870 [0] NCCL INFO RMA/Plugin: Could not find: libnccl-rma.so
+nid001288:1320257:1320870 [0] NCCL INFO Could not open libibverbs.so
+nid001288:1320256:1320872 [0] NCCL INFO NET/OFI Selected Provider is cxi (found 4 nics)
+nid001288:1320256:1320872 [0] NCCL INFO Initialized NET plugin AWS Libfabric
+nid001288:1320256:1320872 [0] NCCL INFO Assigned NET plugin AWS Libfabric to comm
+nid001288:1320257:1320870 [0] NCCL INFO Could not open libibverbs.so.1
+nid001288:1320257:1320870 [0] NCCL INFO transport/net_ib/gin.cc:92 (ncclGinIbInitType) -> 3
+nid001288:1320257:1320870 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+
+[2026-11-27 22:29:37] nid001288:1320257:1320870 [0] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+nid001288:1320257:1320870 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+nid001288:1320257:1320870 [0] NCCL INFO RMA/Plugin: Failed to initialize any plugin
+nid001288:1320256:1320872 [0] NCCL INFO RMA/Plugin: Could not find: libnccl-rma.so
+nid001288:1320257:1320870 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+nid001288:1320257:1320870 [0] NCCL INFO GIN/Plugin: Failed to initialize any GIN plugin
+nid001288:1320257:1320870 [0] NCCL INFO Using network AWS Libfabric
+nid001288:1320257:1320870 [0] NCCL INFO Loaded NVML from libnvidia-ml.so.1
+nid001288:1320256:1320872 [0] NCCL INFO Could not open libibverbs.so
+nid001288:1320256:1320872 [0] NCCL INFO Could not open libibverbs.so.1
+nid001288:1320256:1320872 [0] NCCL INFO transport/net_ib/gin.cc:92 (ncclGinIbInitType) -> 3
+nid001288:1320256:1320872 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+
+[2026-11-27 22:29:37] nid001288:1320256:1320872 [0] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+nid001288:1320256:1320872 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+nid001288:1320256:1320872 [0] NCCL INFO RMA/Plugin: Failed to initialize any plugin
+nid001288:1320256:1320872 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+nid001288:1320256:1320872 [0] NCCL INFO GIN/Plugin: Failed to initialize any GIN plugin
+nid001288:1320256:1320872 [0] NCCL INFO Using network AWS Libfabric
+nid001288:1320257:1320870 [0] NCCL INFO DMA-BUF is available on GPU device 0
+nid001288:1320256:1320872 [0] NCCL INFO Loaded NVML from libnvidia-ml.so.1
+nid001288:1320257:1320870 [0] NCCL INFO [Rank 1] ncclCommInitRankConfig comm 0x7f1be002da90 rank 1 nranks 4 cudaDev 0 nvmlDev 0 busId 82000 commId 0xd47448430343779c - Init START
+nid001288:1320257:1320870 [0] NCCL INFO Socket handshake magic 0x564ab9f2fc4b9d6c (built-in default)
+nid001288:1320256:1320872 [0] NCCL INFO DMA-BUF is available on GPU device 0
+nid001288:1320256:1320872 [0] NCCL INFO [Rank 0] ncclCommInitRankConfig comm 0x7f297c01b810 rank 0 nranks 4 cudaDev 0 nvmlDev 0 busId c1000 commId 0xd47448430343779c - Init START
+nid001288:1320259:1320871 [0] NCCL INFO NET/OFI Selected Provider is cxi (found 4 nics)
+nid001288:1320259:1320871 [0] NCCL INFO Initialized NET plugin AWS Libfabric
+nid001288:1320259:1320871 [0] NCCL INFO Assigned NET plugin AWS Libfabric to comm
+nid001288:1320259:1320871 [0] NCCL INFO RMA/Plugin: Could not find: libnccl-rma.so
+nid001288:1320261:1320874 [0] NCCL INFO NET/OFI Selected Provider is cxi (found 4 nics)
+nid001288:1320261:1320874 [0] NCCL INFO Initialized NET plugin AWS Libfabric
+nid001288:1320259:1320871 [0] NCCL INFO Could not open libibverbs.so
+nid001288:1320261:1320874 [0] NCCL INFO Assigned NET plugin AWS Libfabric to comm
+nid001288:1320259:1320871 [0] NCCL INFO Could not open libibverbs.so.1
+nid001288:1320259:1320871 [0] NCCL INFO transport/net_ib/gin.cc:92 (ncclGinIbInitType) -> 3
+nid001288:1320259:1320871 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+
+[2026-11-27 22:29:37] nid001288:1320259:1320871 [0] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+nid001288:1320259:1320871 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+nid001288:1320259:1320871 [0] NCCL INFO RMA/Plugin: Failed to initialize any plugin
+nid001288:1320261:1320874 [0] NCCL INFO RMA/Plugin: Could not find: libnccl-rma.so
+nid001288:1320259:1320871 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+nid001288:1320259:1320871 [0] NCCL INFO GIN/Plugin: Failed to initialize any GIN plugin
+nid001288:1320259:1320871 [0] NCCL INFO Using network AWS Libfabric
+nid001288:1320259:1320871 [0] NCCL INFO Loaded NVML from libnvidia-ml.so.1
+nid001288:1320261:1320874 [0] NCCL INFO Could not open libibverbs.so
+nid001288:1320261:1320874 [0] NCCL INFO Could not open libibverbs.so.1
+nid001288:1320261:1320874 [0] NCCL INFO transport/net_ib/gin.cc:92 (ncclGinIbInitType) -> 3
+nid001288:1320261:1320874 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+
+[2026-11-27 22:29:37] nid001288:1320261:1320874 [0] transport/rma_socket.cc:32 (ncclRmaSocketProxyInit) NCCL WARN RMA/Socket : rma_socket requires GDRCopy; and GDR Copy is not available
+nid001288:1320261:1320874 [0] NCCL INFO RMA/Plugin: Failed to initialize plugin 
+nid001288:1320261:1320874 [0] NCCL INFO RMA/Plugin: Failed to initialize any plugin
+nid001288:1320261:1320874 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+nid001288:1320261:1320874 [0] NCCL INFO GIN/Plugin: Failed to initialize any GIN plugin
+nid001288:1320261:1320874 [0] NCCL INFO Using network AWS Libfabric
+nid001288:1320259:1320871 [0] NCCL INFO DMA-BUF is available on GPU device 0
+nid001288:1320261:1320874 [0] NCCL INFO Loaded NVML from libnvidia-ml.so.1
+nid001288:1320259:1320871 [0] NCCL INFO [Rank 2] ncclCommInitRankConfig comm 0x7f6e7402e830 rank 2 nranks 4 cudaDev 0 nvmlDev 0 busId 41000 commId 0xd47448430343779c - Init START
+nid001288:1320259:1320871 [0] NCCL INFO Socket handshake magic 0x564ab9f2fc4b9d6c (built-in default)
+nid001288:1320261:1320874 [0] NCCL INFO DMA-BUF is available on GPU device 0
+nid001288:1320261:1320874 [0] NCCL INFO [Rank 3] ncclCommInitRankConfig comm 0x7f9d3002e7b0 rank 3 nranks 4 cudaDev 0 nvmlDev 0 busId 3000 commId 0xd47448430343779c - Init START
+nid001288:1320257:1320870 [0] NCCL INFO RAS client listening socket at ::1<28028>
+nid001288:1320261:1320874 [0] NCCL INFO Socket handshake magic 0x564ab9f2fc4b9d6c (built-in default)
+nid001288:1320259:1320871 [0] NCCL INFO RAS client listening socket at ::1<28028>
+nid001288:1320256:1320872 [0] NCCL INFO RAS client listening socket at ::1<28028>
+nid001288:1320261:1320874 [0] NCCL INFO RAS client listening socket at ::1<28028>
+nid001288:1320256:1320872 [0] NCCL INFO Bootstrap timings total 0.003242 (create 0.000037, send 0.000117, recv 0.000093, ring 0.000121, delay 0.000004)
+nid001288:1320259:1320871 [0] NCCL INFO Bootstrap timings total 0.001443 (create 0.000048, send 0.000134, recv 0.000693, ring 0.000189, delay 0.000003)
+nid001288:1320261:1320874 [0] NCCL INFO Bootstrap timings total 0.000872 (create 0.000049, send 0.000136, recv 0.000209, ring 0.000091, delay 0.000003)
+nid001288:1320257:1320870 [0] NCCL INFO Bootstrap timings total 0.003821 (create 0.000048, send 0.000129, recv 0.002489, ring 0.000746, delay 0.000003)
+nid001288:1320259:1320871 [0] NCCL INFO NCCL_CROSS_NIC set by environment to 2.
+nid001288:1320257:1320870 [0] NCCL INFO NCCL_CROSS_NIC set by environment to 2.
+nid001288:1320261:1320874 [0] NCCL INFO NCCL_CROSS_NIC set by environment to 2.
+nid001288:1320256:1320872 [0] NCCL INFO NCCL_CROSS_NIC set by environment to 2.
+nid001288:1320261:1320874 [0] NCCL INFO NCCL_NET_GDR_LEVEL set by environment to PHB
+nid001288:1320259:1320871 [0] NCCL INFO NCCL_NET_GDR_LEVEL set by environment to PHB
+nid001288:1320261:1320874 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is 48-63,112-127. (GPU affinity = 48-63,112-127 ; CPU affinity = 48-63,112-127).
+nid001288:1320259:1320871 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is 32-47,96-111. (GPU affinity = 32-47,96-111 ; CPU affinity = 32-47,96-111).
+nid001288:1320257:1320870 [0] NCCL INFO NCCL_NET_GDR_LEVEL set by environment to PHB
+nid001288:1320256:1320872 [0] NCCL INFO NCCL_NET_GDR_LEVEL set by environment to PHB
+nid001288:1320257:1320870 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is 16-31,80-95. (GPU affinity = 16-31,80-95 ; CPU affinity = 16-31,80-95).
+nid001288:1320256:1320872 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is 0-15,64-79. (GPU affinity = 0-15,64-79 ; CPU affinity = 0-15,64-79).
+nid001288:1320259:1320871 [0] NCCL INFO Rank 2: 4 Net devices
+nid001288:1320259:1320871 [0] NCCL INFO Rank 2: 0 CollNet devices
+nid001288:1320261:1320874 [0] NCCL INFO Rank 3: 4 Net devices
+nid001288:1320261:1320874 [0] NCCL INFO Rank 3: 0 CollNet devices
+nid001288:1320257:1320870 [0] NCCL INFO Rank 1: 4 Net devices
+nid001288:1320257:1320870 [0] NCCL INFO Rank 1: 0 CollNet devices
+nid001288:1320256:1320872 [0] NCCL INFO Rank 0: 4 Net devices
+nid001288:1320256:1320872 [0] NCCL INFO Rank 0: 0 CollNet devices
+nid001288:1320256:1320872 [0] NCCL INFO Local Net device counts across ranks: min 4 max 4
+nid001288:1320256:1320872 [0] NCCL INFO Local CollNet device counts across ranks: min 0 max 0
+nid001288:1320256:1320872 [0] NCCL INFO comm 0x7f297c01b810 rank 0 nRanks 4 nNodes 1 localRanks 4 localRank 0 MNNVL 0
+nid001288:1320261:1320874 [0] NCCL INFO comm 0x7f9d3002e7b0 rank 3 nRanks 4 nNodes 1 localRanks 4 localRank 3 MNNVL 0
+nid001288:1320257:1320870 [0] NCCL INFO comm 0x7f1be002da90 rank 1 nRanks 4 nNodes 1 localRanks 4 localRank 1 MNNVL 0
+nid001288:1320259:1320871 [0] NCCL INFO comm 0x7f6e7402e830 rank 2 nRanks 4 nNodes 1 localRanks 4 localRank 2 MNNVL 0
+nid001288:1320256:1320872 [0] NCCL INFO Channel 00/24 : 0 1 2 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 01/24 : 0 1 3 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 02/24 : 0 2 3 1
+nid001288:1320256:1320872 [0] NCCL INFO Channel 03/24 : 0 2 1 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 04/24 : 0 3 1 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 05/24 : 0 3 2 1
+nid001288:1320256:1320872 [0] NCCL INFO Channel 06/24 : 0 1 2 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 07/24 : 0 1 3 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 08/24 : 0 2 3 1
+nid001288:1320256:1320872 [0] NCCL INFO Channel 09/24 : 0 2 1 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 10/24 : 0 3 1 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 11/24 : 0 3 2 1
+nid001288:1320256:1320872 [0] NCCL INFO Channel 12/24 : 0 1 2 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 13/24 : 0 1 3 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 14/24 : 0 2 3 1
+nid001288:1320259:1320871 [0] NCCL INFO Trees [0] 3/-1/-1->2->1 [1] 3/-1/-1->2->1 [2] 3/-1/-1->2->1 [3] 3/-1/-1->2->1 [4] 1/-1/-1->2->0 [5] 1/-1/-1->2->0 [6] 1/-1/-1->2->0 [7] 1/-1/-1->2->0 [8] -1/-1/-1->2->3 [9] -1/-1/-1->2->3 [10] -1/-1/-1->2->3 [11] -1/-1/-1->2->3 [12] 3/-1/-1->2->1 [13] 3/-1/-1->2->1 [14] 3/-1/-1->2->1 [15] 3/-1/-1->2->1 [16] 1/-1/-1->2->0 [17] 1/-1/-1->2->0 [18] 1/-1/-1->2->0 [19] 1/-1/-1->2->0 [20] -1/-1/-1->2->3 [21] -1/-1/-1->2->3 [22] -1/-1/-1->2->3 [23] -1/-1/-1->2->3
+nid001288:1320259:1320871 [0] NCCL INFO P2P Chunksize set to 524288
+nid001288:1320259:1320871 [0] NCCL INFO Simple Buffer Size set to 4194304
+nid001288:1320261:1320874 [0] NCCL INFO Trees [0] -1/-1/-1->3->2 [1] -1/-1/-1->3->2 [2] -1/-1/-1->3->2 [3] -1/-1/-1->3->2 [4] -1/-1/-1->3->1 [5] -1/-1/-1->3->1 [6] -1/-1/-1->3->1 [7] -1/-1/-1->3->1 [8] 2/-1/-1->3->0 [9] 2/-1/-1->3->0 [10] 2/-1/-1->3->0 [11] 2/-1/-1->3->0 [12] -1/-1/-1->3->2 [13] -1/-1/-1->3->2 [14] -1/-1/-1->3->2 [15] -1/-1/-1->3->2 [16] -1/-1/-1->3->1 [17] -1/-1/-1->3->1 [18] -1/-1/-1->3->1 [19] -1/-1/-1->3->1 [20] 2/-1/-1->3->0 [21] 2/-1/-1->3->0 [22] 2/-1/-1->3->0 [23] 2/-1/-1->3->0
+nid001288:1320261:1320874 [0] NCCL INFO P2P Chunksize set to 524288
+nid001288:1320261:1320874 [0] NCCL INFO Simple Buffer Size set to 4194304
+nid001288:1320256:1320872 [0] NCCL INFO Channel 15/24 : 0 2 1 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 16/24 : 0 3 1 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 17/24 : 0 3 2 1
+nid001288:1320256:1320872 [0] NCCL INFO Channel 18/24 : 0 1 2 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 19/24 : 0 1 3 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 20/24 : 0 2 3 1
+nid001288:1320256:1320872 [0] NCCL INFO Channel 21/24 : 0 2 1 3
+nid001288:1320256:1320872 [0] NCCL INFO Channel 22/24 : 0 3 1 2
+nid001288:1320256:1320872 [0] NCCL INFO Channel 23/24 : 0 3 2 1
+nid001288:1320256:1320872 [0] NCCL INFO Trees [0] 1/-1/-1->0->-1 [1] 1/-1/-1->0->-1 [2] 1/-1/-1->0->-1 [3] 1/-1/-1->0->-1 [4] 2/-1/-1->0->-1 [5] 2/-1/-1->0->-1 [6] 2/-1/-1->0->-1 [7] 2/-1/-1->0->-1 [8] 3/-1/-1->0->1 [9] 3/-1/-1->0->1 [10] 3/-1/-1->0->1 [11] 3/-1/-1->0->1 [12] 1/-1/-1->0->-1 [13] 1/-1/-1->0->-1 [14] 1/-1/-1->0->-1 [15] 1/-1/-1->0->-1 [16] 2/-1/-1->0->-1 [17] 2/-1/-1->0->-1 [18] 2/-1/-1->0->-1 [19] 2/-1/-1->0->-1 [20] 3/-1/-1->0->1 [21] 3/-1/-1->0->1 [22] 3/-1/-1->0->1 [23] 3/-1/-1->0->1
+nid001288:1320256:1320872 [0] NCCL INFO P2P Chunksize set to 524288
+nid001288:1320256:1320872 [0] NCCL INFO Simple Buffer Size set to 4194304
+nid001288:1320257:1320870 [0] NCCL INFO Trees [0] 2/-1/-1->1->0 [1] 2/-1/-1->1->0 [2] 2/-1/-1->1->0 [3] 2/-1/-1->1->0 [4] 3/-1/-1->1->2 [5] 3/-1/-1->1->2 [6] 3/-1/-1->1->2 [7] 3/-1/-1->1->2 [8] 0/-1/-1->1->-1 [9] 0/-1/-1->1->-1 [10] 0/-1/-1->1->-1 [11] 0/-1/-1->1->-1 [12] 2/-1/-1->1->0 [13] 2/-1/-1->1->0 [14] 2/-1/-1->1->0 [15] 2/-1/-1->1->0 [16] 3/-1/-1->1->2 [17] 3/-1/-1->1->2 [18] 3/-1/-1->1->2 [19] 3/-1/-1->1->2 [20] 0/-1/-1->1->-1 [21] 0/-1/-1->1->-1 [22] 0/-1/-1->1->-1 [23] 0/-1/-1->1->-1
+nid001288:1320257:1320870 [0] NCCL INFO P2P Chunksize set to 524288
+nid001288:1320257:1320870 [0] NCCL INFO Simple Buffer Size set to 4194304
+nid001288:1320261:1320874 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+nid001288:1320261:1320874 [0] NCCL INFO External profiler plugin is unsupported
+nid001288:1320261:1320874 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+nid001288:1320261:1320879 [0] NCCL INFO [Proxy Service] Device 0 CPU core 63
+nid001288:1320261:1320879 [0] NCCL INFO proxy listening socket at 10.249.6.43<36501>
+nid001288:1320261:1320880 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 55
+nid001288:1320257:1320870 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+nid001288:1320257:1320870 [0] NCCL INFO External profiler plugin is unsupported
+nid001288:1320257:1320870 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+nid001288:1320257:1320881 [0] NCCL INFO [Proxy Service] Device 0 CPU core 30
+nid001288:1320257:1320881 [0] NCCL INFO proxy listening socket at 10.249.6.43<56545>
+nid001288:1320257:1320882 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 21
+nid001288:1320256:1320872 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+nid001288:1320256:1320872 [0] NCCL INFO External profiler plugin is unsupported
+nid001288:1320256:1320872 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+nid001288:1320256:1320883 [0] NCCL INFO [Proxy Service] Device 0 CPU core 12
+nid001288:1320256:1320883 [0] NCCL INFO proxy listening socket at 10.249.6.43<49195>
+nid001288:1320256:1320884 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 1
+nid001288:1320259:1320871 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+nid001288:1320259:1320871 [0] NCCL INFO External profiler plugin is unsupported
+nid001288:1320259:1320871 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+nid001288:1320259:1320885 [0] NCCL INFO [Proxy Service] Device 0 CPU core 35
+nid001288:1320259:1320885 [0] NCCL INFO proxy listening socket at 10.249.6.43<34961>
+nid001288:1320259:1320886 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 108
+nid001288:1320259:1320871 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+nid001288:1320259:1320871 [0] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+nid001288:1320259:1320871 [0] NCCL INFO 24 coll channels, 24 collnet channels, 0 nvls channels, 32 p2p channels, 8 p2p channels per peer
+nid001288:1320259:1320871 [0] NCCL INFO Rank 2 RMA strides: baseStride 0 userCtxStride 1 defaultUserStride 1 networkRmaSupport 0 (crossNic 1 contiguousRanksPerHost 4 numRmaCtx 1)
+nid001288:1320259:1320871 [0] NCCL INFO symmetricSupport 1, cuMemEnable 1, globalGinSupport 0, cuMemGdrSupport 1, contiguousRanksPerHost 4, crossNicSupport 1
+nid001288:1320256:1320872 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+nid001288:1320256:1320872 [0] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+nid001288:1320256:1320872 [0] NCCL INFO 24 coll channels, 24 collnet channels, 0 nvls channels, 32 p2p channels, 8 p2p channels per peer
+nid001288:1320256:1320872 [0] NCCL INFO Rank 0 RMA strides: baseStride 0 userCtxStride 1 defaultUserStride 1 networkRmaSupport 0 (crossNic 1 contiguousRanksPerHost 4 numRmaCtx 1)
+nid001288:1320256:1320872 [0] NCCL INFO symmetricSupport 1, cuMemEnable 1, globalGinSupport 0, cuMemGdrSupport 1, contiguousRanksPerHost 4, crossNicSupport 1
+nid001288:1320261:1320874 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+nid001288:1320261:1320874 [0] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+nid001288:1320261:1320874 [0] NCCL INFO 24 coll channels, 24 collnet channels, 0 nvls channels, 32 p2p channels, 8 p2p channels per peer
+nid001288:1320261:1320874 [0] NCCL INFO Rank 3 RMA strides: baseStride 0 userCtxStride 1 defaultUserStride 1 networkRmaSupport 0 (crossNic 1 contiguousRanksPerHost 4 numRmaCtx 1)
+nid001288:1320261:1320874 [0] NCCL INFO symmetricSupport 1, cuMemEnable 1, globalGinSupport 0, cuMemGdrSupport 1, contiguousRanksPerHost 4, crossNicSupport 1
+nid001288:1320256:1320872 [0] NCCL INFO CC Off, workFifoBytes 1048576
+nid001288:1320257:1320870 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+nid001288:1320257:1320870 [0] NCCL INFO threadThresholds 8/8/64 | 32/8/64 | 512 | 512
+nid001288:1320257:1320870 [0] NCCL INFO 24 coll channels, 24 collnet channels, 0 nvls channels, 32 p2p channels, 8 p2p channels per peer
+nid001288:1320257:1320870 [0] NCCL INFO Rank 1 RMA strides: baseStride 0 userCtxStride 1 defaultUserStride 1 networkRmaSupport 0 (crossNic 1 contiguousRanksPerHost 4 numRmaCtx 1)
+nid001288:1320257:1320870 [0] NCCL INFO symmetricSupport 1, cuMemEnable 1, globalGinSupport 0, cuMemGdrSupport 1, contiguousRanksPerHost 4, crossNicSupport 1
+nid001288:1320256:1320872 [0] NCCL INFO ncclCommInitRankConfig comm 0x7f297c01b810 rank 0 nranks 4 cudaDev 0 nvmlDev 0 busId c1000 commId 0xd47448430343779c - Init COMPLETE
+nid001288:1320256:1320872 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 0 nranks 4 total 0.24 (kernels 0.14, alloc 0.03, bootstrap 0.00, allgathers 0.00, topo 0.02, graphs 0.01, connections 0.03, rest 0.01)
+nid001288:1320259:1320871 [0] NCCL INFO ncclCommInitRankConfig comm 0x7f6e7402e830 rank 2 nranks 4 cudaDev 0 nvmlDev 0 busId 41000 commId 0xd47448430343779c - Init COMPLETE
+nid001288:1320259:1320871 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 2 nranks 4 total 0.24 (kernels 0.15, alloc 0.03, bootstrap 0.00, allgathers 0.00, topo 0.02, graphs 0.01, connections 0.02, rest 0.01)
+nid001288:1320261:1320874 [0] NCCL INFO ncclCommInitRankConfig comm 0x7f9d3002e7b0 rank 3 nranks 4 cudaDev 0 nvmlDev 0 busId 3000 commId 0xd47448430343779c - Init COMPLETE
+nid001288:1320261:1320874 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 3 nranks 4 total 0.24 (kernels 0.14, alloc 0.03, bootstrap 0.00, allgathers 0.00, topo 0.02, graphs 0.01, connections 0.03, rest 0.01)
+nid001288:1320257:1320870 [0] NCCL INFO ncclCommInitRankConfig comm 0x7f1be002da90 rank 1 nranks 4 cudaDev 0 nvmlDev 0 busId 82000 commId 0xd47448430343779c - Init COMPLETE
+nid001288:1320257:1320870 [0] NCCL INFO Init timings - ncclCommInitRankConfig: rank 1 nranks 4 total 0.24 (kernels 0.14, alloc 0.03, bootstrap 0.00, allgathers 0.00, topo 0.02, graphs 0.01, connections 0.03, rest 0.01)
+nid001288:1320256:1320256 [0] NCCL INFO Symmetric VA size=40GB
+nid001288:1320259:1320259 [0] NCCL INFO Symmetric VA size=40GB
+nid001288:1320261:1320261 [0] NCCL INFO Symmetric VA size=40GB
+nid001288:1320257:1320257 [0] NCCL INFO Symmetric VA size=40GB
+nid001288:1320259:1320259 [0] NCCL INFO Channel 00/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 00/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 00/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 02/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 04/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 03/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 06/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 06/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 06/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 08/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 10/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 09/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 12/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 12/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 12/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 14/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 16/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 15/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 18/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 18/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 18/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 20/0 : 2[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 22/0 : 1[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 21/0 : 3[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 01/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 01/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 02/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 02/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 04/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 03/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 04/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 03/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 08/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 07/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 07/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 08/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 10/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 10/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 09/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 09/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 14/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 13/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 14/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 13/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 16/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 16/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 15/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 15/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 20/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 19/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 19/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 20/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 22/0 : 2[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 22/0 : 3[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 21/0 : 0[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 21/0 : 1[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 03/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 04/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 02/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 01/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 05/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 05/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 05/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 05/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 10/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 09/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 07/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 08/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 11/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 11/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 11/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 11/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 16/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 15/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 14/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 13/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 17/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 17/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 17/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 17/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 22/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 21/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 20/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 19/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+nid001288:1320259:1320259 [0] NCCL INFO Channel 23/0 : 2[0] -> 1[0] via P2P/CUMEM/read
+nid001288:1320256:1320256 [0] NCCL INFO Channel 23/0 : 0[0] -> 3[0] via P2P/CUMEM/read
+nid001288:1320257:1320257 [0] NCCL INFO Channel 23/0 : 1[0] -> 0[0] via P2P/CUMEM/read
+nid001288:1320261:1320261 [0] NCCL INFO Channel 23/0 : 3[0] -> 2[0] via P2P/CUMEM/read
+
+[2026-11-27 22:29:37] nid001288:1320256:1320256 [0] transport/p2p.cc:301 (ncclP2pImportShareableBuffer) NCCL WARN Cuda failure 101 'invalid device ordinal'
+nid001288:1320256:1320256 [0] NCCL INFO transport/p2p.cc:304 (ncclP2pImportShareableBuffer) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO transport/p2p.cc:396 (p2pMap) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO transport/p2p.cc:559 (p2pSendConnect) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO transport.cc:248 (ncclTransportP2pSetup) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO transport/generic.cc:28 (ncclTransportRingConnect) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO group.cc:232 (ncclCollPreconnect) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO group.cc:337 (ncclCollPreconnectFunc) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO group.cc:147 (ncclAsyncJobMain) -> 1 [Async thread]
+nid001288:1320256:1320256 [0] NCCL INFO group.cc:841 (groupLaunchLegacy) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO group.cc:1152 (ncclGroupEndInternal) -> 1
+nid001288:1320256:1320256 [0] NCCL INFO group.cc:178 (ncclGroupEnd) -> 1
+
+[2026-11-27 22:29:37] nid001288:1320259:1320259 [0] transport/p2p.cc:301 (ncclP2pImportShareableBuffer) NCCL WARN Cuda failure 101 'invalid device ordinal'
+
+[2026-11-27 22:29:37] nid001288:1320257:1320257 [0] transport/p2p.cc:301 (ncclP2pImportShareableBuffer) NCCL WARN Cuda failure 101 'invalid device ordinal'
+nid001288:1320259:1320259 [0] NCCL INFO transport/p2p.cc:304 (ncclP2pImportShareableBuffer) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO transport/p2p.cc:396 (p2pMap) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO transport/p2p.cc:559 (p2pSendConnect) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO transport.cc:248 (ncclTransportP2pSetup) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO transport/generic.cc:28 (ncclTransportRingConnect) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO group.cc:232 (ncclCollPreconnect) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO group.cc:337 (ncclCollPreconnectFunc) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO group.cc:147 (ncclAsyncJobMain) -> 1 [Async thread]
+nid001288:1320257:1320257 [0] NCCL INFO transport/p2p.cc:304 (ncclP2pImportShareableBuffer) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO transport/p2p.cc:396 (p2pMap) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO transport/p2p.cc:559 (p2pSendConnect) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO group.cc:841 (groupLaunchLegacy) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO group.cc:1152 (ncclGroupEndInternal) -> 1
+nid001288:1320259:1320259 [0] NCCL INFO group.cc:178 (ncclGroupEnd) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO transport.cc:248 (ncclTransportP2pSetup) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO transport/generic.cc:28 (ncclTransportRingConnect) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO group.cc:232 (ncclCollPreconnect) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO group.cc:337 (ncclCollPreconnectFunc) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO group.cc:147 (ncclAsyncJobMain) -> 1 [Async thread]
+
+[2026-11-27 22:29:37] nid001288:1320261:1320261 [0] transport/p2p.cc:301 (ncclP2pImportShareableBuffer) NCCL WARN Cuda failure 101 'invalid device ordinal'
+nid001288:1320257:1320257 [0] NCCL INFO group.cc:841 (groupLaunchLegacy) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO group.cc:1152 (ncclGroupEndInternal) -> 1
+nid001288:1320257:1320257 [0] NCCL INFO group.cc:178 (ncclGroupEnd) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO transport/p2p.cc:304 (ncclP2pImportShareableBuffer) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO transport/p2p.cc:396 (p2pMap) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO transport/p2p.cc:559 (p2pSendConnect) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO transport.cc:248 (ncclTransportP2pSetup) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO transport/generic.cc:28 (ncclTransportRingConnect) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO group.cc:232 (ncclCollPreconnect) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO group.cc:337 (ncclCollPreconnectFunc) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO group.cc:147 (ncclAsyncJobMain) -> 1 [Async thread]
+nid001288:1320261:1320261 [0] NCCL INFO group.cc:841 (groupLaunchLegacy) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO group.cc:1152 (ncclGroupEndInternal) -> 1
+nid001288:1320261:1320261 [0] NCCL INFO group.cc:178 (ncclGroupEnd) -> 1
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 80, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 228, in run_deck_decomposed
+    diag0 = jax.device_get(DD.diagnostics(dec, state))
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2669, in device_get
+    return tree_map(_device_get, x)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in tree_map
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in <genexpr>
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+                             ~^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2634, in _device_get
+    return toarray()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 671, in _value
+    npy_value, did_copy = self._to_np_array_did_copy()
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+jax.errors.JaxRuntimeError: INTERNAL: NCCL operation ncclGroupEnd() failed: unhandled cuda error (run with NCCL_DEBUG=INFO for details). Last NCCL warning(error) log entry (may be unrelated) 'Cuda failure 101 'invalid device ordinal''. [executable_name='jit__inner_diag']
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 80, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 228, in run_deck_decomposed
+    diag0 = jax.device_get(DD.diagnostics(dec, state))
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2669, in device_get
+    return tree_map(_device_get, x)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in tree_map
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in <genexpr>
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+                             ~^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2634, in _device_get
+    return toarray()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 671, in _value
+    npy_value, did_copy = self._to_np_array_did_copy()
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+jax.errors.JaxRuntimeError: INTERNAL: NCCL operation ncclGroupEnd() failed: unhandled cuda error (run with NCCL_DEBUG=INFO for details). Last NCCL warning(error) log entry (may be unrelated) 'Cuda failure 101 'invalid device ordinal''. [executable_name='jit__inner_diag']
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 80, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 228, in run_deck_decomposed
+    diag0 = jax.device_get(DD.diagnostics(dec, state))
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2669, in device_get
+    return tree_map(_device_get, x)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in tree_map
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in <genexpr>
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+                             ~^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2634, in _device_get
+    return toarray()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 671, in _value
+    npy_value, did_copy = self._to_np_array_did_copy()
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+jax.errors.JaxRuntimeError: INTERNAL: NCCL operation ncclGroupEnd() failed: unhandled cuda error (run with NCCL_DEBUG=INFO for details). Last NCCL warning(error) log entry (may be unrelated) 'Cuda failure 101 'invalid device ordinal''. [executable_name='jit__inner_diag']
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 92, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/bench/env/check_env.py", line 80, in main
+    res = driver.run_deck_decomposed(d, n, seed=1)
+  File "/global/u1/a/aajain/JAX-DSMC-sparta/sparta_jax/driver.py", line 228, in run_deck_decomposed
+    diag0 = jax.device_get(DD.diagnostics(dec, state))
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2669, in device_get
+    return tree_map(_device_get, x)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in tree_map
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/tree_util.py", line 422, in <genexpr>
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+                             ~^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/api.py", line 2634, in _device_get
+    return toarray()
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 431, in __array__
+    return np.asarray(self._value, dtype=dtype, **kwds)  # pyrefly: ignore[no-matching-overload]
+                      ^^^^^^^^^^^
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/profiler.py", line 574, in wrapper
+    return func(*args, **kwargs)
+  File "/pscratch/sd/a/aajain/sparta-scaling/envs/jax-pm-gpu/lib/python3.13/site-packages/jax/_src/array.py", line 671, in _value
+    npy_value, did_copy = self._to_np_array_did_copy()
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+jax.errors.JaxRuntimeError: INTERNAL: NCCL operation ncclGroupEnd() failed: unhandled cuda error (run with NCCL_DEBUG=INFO for details). Last NCCL warning(error) log entry (may be unrelated) 'Cuda failure 101 'invalid device ordinal''. [executable_name='jit__inner_diag']
+W1127 22:29:37.940211 1320586 pjrt_client.cc:1720] WatchTasksAsync failed for task 1: CANCELLED: CANCELLED
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:CANCELLED:CANCELLED [type.googleapis.com/tensorflow.DerivedStatus='']
+=== Source Location Trace: ===
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+W1127 22:29:37.940290 1320569 pjrt_client.cc:1720] WatchTasksAsync failed for task 0: CANCELLED: CANCELLED
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:CANCELLED:CANCELLED [type.googleapis.com/tensorflow.DerivedStatus='']
+=== Source Location Trace: ===
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+W1127 22:29:37.940455 1320606 pjrt_client.cc:1720] WatchTasksAsync failed for task 3: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.67.156:63630: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.67.156:63630: Failed to connect to remote host: Connection refused
+=== Source Location Trace: ===
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+W1127 22:29:37.940475 1320605 pjrt_client.cc:1720] WatchTasksAsync failed for task 2: UNAVAILABLE: failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.67.156:63630: Failed to connect to remote host: Connection refused
+Additional GRPC error information from remote target coordination_service while calling /xla.coordination.CoordinationService/WatchTasks:
+:UNAVAILABLE:failed to connect to all addresses; last error: UNKNOWN: ipv4:128.55.67.156:63630: Failed to connect to remote host: Connection refused
+=== Source Location Trace: === 
+external/xla+/xla/tsl/distributed_runtime/rpc/grpc_util.h:89
+
+srun: error: nid001288: task 1: Exited with exit code 1
+srun: Terminating StepId=62134414.1
+[2026-11-28T06:29:39.404] error: *** STEP 62134414.1 ON nid001288 CANCELLED AT 2026-11-28T06:29:39 DUE TO TASK FAILURE ***
+srun: error: nid001288: tasks 0,2-3: Exited with exit code 1
+[2026-11-27T22:29:39-08:00] run 4 FAILED
+[2026-11-27T22:29:39-08:00] run 4 done in 8 s
+[2026-11-27T22:29:39-08:00] 4 runs, 1 failed
