@@ -16,9 +16,9 @@ if [ -z "${found}" ]; then
   if [ ! -x "${PY_DIR}/uv-venv/bin/uv" ]; then
     command -v module > /dev/null 2>&1 && module load python 2> /dev/null || true
     python3 -m venv "${PY_DIR}/uv-venv"
-    "${PY_DIR}/uv-venv/bin/pip" install -q uv
+    "${PY_DIR}/uv-venv/bin/pip" install -q --no-cache-dir uv
   fi
-  UV_PYTHON_INSTALL_DIR="${PY_DIR}" "${PY_DIR}/uv-venv/bin/uv" python install "${PY_VER}" >&2
+  UV_PYTHON_INSTALL_DIR="${PY_DIR}" UV_CACHE_DIR="${PY_DIR}/uv-cache" "${PY_DIR}/uv-venv/bin/uv" python install "${PY_VER}" >&2
   found="$(ls -d "${PY_DIR}"/cpython-"${PY_VER}"*/bin/python"${PY_VER}" | head -1)"
 fi
 "${found}" -c 'import sys, ssl, sqlite3; print("python", sys.version.split()[0], "ok", file=sys.stderr)'

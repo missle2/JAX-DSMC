@@ -14,6 +14,9 @@
 # The env gets a manifest (pip freeze + module list + nvidia-smi/rocm-smi) next to it, and
 # bench/env/check_env.py runs at the end (CPU-only on a login node: import + versions).
 set -euo pipefail
+# No pip download cache: it lives in ~/.cache/pip, and the CUDA/ROCm wheels filled 2.9 GB of
+# Alpine's small home quota (2026-11-27).  Rebuilds re-download, which takes minutes.
+export PIP_NO_CACHE_DIR=1
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${HERE}/platforms.sh"
