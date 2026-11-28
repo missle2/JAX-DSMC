@@ -21,6 +21,7 @@ forwards predate the dumps' code, so seed-mean against seed-mean).
 """
 
 import argparse
+import os
 import json
 import time
 from pathlib import Path
@@ -28,7 +29,9 @@ from pathlib import Path
 import numpy as np
 from scipy.interpolate import BSpline
 
-CACHE = Path("scratch/fitlab/cache")
+# the full dumps (~150 GB): $FITLAB_CACHE if set -- on the cluster env.sh points it at
+# /scratch/alpine (2026-11-27: they filled the /projects quota) -- else the checkout
+CACHE = Path(os.environ.get("FITLAB_CACHE", "scratch/fitlab/cache"))
 SLIM = Path("scratch/fitlab/cache_slim")
 OUT = Path("scratch/fitlab/out")
 FITGATE = Path("examples/mesh/results/fitgate")
@@ -61,7 +64,17 @@ CASES = {
     "spec_dt2_h600": "c10_spec_dt2_h600",
     "spec_2dt_h150": "c10_spec_2dt_h150",
     "spec_h1000": "c10_spec_h1000",
+    # knnlong (2026-11-28): the tuning cases' same forwards captured longer (FDs: the parents')
+    "drag_h600": "c10_diff_m2_h600",
+    "drag_h1000": "c10_diff_m2_h1000",
+    "hot_h600": "c10_hot_m2_h600",
+    "m25_diff_h600": "c25_diff_m2_h600",
+    "m25_spec_h600": "c25_spec_m2_h600",
 }
+# a long capture of a case's own forward (warm-up shortened by the extra steps): its FDs are the
+# parent's, seed by seed
+LONG_OF = {"spec_h1000": "spec", "drag_h600": "drag", "drag_h1000": "drag", "hot_h600": "hot",
+           "m25_diff_h600": "m25_diff", "m25_spec_h600": "m25_spec"}  # fmt: skip
 BASE_VARIANT = "cell_along_pool_plane"
 # circle_long's cells (60 x 20 of 0.5 m from (-10, 0)): the angle of each centre about the body
 N_CELLS = 1200
@@ -307,6 +320,8 @@ def _bump_fd(objective):
 def finite_differences(case):
     """``{control: {seed: FD}}`` from the gate rows that share the dump's objective and body
     (mode2s drag/heat: 0 by symmetry)."""
+    if case in LONG_OF:
+        return finite_differences(LONG_OF[case])
     if case == "drag":
         out = {"radius": _gate_fd("c10_diff"), "mode2": _gate_fd("c10_diff_m2")}
         out.update(_bump_fd("drag"))
@@ -325,9 +340,6 @@ def finite_differences(case):
         # the transfer cases: each seed's dump carries its own central differences (the
         # specular labs' radius: their fitgate rows, more seeds)
         out = {"mode2s": {"symmetry": 0.0}}
-        if case == "spec_h1000":
-            out.update(radius=_gate_fd("c10_spec"), mode2=_gate_fd("c10_spec_m2"))
-            return out
         if case in ("spec_kn2", "spec_kn10", "spec_dt2", "spec_2dt"):
             out["radius"] = _gate_fd(CASES[case])
         for seed, path in seed_files(CASES[case]):

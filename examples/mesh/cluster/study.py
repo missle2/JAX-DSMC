@@ -1589,6 +1589,44 @@ def _speclab2_jobs(gpus_per_node: int) -> dict[str, str]:
     return jobs
 
 
+# knnlong: gate -> (GPU tag, seed block): "full" a whole 96 GB RTX card, "48" a 2g.48gb slice
+KNNLONG_GATES = {
+    "c10_diff_m2_h600": ("full", 4),
+    "c10_diff_m2_h1000": ("full", 2),
+    "c25_diff_m2_h600": ("full", 4),
+    "c10_hot_m2_h600": ("48", 4),
+    "c25_spec_m2_h600": ("48", 4),
+}
+
+
+def _knnlong_jobs(gpus_per_node: int) -> dict[str, str]:
+    """``knnlong`` (2026-11-28): the kNN tuning's collisional cases captured longer.  The
+    300-step capture keeps 100 steps (2.5 ms) of history before the 200-step window, and the
+    hits' pathwise contribution is still undecayed there in every collisional case
+    (scratch/fitlab/spec_lag.py; c10_spec's tail ~400 steps: cos 2 theta 1.074 -> 0.989 at
+    1000 steps), so knntune scored truncated adjoints.  The same forwards (warm-up + steps
+    unchanged: the parents' FDs hold, lab.finite_differences) over 600 captured steps -- M 10
+    diffuse drag, hot wall, M 25 diffuse and specular -- and the drag over 1000 (the diffuse
+    tail's length), seeds 0-7.  M 0.32 and Kn 10 have no tail (their 300-step dumps stand);
+    grid / 2 is past a card at 600 steps (71 GB slice at 300).  Memory from the 300-step dumps
+    (24 GB slices; M 25 diffuse 48 GB) x the steps: the ``lab_full_`` jobs on whole cards, the
+    ``lab_48_`` on 2g.48gb slices, then ``slim_long`` (no GPU work; default d < 0.6 m, the
+    tuning's band):
+
+        GPU_KIND=rtx_full ONLY='^lab_full_' bash examples/mesh/cluster/submit_curc.sh knnlong
+        GPU_KIND=rtx_48 ONLY='^lab_48_' bash examples/mesh/cluster/submit_curc.sh knnlong
+        GPU_KIND=rtx_48 ONLY='^slim_long$' bash examples/mesh/cluster/submit_curc.sh knnlong
+    """
+    del gpus_per_node
+    dump = "python3 scratch/fitlab/dump.py"
+    jobs = {}
+    for gate, (tag, block) in KNNLONG_GATES.items():
+        for a in range(0, 8, block):
+            jobs[f"lab_{tag}_{gate}_s{a}"] = f"{dump} --gate {gate} --seeds {a} {a + block}"
+    jobs["slim_long"] = f"python3 scratch/fitlab/slim.py --gates {' '.join(KNNLONG_GATES)}"
+    return jobs
+
+
 def _fitgate_jobs(gpus_per_node: int) -> dict[str, str]:
     """``fitgate`` (2026-10-29): the shape adjoint's fits against central differences at
     transitional conditions, in 2-D (scratch/fitgate/variant_gate.py; results in
@@ -1848,6 +1886,7 @@ NEW_GROUPS = {
     "knntune": _knntune_jobs,
     "speclab": _speclab_jobs,
     "speclab2": _speclab2_jobs,
+    "knnlong": _knnlong_jobs,
     "shiftfd": _shiftfd_jobs,
     "optrules": _optrules_jobs,
     "optrules2": _optrules2_jobs,

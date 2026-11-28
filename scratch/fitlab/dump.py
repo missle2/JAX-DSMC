@@ -27,6 +27,7 @@ Saved per seed (``scratch/fitlab/cache/<gate>_s<seed>.npz`` + ``.json``):
 """
 
 import argparse
+import os
 import functools
 import json
 import sys
@@ -48,7 +49,9 @@ from jax_dsmc.grid import cell_centers, cell_of, spacing  # noqa: E402
 from jax_dsmc.mesh import levelset as levelset_mod  # noqa: E402
 from jax_dsmc.rng import STAGE_MOVE, key_for  # noqa: E402
 
-OUT = Path("scratch/fitlab/cache")
+# the full dumps (~150 GB): $FITLAB_CACHE if set -- on the cluster env.sh points it at
+# /scratch/alpine (2026-11-27: they filled the /projects quota) -- else the checkout
+OUT = Path(os.environ.get("FITLAB_CACHE", "scratch/fitlab/cache"))
 CONTROLS = ("radius", "mode2", "mode2s", "bump_nose", "bump_side", "bump_base")
 VARIANTS = ("cell_along_pool_plane", "cell_pool_plane", "along_pool_plane")
 

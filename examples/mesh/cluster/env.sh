@@ -79,4 +79,12 @@ export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-/projects/${USER}
 # script's own directory: every biasgate job of 2026-10-04 died on `import jax_dsmc`
 # (ModuleNotFoundError) for that reason.  job.sbatch runs from the repository root.
 export PYTHONPATH="${SLURM_SUBMIT_DIR:-${PWD}}${PYTHONPATH:+:${PYTHONPATH}}"
+# the fit lab's full dumps (scratch/fitlab/dump.py, read by slim.py / lab.py; ~150 GB) live on
+# Alpine scratch, not /projects (2026-11-27: they filled the 250 GB quota and the speclab2 jobs
+# died writing).  Scratch is purged after ~90 days of no access -- the dumps regenerate, and the
+# slimmed copies the analysis needs stay in scratch/fitlab/cache_slim/.  FITLAB_CACHE overrides.
+if [ -z "${FITLAB_CACHE:-}" ] && [ -d "/scratch/alpine/${USER}" ]; then
+  export FITLAB_CACHE="/scratch/alpine/${USER}/JAX-DSMC/fitlab/cache"
+fi
+[ -n "${FITLAB_CACHE:-}" ] && mkdir -p "${FITLAB_CACHE}"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"

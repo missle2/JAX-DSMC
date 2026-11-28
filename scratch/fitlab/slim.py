@@ -9,6 +9,7 @@ specular reflection-identity and tracer gates, 2026-11-27).  numpy only (no JAX,
 """
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -17,7 +18,9 @@ import numpy as np
 
 sys.path.insert(0, "scratch/fitlab")
 
-CACHE = Path("scratch/fitlab/cache")
+# the full dumps (~150 GB): $FITLAB_CACHE if set -- on the cluster env.sh points it at
+# /scratch/alpine (2026-11-27: they filled the /projects quota) -- else the checkout
+CACHE = Path(os.environ.get("FITLAB_CACHE", "scratch/fitlab/cache"))
 SLIM = Path("scratch/fitlab/cache_slim")
 CENTRE = np.array([5.0, 5.0])
 RADIUS = 3.0

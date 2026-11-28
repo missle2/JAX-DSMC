@@ -208,6 +208,22 @@ NEW_GATES = {
                            "window": 400}, "radius", [0.1, 0.05]),
     "c10_spec_2dt_h150": ({**CIRCLE_M10, **COMMON, "dt": 5e-5, "warmup": 1400, "steps": 150,
                            "window": 100}, "radius", [0.1, 0.05]),
+    # the long captures of the kNN tuning's cases (2026-11-28, study group knnlong): the 300-step
+    # capture keeps only 100 steps (2.5 ms) of history before the window, and the hits' pathwise
+    # contribution was still undecayed there in every collisional case (spec_lag.py; c10_spec's
+    # tail ~400 steps, cos 2 theta 1.074 -> 0.989 at h1000).  The same forwards (warm-up + steps
+    # unchanged, so the parents' FDs hold seed by seed: lab.finite_differences) captured over
+    # 600 steps, and the diffuse drag over 1000 (does the cold re-emitted gas remember longer?)
+    "c10_diff_m2_h600": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "warmup": 2500, "steps": 600},
+                         "mode2", [0.1, 0.05]),
+    "c10_diff_m2_h1000": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "warmup": 2100, "steps": 1000},
+                          "mode2", [0.1, 0.05]),
+    "c10_hot_m2_h600": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "t_wall": 1000.0, "warmup": 2500,
+                        "steps": 600}, "mode2", [0.1]),
+    "c25_diff_m2_h600": ({**CIRCLE_M10, **COMMON, **DIFFUSE, "mach": 25.0, "dt": 1e-5,
+                         "warmup": 4700, "steps": 600, "slots": 600_000}, "mode2", [0.1]),
+    "c25_spec_m2_h600": ({**CIRCLE_M10, **COMMON, "mach": 25.0, "dt": 1e-5, "warmup": 4700,
+                         "steps": 600}, "mode2", [0.1]),
     # 2026-11-03 production check of the diffuse wall (the dlh3d objective's three pieces, per-cell
     # fits): drag and the body's total heat rate (dlh3d's heat_patch lattice) under the cos 2
     # theta elongation, and J = D - L (drag_lift, lift_weight 1) under its sin 2 theta inclination

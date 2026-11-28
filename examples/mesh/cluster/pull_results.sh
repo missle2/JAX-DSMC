@@ -47,7 +47,9 @@ RSYNC=(rsync -aP --update --relative --info=stats1,progress2 --exclude .git/
 # the other scratch/*/cache/ dirs are local figure caches and stay out)
 # (2026-11-05: the transfer cases' full dumps are ~70 GB -- their slimmed copies,
 # scratch/fitlab/slim.py run on the cluster, come instead; the full cache only with
-# FITLAB_FULL=1)
+# FITLAB_FULL=1; since 2026-11-27 the cluster keeps them on /scratch/alpine (env.sh's
+# FITLAB_CACHE) and FITLAB_FULL no longer reaches them: rsync that directory directly, e.g.
+# rsync -aP aaja8389@dtn.rc.colorado.edu:/scratch/alpine/aaja8389/JAX-DSMC/fitlab/cache/ scratch/fitlab/cache/)
 SCRATCH_ONLY=(--include '/scratch/' --include '/scratch/*/' --include '/scratch/*/cluster/***'
               --include '/scratch/fitlab/cache_slim/***' --exclude '*' --prune-empty-dirs)
 [ -n "${FITLAB_FULL:-}" ] && SCRATCH_ONLY=(--include '/scratch/fitlab/cache/***' "${SCRATCH_ONLY[@]}")
