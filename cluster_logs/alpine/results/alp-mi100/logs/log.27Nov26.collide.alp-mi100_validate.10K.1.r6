@@ -1,0 +1,26 @@
+sparta_jax d6e6a3e4 jax 0.4.35 gpu XLA_FLAGS='' overrides={}
+sparta_jax 3-D deck collide 10 10 10 on AMD Instinct MI100
+Created 10000 particles
+Step CPU Np Natt Ncoll Nscoll temp maxpercell
+       0            0     10000         0         0       0    273.26984     10
+      10    0.0291718     10000      9596      7024       0    273.26984     22
+      20    0.0583437     10000     10002      7125       0    273.26984     20
+      30    0.0875155     10000     10032      7116       0    273.26984     20
+Loop time of 0.0875155 on 1 procs for 30 steps with 10000 particles
+
+Step CPU Np Natt Ncoll Nscoll temp maxpercell
+      30            0     10000         0         0       0    273.26984     20
+      40   0.00488476     10000       885       685       0    273.26984     22
+      50   0.00976952     10000       905       699       0    273.26984     21
+      60    0.0146543     10000       935       707       0    273.26984     23
+      70     0.019539     10000       932       705       0    273.26984     21
+      80    0.0244238     10000       941       684       0    273.26984     24
+      90    0.0293086     10000       971       719       0    273.26984     23
+     100    0.0341933     10000       977       721       0    273.26984     22
+     110    0.0390781     10000       969       692       0    273.26984     24
+     120    0.0439629     10000       986       731       0    273.26984     21
+     130    0.0488476     10000       981       715       0    273.26984     20
+Loop time of 0.0488476 on 1 procs for 100 steps with 10000 particles
+
+Particle moves = 1000000
+Particle-moves/CPUsec/proc: 2.047e+07

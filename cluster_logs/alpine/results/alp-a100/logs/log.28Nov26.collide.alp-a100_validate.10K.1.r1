@@ -1,0 +1,26 @@
+sparta_jax d6e6a3e4 jax 0.12.1 gpu XLA_FLAGS='' overrides={}
+sparta_jax 3-D deck collide 10 10 10 on NVIDIA A100-PCIE-40GB
+Created 10000 particles
+Step CPU Np Natt Ncoll Nscoll temp maxpercell
+       0            0     10000         0         0       0    273.33513     10
+      10    0.0337162     10000      9606      7075       0    273.33513     23
+      20    0.0674324     10000      9856      7061       0    273.33513     20
+      30     0.101149     10000     10024      7082       0    273.33513     21
+Loop time of 0.101149 on 1 procs for 30 steps with 10000 particles
+
+Step CPU Np Natt Ncoll Nscoll temp maxpercell
+      30            0     10000         0         0       0    273.33513     21
+      40    0.0057034     10000       898       712       0    273.33513     23
+      50    0.0114068     10000       916       717       0    273.33513     22
+      60    0.0171102     10000       927       715       0    273.33513     22
+      70    0.0228136     10000       928       690       0    273.33513     19
+      80     0.028517     10000       939       720       0    273.33513     23
+      90    0.0342204     10000       945       722       0    273.33513     22
+     100    0.0399238     10000       943       683       0    273.33513     23
+     110    0.0456272     10000       969       715       0    273.33513     21
+     120    0.0513306     10000       970       708       0    273.33513     21
+     130     0.057034     10000       976       702       0    273.33513     20
+Loop time of 0.057034 on 1 procs for 100 steps with 10000 particles
+
+Particle moves = 1000000
+Particle-moves/CPUsec/proc: 1.753e+07

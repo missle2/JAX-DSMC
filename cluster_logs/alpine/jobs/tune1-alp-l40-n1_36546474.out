@@ -1,0 +1,28 @@
+[runtime] alp-l40 on c3gpu-a9-u15-1: jax env /projects/aaja8389/jax-env-313 (0.12.1), spa /projects/aaja8389/sparta-scaling/builds/sparta-alp-l40-default/spa
+[2026-11-28T09:59:38-07:00] job 36546474 tune1-alp-l40-n1: 1 node(s) c3gpu-a9-u15-1...
+plan /projects/aaja8389/JAX-DSMC-sparta/bench/plans/alp-l40/tune1-alp-l40-n1.plan: 6 runs
+[2026-11-28T09:59:38-07:00] run 1: timeout 768  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 12.588021495379508, "mpsps": 1301.5548159028663, "compile_s": 2.5838504564017057}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 12.57934068981558, "mpsps": 1302.4529984520354, "compile_s": 0.0}
+[2026-11-28T10:00:14-07:00] run 1 done in 36 s
+[2026-11-28T10:00:14-07:00] run 2: timeout 1787  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 19.803614934906363, "mpsps": 820.7997044695545, "compile_s": 6.075695380568504}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 19.965862904675305, "mpsps": 814.2667350577198, "compile_s": 0.0}
+[2026-11-28T10:01:52-07:00] run 2 done in 98 s
+[2026-11-28T10:01:52-07:00] run 3: timeout 768  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 12.553705665282905, "mpsps": 1305.112644572329, "compile_s": 18.10035676136613}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 12.55630457866937, "mpsps": 1304.8425113733792, "compile_s": 0.0}
+[2026-11-28T10:02:49-07:00] run 3 done in 57 s
+[2026-11-28T10:02:49-07:00] run 4: timeout 1787  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_cprefix_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set collide_mode=prefix --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 19.901354891248047, "mpsps": 816.7685755480056, "compile_s": 20.034334973432124}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 19.914012532681227, "mpsps": 816.3868518873068, "compile_s": 0.0}
+[2026-11-28T10:04:38-07:00] run 4 done in 109 s
+[2026-11-28T10:04:38-07:00] run 5: timeout 768  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck collide --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs_cunroll8 --nodes 1 --reps 2 --steps 1000 --out "${RESULTS_DIR}" --set sort=full --set collide_unroll=8
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 22.95730812754482, "mpsps": 713.6725224479616, "compile_s": 2.3788540437817574}
+{"deck": "collide", "particles": 16384000, "procs": 1, "loop_time": 22.989870073273778, "mpsps": 712.661704819583, "compile_s": 0.0}
+[2026-11-28T10:05:45-07:00] run 5 done in 67 s
+[2026-11-28T10:05:45-07:00] run 6: timeout 1787  $(pf_launch 1 1 bind) python3 bench/run_bench.py jax --deck sphere --particles 16384K --machine "${MACHINE}" --variant jax_sortpairs_cunroll8 --nodes 1 --reps 2 --out "${RESULTS_DIR}" --set sort=full --set collide_unroll=8
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 94.20530967693776, "mpsps": 172.54655116302123, "compile_s": 5.862290426157415}
+{"deck": "sphere", "particles": 16384000, "procs": 1, "loop_time": 94.82059866003692, "mpsps": 171.45576203635488, "compile_s": 0.0}
+[2026-11-28T10:12:03-07:00] run 6 done in 378 s
+[2026-11-28T10:12:03-07:00] 6 runs, 0 failed
