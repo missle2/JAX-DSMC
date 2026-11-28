@@ -173,6 +173,18 @@ def dump_json(result, path):
 # ---------------------------------------------------------------------------------------------
 
 
+def _to_host(tree):
+    """Host copies of (possibly multi-process) arrays.  Per-rank stats are sharded over ranks,
+    so with several processes each holds only its own ranks' part and np.asarray refuses
+    ("spans non-addressable devices": every multi-process run, Perlmutter CPU tune 62133655):
+    gather them (outside the timed loop)."""
+    if jax.process_count() > 1:
+        from jax.experimental import multihost_utils
+
+        return multihost_utils.process_allgather(tree, tiled=True)
+    return jax.device_get(tree)
+
+
 def run_deck_decomposed(deck, nrank, seed=12345, log=None, layout=None, headroom=None, **cfg_overrides):
     """All runs of the deck over ``nrank`` devices (``decomp3d``).  Same outputs as
     ``run_deck``, plus the layout and the per-rank particle-count imbalance."""
@@ -235,6 +247,7 @@ def run_deck_decomposed(deck, nrank, seed=12345, log=None, layout=None, headroom
             diags.append(DD.diagnostics(dec, state))
         jax.block_until_ready((state, diags))
         loop = time.perf_counter() - t_start
+        chunks = _to_host(chunks)
         per_rank = {k: np.concatenate([np.asarray(getattr(st, k)) for st in chunks]) for k in S.Stats._fields}
         stats = {k: (v.max(axis=1) if k in ("nlane", "nwalk") else v.sum(axis=1)) for k, v in per_rank.items()}
         diags = jax.device_get(diags)

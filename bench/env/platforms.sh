@@ -137,12 +137,18 @@ pf_alpine_share() {  # $1 = GPUs -> sbatch resource flags for that many GPUs of 
   echo "${SB_ARGS} -N 1 --ntasks=$1 --cpus-per-task=${c} --mem=$(( m * $1 ))M --gres=gpu:${GRES}:$1"
 }
 
+# NERSC jobs mail the user at the end (and on failure); MAIL_USER= (empty) turns it off
+pf_mail() {
+  local u="${MAIL_USER-aakash.jain@colorado.edu}"
+  [ -n "${u}" ] && echo " --mail-user=${u} --mail-type=END,FAIL"
+}
+
 pf_resources() {  # $1 = nodes
   if [ "${SITE}" = curc ]; then
     [ "$1" = 1 ] || { echo "Alpine runs are single-node" >&2; return 1; }
     pf_alpine_share "${GRES_COUNT}"
   else
-    echo "${SB_ARGS} -N $1 --exclusive"
+    echo "${SB_ARGS} -N $1 --exclusive$(pf_mail)"
   fi
 }
 
@@ -152,7 +158,7 @@ pf_resources_shared() {  # $1 = GPUs
   if [ "${SITE}" = curc ]; then
     pf_alpine_share "$1"
   else
-    echo "-A ${ACCOUNT} -C ${CONSTRAINT:-gpu} -q shared -N 1 -n $1 -c 32 --gpus-per-task=1"
+    echo "-A ${ACCOUNT} -C ${CONSTRAINT:-gpu} -q shared -N 1 -n $1 -c 32 --gpus-per-task=1$(pf_mail)"
   fi
 }
 
